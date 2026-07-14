@@ -1,0 +1,265 @@
+// Package onboard materializes live paths into a module.
+package onboard
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/BurntSushi/toml"
+	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/resolve"
+)
+
+// Options configures the onboard operation.
+type Options struct {
+	ProfileRoot string
+	Paths       []string
+	App         string
+	Mode        string
+	Packages    []string
+	Tools       []string
+	Host        bool
+	DryRun      bool
+	Home        string
+	Hostname    string
+}
+
+// Onboard materializes live paths into a module and applies them.
+type Onboard struct {
+	Mise mise.Runner
+}
+
+// dotfileEntry matches the TOML shape for a single dotfile.
+type dotfileEntry struct {
+	Source string `toml:"source"`
+	Mode   string `toml:"mode"`
+}
+
+// moduleConfig is the TOML shape written to module.toml.
+type moduleConfig struct {
+	ID       string                  `toml:"id,omitempty"`
+	App      string                  `toml:"app,omitempty"`
+	Packages packagesConfig          `toml:"packages,omitempty"`
+	Tools    map[string]string       `toml:"tools,omitempty"`
+	Dotfiles map[string]dotfileEntry `toml:"dotfiles,omitempty"`
+}
+
+type packagesConfig struct {
+	Present []string `toml:"present,omitempty"`
+}
+
+// Run copies the live paths into the module, writes module.toml, and applies.
+func (o *Onboard) Run(opts Options) error {
+	if len(opts.Paths) == 0 {
+		return fmt.Errorf("no paths provided")
+	}
+
+	home := opts.Home
+	if home == "" {
+		var err error
+		home, err = os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("home dir: %w", err)
+		}
+	}
+
+	expanded := make([]string, len(opts.Paths))
+	for i, p := range opts.Paths {
+		expanded[i] = expandPath(p, home)
+	}
+
+	app := opts.App
+	if app == "" {
+		app = inferApp(expanded, home)
+	}
+	if app == "" {
+		return fmt.Errorf("could not infer app from paths")
+	}
+
+	mode := opts.Mode
+	if mode == "" {
+		mode = "link"
+	}
+
+	moduleDir := filepath.Join(opts.ProfileRoot, "modules", app)
+	if opts.Host {
+		if opts.Hostname == "" {
+			return fmt.Errorf("hostname required for host overlay")
+		}
+		moduleDir = filepath.Join(opts.ProfileRoot, "hosts", opts.Hostname, "modules", app)
+	}
+
+	entries := make(map[string]dotfileEntry)
+	for _, p := range expanded {
+		target, source, err := mapPath(p, home, moduleDir)
+		if err != nil {
+			return err
+		}
+		if !opts.DryRun {
+			if _, err := os.Stat(source); err == nil {
+				return fmt.Errorf("conflict: %s already exists in module", source)
+			}
+			if err := copyPath(p, source); err != nil {
+				return fmt.Errorf("copy %s: %w", p, err)
+			}
+		}
+		relSource, _ := filepath.Rel(moduleDir, source)
+		entries[target] = dotfileEntry{Source: filepath.ToSlash(relSource), Mode: mode}
+	}
+
+	if opts.DryRun {
+		return nil
+	}
+
+	cfg := moduleConfig{
+		ID:       app,
+		App:      app,
+		Packages: packagesConfig{Present: opts.Packages},
+		Tools:    toolsMap(opts.Tools),
+		Dotfiles: entries,
+	}
+	if err := writeModuleTOML(moduleDir, cfg); err != nil {
+		return err
+	}
+
+	if o.Mise == nil {
+		return fmt.Errorf("no mise runner configured")
+	}
+
+	configPath, err := writeMiseConfig(moduleDir, entries)
+	if err != nil {
+		return err
+	}
+	if err := o.Mise.EnsureAndInstall(configPath); err != nil {
+		return fmt.Errorf("mise install: %w", err)
+	}
+	if err := o.Mise.DotfilesApply(configPath, false); err != nil {
+		return fmt.Errorf("mise dotfiles apply: %w", err)
+	}
+	return nil
+}
+
+func expandPath(p, home string) string {
+	if strings.HasPrefix(p, "~/") {
+		return filepath.Join(home, p[2:])
+	}
+	return p
+}
+
+func inferApp(paths []string, home string) string {
+	for _, p := range paths {
+		rel, err := filepath.Rel(filepath.Join(home, ".config"), p)
+		if err == nil && !strings.HasPrefix(rel, "..") {
+			parts := strings.Split(rel, string(os.PathSeparator))
+			if parts[0] != "" && parts[0] != "." {
+				return parts[0]
+			}
+		}
+	}
+	base := filepath.Base(paths[0])
+	return strings.TrimPrefix(base, ".")
+}
+
+func mapPath(p, home, moduleDir string) (target, source string, err error) {
+	rel, err := filepath.Rel(home, p)
+	if err == nil && !strings.HasPrefix(rel, "..") {
+		target = "~" + string(os.PathSeparator) + rel
+		source = filepath.Join(moduleDir, "home", rel)
+		return target, source, nil
+	}
+	if !filepath.IsAbs(p) {
+		p, err = filepath.Abs(p)
+		if err != nil {
+			return "", "", err
+		}
+	}
+	target = p
+	source = filepath.Join(moduleDir, "system", strings.TrimPrefix(p, string(os.PathSeparator)))
+	return target, source, nil
+}
+
+func copyPath(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		if err := os.MkdirAll(dst, 0o755); err != nil {
+			return err
+		}
+		return os.CopyFS(dst, os.DirFS(src))
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	return out.Close()
+}
+
+func writeModuleTOML(moduleDir string, cfg moduleConfig) error {
+	if err := os.MkdirAll(moduleDir, 0o755); err != nil {
+		return fmt.Errorf("create module dir: %w", err)
+	}
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("encode module.toml: %w", err)
+	}
+	path := filepath.Join(moduleDir, "module.toml")
+	return os.WriteFile(path, data, 0o644)
+}
+
+func writeMiseConfig(moduleDir string, entries map[string]dotfileEntry) (string, error) {
+	plan := &resolve.Plan{
+		Dotfiles: resolve.DotfilesStep{Entries: make([]resolve.DotfileEntry, 0, len(entries))},
+	}
+	for target, e := range entries {
+		plan.Dotfiles.Entries = append(plan.Dotfiles.Entries, resolve.DotfileEntry{
+			Target: target,
+			Source: e.Source,
+			Mode:   e.Mode,
+		})
+	}
+	cfg := mise.GenerateConfig(plan)
+
+	configDir := filepath.Join(moduleDir, ".mise")
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
+		return "", err
+	}
+	configPath := filepath.Join(configDir, "mise.toml")
+	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
+		return "", err
+	}
+	return configPath, nil
+}
+
+func toolsMap(tools []string) map[string]string {
+	if len(tools) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(tools))
+	for _, t := range tools {
+		parts := strings.SplitN(t, "=", 2)
+		if len(parts) == 2 {
+			out[parts[0]] = parts[1]
+		} else {
+			out[t] = "latest"
+		}
+	}
+	return out
+}
+

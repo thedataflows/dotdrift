@@ -1,0 +1,21 @@
+id = "named"
+app = "NamedApp"
+
+[when]
+hosts = ["myhost"]
+users = ["cri"]
+os = ["cachyos"]
+gpu = "nvidia"
+
+[packages]
+present = ["neovim", "ripgrep"]
+absent = ["nano"]
+
+[tools]
+node = "20"
+python = "3.12"
+
+[dotfiles]
+"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.config/nvim" = { source = "nvim", mode = "symlink-each" }
+"~/.config/app/config.toml" = { source = "config.toml", mode = "copy" }

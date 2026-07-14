@@ -1,0 +1,12 @@
+id = "shell"
+app = "shell"
+
+[packages]
+present = ["neovim", "ripgrep", "nano"]
+absent = ["emacs"]
+
+[tools]
+node = "20"
+
+[dotfiles]
+"~/.bashrc" = { source = ".bashrc", mode = "link" }

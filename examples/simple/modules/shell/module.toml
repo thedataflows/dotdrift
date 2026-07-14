@@ -1,0 +1,9 @@
+id = "shell"
+app = "shell"
+
+[packages]
+present = ["bash", "ripgrep"]
+
+[dotfiles]
+"~/.bashrc" = { source = "home/.bashrc", mode = "link" }
+"~/.bash_profile" = { source = "home/.bash_profile", mode = "link" }

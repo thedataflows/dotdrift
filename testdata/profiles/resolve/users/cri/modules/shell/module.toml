@@ -1,0 +1,9 @@
+[packages]
+present = ["neovim", "eza"]
+absent = ["nano"]
+
+[tools]
+python = "3.12"
+
+[dotfiles]
+"~/.bashrc" = { source = ".bashrc", mode = "copy" }

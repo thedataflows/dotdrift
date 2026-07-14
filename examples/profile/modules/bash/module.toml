@@ -1,0 +1,8 @@
+id = "bash"
+app = "bash"
+
+[packages]
+present = ["bash"]
+
+[dotfiles]
+"~/.bashrc" = { source = "home/.bashrc", mode = "link" }

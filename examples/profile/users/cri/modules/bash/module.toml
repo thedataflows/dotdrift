@@ -1,0 +1,3 @@
+[packages]
+present = ["bash-completion"]
+absent = ["nano"]

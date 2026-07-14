@@ -1,0 +1,11 @@
+[packages]
+present = ["fd"]
+absent = ["neovim"]
+
+[tools]
+node = "22"
+python = "3.11"
+
+[dotfiles]
+"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.config/fish" = { source = "fish", mode = "symlink-each" }

@@ -1,0 +1,5 @@
+[when]
+hosts = ["myhost"]
+users = ["cri"]
+os = ["cachyos"]
+gpu = "nvidia"

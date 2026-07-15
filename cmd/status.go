@@ -19,7 +19,7 @@ type StatusCmd struct {
 func (c *StatusCmd) Run() error {
 	statePath := c.State
 	if statePath == "" {
-		statePath = state.DefaultPath()
+		statePath = state.ProfileStatePath(c.Profile)
 	}
 	store := state.NewFileStore(statePath)
 	s, err := store.Load()

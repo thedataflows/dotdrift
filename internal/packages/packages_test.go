@@ -5,7 +5,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"context"
+
 	"github.com/thedataflows/dotdrift/internal/packages"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 type fakeRunner struct {
@@ -88,4 +91,67 @@ func TestParu_presentError(t *testing.T) {
 	err := b.Present([]string{"x"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "cancelled")
+}
+
+
+type fakeBackend struct {
+	presentCalls [][]string
+	absentCalls  [][]string
+	err          error
+}
+
+func (f *fakeBackend) Present(pkgs []string) error {
+	f.presentCalls = append(f.presentCalls, pkgs)
+	return f.err
+}
+
+func (f *fakeBackend) Absent(pkgs []string) error {
+	f.absentCalls = append(f.absentCalls, pkgs)
+	return f.err
+}
+
+func (f *fakeBackend) IsInstalled(pkg string) (bool, error) { return false, nil }
+
+func TestPackagesStep_callsAbsentAndPresent(t *testing.T) {
+	b := &fakeBackend{}
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{
+			Install: []string{"neovim"},
+			Remove:  []string{"nano"},
+		},
+	}
+
+	step := packages.NewStep(b, plan)
+	require.NoError(t, step.Run(context.Background()))
+	require.Len(t, b.absentCalls, 1, "absent should be called")
+	require.Equal(t, []string{"nano"}, b.absentCalls[0])
+	require.Len(t, b.presentCalls, 1, "present should be called")
+	require.Equal(t, []string{"neovim"}, b.presentCalls[0])
+}
+
+func TestPackagesStep_removeErrorFails(t *testing.T) {
+	b := &fakeBackend{err: errors.New("remove failed")}
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{
+			Install: []string{"neovim"},
+			Remove:  []string{"nano"},
+		},
+	}
+
+	step := packages.NewStep(b, plan)
+	err := step.Run(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "remove failed")
+}
+
+func TestPackagesStep_noPackagesNoBackendCalls(t *testing.T) {
+	b := &fakeBackend{}
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{},
+	}
+
+	step := packages.NewStep(b, plan)
+	require.NoError(t, step.Run(context.Background()))
+	require.Empty(t, b.presentCalls)
+	require.Empty(t, b.absentCalls)
 }

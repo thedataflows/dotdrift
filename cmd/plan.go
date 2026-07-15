@@ -54,6 +54,10 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 	for _, pkg := range plan.Packages.Install {
 		fmt.Fprintf(out, "  - %s\n", pkg)
 	}
+	fmt.Fprintln(out, "remove:")
+	for _, pkg := range plan.Packages.Remove {
+		fmt.Fprintf(out, "  - %s\n", pkg)
+	}
 	fmt.Fprintln(out, "tools:")
 	for _, k := range sortedKeys(plan.Tools.Versions) {
 		fmt.Fprintf(out, "  %s: %s\n", k, plan.Tools.Versions[k])

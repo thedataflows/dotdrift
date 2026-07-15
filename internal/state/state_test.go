@@ -3,6 +3,7 @@ package state_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -85,4 +86,40 @@ func TestState_markCompleteAndFailed(t *testing.T) {
 	s.MarkCompletePipeline()
 	require.Equal(t, state.StatusComplete, s.Status)
 	require.Empty(t, s.Current)
+}
+
+func TestProfileStatePath(t *testing.T) {
+	dir := t.TempDir()
+	p := state.ProfileStatePath(dir)
+	require.True(t, strings.HasSuffix(p, "state.json"), "state path should end with state.json")
+	require.True(t, strings.Contains(p, "profiles"), "state path should be under profiles/")
+	require.NotEqual(t, p, state.ProfileStatePath(filepath.Join(dir, "other")), "different profiles should have different state paths")
+}
+
+func TestProfileStatePath_respectsXDGStateHome(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/tmp/xdg-state")
+	dir := t.TempDir()
+	p := state.ProfileStatePath(dir)
+	require.True(t, strings.HasPrefix(p, "/tmp/xdg-state/dotdrift/"), "state path should respect XDG_STATE_HOME: %s", p)
+}
+
+func TestProfileStatePath_defaultsToLocalState(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	dir := t.TempDir()
+	p := state.ProfileStatePath(dir)
+	require.True(t, strings.HasPrefix(p, filepath.Join(os.Getenv("HOME"), ".local", "state", "dotdrift")), "default state path should be under ~/.local/state/dotdrift: %s", p)
+}
+
+func TestDefaultPath_usesXDGStateHome(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "")
+	p := state.DefaultPath()
+	home, _ := os.UserHomeDir()
+	want := filepath.Join(home, ".local", "state", "dotdrift", "state.json")
+	require.Equal(t, want, p)
+}
+
+func TestDefaultPath_respectsXDGStateHome(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", "/tmp/xdg-state")
+	p := state.DefaultPath()
+	require.Equal(t, "/tmp/xdg-state/dotdrift/state.json", p)
 }

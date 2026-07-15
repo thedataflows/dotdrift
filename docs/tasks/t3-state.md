@@ -26,7 +26,7 @@ State + apply driver with fake steps.
 
 # Implementation notes
 
-- `internal/state` persists JSON state to `~/.local/share/dotdrift/state.json` (or a configurable path).
+- `internal/state` persists JSON state under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`). The path is profile-specific so switching profiles does not collide resume state. `--state` still overrides the path.
 - State fields: `selection` (fingerprint), `completed` (map of step names), `current` (step name), `status` (enum), `error` (string).
 - `internal/apply` orchestrates the pipeline. Each step is an interface (`Step`) with `Run(ctx, plan, state) error`.
 - The apply driver:

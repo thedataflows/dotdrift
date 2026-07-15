@@ -145,3 +145,19 @@ func TestResolve_emptyProfile(t *testing.T) {
 	require.Empty(t, plan.Tools.Versions)
 	require.Empty(t, plan.Dotfiles.Entries)
 }
+
+func TestMergePackages_absentInRemoveList(t *testing.T) {
+	p, err := profile.Load(fixture(t, "resolve"), &facts.Facts{
+		Hostname: "myhost",
+		Username: "cri",
+		OS:       "linux",
+	})
+	require.NoError(t, err)
+	require.Contains(t, selectedIDs(p), "shell")
+
+	plan, err := resolve.Resolve(p, &facts.Facts{Hostname: "myhost", Username: "cri"})
+	require.NoError(t, err)
+
+	require.Contains(t, plan.Packages.Remove, "nano", "user absent should appear in remove list")
+	require.Contains(t, plan.Packages.Remove, "emacs", "base absent should appear in remove list")
+}

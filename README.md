@@ -54,6 +54,8 @@ profile/
 
 See `examples/simple/` for a minimal profile.
 
+> Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state.
+
 ## Commands
 
 | Command | Purpose |

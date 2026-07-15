@@ -21,9 +21,10 @@ type Plan struct {
 	Hooks    HooksStep
 }
 
-// PackagesStep lists packages that should be present on the system.
+// PackagesStep lists packages that should be present or removed from the system.
 type PackagesStep struct {
 	Install []string
+	Remove  []string
 }
 
 // ToolsStep lists required tool versions.
@@ -95,9 +96,12 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		userCfg, _ := loadModuleConfig(userPath)
 		user := layerConfig{name: "user", path: userPath, cfg: userCfg}
 
-		for _, pkg := range mergePackages(base.cfg.Packages, host.cfg.Packages, user.cfg.Packages) {
+		install, remove := mergePackages(base.cfg.Packages, host.cfg.Packages, user.cfg.Packages)
+		for _, pkg := range install {
 			pkgSet[pkg] = struct{}{}
 		}
+		plan.Packages.Remove = append(plan.Packages.Remove, remove...)
+		sort.Strings(plan.Packages.Remove)
 
 		for k, v := range mergeTools(base.cfg.Tools, host.cfg.Tools, user.cfg.Tools) {
 			plan.Tools.Versions[k] = v
@@ -169,27 +173,29 @@ func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {
 	return cfg, nil
 }
 
-func mergePackages(base, host, user profile.Packages) []string {
-	set := make(map[string]struct{})
-	applyPackages(set, base)
-	applyPackages(set, host)
-	applyPackages(set, user)
+func mergePackages(base, host, user profile.Packages) (present []string, absent []string) {
+	// pkgState records the final declaration for each package: true = present, false = absent.
+	// Higher layers win because they are applied last.
+	pkgState := make(map[string]bool)
+	for _, p := range []profile.Packages{base, host, user} {
+		for _, pkg := range p.Present {
+			pkgState[pkg] = true
+		}
+		for _, pkg := range p.Absent {
+			pkgState[pkg] = false
+		}
+	}
 
-	result := make([]string, 0, len(set))
-	for pkg := range set {
-		result = append(result, pkg)
+	for pkg, isPresent := range pkgState {
+		if isPresent {
+			present = append(present, pkg)
+		} else {
+			absent = append(absent, pkg)
+		}
 	}
-	sort.Strings(result)
-	return result
-}
-
-func applyPackages(set map[string]struct{}, p profile.Packages) {
-	for _, pkg := range p.Present {
-		set[pkg] = struct{}{}
-	}
-	for _, pkg := range p.Absent {
-		delete(set, pkg)
-	}
+	sort.Strings(present)
+	sort.Strings(absent)
+	return present, absent
 }
 
 func mergeTools(base, host, user map[string]string) map[string]string {

@@ -2,6 +2,7 @@
 package state
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -90,16 +91,52 @@ type FileStore struct {
 	Path string
 }
 
-// DefaultPath returns the default state file path.
+// DefaultPath returns the default state file path when no profile is known.
+// Prefer ProfileStatePath for normal CLI use; DefaultPath is a fallback for
+// direct API callers that do not have a profile root.
 func DefaultPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
+	root := os.Getenv("XDG_STATE_HOME")
+	if root == "" {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			return ""
+		}
+		root = filepath.Join(home, ".local", "state")
 	}
-	return filepath.Join(home, ".local", "share", "dotdrift", "state.json")
+	return filepath.Join(root, "dotdrift", "state.json")
 }
 
 // NewFileStore returns a FileStore using the given path.
+
+// ProfileStatePath returns the default state file path for a profile root.
+// The path is located under the XDG state directory so the profile directory
+// is not polluted with runtime state.
+func ProfileStatePath(profileRoot string) string {
+	root := os.Getenv("XDG_STATE_HOME")
+	if root == "" {
+		home, err := os.UserHomeDir()
+		if err != nil || home == "" {
+			root = "."
+		} else {
+			root = filepath.Join(home, ".local", "state")
+		}
+	}
+	if profileRoot == "" {
+		profileRoot = "."
+	}
+	abs, err := filepath.Abs(profileRoot)
+	if err != nil {
+		abs = profileRoot
+	}
+	id := profileHash(abs)
+	return filepath.Join(root, "dotdrift", "profiles", id, "state.json")
+}
+
+// profileHash returns a stable identifier for a profile path.
+func profileHash(path string) string {
+	h := sha256.Sum256([]byte(path))
+	return fmt.Sprintf("%x", h)
+}
 func NewFileStore(path string) *FileStore {
 	if path == "" {
 		path = DefaultPath()

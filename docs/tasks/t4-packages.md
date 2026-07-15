@@ -16,7 +16,9 @@ Package step for apply.
 - `TestParu_presentCommandLine` — paru present command uses `--needed` and sorted packages.
 - `TestParu_absent` — paru `-R` command for absent packages.
 - `TestPacman_isInstalled` — check installed state via `pacman -Q`.
-- `TestPackagesStep_callsPresent` — packages step invokes backend with merged present/absent sets.
+- `TestPackagesStep_callsPresent` — packages step invokes backend with merged present set.
+- `TestPackagesStep_callsAbsentAndPresent` — packages step invokes `Absent` before `Present`, executing explicit exceptions.
+- `TestPackagesStep_removeErrorFails` — a failing remove stops the pipeline.
 - `TestPackagesStep_idempotent` — already-installed packages are skipped.
 - Fake backend used in apply integration unit test.
 
@@ -27,7 +29,7 @@ Package step for apply.
 - `present` runs `paru -S --needed --noconfirm <packages...>`.
 - `absent` runs `paru -R --noconfirm <packages...>`.
 - `IsInstalled` uses `pacman -Q <pkg>` for idempotency checks.
-- The packages step in `internal/apply` uses the backend selected by `facts.Backend` (paru for now; apt/dnf are stubs).
+- The packages step calls `backend.Absent(plan.Packages.Remove)` before `backend.Present(plan.Packages.Install)` so explicit exceptions are actually uninstalled.
 - All `exec` calls go through a runner interface so tests fake them.
 
 # Acceptance

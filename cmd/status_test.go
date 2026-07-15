@@ -35,9 +35,10 @@ func TestStatus_showsState(t *testing.T) {
 	require.True(t, strings.HasPrefix(out, "profile:"))
 }
 
-func TestStatus_defaultsToDefaultStatePath(t *testing.T) {
+func TestStatus_defaultsToProfileStatePath(t *testing.T) {
+	dir := t.TempDir()
 	var buf bytes.Buffer
-	cmd := &StatusCmd{out: &buf}
+	cmd := &StatusCmd{Profile: dir, out: &buf}
 	require.NoError(t, cmd.Run())
-	require.Contains(t, buf.String(), "state: "+state.DefaultPath())
+	require.Contains(t, buf.String(), "state: "+state.ProfileStatePath(dir))
 }

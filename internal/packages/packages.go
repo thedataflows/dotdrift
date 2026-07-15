@@ -117,12 +117,22 @@ func NewStep(backend Backend, plan *resolve.Plan) *Step {
 // Name returns the step name.
 func (s *Step) Name() string { return "packages" }
 
-// Run applies the package backend.
+// Run applies the package backend, removing absent packages first, then installing present ones.
 func (s *Step) Run(ctx context.Context) error {
 	if s.plan == nil {
 		return fmt.Errorf("plan is nil")
 	}
-	return s.backend.Present(s.plan.Packages.Install)
+	if len(s.plan.Packages.Remove) > 0 {
+		if err := s.backend.Absent(s.plan.Packages.Remove); err != nil {
+			return fmt.Errorf("remove packages: %w", err)
+		}
+	}
+	if len(s.plan.Packages.Install) > 0 {
+		if err := s.backend.Present(s.plan.Packages.Install); err != nil {
+			return fmt.Errorf("install packages: %w", err)
+		}
+	}
+	return nil
 }
 
 // AutoBackend resolves the backend string from the runtime environment.

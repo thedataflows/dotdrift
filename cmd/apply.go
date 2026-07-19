@@ -44,6 +44,13 @@ func (c *ApplyCmd) Run() error {
 		statePath = state.ProfileStatePath(c.Profile)
 	}
 	store := state.NewFileStore(statePath)
+	// Serialize concurrent applies: the sidecar lock is held from before Load
+	// until the pipeline's last save, so two applies can never interleave
+	// load→pipeline→save on the same state file.
+	if err := store.Lock(); err != nil {
+		return fmt.Errorf("lock state: %w", err)
+	}
+	defer func() { _ = store.Unlock() }()
 	s, err := store.Load()
 	if err != nil {
 		return fmt.Errorf("load state: %w", err)

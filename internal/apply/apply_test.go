@@ -3,6 +3,7 @@ package apply_test
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,7 +26,7 @@ func (s *fakeStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func TestStepOrder(t *testing.T) {
+func TestStepOrder_packagesToolsDotfiles(t *testing.T) {
 	var order []string
 	steps := []apply.Step{
 		&fakeStep{name: "packages", run: func() error { order = append(order, "packages"); return nil }},
@@ -79,4 +80,26 @@ func TestApply_successRerunsFullPipeline(t *testing.T) {
 	pipeline2.SetState(pipeline.State())
 	require.NoError(t, pipeline2.Run(context.Background()))
 	require.Equal(t, 2, step.runs)
+}
+
+func TestApply_failurePersistsFailedState(t *testing.T) {
+	boom := errors.New("boom")
+	steps := []apply.Step{
+		&fakeStep{name: "packages"},
+		&fakeStep{name: "tools", run: func() error { return boom }},
+	}
+
+	store := state.NewFileStore(filepath.Join(t.TempDir(), "state.json"))
+	pipeline := apply.NewPipeline(steps, store.Save)
+	pipeline.SetState(state.New())
+	err := pipeline.Run(context.Background())
+	require.ErrorIs(t, err, boom)
+
+	onDisk, err := store.Load()
+	require.NoError(t, err)
+	require.Equal(t, state.StatusFailed, onDisk.Status)
+	require.Equal(t, "tools", onDisk.Current)
+	require.Contains(t, onDisk.Error, "boom")
+	require.True(t, onDisk.IsCompleted("packages"))
+	require.False(t, onDisk.IsCompleted("tools"))
 }

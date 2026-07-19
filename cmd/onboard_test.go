@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
@@ -65,4 +66,46 @@ func TestOnboard_detectErrorPropagates(t *testing.T) {
 	cmd := &OnboardCmd{Paths: []string{"/x"}, Profile: t.TempDir(), Mise: &mise.FakeRunner{}}
 	err := cmd.Run()
 	require.ErrorContains(t, err, "detect")
+}
+
+// Every dotfile mode documented in docs/product/profile-layout.md must parse.
+func TestOnboard_modeFlag_acceptsDocumentedModes(t *testing.T) {
+	for _, mode := range []string{"link", "copy", "template", "symlink-each"} {
+		t.Run(mode, func(t *testing.T) {
+			var cli CLI
+			parser, err := kong.New(&cli, kong.Name(appName))
+			require.NoError(t, err)
+			_, err = parser.Parse([]string{"onboard", "--mode", mode, filepath.Join(t.TempDir(), "x")})
+			require.NoError(t, err, "--mode %s is documented in docs/product/profile-layout.md and must parse", mode)
+			require.Equal(t, mode, cli.Onboard.Mode)
+		})
+	}
+}
+
+func TestOnboard_modeFlowsToModuleTOML(t *testing.T) {
+	for _, mode := range []string{"template", "symlink-each"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			profDir := t.TempDir()
+			live := filepath.Join(t.TempDir(), "live.conf")
+			require.NoError(t, os.WriteFile(live, []byte("x=1\n"), 0o644))
+
+			orig := detectFacts
+			detectFacts = func() (*facts.Facts, error) { return &facts.Facts{Hostname: "testhost"}, nil }
+			t.Cleanup(func() { detectFacts = orig })
+
+			cmd := &OnboardCmd{
+				Paths:   []string{live},
+				Profile: profDir,
+				App:     "myapp",
+				Mode:    mode,
+				Mise:    &mise.FakeRunner{},
+			}
+			require.NoError(t, cmd.Run())
+
+			data, err := os.ReadFile(filepath.Join(profDir, "modules", "myapp", "module.toml"))
+			require.NoError(t, err)
+			require.Contains(t, string(data), `mode = "`+mode+`"`, "module.toml must record the requested mode")
+		})
+	}
 }

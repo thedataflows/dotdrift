@@ -55,28 +55,39 @@ type Mise struct {
 	Install    func() (string, error)
 	Classify   func(string) InstallKind
 
+	// Env is extra environment ("KEY=value") appended to the subprocess
+	// environment on the real exec path; fakes (Run/RunContext) bypass it.
+	Env []string
+
 	ensureOnce sync.Once
 	ensurePath string
 	ensureErr  error
 }
 
-// DefaultMise returns a Mise configured with real OS dependencies.
+// DefaultMise returns a Mise configured with real OS dependencies. Run and
+// RunContext stay nil so runner() uses the env-aware real exec path.
 func DefaultMise() *Mise {
 	return &Mise{
 		LookPath: defaultLookPath,
-		Run: func(name string, args ...string) (string, error) {
-			return defaultRunContext(context.Background(), name, args...)
-		},
-		RunContext: defaultRunContext,
-		Install:    defaultInstall,
-		Classify:   ClassifyInstall,
+		Install:  defaultInstall,
+		Classify: ClassifyInstall,
 	}
 }
 
 // defaultRunContext executes a command, cancelling it with ctx. On failure the
 // trimmed combined output is appended so callers surface mise's own message.
 func defaultRunContext(ctx context.Context, name string, args ...string) (string, error) {
+	return runContextEnv(ctx, nil, name, args...)
+}
+
+// runContextEnv is defaultRunContext with extra environment entries appended
+// to the inherited environment; a later duplicate key wins over an inherited
+// one, so callers can override (merged) variables.
+func runContextEnv(ctx context.Context, env []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if trimmed := strings.TrimSpace(string(out)); trimmed != "" {
@@ -88,7 +99,7 @@ func defaultRunContext(ctx context.Context, name string, args ...string) (string
 }
 
 // runner resolves the ctx-aware runner: RunContext wins, then legacy Run,
-// then the real exec implementation.
+// then the real exec implementation (which honors Env).
 func (m *Mise) runner() func(context.Context, string, ...string) (string, error) {
 	if m.RunContext != nil {
 		return m.RunContext
@@ -99,7 +110,42 @@ func (m *Mise) runner() func(context.Context, string, ...string) (string, error)
 			return run(name, args...)
 		}
 	}
+	if len(m.Env) > 0 {
+		env := m.Env
+		return func(ctx context.Context, name string, args ...string) (string, error) {
+			return runContextEnv(ctx, env, name, args...)
+		}
+	}
 	return defaultRunContext
+}
+
+// runWithEnv executes one command with per-call extra environment merged
+// after Env. Shared struct state is never mutated, so concurrent callers are
+// race-free. Fakes (Run/RunContext) cannot receive env and are called as-is.
+func (m *Mise) runWithEnv(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
+	if m.RunContext == nil && m.Run == nil && (len(m.Env) > 0 || len(extraEnv) > 0) {
+		env := make([]string, 0, len(m.Env)+len(extraEnv))
+		env = append(env, m.Env...)
+		env = append(env, extraEnv...)
+		return runContextEnv(ctx, env, name, args...)
+	}
+	return m.runner()(ctx, name, args...)
+}
+
+// trustEnv returns a MISE_TRUSTED_CONFIG_PATHS entry covering the directory
+// of configPath so mise accepts dotdrift-generated configs that live outside
+// its default trusted paths. Any pre-existing user value is preserved and the
+// generated dir is appended (colon-separated), never clobbered.
+func trustEnv(configPath string) []string {
+	dir := filepath.Dir(configPath)
+	if abs, err := filepath.Abs(dir); err == nil {
+		dir = abs
+	}
+	value := dir
+	if existing := os.Getenv("MISE_TRUSTED_CONFIG_PATHS"); existing != "" {
+		value = existing + string(os.PathListSeparator) + dir
+	}
+	return []string{"MISE_TRUSTED_CONFIG_PATHS=" + value}
 }
 
 func defaultLookPath(name string) (string, error) {
@@ -402,7 +448,7 @@ func (e *ExecMise) EnsureAndInstall(ctx context.Context, configPath string) erro
 	if err != nil {
 		return err
 	}
-	_, err = e.mise.runner()(ctx, path, "install", "--cd", filepath.Dir(configPath))
+	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), path, "install", "--cd", filepath.Dir(configPath))
 	return err
 }
 
@@ -415,7 +461,7 @@ func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes boo
 	if yes {
 		args = append(args, "--yes")
 	}
-	_, err = e.mise.runner()(ctx, path, args...)
+	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), path, args...)
 	return err
 }
 
@@ -425,7 +471,7 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 	if err != nil {
 		return err
 	}
-	_, err = e.mise.runner()(ctx, path, "run", "--cd", filepath.Dir(configPath), taskName)
+	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), path, "run", "--cd", filepath.Dir(configPath), taskName)
 	return err
 }
 

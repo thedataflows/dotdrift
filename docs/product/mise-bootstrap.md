@@ -54,6 +54,10 @@ Errors from a failing `mise` subprocess include the captured (trimmed) combined 
 
 The `Ensure` result (success or failure) is memoized per `Mise` instance, so the bootstrap runs at most once per process no matter how many steps invoke it. `EnsureContext` propagates a `context.Context` to every subprocess (`exec.CommandContext`); `Ensure` uses `context.Background()`.
 
+# Trusting generated configs
+
+Generated `mise.toml` files live under the XDG state dir (`$XDG_STATE_HOME/dotdrift/profiles/<hash>/…`), which is outside mise's default trusted paths — unmodified mise refuses to parse them (`Config files in … are not trusted`). Whenever `ExecMise` invokes mise against a generated config (`EnsureAndInstall`, `DotfilesApply`, `RunTask`), the subprocess environment includes `MISE_TRUSTED_CONFIG_PATHS` covering the config's directory, merged with (never clobbering) any pre-existing user value of that variable, colon-separated. The env is derived per call and never mutates shared `Mise` state, so concurrent steps are race-free.
+
 # Testing
 
 See [Ensure mise task](/tasks/t-mise-ensure.md). All branches use fakes for PATH, version output, and installer.

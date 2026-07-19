@@ -38,6 +38,7 @@ v0.1.0 ship readiness.
 
 - README: contract, merge order, onboard, apply resume, mise ensure.
 - ~~Migration guide from pimp-my-cachyos~~ — removed from v0.1 scope on 2026-07-19 (no longer tracked as a deliverable).
+- `plan --json` machine-readable output — implemented 2026-07-19 (deferred from the gap-analysis program as new surface; emits one JSON object with fingerprint, modules, packages, tools, dotfiles; warning suppressed so stdout stays parseable).
 - `examples/` small profile showing a module, host overlay, and user overlay.
 
 # Acceptance

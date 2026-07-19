@@ -1,6 +1,7 @@
 package dotdrift
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,7 @@ import (
 // PlanCmd prints the resolved plan without side effects.
 type PlanCmd struct {
 	Profile string       `help:"Path to profile directory" type:"existingdir" default:"."`
+	JSON    bool         `help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
 	Facts   *facts.Facts `kong:"-"`
 	Out     io.Writer    `kong:"-"`
 }
@@ -45,7 +47,59 @@ func (c *PlanCmd) Run() error {
 		out = os.Stdout
 	}
 
+	if c.JSON {
+		return printPlanJSON(out, plan, p, f)
+	}
 	return printPlan(out, plan, p, f)
+}
+
+type planJSONDotfile struct {
+	Target string `json:"target"`
+	Source string `json:"source"`
+	Mode   string `json:"mode"`
+	Module string `json:"module"`
+	Layer  string `json:"layer"`
+}
+
+type planJSONDoc struct {
+	Fingerprint string   `json:"fingerprint"`
+	Modules     []string `json:"modules"`
+	Packages    struct {
+		Install []string `json:"install"`
+		Remove  []string `json:"remove"`
+	} `json:"packages"`
+	Tools    map[string]string `json:"tools"`
+	Dotfiles []planJSONDotfile `json:"dotfiles"`
+}
+
+// printPlanJSON renders the plan as one JSON object. The no-modules warning is
+// intentionally omitted so stdout stays parseable by machine consumers.
+func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts) error {
+	doc := planJSONDoc{
+		Fingerprint: resolve.Fingerprint(p, f),
+		Modules:     make([]string, 0, len(p.Selected)),
+		Tools:       plan.Tools.Versions,
+		Dotfiles:    make([]planJSONDotfile, 0, len(plan.Dotfiles.Entries)),
+	}
+	for _, m := range p.Selected {
+		doc.Modules = append(doc.Modules, m.ID)
+	}
+	sort.Strings(doc.Modules)
+	doc.Packages.Install = plan.Packages.Install
+	doc.Packages.Remove = plan.Packages.Remove
+	for _, e := range plan.Dotfiles.Entries {
+		doc.Dotfiles = append(doc.Dotfiles, planJSONDotfile{
+			Target: e.Target,
+			Source: e.Source,
+			Mode:   e.Mode,
+			Module: e.Module,
+			Layer:  e.Layer,
+		})
+	}
+
+	enc := json.NewEncoder(out)
+	enc.SetIndent("", "  ")
+	return enc.Encode(doc)
 }
 
 func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts) error {

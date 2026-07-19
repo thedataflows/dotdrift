@@ -26,6 +26,8 @@
 
 ## 2026-07-19
 
+* **Added (cli)**: `dotdrift plan --json` prints the effective plan as a single JSON object to stdout (`fingerprint`, `modules`, `packages.install`/`remove`, `tools`, `dotfiles[]` with target/source/mode/module/layer). The `warning: no modules selected` line is suppressed in JSON mode so stdout stays parseable; default text output is byte-identical. New tests: `TestCLI_plan_jsonOutput`, `TestCLI_plan_jsonNotInDefaultOutput`, `TestCLI_plan_jsonNoModulesStaysParseable`.
+
 * **Removed (dead exports + hooks noop, decision D4a)**: deleted `facts.Detect` (package kept — `facts.Facts` is the shared facts type used by profile/resolve/detect/cmd), package-level `state.Load`/`state.Save` (FileStore is the API), `detect.DetectEnv`, `apply.Pipeline.StepNames`/`Steps` and `apply.NoOpStep`/`NewNoOpStep`, the unused `mise.DotfileEntry`/`mise.Plan` mirror types, and the permanent-noop hooks step: `mise.HooksStep`, `resolve.Plan.Hooks`/`resolve.HooksStep`, the `hooks:` section of `dotdrift plan` output, and the `&mise.HooksStep{}` pipeline entry in `cmd/apply.go`. Pipeline is now `packages → tools → dotfiles`; task docs t2/t3/t6 updated.
 
 * **Hardened (root)**: pprof now defaults to `127.0.0.1:6060` (was `0.0.0.0:6060`) and its `ListenAndServe` error is logged via zerolog `Error` instead of silently swallowed; `.env` auto-load honors `DOTDRIFT_NO_ENV=1` (skips loading entirely) and emits a `Debug` notice naming the loaded files. New tests: `TestProfilingListenOn_defaultIsLoopback`, `TestLoadDotenvFiles_loadsEnvFiles`, `TestLoadDotenvFiles_optOut`.

@@ -2,6 +2,7 @@ package dotdrift_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -10,6 +11,23 @@ import (
 	cmd "github.com/thedataflows/dotdrift/cmd"
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
+
+type planJSON struct {
+	Fingerprint string   `json:"fingerprint"`
+	Modules     []string `json:"modules"`
+	Packages    struct {
+		Install []string `json:"install"`
+		Remove  []string `json:"remove"`
+	} `json:"packages"`
+	Tools    map[string]string `json:"tools"`
+	Dotfiles []struct {
+		Target string `json:"target"`
+		Source string `json:"source"`
+		Mode   string `json:"mode"`
+		Module string `json:"module"`
+		Layer  string `json:"layer"`
+	} `json:"dotfiles"`
+}
 
 func TestCLI_plan_output(t *testing.T) {
 	var buf bytes.Buffer
@@ -54,4 +72,92 @@ func TestCLI_plan_noModulesSelectedWarning(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	require.Contains(t, buf.String(), "warning: no modules selected")
+}
+
+func TestCLI_plan_jsonOutput(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "resolve"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+		JSON:    true,
+	}
+	err := c.Run()
+	require.NoError(t, err)
+
+	var got planJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got), "plan --json must emit a single parseable JSON object")
+
+	require.Equal(t, []string{"shell"}, got.Modules)
+	require.Contains(t, got.Fingerprint, "selected=shell")
+	require.Contains(t, got.Fingerprint, "hostname=myhost")
+	require.Contains(t, got.Fingerprint, "username=cri")
+
+	require.Equal(t, []string{"eza", "fd", "neovim", "ripgrep"}, got.Packages.Install)
+	require.Equal(t, []string{"emacs", "nano"}, got.Packages.Remove)
+
+	require.Equal(t, map[string]string{"node": "22", "python": "3.12"}, got.Tools)
+
+	require.Len(t, got.Dotfiles, 2)
+	byTarget := make(map[string]struct {
+		Source string
+		Mode   string
+		Module string
+		Layer  string
+	})
+	for _, d := range got.Dotfiles {
+		byTarget[d.Target] = struct {
+			Source string
+			Mode   string
+			Module string
+			Layer  string
+		}{d.Source, d.Mode, d.Module, d.Layer}
+	}
+	bashrc, ok := byTarget["~/.bashrc"]
+	require.True(t, ok, "dotfiles must include ~/.bashrc")
+	require.Equal(t, "copy", bashrc.Mode)
+	require.Equal(t, "shell", bashrc.Module)
+	require.Equal(t, "user", bashrc.Layer)
+	require.True(t, strings.HasSuffix(bashrc.Source, filepath.Join("users", "cri", "modules", "shell", ".bashrc")),
+		"bashrc source should resolve to the user overlay, got %q", bashrc.Source)
+
+	fish, ok := byTarget["~/.config/fish"]
+	require.True(t, ok, "dotfiles must include ~/.config/fish")
+	require.Equal(t, "symlink-each", fish.Mode)
+	require.Equal(t, "host", fish.Layer)
+}
+
+func TestCLI_plan_jsonNotInDefaultOutput(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "resolve"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+	}
+	err := c.Run()
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "fingerprint:")
+	require.False(t, json.Valid(buf.Bytes()), "default plan output must remain the text rendering, not JSON")
+}
+
+// Decision: with --json the "warning: no modules selected" line is suppressed
+// so stdout stays a single parseable JSON object (empty modules/packages
+// arrays convey the same information to machine consumers).
+func TestCLI_plan_jsonNoModulesStaysParseable(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "minimal"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+		JSON:    true,
+	}
+	err := c.Run()
+	require.NoError(t, err)
+	require.NotContains(t, buf.String(), "warning: no modules selected")
+
+	var got planJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got), "zero-module --json output must stay parseable")
+	require.Empty(t, got.Modules)
+	require.Empty(t, got.Packages.Install)
+	require.Empty(t, got.Dotfiles)
 }

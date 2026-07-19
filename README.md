@@ -69,7 +69,7 @@ See `examples/simple/` for a minimal single-module profile, and `examples/profil
 | `dotdrift init [path|git-url]` | Create a new profile (git-initialized) or clone a profile repo |
 | `dotdrift detect` | Print host/user/os/distro/gpu/backend facts |
 | `dotdrift modules` | List selected and skipped modules |
-| `dotdrift plan` | Print the effective plan without side effects |
+| `dotdrift plan [--json]` | Print the effective plan without side effects (`--json` for machine-readable output) |
 | `dotdrift apply [--yes]` | Run the full pipeline and resume from state |
 | `dotdrift status` | Show resume cursor, selection, and last error |
 | `dotdrift onboard <path>...` | Copy live paths into a module and apply |

@@ -228,6 +228,79 @@ func TestOnboard_conflictKeepsModule(t *testing.T) {
 	require.FileExists(t, filepath.Join(profile, "modules", "bash", "module.toml"))
 }
 
+func TestOnboard_forceReplacesExistingFile(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	src := filepath.Join(home, ".bashrc")
+	require.NoError(t, writeFile(src, "v1"))
+
+	fr := &mise.FakeRunner{}
+	o := &onboard.Onboard{Mise: fr}
+	opts := onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{src},
+		App:         "bash",
+		Home:        home,
+	}
+	require.NoError(t, o.Run(opts))
+
+	// Live file changed since the first onboard.
+	require.NoError(t, writeFile(src, "v2"))
+
+	// Without force the second onboard still conflicts.
+	err := o.Run(opts)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "conflict")
+
+	// With force the module copy is refreshed from the live file.
+	forced := opts
+	forced.Force = true
+	require.NoError(t, o.Run(forced))
+
+	copied := filepath.Join(profile, "modules", "bash", "home", ".bashrc")
+	content, err := readFile(copied)
+	require.NoError(t, err)
+	require.Equal(t, "v2", content)
+}
+
+func TestOnboard_forceReplacesExistingDir(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	dir := filepath.Join(home, ".config", "app")
+	require.NoError(t, writeFile(filepath.Join(dir, "old.conf"), "old"))
+	require.NoError(t, writeFile(filepath.Join(dir, "keep.conf"), "v1"))
+
+	fr := &mise.FakeRunner{}
+	o := &onboard.Onboard{Mise: fr}
+	opts := onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{dir},
+		App:         "app",
+		Home:        home,
+	}
+	require.NoError(t, o.Run(opts))
+
+	// Live dir changed: one file removed, one modified, one added.
+	require.NoError(t, os.Remove(filepath.Join(dir, "old.conf")))
+	require.NoError(t, writeFile(filepath.Join(dir, "keep.conf"), "v2"))
+	require.NoError(t, writeFile(filepath.Join(dir, "new.conf"), "new"))
+
+	forced := opts
+	forced.Force = true
+	require.NoError(t, o.Run(forced))
+
+	base := filepath.Join(profile, "modules", "app", "home", ".config", "app")
+	require.NoFileExists(t, filepath.Join(base, "old.conf"))
+	kept, err := readFile(filepath.Join(base, "keep.conf"))
+	require.NoError(t, err)
+	require.Equal(t, "v2", kept)
+	require.FileExists(t, filepath.Join(base, "new.conf"))
+}
+
 func TestOnboard_dryRun_noSideEffects(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()

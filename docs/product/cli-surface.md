@@ -29,6 +29,7 @@ timestamp: 2026-07-14T00:00:00Z
 | `--tools T` | none | Declare mise tool (comma-separated or repeated for several) |
 | `--host` | base module files | Host overlay only |
 | `--dry-run` | false | Preview only |
+| `--force` | false | Re-onboard a conflicting path: replace the module's copy with the live file/dir instead of erroring |
 
 Forbidden: `--enable`, `--resume`.
 

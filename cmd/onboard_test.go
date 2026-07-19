@@ -58,6 +58,50 @@ func TestOnboard_mapsCommandFieldsToOptions(t *testing.T) {
 	require.FileExists(t, copied)
 }
 
+// --force must parse and flow through to onboard.Options.Force so a
+// conflicting path is re-materialized instead of erroring.
+func TestOnboard_forceFlagParses(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", "--force", filepath.Join(t.TempDir(), "x")})
+	require.NoError(t, err)
+	require.True(t, cli.Onboard.Force)
+}
+
+func TestOnboard_forceFlowsToOptions(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	profDir := t.TempDir()
+	live := filepath.Join(t.TempDir(), "live.conf")
+	require.NoError(t, os.WriteFile(live, []byte("v1\n"), 0o644))
+
+	orig := detectFacts
+	detectFacts = func() (*facts.Facts, error) { return &facts.Facts{Hostname: "testhost"}, nil }
+	t.Cleanup(func() { detectFacts = orig })
+
+	run := func(force bool) error {
+		cmd := &OnboardCmd{
+			Paths:   []string{live},
+			Profile: profDir,
+			App:     "myapp",
+			Force:   force,
+			Mise:    &mise.FakeRunner{},
+		}
+		return cmd.Run()
+	}
+
+	require.NoError(t, run(false))
+	require.ErrorContains(t, run(false), "conflict")
+
+	require.NoError(t, os.WriteFile(live, []byte("v2\n"), 0o644))
+	require.NoError(t, run(true))
+
+	copied := filepath.Join(profDir, "modules", "myapp", "system", strings.TrimPrefix(live, string(filepath.Separator)))
+	data, err := os.ReadFile(copied)
+	require.NoError(t, err)
+	require.Equal(t, "v2\n", string(data))
+}
+
 func TestOnboard_detectErrorPropagates(t *testing.T) {
 	orig := detectFacts
 	detectFacts = func() (*facts.Facts, error) { return nil, errors.New("no facts") }

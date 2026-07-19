@@ -14,7 +14,7 @@ Runnable module with subcommand stubs and test harness.
 # Exit criteria
 
 - `go test ./...` passes
-- CI runs test + vet
+- CI runs test + vet (see `.github/workflows/ci.yml`, added 2026-07-19)
 - Architecture notes match [product contract](/product/contract.md)
 
 # Tasks

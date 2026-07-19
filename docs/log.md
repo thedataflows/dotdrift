@@ -23,3 +23,7 @@
 * **Implemented**: Default state path is now profile-specific under the XDG state directory (`$XDG_STATE_HOME/dotdrift/profiles/<hash>/state.json`, defaulting to `~/.local/state/dotdrift/profiles/<hash>/state.json`) for `apply` and `status`; `packages.absent` is now propagated through `resolve.PackagesStep.Remove` and executed by the package backend during apply. Verified with `go test ./...`, `go vet ./...`, `golangci-lint run ./...`, and `go build`.
 
 * **Updated**: `docs/tasks/t3-state.md` and `docs/tasks/t4-packages.md` now describe the XDG profile-specific state path and the `packages.absent` uninstall behavior. Added `TestDefaultPath_*`, `TestProfileStatePath_defaultsToLocalState`, and `TestPackagesStep_noPackagesNoBackendCalls`.
+
+## 2026-07-19
+
+* **Added**: `.github/workflows/ci.yml` — CI workflow running `go test ./...` and `go vet ./...` (with `GOFLAGS=-mod=vendor`) plus golangci-lint v2 on push to `main` and pull requests, closing the M0 "CI runs test + vet" exit criterion.

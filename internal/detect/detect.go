@@ -96,7 +96,8 @@ func detectUsername() (string, error) {
 	return "", fmt.Errorf("detect username: os/user lookup failed and USER/USERNAME are unset or empty")
 }
 
-func parseOSRelease(content string) string {	for _, line := range strings.Split(content, "\n") {
+func parseOSRelease(content string) string {
+	for _, line := range strings.Split(content, "\n") {
 		if !strings.HasPrefix(line, "ID=") {
 			continue
 		}
@@ -136,13 +137,4 @@ func classifyGPU(content string) string {
 		}
 	}
 	return "unknown"
-}
-
-// DetectEnv wraps Detect and returns an error if the facts are incomplete.
-func DetectEnv() (*facts.Facts, error) {
-	f, err := Detect()
-	if err != nil {
-		return nil, fmt.Errorf("detect: %w", err)
-	}
-	return f, nil
 }

@@ -18,7 +18,6 @@ type Plan struct {
 	Packages PackagesStep
 	Tools    ToolsStep
 	Dotfiles DotfilesStep
-	Hooks    HooksStep
 }
 
 // PackagesStep lists packages that should be present or removed from the system.
@@ -44,12 +43,6 @@ type DotfileEntry struct {
 	Mode   string
 	Module string
 	Layer  string
-}
-
-// HooksStep is a placeholder for pre/post hooks in v0.1.
-type HooksStep struct {
-	Pre  []string
-	Post []string
 }
 
 type layerConfig struct {
@@ -78,7 +71,6 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		Packages: PackagesStep{},
 		Tools:    ToolsStep{Versions: make(map[string]string)},
 		Dotfiles: DotfilesStep{},
-		Hooks:    HooksStep{},
 	}
 
 	if len(p.Selected) > 0 {

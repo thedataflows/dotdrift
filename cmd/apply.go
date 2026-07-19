@@ -122,7 +122,6 @@ func (c *ApplyCmd) Run() error {
 		packages.NewStep(backend, plan),
 		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: configPath},
 		&mise.DotfilesStep{Runner: runner, Plan: plan, ConfigPath: configPath, Yes: c.Yes},
-		&mise.HooksStep{},
 	}
 
 	pipeline := apply.NewPipeline(steps, store.Save)

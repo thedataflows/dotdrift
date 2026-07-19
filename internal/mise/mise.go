@@ -492,18 +492,3 @@ func GenerateConfig(plan *resolve.Plan) string {
 	}
 	return out
 }
-
-// DotfileEntry is a single resolved dotfile target.
-type DotfileEntry struct {
-	Target string
-	Source string
-	Mode   string
-	Module string
-	Layer  string
-}
-
-// Plan mirrors the parts of resolve.Plan needed for mise config generation.
-type Plan struct {
-	Tools    map[string]string
-	Dotfiles []DotfileEntry
-}

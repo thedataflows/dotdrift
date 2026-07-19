@@ -14,9 +14,11 @@ State + apply driver with fake steps.
 # Steps order
 
 `resolve` runs before the pipeline (pre-pipeline planning). The pipeline itself
-persists resume state for four steps:
+persists resume state for three steps:
 
-`packages` → `tools` → `dotfiles` → `hooks`
+`packages` → `tools` → `dotfiles`
+
+(Hooks were a permanent noop placeholder and were removed for v0.1, decision D4a.)
 
 # Tests first
 
@@ -24,7 +26,7 @@ persists resume state for four steps:
 - `TestState_resetOnSelectionChange` — different fingerprint clears completed/current/error.
 - `TestApply_continuesAfterFailure` — resumes from the failed step.
 - `TestApply_successRerunsFullPipeline` — completed run reruns all steps.
-- `TestStepOrder` — steps run in packages → tools → dotfiles → hooks order.
+- `TestStepOrder` — steps run in packages → tools → dotfiles order.
 - `TestApply_noResumeFlag` — no `--resume` in CLI or API.
 - `TestFileStore_sidecarLockMutualExclusion` / `TestFileStore_lockSurvivesRename` / `TestFileStore_lockBlocksUntilUnlock` — the sidecar lock serializes openers and survives atomic rename.
 - `TestApply_secondApplyBlocksOnSidecarLock` — a second apply blocks on the sidecar lock while the first apply is mid-pipeline.

@@ -39,7 +39,7 @@ Implement [merge rules](/product/merge-rules.md) and produce a side-effect-free 
   - unreadable/malformed host or user overlay `module.toml` (missing overlay is fine);
   - dotfile `source` escaping the layer root, or not found in any layer;
   - a package present in one selected module and absent in another.
-- The `Plan` contains ordered steps: packages, tools, dotfiles, hooks.
+- The `Plan` contains ordered steps: packages, tools, dotfiles. (Hooks were a noop placeholder removed for v0.1, decision D4a.)
 - `dotdrift plan` calls `resolve.Plan(profile, facts)` and prints the plan.
 
 # Acceptance

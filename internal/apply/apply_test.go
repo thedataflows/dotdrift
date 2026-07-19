@@ -11,9 +11,9 @@ import (
 )
 
 type fakeStep struct {
-	name  string
-	run   func() error
-	runs  int
+	name string
+	run  func() error
+	runs int
 }
 
 func (s *fakeStep) Name() string { return s.name }
@@ -28,18 +28,16 @@ func (s *fakeStep) Run(ctx context.Context) error {
 func TestStepOrder(t *testing.T) {
 	var order []string
 	steps := []apply.Step{
-		&fakeStep{name: "resolve", run: func() error { order = append(order, "resolve"); return nil }},
 		&fakeStep{name: "packages", run: func() error { order = append(order, "packages"); return nil }},
 		&fakeStep{name: "tools", run: func() error { order = append(order, "tools"); return nil }},
 		&fakeStep{name: "dotfiles", run: func() error { order = append(order, "dotfiles"); return nil }},
-		&fakeStep{name: "hooks", run: func() error { order = append(order, "hooks"); return nil }},
 	}
 
 	var saved *state.State
 	pipeline := apply.NewPipeline(steps, func(s *state.State) error { saved = s; return nil })
 	pipeline.SetState(state.New())
 	require.NoError(t, pipeline.Run(context.Background()))
-	require.Equal(t, []string{"resolve", "packages", "tools", "dotfiles", "hooks"}, order)
+	require.Equal(t, []string{"packages", "tools", "dotfiles"}, order)
 	require.Equal(t, state.StatusComplete, saved.Status)
 }
 

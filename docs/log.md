@@ -26,6 +26,10 @@
 
 ## 2026-07-19
 
+* **Removed (dead exports + hooks noop, decision D4a)**: deleted `facts.Detect` (package kept — `facts.Facts` is the shared facts type used by profile/resolve/detect/cmd), package-level `state.Load`/`state.Save` (FileStore is the API), `detect.DetectEnv`, `apply.Pipeline.StepNames`/`Steps` and `apply.NoOpStep`/`NewNoOpStep`, the unused `mise.DotfileEntry`/`mise.Plan` mirror types, and the permanent-noop hooks step: `mise.HooksStep`, `resolve.Plan.Hooks`/`resolve.HooksStep`, the `hooks:` section of `dotdrift plan` output, and the `&mise.HooksStep{}` pipeline entry in `cmd/apply.go`. Pipeline is now `packages → tools → dotfiles`; task docs t2/t3/t6 updated.
+
+* **Hardened (root)**: pprof now defaults to `127.0.0.1:6060` (was `0.0.0.0:6060`) and its `ListenAndServe` error is logged via zerolog `Error` instead of silently swallowed; `.env` auto-load honors `DOTDRIFT_NO_ENV=1` (skips loading entirely) and emits a `Debug` notice naming the loaded files. New tests: `TestProfilingListenOn_defaultIsLoopback`, `TestLoadDotenvFiles_loadsEnvFiles`, `TestLoadDotenvFiles_optOut`.
+
 * **Added**: `.github/workflows/ci.yml` — CI workflow running `go test ./...` and `go vet ./...` (with `GOFLAGS=-mod=vendor`) plus golangci-lint v2 on push to `main` and pull requests, closing the M0 "CI runs test + vet" exit criterion.
 
 * **Fixed (onboard, M8 re-validated)**: generated mise config moved out of the profile into the XDG state dir (`profiles/<hash>/onboard/mise.toml`) with absolute dotfile sources — previously mise resolved relative sources against `<module>/.mise/` and failed end-to-end; `--yes` plumbed through `cmd/onboard.go` → `onboard.Options` → `mise.DotfilesApply`; directory-tree materialization now preserves per-file modes (ownership not preserved, documented); `TestOnboard_orderCopyThenEnsureThenMiseApply` now records and asserts the copy → ensure → apply sequence.

@@ -82,11 +82,3 @@ func writeConfig(path, content string) error {
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
 }
-
-// HooksStep is a placeholder for pre/post hooks in v0.1.
-type HooksStep struct{}
-
-var _ apply.Step = (*HooksStep)(nil)
-
-func (s *HooksStep) Name() string                  { return "hooks" }
-func (s *HooksStep) Run(ctx context.Context) error { return nil }

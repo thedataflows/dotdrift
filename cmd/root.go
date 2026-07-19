@@ -25,7 +25,7 @@ type ExitError struct {
 }
 
 func (e *ExitError) Error() string { return e.Err.Error() }
-func (e *ExitError) Unwrap() error  { return e.Err }
+func (e *ExitError) Unwrap() error { return e.Err }
 
 const appName = "dotdrift"
 
@@ -37,7 +37,7 @@ type RootFlags struct {
 	LogLevel          string `help:"Log level (trace,debug,info,warn,error)" enum:"trace,debug,info,warn,error" default:"info" env:"LOG_LEVEL"`
 	LogFormat         string `help:"Log format (console,json)" enum:"console,json" default:"console" env:"LOG_FORMAT"`
 	Profiling         bool   `help:"Enable pprof profiling server" default:"false"`
-	ProfilingListenOn string `help:"Listen address for pprof profiling server" default:"0.0.0.0:6060"`
+	ProfilingListenOn string `help:"Listen address for pprof profiling server" default:"127.0.0.1:6060"`
 }
 
 // CLI represents the main CLI structure.
@@ -48,7 +48,7 @@ type CLI struct {
 	Detect  DetectCmd  `cmd:"" help:"Detect system facts"`
 	Modules ModulesCmd `cmd:"" help:"List selected and skipped modules"`
 	Plan    PlanCmd    `cmd:"" help:"Print the effective plan"`
-	Apply   ApplyCmd    `cmd:"" help:"Apply the profile"`
+	Apply   ApplyCmd   `cmd:"" help:"Apply the profile"`
 	Status  StatusCmd  `cmd:"" help:"Show status"`
 	Onboard OnboardCmd `cmd:"" help:"Onboard paths into a module"`
 	Version VersionCmd `cmd:"" help:"Show version information"`
@@ -70,7 +70,11 @@ func (cli *CLI) AfterApply(kctx *kong.Context) error {
 	if cli.Profiling {
 		log.Info().Str("listen", cli.ProfilingListenOn).Msg("Starting pprof profiling server")
 		runtime.SetBlockProfileRate(1)
-		go func() { http.ListenAndServe(cli.ProfilingListenOn, nil) }()
+		go func() {
+			if err := http.ListenAndServe(cli.ProfilingListenOn, nil); err != nil {
+				log.Error().Err(err).Str("listen", cli.ProfilingListenOn).Msg("pprof profiling server stopped")
+			}
+		}()
 	}
 	return nil
 }
@@ -98,9 +102,36 @@ func setGlobalLoggerLogFormat(format string) error {
 	return nil
 }
 
+// dotenvFiles are tried in order; godotenv never overrides an existing var.
+var dotenvFiles = []string{".env", ".local.env", ".dev.env"}
+
+// loadDotenvFiles auto-loads .env files from the current directory. Set
+// DOTDRIFT_NO_ENV=1 to skip loading entirely (e.g. in sandboxed or CI runs
+// where a stray .env must not leak into the process environment).
+func loadDotenvFiles() {
+	if os.Getenv("DOTDRIFT_NO_ENV") == "1" {
+		log.Debug().Msg("skipping .env auto-load (DOTDRIFT_NO_ENV=1)")
+		return
+	}
+	var present []string
+	for _, f := range dotenvFiles {
+		if info, err := os.Stat(f); err == nil && !info.IsDir() {
+			present = append(present, f)
+		}
+	}
+	if len(present) == 0 {
+		return
+	}
+	if err := godotenv.Load(present...); err != nil {
+		log.Debug().Err(err).Strs("files", present).Msg("failed to load .env files")
+		return
+	}
+	log.Debug().Strs("files", present).Msg("loaded .env files")
+}
+
 // Run executes the CLI with the given version.
 func Run(version string, args []string) error {
-	_ = godotenv.Load(".env", ".local.env", ".dev.env")
+	loadDotenvFiles()
 
 	var cli CLI
 	parser, err := kong.New(
@@ -134,7 +165,6 @@ func Run(version string, args []string) error {
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		return nil
 	}
-
 
 	if kctx.Command() == "version" {
 		if err := kctx.Run(version); err != nil {

@@ -13,9 +13,9 @@ import (
 
 func TestGenerateTools(t *testing.T) {
 	out := mise.GenerateTools(map[string]string{
-		"node":    "20",
-		"python":  "3.12",
-		"rust":    "stable",
+		"node":   "20",
+		"python": "3.12",
+		"rust":   "stable",
 	})
 	require.Contains(t, out, "[tools]")
 	require.Contains(t, out, `node = "20"`)
@@ -88,12 +88,6 @@ func TestDotfilesStep_conflictStops(t *testing.T) {
 	step := &mise.DotfilesStep{Runner: fr, Plan: plan, ConfigPath: "/tmp/mise-dotfiles.toml", Yes: false}
 	err := step.Run(context.Background())
 	require.ErrorIs(t, err, boom)
-}
-
-func TestHooksStep_noop(t *testing.T) {
-	step := &mise.HooksStep{}
-	require.Equal(t, "hooks", step.Name())
-	require.NoError(t, step.Run(context.Background()))
 }
 
 func TestGenerateTools_escapesQuotesAndBackslashes(t *testing.T) {

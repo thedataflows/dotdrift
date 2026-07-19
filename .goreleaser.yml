@@ -1,5 +1,4 @@
 version: 2
-project_name: dotdrift
 archives:
   - strip_binary_directory: true
     format_overrides:

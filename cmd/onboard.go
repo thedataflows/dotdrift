@@ -19,6 +19,7 @@ type OnboardCmd struct {
 	Tools    []string `help:"Mise tools to declare"`
 	Host     bool     `help:"Host overlay only"`
 	DryRun   bool     `help:"Preview only"`
+	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
 }
 
 // Run implements the onboard command.
@@ -38,6 +39,7 @@ func (c *OnboardCmd) Run() error {
 		Tools:       c.Tools,
 		Host:        c.Host,
 		DryRun:      c.DryRun,
+		Yes:         c.Yes,
 		Hostname:    f.Hostname,
 	})
 }

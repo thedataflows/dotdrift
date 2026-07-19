@@ -43,3 +43,15 @@ func TestCLI_plan_noSideEffects(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, buf.String(), "fingerprint:")
 }
+
+func TestCLI_plan_noModulesSelectedWarning(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "minimal"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+	}
+	err := c.Run()
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "warning: no modules selected")
+}

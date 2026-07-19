@@ -5,11 +5,16 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/user"
 	"runtime"
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
+
+// CurrentUser resolves the OS account of the running process. It is a
+// package-level var so tests can stub the lookup (root-vs-user, failures).
+var CurrentUser = user.Current
 
 // OSReleaseReader reads /etc/os-release content.
 type OSReleaseReader interface {
@@ -48,10 +53,11 @@ func DetectWith(osReader OSReleaseReader, gpuReader GPUReader) (*facts.Facts, er
 	hostname, _ := os.Hostname()
 	f.Hostname = hostname
 
-	f.Username = os.Getenv("USER")
-	if f.Username == "" {
-		f.Username = os.Getenv("USERNAME")
+	username, err := detectUsername()
+	if err != nil {
+		return nil, err
 	}
+	f.Username = username
 
 	f.OS = strings.ToLower(runtime.GOOS)
 
@@ -75,8 +81,22 @@ func DetectWith(osReader OSReleaseReader, gpuReader GPUReader) (*facts.Facts, er
 	return f, nil
 }
 
-func parseOSRelease(content string) string {
-	for _, line := range strings.Split(content, "\n") {
+// detectUsername resolves the username from the OS account first; $USER is
+// untrusted because sudo preserves it while the process runs as root.
+func detectUsername() (string, error) {
+	if u, err := CurrentUser(); err == nil && u.Username != "" {
+		return u.Username, nil
+	}
+	if name := os.Getenv("USER"); name != "" {
+		return name, nil
+	}
+	if name := os.Getenv("USERNAME"); name != "" {
+		return name, nil
+	}
+	return "", fmt.Errorf("detect username: os/user lookup failed and USER/USERNAME are unset or empty")
+}
+
+func parseOSRelease(content string) string {	for _, line := range strings.Split(content, "\n") {
 		if !strings.HasPrefix(line, "ID=") {
 			continue
 		}

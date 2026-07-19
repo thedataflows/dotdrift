@@ -14,9 +14,11 @@ Day-2 workflow to grow modules; EnsureMise then mise apply.
 # Exit criteria
 
 - Default link mode
-- Copy then mise order enforced in tests
+- Copy then mise order asserted by an order-recording test
 - Module presence selects app automatically
 - Conflict keeps module files, fails command
+- Generated mise config lives under the XDG state dir with absolute dotfile sources; the profile directory carries no runtime files
+- `--yes` propagates to `mise dotfiles apply`; file modes preserved when materializing paths (ownership is not)
 
 # Tasks
 

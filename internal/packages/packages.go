@@ -16,23 +16,23 @@ import (
 // Backend performs package operations.
 type Backend interface {
 	// Present installs the given packages if not already present.
-	Present(pkgs []string) error
+	Present(ctx context.Context, pkgs []string) error
 	// Absent removes the given packages.
-	Absent(pkgs []string) error
+	Absent(ctx context.Context, pkgs []string) error
 	// IsInstalled reports whether a package is already installed.
-	IsInstalled(pkg string) (bool, error)
+	IsInstalled(ctx context.Context, pkg string) (bool, error)
 }
 
-// Runner runs a command and returns stdout.
+// Runner runs a command and returns stdout; cancelling ctx kills the child process.
 type Runner interface {
-	Run(name string, args ...string) (string, error)
+	Run(ctx context.Context, name string, args ...string) (string, error)
 }
 
 // ExecRunner is the real command runner.
 type ExecRunner struct{}
 
-func (ExecRunner) Run(name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
+func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.Output()
 	return string(out), err
 }
@@ -48,13 +48,13 @@ func NewParu() *Paru {
 }
 
 // Present installs packages idempotently.
-func (p *Paru) Present(pkgs []string) error {
+func (p *Paru) Present(ctx context.Context, pkgs []string) error {
 	pkgs = uniqueSorted(pkgs)
 	if len(pkgs) == 0 {
 		return nil
 	}
 	args := append([]string{"-S", "--needed", "--noconfirm"}, pkgs...)
-	_, err := p.Runner.Run("paru", args...)
+	_, err := p.Runner.Run(ctx, "paru", args...)
 	if err != nil {
 		return fmt.Errorf("paru install %v: %w", pkgs, err)
 	}
@@ -62,13 +62,13 @@ func (p *Paru) Present(pkgs []string) error {
 }
 
 // Absent removes packages.
-func (p *Paru) Absent(pkgs []string) error {
+func (p *Paru) Absent(ctx context.Context, pkgs []string) error {
 	pkgs = uniqueSorted(pkgs)
 	if len(pkgs) == 0 {
 		return nil
 	}
 	args := append([]string{"-R", "--noconfirm"}, pkgs...)
-	_, err := p.Runner.Run("paru", args...)
+	_, err := p.Runner.Run(ctx, "paru", args...)
 	if err != nil {
 		return fmt.Errorf("paru remove %v: %w", pkgs, err)
 	}
@@ -76,8 +76,8 @@ func (p *Paru) Absent(pkgs []string) error {
 }
 
 // IsInstalled checks if a package is installed via pacman.
-func (p *Paru) IsInstalled(pkg string) (bool, error) {
-	_, err := p.Runner.Run("pacman", "-Q", pkg)
+func (p *Paru) IsInstalled(ctx context.Context, pkg string) (bool, error) {
+	_, err := p.Runner.Run(ctx, "pacman", "-Q", pkg)
 	if err == nil {
 		return true, nil
 	}
@@ -123,12 +123,12 @@ func (s *Step) Run(ctx context.Context) error {
 		return fmt.Errorf("plan is nil")
 	}
 	if len(s.plan.Packages.Remove) > 0 {
-		if err := s.backend.Absent(s.plan.Packages.Remove); err != nil {
+		if err := s.backend.Absent(ctx, s.plan.Packages.Remove); err != nil {
 			return fmt.Errorf("remove packages: %w", err)
 		}
 	}
 	if len(s.plan.Packages.Install) > 0 {
-		if err := s.backend.Present(s.plan.Packages.Install); err != nil {
+		if err := s.backend.Present(ctx, s.plan.Packages.Install); err != nil {
 			return fmt.Errorf("install packages: %w", err)
 		}
 	}
@@ -160,14 +160,23 @@ func For(backend string) Backend {
 		if b, err := AutoBackend(); err == nil {
 			return For(b)
 		}
-		return &noop{}
+		return &noop{backend: backend}
 	default:
-		return &noop{}
+		return &noop{backend: backend}
 	}
 }
 
-type noop struct{}
+// noop fails loudly so an unsupported distro never looks like a successful apply.
+type noop struct {
+	backend string
+}
 
-func (noop) Present([]string) error         { return nil }
-func (noop) Absent([]string) error           { return nil }
-func (noop) IsInstalled(string) (bool, error) { return false, nil }
+func (n *noop) err() error {
+	return fmt.Errorf("no supported package backend for distro %q", n.backend)
+}
+
+func (n *noop) Present(context.Context, []string) error { return n.err() }
+func (n *noop) Absent(context.Context, []string) error  { return n.err() }
+func (n *noop) IsInstalled(context.Context, string) (bool, error) {
+	return false, n.err()
+}

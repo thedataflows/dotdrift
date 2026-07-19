@@ -100,6 +100,44 @@ func TestDiscoverModules_missingModuleToml(t *testing.T) {
 	require.Equal(t, "valid", p.Modules[0].ID)
 }
 
+func TestDiscoverModules_missingModulesDir(t *testing.T) {
+	dir := fixture(t, "nomodules")
+	_, err := profile.Load(dir, &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not a dotdrift profile")
+	require.Contains(t, err.Error(), dir)
+	t.Logf("error: %v", err)
+}
+
+func TestDiscoverModules_duplicateIDs(t *testing.T) {
+	_, err := profile.Load(fixture(t, "dupids"), &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `"same"`)
+	require.Contains(t, err.Error(), filepath.Join("modules", "one"))
+	require.Contains(t, err.Error(), filepath.Join("modules", "two"))
+	t.Logf("error: %v", err)
+}
+
+func TestLoadConfig_emptyHostnameCollapsedOverlay(t *testing.T) {
+	_, err := profile.Load(fixture(t, "collapsed"), &facts.Facts{Username: "cri"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "hostname")
+	t.Logf("error: %v", err)
+}
+
+func TestLoadConfig_emptyUsernameCollapsedOverlay(t *testing.T) {
+	_, err := profile.Load(fixture(t, "collapsed"), &facts.Facts{Hostname: "myhost"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "username")
+	t.Logf("error: %v", err)
+}
+
+func TestLoadConfig_emptyFactsNoOverlayOK(t *testing.T) {
+	p, err := profile.Load(fixture(t, "simple"), &facts.Facts{})
+	require.NoError(t, err)
+	require.NotEmpty(t, p.Modules)
+}
+
 func TestSelection_presenceMeansEnabled(t *testing.T) {
 	p, err := profile.Load(fixture(t, "simple"), &facts.Facts{
 		Hostname: "myhost",

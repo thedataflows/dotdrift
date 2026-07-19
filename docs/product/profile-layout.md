@@ -31,6 +31,25 @@ profile/
 - `id` is the directory name unless overridden by `id` in `module.toml`.
 - `app` defaults to `id` unless overridden.
 
+## Validation
+
+- `modules/` must exist. Loading a directory without it fails with
+  `not a dotdrift profile: <path> missing modules/ directory` — a typo'd
+  profile path is never silently treated as an empty profile.
+- Module IDs must be unique across `modules/`. Two modules resolving to the
+  same `id` (via directory name or `id` override) fail with an error naming
+  both module paths.
+- Host/user overlays require a non-empty hostname/username. An empty value
+  collapses the overlay path onto the parent directory (e.g.
+  `hosts/dotdrift.toml`); if a file exists at that collapsed path, loading
+  fails with `empty <hostname|username>: refusing to load collapsed overlay
+  <path>`. If no file exists there, the overlay is treated as absent.
+  Rationale: erroring unconditionally would forbid partial facts used purely
+  for `when` filtering; erroring only on a real collapsed file keeps the
+  silent-merge bug loud without breaking legitimate partial-fact loads.
+- When no modules are selected, `dotdrift plan` prints
+  `warning: no modules selected` before the plan body.
+
 # `dotdrift.toml`
 
 ```toml

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -93,4 +94,40 @@ func TestHooksStep_noop(t *testing.T) {
 	step := &mise.HooksStep{}
 	require.Equal(t, "hooks", step.Name())
 	require.NoError(t, step.Run(context.Background()))
+}
+
+func TestGenerateTools_escapesQuotesAndBackslashes(t *testing.T) {
+	versions := map[string]string{
+		"node": `20 "lts"`,
+		"java": `C:\Program Files\Java\21`,
+	}
+	out := mise.GenerateTools(versions)
+
+	var decoded struct {
+		Tools map[string]string `toml:"tools"`
+	}
+	_, err := toml.Decode(out, &decoded)
+	require.NoError(t, err, "generated TOML must be parseable: %q", out)
+	require.Equal(t, versions, decoded.Tools)
+}
+
+func TestGenerateDotfiles_escapesQuotesAndBackslashes(t *testing.T) {
+	entries := []resolve.DotfileEntry{
+		{Target: `~/weird"dir\file`, Source: `mod\src"x`, Mode: "link"},
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
+	}
+	out := mise.GenerateDotfiles(entries)
+
+	var decoded struct {
+		Dotfiles map[string]struct {
+			Source string `toml:"source"`
+			Mode   string `toml:"mode"`
+		} `toml:"dotfiles"`
+	}
+	_, err := toml.Decode(out, &decoded)
+	require.NoError(t, err, "generated TOML must be parseable: %q", out)
+	require.Len(t, decoded.Dotfiles, 2)
+	require.Equal(t, `mod\src"x`, decoded.Dotfiles[`~/weird"dir\file`].Source)
+	require.Equal(t, "link", decoded.Dotfiles[`~/weird"dir\file`].Mode)
+	require.Equal(t, ".bashrc", decoded.Dotfiles["~/.bashrc"].Source)
 }

@@ -35,7 +35,7 @@ func (s *ToolsStep) Run(ctx context.Context) error {
 	if err := writeConfig(s.ConfigPath, cfg); err != nil {
 		return fmt.Errorf("write tools mise config: %w", err)
 	}
-	if err := s.Runner.EnsureAndInstall(s.ConfigPath); err != nil {
+	if err := s.Runner.EnsureAndInstall(ctx, s.ConfigPath); err != nil {
 		return fmt.Errorf("mise install: %w", err)
 	}
 	return nil
@@ -67,7 +67,7 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	if err := writeConfig(s.ConfigPath, cfg); err != nil {
 		return fmt.Errorf("write dotfiles mise config: %w", err)
 	}
-	if err := s.Runner.DotfilesApply(s.ConfigPath, s.Yes); err != nil {
+	if err := s.Runner.DotfilesApply(ctx, s.ConfigPath, s.Yes); err != nil {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil

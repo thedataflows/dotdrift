@@ -13,16 +13,19 @@ Each top-level `internal/` directory is a deep module with a small public API an
 ```
 .
 ├── cmd/                      # Kong CLI wiring; no business logic
+│   │                         # (exception: cmd/init.go's git clone/create
+│   │                         # orchestration is intentional command wiring,
+│   │                         # not domain logic; anything richer belongs in internal/)
 ├── internal/
 │   ├── profile/              # Load dotdrift.toml + modules; selection
 │   ├── resolve/              # Merge host/user layers into Plan
 │   ├── state/                # Resume-only state persistence
 │   ├── apply/                # Pipeline orchestration
-│   ├── packages/             # Package backend interface + paru/pacman
+│   ├── packages/             # Package backend interface + paru/pacman, apt, dnf
 │   ├── mise/                 # Bootstrap, tools, dotfiles via mise
+│   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts
-│   ├── onboard/              # Module factory + copy
-│   └── testutil/             # Fakes, fixtures, golden helpers
+│   └── onboard/              # Module factory + copy
 ├── testdata/                 # Fixture profiles
 └── examples/                 # Example profile for users
 ```

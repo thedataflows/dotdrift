@@ -81,7 +81,18 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		Hooks:    HooksStep{},
 	}
 
+	if len(p.Selected) > 0 {
+		if f.Hostname == "" {
+			return nil, fmt.Errorf("resolve: hostname fact is empty (required to locate host overlays)")
+		}
+		if f.Username == "" {
+			return nil, fmt.Errorf("resolve: username fact is empty (required to locate user overlays)")
+		}
+	}
+
 	pkgSet := make(map[string]struct{})
+	presentIn := make(map[string][]string)
+	absentIn := make(map[string][]string)
 	for _, m := range p.Selected {
 		root, err := rootFromModule(m)
 		if err != nil {
@@ -90,15 +101,25 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 
 		base := layerConfig{name: "base", path: m.Path, cfg: m.Config}
 		hostPath := filepath.Join(root, "hosts", f.Hostname, "modules", filepath.Base(m.Path))
-		hostCfg, _ := loadModuleConfig(hostPath)
+		hostCfg, err := loadModuleConfig(hostPath)
+		if err != nil {
+			return nil, fmt.Errorf("module %s: host overlay %s: %w", m.ID, hostPath, err)
+		}
 		host := layerConfig{name: "host", path: hostPath, cfg: hostCfg}
 		userPath := filepath.Join(root, "users", f.Username, "modules", filepath.Base(m.Path))
-		userCfg, _ := loadModuleConfig(userPath)
+		userCfg, err := loadModuleConfig(userPath)
+		if err != nil {
+			return nil, fmt.Errorf("module %s: user overlay %s: %w", m.ID, userPath, err)
+		}
 		user := layerConfig{name: "user", path: userPath, cfg: userCfg}
 
 		install, remove := mergePackages(base.cfg.Packages, host.cfg.Packages, user.cfg.Packages)
 		for _, pkg := range install {
 			pkgSet[pkg] = struct{}{}
+			presentIn[pkg] = append(presentIn[pkg], m.ID)
+		}
+		for _, pkg := range remove {
+			absentIn[pkg] = append(absentIn[pkg], m.ID)
 		}
 		plan.Packages.Remove = append(plan.Packages.Remove, remove...)
 		sort.Strings(plan.Packages.Remove)
@@ -107,7 +128,15 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 			plan.Tools.Versions[k] = v
 		}
 
-		plan.Dotfiles.Entries = append(plan.Dotfiles.Entries, mergeDotfiles(base, host, user)...)
+		entries, err := mergeDotfiles(base, host, user)
+		if err != nil {
+			return nil, err
+		}
+		plan.Dotfiles.Entries = append(plan.Dotfiles.Entries, entries...)
+	}
+
+	if err := checkPackageConflicts(presentIn, absentIn); err != nil {
+		return nil, err
 	}
 
 	for pkg := range pkgSet {
@@ -212,7 +241,7 @@ func mergeTools(base, host, user map[string]string) map[string]string {
 	return result
 }
 
-func mergeDotfiles(base, host, user layerConfig) []DotfileEntry {
+func mergeDotfiles(base, host, user layerConfig) ([]DotfileEntry, error) {
 	winners := make(map[string]dotfileWinner)
 	for target, df := range base.cfg.Dotfiles {
 		winners[target] = dotfileWinner{layer: "base", path: base.path, df: df}
@@ -227,29 +256,61 @@ func mergeDotfiles(base, host, user layerConfig) []DotfileEntry {
 	moduleID := filepath.Base(base.path)
 	entries := make([]DotfileEntry, 0, len(winners))
 	for target, winner := range winners {
+		source, err := resolveSource(winner, moduleID, base, host, user)
+		if err != nil {
+			return nil, err
+		}
 		entries = append(entries, DotfileEntry{
 			Target: target,
-			Source: resolveSource(winner, base, host, user),
+			Source: source,
 			Mode:   winner.df.Mode,
 			Module: moduleID,
 			Layer:  winner.layer,
 		})
 	}
-	return entries
+	return entries, nil
 }
 
-func resolveSource(winner dotfileWinner, base, host, user layerConfig) string {
+// resolveSource locates a dotfile source inside the layer directories,
+// highest-precedence existing file first. The joined path must stay inside the
+// layer root and the file must exist; both violations are resolve-time errors.
+func resolveSource(winner dotfileWinner, moduleID string, base, host, user layerConfig) (string, error) {
 	rel := winner.df.Source
 	for _, layer := range []layerConfig{user, host, base} {
 		if layer.path == "" {
 			continue
 		}
 		abs := filepath.Join(layer.path, rel)
+		contained, err := filepath.Rel(layer.path, abs)
+		if err != nil || contained == ".." || strings.HasPrefix(contained, ".."+string(filepath.Separator)) {
+			return "", fmt.Errorf("module %s: dotfile source %q escapes the module directory", moduleID, rel)
+		}
 		if _, err := os.Stat(abs); err == nil {
-			return abs
+			return abs, nil
 		}
 	}
-	return filepath.Join(winner.path, rel)
+	return "", fmt.Errorf("module %s: dotfile source %q not found in any layer", moduleID, rel)
+}
+
+// checkPackageConflicts rejects packages that are present in at least one
+// module and absent in at least one other; install+remove would be ambiguous.
+func checkPackageConflicts(presentIn, absentIn map[string][]string) error {
+	var conflicts []string
+	for pkg, presentMods := range presentIn {
+		absentMods, ok := absentIn[pkg]
+		if !ok {
+			continue
+		}
+		sort.Strings(presentMods)
+		sort.Strings(absentMods)
+		conflicts = append(conflicts, fmt.Sprintf("%q present in module(s) [%s] but absent in module(s) [%s]",
+			pkg, strings.Join(presentMods, ", "), strings.Join(absentMods, ", ")))
+	}
+	if len(conflicts) == 0 {
+		return nil
+	}
+	sort.Strings(conflicts)
+	return fmt.Errorf("package conflict across modules: %s", strings.Join(conflicts, "; "))
 }
 
 func sortEntries(entries []DotfileEntry) {

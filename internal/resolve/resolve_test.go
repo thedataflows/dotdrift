@@ -1,6 +1,7 @@
 package resolve_test
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -160,4 +161,105 @@ func TestMergePackages_absentInRemoveList(t *testing.T) {
 
 	require.Contains(t, plan.Packages.Remove, "nano", "user absent should appear in remove list")
 	require.Contains(t, plan.Packages.Remove, "emacs", "base absent should appear in remove list")
+}
+
+func writeModule(t *testing.T, root, id, moduleTOML string) string {
+	t.Helper()
+	dir := filepath.Join(root, "modules", id)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(moduleTOML), 0o644))
+	return dir
+}
+
+func loadAndResolve(t *testing.T, root string, f *facts.Facts) (*resolve.Plan, error) {
+	t.Helper()
+	p, err := profile.Load(root, f)
+	require.NoError(t, err)
+	return resolve.Resolve(p, f)
+}
+
+func TestResolveSource_traversalRejected(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "evil", `
+[dotfiles]
+"~/.ssh/authorized_keys" = { source = "../../outside", mode = "copy" }
+`)
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "source escaping the layer root must be rejected")
+	require.Contains(t, err.Error(), "evil", "error should name the module")
+	require.Contains(t, err.Error(), "../../outside", "error should name the offending source")
+}
+
+func TestResolveSource_missingFileErrors(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.x" = { source = "no-such-file", mode = "copy" }
+`)
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "declared source file that does not exist must be an error")
+	require.Contains(t, err.Error(), "mod", "error should name the module")
+	require.Contains(t, err.Error(), "no-such-file", "error should name the missing source")
+}
+
+func TestResolve_overlayTOMLErrorPropagated(t *testing.T) {
+	for _, layer := range []string{"hosts", "users"} {
+		t.Run(layer, func(t *testing.T) {
+			root := t.TempDir()
+			writeModule(t, root, "shell", "[packages]\npresent = [\"ripgrep\"]\n")
+
+			var name string
+			if layer == "hosts" {
+				name = "myhost"
+			} else {
+				name = "cri"
+			}
+			overlayDir := filepath.Join(root, layer, name, "modules", "shell")
+			require.NoError(t, os.MkdirAll(overlayDir, 0o755))
+			require.NoError(t, os.WriteFile(filepath.Join(overlayDir, "module.toml"), []byte("not = [valid"), 0o644))
+
+			f := &facts.Facts{Hostname: "myhost", Username: "cri"}
+			_, err := loadAndResolve(t, root, f)
+			require.Error(t, err, "malformed %s overlay module.toml must propagate", layer)
+			require.Contains(t, err.Error(), "shell", "error should name the module")
+			require.Contains(t, err.Error(), filepath.Join(layer, name), "error should identify the overlay path")
+		})
+	}
+}
+
+func TestResolve_crossModulePackageConflict(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "moda", "[packages]\npresent = [\"vim\"]\n")
+	writeModule(t, root, "modb", "[packages]\nabsent = [\"vim\"]\n")
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "present in one module and absent in another is a conflict")
+	require.Contains(t, err.Error(), "vim", "error should name the conflicting package")
+	require.Contains(t, err.Error(), "moda", "error should name the present module")
+	require.Contains(t, err.Error(), "modb", "error should name the absent module")
+}
+
+func TestResolve_emptyHostnameErrors(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", "")
+	f := &facts.Facts{Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "empty hostname with selected modules must be an explicit error")
+	require.Contains(t, err.Error(), "hostname")
+}
+
+func TestResolve_emptyUsernameErrors(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", "")
+	f := &facts.Facts{Hostname: "h"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "empty username with selected modules must be an explicit error")
+	require.Contains(t, err.Error(), "username")
 }

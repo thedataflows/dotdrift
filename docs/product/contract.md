@@ -15,6 +15,9 @@ timestamp: 2026-07-14T00:00:00Z
 5. **Onboard materializes then applies.** Copy live paths into the module, write `module.toml`, then immediately run mise dotfiles apply (default mode: link).
 6. **Mise is ensured before use.** Any command that needs mise runs [mise bootstrap](/product/mise-bootstrap.md) first.
 7. **Exceptions are explicit.** `modules.disable`, `packages.absent`, `--mode copy|template`, host/user overlays. Defaults do the common case.
+8. **Dotfile sources stay contained.** `dotfiles.<target>.source` is a relative path inside the module directory. A source that resolves outside the layer root (e.g. `../../outside`) is a resolve-time error naming the module and the source. A declared source file that does not exist in any layer is also a resolve-time error (chosen over a warning: fail fast with a clear message instead of dying later inside mise).
+9. **Cross-module package conflicts are errors.** If a package is `present` in at least one selected module and `absent` in at least one other selected module, resolve fails with a conflict error naming the package and the modules on both sides. Within a single module, the layer rules still apply: a higher-layer `absent` cancels a lower-layer `present` without error.
+10. **Fingerprint scope is broader than selection.** The stored "selection fingerprint" intentionally covers the selected module IDs, the `modules.disable` union, and the facts `hostname`, `username`, `os`, `gpu`, and `backend`. Any change to any of these — not just selection — produces a different fingerprint and resets resume state.
 
 # Out of scope (v0.1)
 

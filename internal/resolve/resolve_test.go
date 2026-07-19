@@ -163,6 +163,22 @@ func TestMergePackages_absentInRemoveList(t *testing.T) {
 	require.Contains(t, plan.Packages.Remove, "emacs", "base absent should appear in remove list")
 }
 
+// Precedence is symmetric: a higher layer's present overrides a lower
+// layer's absent, just as a higher absent overrides a lower present.
+func TestMergePackages_baseAbsentBeatenByHostPresent(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "shell", "[packages]\nabsent = [\"nano\"]\npresent = [\"ripgrep\"]\n")
+	hostDir := filepath.Join(root, "hosts", "myhost", "modules", "shell")
+	require.NoError(t, os.MkdirAll(hostDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(hostDir, "module.toml"), []byte("[packages]\npresent = [\"nano\"]\n"), 0o644))
+
+	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "myhost", Username: "cri"})
+	require.NoError(t, err)
+	require.Contains(t, plan.Packages.Install, "nano", "host present should override base absent")
+	require.NotContains(t, plan.Packages.Remove, "nano")
+	require.Contains(t, plan.Packages.Install, "ripgrep", "base present should survive")
+}
+
 func writeModule(t *testing.T, root, id, moduleTOML string) string {
 	t.Helper()
 	dir := filepath.Join(root, "modules", id)

@@ -287,6 +287,33 @@ func TestClassifyInstall(t *testing.T) {
 	}
 }
 
+// DOTDRIFT_MISE_SYSTEM forces system-wide only for the literal "1"; any
+// other value leaves a user-managed path user-managed.
+func TestClassifyInstall_systemEnvVariants(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	userMise := filepath.Join(home, ".local", "bin", "mise")
+	require.NoError(t, os.MkdirAll(filepath.Dir(userMise), 0o755))
+	require.NoError(t, os.WriteFile(userMise, []byte("fake"), 0o755))
+
+	cases := []struct {
+		env      string
+		expected mise.InstallKind
+	}{
+		{"1", mise.InstallKindSystemWide},
+		{"0", mise.InstallKindUserManaged},
+		{"true", mise.InstallKindUserManaged},
+		{"yes", mise.InstallKindUserManaged},
+		{"", mise.InstallKindUserManaged},
+	}
+	for _, tc := range cases {
+		t.Run("env="+tc.env, func(t *testing.T) {
+			t.Setenv("DOTDRIFT_MISE_SYSTEM", tc.env)
+			require.Equal(t, tc.expected, mise.ClassifyInstall(userMise))
+		})
+	}
+}
+
 func TestEnsureMise_versionOutputWithLeadingToken(t *testing.T) {
 	// Given `mise --version` output that starts with a non-version token,
 	// Ensure must scan for the first token that looks like a version.

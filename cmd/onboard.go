@@ -13,7 +13,7 @@ type OnboardCmd struct {
 
 	Profile  string   `help:"Path to profile directory" type:"existingdir" default:"."`
 	App      string   `help:"Module app id"`
-	Mode     string   `help:"Dotfile mode" enum:"link,copy,template" default:"link"`
+	Mode     string   `help:"Dotfile mode" enum:"link,copy,template,symlink-each" default:"link"`
 	Packages []string `help:"Distro packages to declare"`
 	Tools    []string `help:"Mise tools to declare"`
 	Host     bool         `help:"Host overlay only"`

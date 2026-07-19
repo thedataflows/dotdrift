@@ -1,0 +1,5 @@
+id = "sysdemo"
+scope = "system"
+
+[dotfiles]
+"/etc/sysdemo.conf" = { source = "sysdemo.conf", mode = "copy" }

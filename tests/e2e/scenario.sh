@@ -62,6 +62,9 @@ esac
 grep -q "pre-hook" /tmp/hooks.log || fail "pre-hook missing from /tmp/hooks.log"
 grep -q "post-hook" /tmp/hooks.log || fail "post-hook missing from /tmp/hooks.log"
 
+# system-scope dotfile copied to /etc (covers the EUID==0 path: containers run as root, no sudo needed)
+grep -q "sysdemo = true" /etc/sysdemo.conf || fail "/etc/sysdemo.conf missing or wrong content (system scope)"
+
 # (d) state file reports the pipeline complete
 STATE=$(ls /root/.local/state/dotdrift/profiles/*/state.json 2> /dev/null) || fail "no state.json under /root/.local/state/dotdrift/profiles"
 [ -n "$STATE" ] || fail "no state.json under /root/.local/state/dotdrift/profiles"

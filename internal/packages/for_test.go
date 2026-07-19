@@ -1,6 +1,7 @@
 package packages_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -22,10 +23,18 @@ func TestFor_dnf(t *testing.T) {
 
 func TestFor_unknown(t *testing.T) {
 	b := packages.For("unknown")
-	require.NoError(t, b.Present(nil))
-	require.NoError(t, b.Absent(nil))
-	ok, err := b.IsInstalled("")
-	require.NoError(t, err)
+	err := b.Present(context.Background(), []string{"x"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no supported package backend")
+	require.Contains(t, err.Error(), "unknown")
+
+	err = b.Absent(context.Background(), []string{"x"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no supported package backend")
+
+	ok, err := b.IsInstalled(context.Background(), "x")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no supported package backend")
 	require.False(t, ok)
 }
 
@@ -41,7 +50,9 @@ func TestFor_auto_fallbackOnError(t *testing.T) {
 	packages.AutoBackend = func() (string, error) { return "", errTest }
 	defer func() { packages.AutoBackend = old }()
 	b := packages.For("auto")
-	require.NoError(t, b.Present(nil))
+	err := b.Present(context.Background(), []string{"x"})
+	require.Error(t, err, "failed auto-resolution must fail loudly, not silently no-op")
+	require.Contains(t, err.Error(), "no supported package backend")
 }
 
 var errTest = errors.New("test")

@@ -17,5 +17,5 @@ in `docs/`.
 ## Guidelines
 
   - DO NOT build the binary, run with `go run .`, or use `go test -run` to skip tests. Always run `go test ./...` to verify all tests pass. You can use `go vet` to check the code.
-  - Use `zerolog` for logging in production code. Use `t.Log` in tests.
+  - Use `zerolog` for logging in production code. Use `t.Log` in tests. Zerolog is for operational/diagnostic logging (warnings, bootstrap messages, errors); `fmt.Fprintf` to the command's `Out` writer is correct for intentional CLI output (plan, status, detect facts).
   - `git commit` after each task is complete and all tests pass. Do not commit half-done work unless the user instructs so.

@@ -47,12 +47,16 @@ profile/
 │       ├── module.toml
 │       └── home/...          # files referenced by dotfile entries
 ├── hosts/<hostname>/
+│   ├── dotdrift.toml           # host layer: disable list unioned
 │   └── modules/<id>/...        # host overlays
 └── users/<username>/
+    ├── dotdrift.toml           # user layer: disable list unioned
     └── modules/<id>/...        # user overlays (highest precedence)
 ```
 
-See `examples/simple/` for a minimal profile.
+The `dotdrift.toml` in each layer may carry a `[modules]` `disable` list; disables are unioned across base, host, and user layers.
+
+See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
 
 > Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
 

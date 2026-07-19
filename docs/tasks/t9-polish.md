@@ -37,7 +37,7 @@ v0.1.0 ship readiness.
 # Docs
 
 - README: contract, merge order, onboard, apply resume, mise ensure.
-- Migration guide from pimp-my-cachyos.
+- ~~Migration guide from pimp-my-cachyos~~ — removed from v0.1 scope on 2026-07-19 (no longer tracked as a deliverable).
 - `examples/` small profile showing a module, host overlay, and user overlay.
 
 # Acceptance

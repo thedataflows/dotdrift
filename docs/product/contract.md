@@ -24,5 +24,5 @@ timestamp: 2026-07-14T00:00:00Z
 
 - Custom file engine parallel to mise
 - Multi-host remote agent
-- Full apt/dnf production backends (interface only if time)
+- Hardened apt/dnf production backends (v0.1 ships minimal functional install/remove/is-installed backends, auto-resolved from os-release)
 - Interactive TUI

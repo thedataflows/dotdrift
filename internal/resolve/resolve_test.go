@@ -222,6 +222,59 @@ func TestResolveSource_missingFileErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "no-such-file", "error should name the missing source")
 }
 
+func TestResolveDotfileMode_unknownModeErrors(t *testing.T) {
+	root := t.TempDir()
+	dir := writeModule(t, root, "mod", `
+[dotfiles]
+"~/.x" = { source = "x", mode = "hardlink" }
+`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x"), []byte("data"), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "unknown dotfile mode must be rejected at resolve time")
+	require.Contains(t, err.Error(), "mod", "error should name the module")
+	require.Contains(t, err.Error(), "hardlink", "error should name the offending mode")
+}
+
+// mise ignores entries with an empty mode ("unknown mode '', ignoring
+// entry", exit 0), so an omitted mode is the same silent-breakage class as
+// an unknown one and must fail loudly at resolve time.
+func TestResolveDotfileMode_emptyModeErrors(t *testing.T) {
+	root := t.TempDir()
+	dir := writeModule(t, root, "mod", `
+[dotfiles]
+"~/.x" = { source = "x" }
+`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "x"), []byte("data"), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "omitted dotfile mode must be rejected at resolve time")
+	require.Contains(t, err.Error(), "mod", "error should name the module")
+}
+
+// Every mode documented in docs/product/profile-layout.md must resolve.
+func TestResolveDotfileMode_documentedModesPass(t *testing.T) {
+	for _, mode := range []string{"link", "symlink-each", "copy", "template"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			dir := writeModule(t, root, "mod", `
+[dotfiles]
+"~/.x" = { source = "x", mode = "`+mode+`" }
+`)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "x"), []byte("data"), 0o644))
+			f := &facts.Facts{Hostname: "h", Username: "u"}
+
+			plan, err := loadAndResolve(t, root, f)
+			require.NoError(t, err)
+			require.Len(t, plan.Dotfiles.Entries, 1)
+			require.Equal(t, mode, plan.Dotfiles.Entries[0].Mode,
+				"the plan keeps dotdrift vocabulary; translation to mise happens at generation")
+		})
+	}
+}
+
 func TestResolve_overlayTOMLErrorPropagated(t *testing.T) {
 	for _, layer := range []string{"hosts", "users"} {
 		t.Run(layer, func(t *testing.T) {

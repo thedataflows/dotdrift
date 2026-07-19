@@ -524,6 +524,19 @@ func GenerateTools(versions map[string]string) string {
 	return b.String()
 }
 
+// MiseDotfileMode translates dotdrift's dotfile mode vocabulary into mise's
+// at the config-generation boundary. dotdrift keeps `link` as its documented
+// default mode, but real mise only accepts `symlink` — verified against mise
+// 2026.7.10, where `mode = "link"` is ignored ("unknown mode 'link',
+// ignoring entry") with exit code 0 and no file created. All other dotdrift
+// modes (copy, template, symlink-each) are already valid mise vocabulary.
+func MiseDotfileMode(mode string) string {
+	if mode == "link" {
+		return "symlink"
+	}
+	return mode
+}
+
 // GenerateDotfiles emits a mise.toml [dotfiles] section from the resolved plan.
 func GenerateDotfiles(entries []resolve.DotfileEntry) string {
 	if len(entries) == 0 {
@@ -533,7 +546,7 @@ func GenerateDotfiles(entries []resolve.DotfileEntry) string {
 	b.WriteString("[dotfiles]\n")
 	for _, e := range entries {
 		fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", mode = \"%s\" }\n",
-			tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Mode))
+			tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(MiseDotfileMode(e.Mode)))
 	}
 	return b.String()
 }

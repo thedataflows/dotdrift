@@ -14,6 +14,8 @@ Before any operation that invokes mise (`apply` tools/dotfiles steps, `onboard` 
 
 - `const MinMiseVersion = "2025.1.0"` in `internal/mise`.
 - Mise uses calendar versions like `2026.6.6`. Compare by splitting on `.` and comparing each numeric component left-to-right.
+- A version with a non-numeric suffix on a segment (e.g. `2025.1.0-rc1`, `2025.1.0-dev.1`, `2025.1.0+build.5`) is a pre-release and compares **below** the plain release. Unparseable versions (`""`, `abc`, …) are explicit errors, never a silent less-than.
+- `mise --version` output is scanned for the first token that starts with a digit, so a leading program-name token does not break parsing.
 
 # Algorithm (`EnsureMise`)
 
@@ -21,7 +23,7 @@ Before any operation that invokes mise (`apply` tools/dotfiles steps, `onboard` 
 2. If found, run `mise --version` and parse the version string.
    - If version ≥ `MinMiseVersion`, return the absolute path.
 3. If missing or too old, classify the installation:
-   - **System-wide** (under `/usr/bin`, `/usr/local/bin`, or `DOTDRIFT_MISE_SYSTEM=1`): do not auto-upgrade; tell the user to upgrade via the package manager.
+   - **System-wide** (under `/usr/bin`, `/usr/local/bin`, `/bin`, `/sbin`, `/usr/sbin`, `/opt`, or `DOTDRIFT_MISE_SYSTEM=1`): do not auto-upgrade; tell the user to upgrade via the package manager.
    - **User-managed** (under `$HOME`, writable, installed via `https://mise.run`): run the official installer or `mise self-update`.
 4. After install/upgrade, verify the binary reports version ≥ `MinMiseVersion`.
 5. Return the path or an error.
@@ -42,9 +44,15 @@ Before any operation that invokes mise (`apply` tools/dotfiles steps, `onboard` 
 
 # User-visible messages
 
-- Missing: “mise not found; installing via https://mise.run …”
-- Too old + system: “mise X < required Y; system install at /usr/bin/mise — upgrade with your package manager”
-- Too old + user: “mise X < required Y; upgrading user install…”
+Emitted via zerolog (`log.Info` / `log.Warn`) from `Ensure`:
+
+- Missing (info, before install): “mise not found; installing via https://mise.run …”
+- Too old + system (warn): “mise X < required Y; system install at /usr/bin/mise — upgrade with your package manager”
+- Too old + user (info, before `self-update`): “mise X < required Y; upgrading user install…”
+
+Errors from a failing `mise` subprocess include the captured (trimmed) combined output. A failed `https://mise.run` install additionally hints to check network connectivity or pre-seed `~/.local/bin/mise`.
+
+The `Ensure` result (success or failure) is memoized per `Mise` instance, so the bootstrap runs at most once per process no matter how many steps invoke it. `EnsureContext` propagates a `context.Context` to every subprocess (`exec.CommandContext`); `Ensure` uses `context.Background()`.
 
 # Testing
 

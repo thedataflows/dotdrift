@@ -2,6 +2,7 @@
 package onboard
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -17,6 +18,8 @@ import (
 
 // Options configures the onboard operation.
 type Options struct {
+	// Ctx carries cancellation to mise subprocesses; nil means Background.
+	Ctx         context.Context
 	ProfileRoot string
 	Paths       []string
 	App         string
@@ -136,10 +139,14 @@ func (o *Onboard) Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	if err := o.Mise.EnsureAndInstall(configPath); err != nil {
+	ctx := opts.Ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := o.Mise.EnsureAndInstall(ctx, configPath); err != nil {
 		return fmt.Errorf("mise install: %w", err)
 	}
-	if err := o.Mise.DotfilesApply(configPath, opts.Yes); err != nil {
+	if err := o.Mise.DotfilesApply(ctx, configPath, opts.Yes); err != nil {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil

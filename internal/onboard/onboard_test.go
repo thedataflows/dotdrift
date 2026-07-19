@@ -1,6 +1,7 @@
 package onboard_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -256,14 +257,17 @@ type recordingRunner struct {
 	calls      []string
 	configPath string
 	yes        bool
+	ctx        context.Context
 }
 
-func (r *recordingRunner) EnsureAndInstall(configPath string) error {
+func (r *recordingRunner) EnsureAndInstall(ctx context.Context, configPath string) error {
+	r.ctx = ctx
 	r.calls = append(r.calls, "ensure")
 	return nil
 }
 
-func (r *recordingRunner) DotfilesApply(configPath string, yes bool) error {
+func (r *recordingRunner) DotfilesApply(ctx context.Context, configPath string, yes bool) error {
+	r.ctx = ctx
 	r.calls = append(r.calls, "dotfiles")
 	r.configPath = configPath
 	r.yes = yes
@@ -282,11 +286,11 @@ type validatingRunner struct {
 	configPath  string
 }
 
-func (v *validatingRunner) EnsureAndInstall(configPath string) error {
+func (v *validatingRunner) EnsureAndInstall(ctx context.Context, configPath string) error {
 	return nil
 }
 
-func (v *validatingRunner) DotfilesApply(configPath string, yes bool) error {
+func (v *validatingRunner) DotfilesApply(ctx context.Context, configPath string, yes bool) error {
 	v.configPath = configPath
 	cwd := filepath.Dir(configPath)
 	require.True(v.t, strings.HasPrefix(cwd, v.stateRoot+string(os.PathSeparator)),
@@ -425,4 +429,29 @@ func readFile(path string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+type ctxTestKey struct{}
+
+func TestOnboard_ctxPropagatesToMiseRunner(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	src := filepath.Join(home, ".bashrc")
+	require.NoError(t, writeFile(src, "bashrc"))
+
+	rr := &recordingRunner{}
+	o := &onboard.Onboard{Mise: rr}
+	ctx := context.WithValue(context.Background(), ctxTestKey{}, "marker")
+	err := o.Run(onboard.Options{
+		Ctx:         ctx,
+		ProfileRoot: profile,
+		Paths:       []string{src},
+		App:         "bash",
+		Home:        home,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, rr.ctx)
+	require.Equal(t, "marker", rr.ctx.Value(ctxTestKey{}))
 }

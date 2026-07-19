@@ -29,6 +29,7 @@ type Options struct {
 	Host        bool
 	DryRun      bool
 	Yes         bool
+	Force       bool
 	Home        string
 	Hostname    string
 }
@@ -106,7 +107,12 @@ func (o *Onboard) Run(opts Options) error {
 		}
 		if !opts.DryRun {
 			if _, err := os.Stat(source); err == nil {
-				return fmt.Errorf("conflict: %s already exists in module (remove it or onboard into a different module id)", source)
+				if !opts.Force {
+					return fmt.Errorf("conflict: %s already exists in module (remove it or onboard into a different module id)", source)
+				}
+				if err := os.RemoveAll(source); err != nil {
+					return fmt.Errorf("force replace %s: %w", source, err)
+				}
 			}
 			if err := copyPath(p, source); err != nil {
 				return fmt.Errorf("copy %s: %w", p, err)

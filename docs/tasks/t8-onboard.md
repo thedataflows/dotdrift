@@ -21,6 +21,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - `TestOnboard_orderCopyThenEnsureThenMiseApply` — records the mise call sequence and asserts copy → ensure mise → dotfiles apply order.
 - `TestOnboard_defaultModeLink` — default mode is `link`.
 - `TestOnboard_conflictKeepsModule` — if target exists, keep module files and fail the command.
+- `TestOnboard_forceReplacesExistingFile` / `TestOnboard_forceReplacesExistingDir` — with `--force`, a conflicting destination is removed and re-copied from the live path (file refresh; dir add/modify/delete refresh).
 - `TestOnboard_dryRun_noSideEffects` — `--dry-run` writes nothing and invokes nothing.
 - `TestOnboard_miseConfigInStateDir_absoluteSources` — the generated mise config lives under the XDG state dir (`$XDG_STATE_HOME/dotdrift/profiles/<hash>/onboard/mise.toml`), its dotfile sources are absolute and exist, and the module dir contains no runtime files.
 - `TestOnboard_preservesDirTreeModes` — materializing a directory tree preserves per-file and per-directory modes (ownership is not preserved).
@@ -32,6 +33,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - Copies live paths into `modules/<app>/` under the profile, writes a `module.toml`, then runs `EnsureMise` and `mise dotfiles apply`.
 - The generated mise config is written to the profile's state directory (`onboard/mise.toml` next to apply's `mise/mise.toml`), never inside the profile; dotfile sources in it are absolute so mise's `--cd` resolution finds the materialized files.
 - `--yes` is plumbed from the CLI through `onboard.Options` to `DotfilesApply` for non-interactive runs.
+- `--force` turns a destination conflict into a refresh: the existing module destination is removed (`os.RemoveAll`, covering both file and directory destinations) and re-copied from the live path. Without `--force`, a conflict errors and leaves the module untouched.
 - File modes are preserved when copying files and directory trees; ownership is not (copies belong to the current user).
 - Default mode is `link`; `--mode copy|template` overrides.
 - `--app` overrides inferred app name.

@@ -26,6 +26,8 @@
 
 ## 2026-07-19
 
+* **Added (onboard)**: `--force` flag (`onboard.Options.Force`) re-materializes a conflicting path: instead of the `conflict: ... already exists in module` error, the existing module destination is removed (`os.RemoveAll`, files and dirs alike) and re-copied fresh from the live path. Default behavior unchanged. New tests: `TestOnboard_forceReplacesExistingFile`, `TestOnboard_forceReplacesExistingDir`, `TestOnboard_forceFlagParses`, `TestOnboard_forceFlowsToOptions`. Docs: cli-surface onboard flags table, README command table, t8-onboard.
+
 * **Added (cli)**: `dotdrift plan --json` prints the effective plan as a single JSON object to stdout (`fingerprint`, `modules`, `packages.install`/`remove`, `tools`, `dotfiles[]` with target/source/mode/module/layer). The `warning: no modules selected` line is suppressed in JSON mode so stdout stays parseable; default text output is byte-identical. New tests: `TestCLI_plan_jsonOutput`, `TestCLI_plan_jsonNotInDefaultOutput`, `TestCLI_plan_jsonNoModulesStaysParseable`.
 
 * **Removed (dead exports + hooks noop, decision D4a)**: deleted `facts.Detect` (package kept — `facts.Facts` is the shared facts type used by profile/resolve/detect/cmd), package-level `state.Load`/`state.Save` (FileStore is the API), `detect.DetectEnv`, `apply.Pipeline.StepNames`/`Steps` and `apply.NoOpStep`/`NewNoOpStep`, the unused `mise.DotfileEntry`/`mise.Plan` mirror types, and the permanent-noop hooks step: `mise.HooksStep`, `resolve.Plan.Hooks`/`resolve.HooksStep`, the `hooks:` section of `dotdrift plan` output, and the `&mise.HooksStep{}` pipeline entry in `cmd/apply.go`. Pipeline is now `packages → tools → dotfiles`; task docs t2/t3/t6 updated.

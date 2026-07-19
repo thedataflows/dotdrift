@@ -85,7 +85,7 @@ See `examples/simple/` for a minimal single-module profile, and `examples/profil
 | `dotdrift plan [--json]` | Print the effective plan without side effects (`--json` for machine-readable output) |
 | `dotdrift apply [--yes] [--no-hooks]` | Run the full pipeline and resume from state |
 | `dotdrift status` | Show resume cursor, selection, and last error |
-| `dotdrift onboard <path>...` | Copy live paths into a module and apply |
+| `dotdrift onboard <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file) |
 
 ## Testing
 

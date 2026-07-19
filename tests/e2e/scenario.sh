@@ -4,12 +4,6 @@
 # linking, real hooks-as-mise-tasks, resume, and profile-pollution checks.
 # Any failed assertion prints "FAIL: <reason>" and exits non-zero.
 
-# dotdrift generates mise configs under the XDG state dir; on a fresh
-# machine (like this container) mise refuses untrusted configs, so trust
-# everything via the environment. This is the standard CI knob
-# (https://mise.jdx.dev/cli/trust.html) and avoids touching product code.
-export MISE_TRUSTED_CONFIG_PATHS=/
-
 fail() {
 	echo "FAIL: $*" >&2
 	exit 1
@@ -29,6 +23,7 @@ echo "live-config 1" > /root/.liverc
 dotdrift onboard --yes --profile /profile /root/.liverc || fail "onboard exited non-zero"
 [ -f /profile/modules/liverc/module.toml ] || fail "onboard did not materialize modules/liverc/module.toml"
 [ -f /profile/modules/liverc/home/.liverc ] || fail "onboard did not copy the live file into the module"
+[ -L /root/.liverc ] || fail "onboard did not link /root/.liverc"
 
 # --- plan ----------------------------------------------------------------
 step "plan"

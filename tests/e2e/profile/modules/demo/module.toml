@@ -4,11 +4,8 @@ app = "demo"
 [packages]
 present = ["curl"]
 
-# NB: mode "symlink" is real mise's dotfiles vocabulary; dotdrift passes the
-# mode string through unvalidated, and current mise ignores unknown modes
-# (dotdrift's default "link" included) with only a warning.
 [dotfiles]
-"~/.demorc" = { source = "home/.demorc", mode = "symlink" }
+"~/.demorc" = { source = "home/.demorc", mode = "link" }
 
 [hooks]
 pre = ["echo pre-hook >> /tmp/hooks.log"]

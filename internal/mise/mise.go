@@ -465,6 +465,39 @@ func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes boo
 	return err
 }
 
+// geteuid is a test seam for the already-root check in dotfilesApplyArgv.
+var geteuid = os.Geteuid
+
+// dotfilesApplyArgv builds the argv for applying system-scope dotfiles:
+// directly as <mise> dotfiles apply when already root (EUID 0, e.g.
+// containers), otherwise elevated as sudo -E <mise> dotfiles apply. The -E
+// preserves the MISE_TRUSTED_CONFIG_PATHS entry the trust plumbing sets on
+// the sudo child environment, so the trust handling keeps working through
+// the elevation.
+func dotfilesApplyArgv(euid int, misePath, configPath string, yes bool) []string {
+	args := []string{"dotfiles", "apply", "--cd", filepath.Dir(configPath)}
+	if yes {
+		args = append(args, "--yes")
+	}
+	if euid == 0 {
+		return append([]string{misePath}, args...)
+	}
+	return append([]string{"sudo", "-E", misePath}, args...)
+}
+
+// DotfilesApplySudo applies system-scope dotfiles with root privileges. When
+// the process is not already root it invokes sudo (failing loudly if sudo is
+// missing or authentication fails); as root it applies directly.
+func (e *ExecMise) DotfilesApplySudo(ctx context.Context, configPath string, yes bool) error {
+	path, err := e.mise.EnsureContext(ctx)
+	if err != nil {
+		return err
+	}
+	argv := dotfilesApplyArgv(geteuid(), path, configPath, yes)
+	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), argv[0], argv[1:]...)
+	return err
+}
+
 // RunTask runs a named task (e.g. "hooks:pre") from the generated config.
 func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) error {
 	path, err := e.mise.EnsureContext(ctx)

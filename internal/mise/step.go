@@ -73,8 +73,40 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	return nil
 }
 
-// HooksStep runs one pre/post hook command list as a mise task from the
-// generated apply config. cmd/apply.go only constructs HooksSteps for
+// DotfilesSystemStep applies system-scope dotfile entries with root
+// privileges. It takes the concrete ExecMise (like HooksStep) because the
+// sudo-aware entry point is deliberately not part of the Runner interface.
+// cmd/apply.go only constructs it when at least one system-scope entry
+// exists; Run also no-ops on an empty list as a second line of defense.
+type DotfilesSystemStep struct {
+	Exec       *ExecMise
+	Entries    []resolve.DotfileEntry
+	ConfigPath string
+	Yes        bool
+}
+
+var _ apply.Step = (*DotfilesSystemStep)(nil)
+
+func (s *DotfilesSystemStep) Name() string { return "dotfiles-system" }
+
+func (s *DotfilesSystemStep) Run(ctx context.Context) error {
+	if len(s.Entries) == 0 {
+		return nil
+	}
+	if s.Exec == nil {
+		return fmt.Errorf("no mise exec configured")
+	}
+	cfg := GenerateDotfiles(s.Entries)
+	if err := writeConfig(s.ConfigPath, cfg); err != nil {
+		return fmt.Errorf("write system dotfiles mise config: %w", err)
+	}
+	if err := s.Exec.DotfilesApplySudo(ctx, s.ConfigPath, s.Yes); err != nil {
+		return fmt.Errorf("mise dotfiles apply (system): %w", err)
+	}
+	return nil
+}
+
+// HooksStep runs one pre/post hook command list as a mise task from the// generated apply config. cmd/apply.go only constructs HooksSteps for
 // non-empty command lists; Run also no-ops on an empty list as a second line
 // of defense.
 type HooksStep struct {
@@ -102,7 +134,8 @@ func (s *HooksStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func writeConfig(path, content string) error {	if path == "" {
+func writeConfig(path, content string) error {
+	if path == "" {
 		return fmt.Errorf("config path is empty")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

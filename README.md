@@ -69,6 +69,26 @@ post = ["systemctl --user daemon-reload"]
 
 `pre` commands run as the `hooks-pre` step **before** packages are installed; `post` commands run as the `hooks-post` step **after** dotfiles. Commands execute as [mise tasks](https://mise.jdx.dev) from the profile root with `DOTDRIFT_PROFILE`, `DOTDRIFT_HOSTNAME`, `DOTDRIFT_USERNAME`, `DOTDRIFT_OS`, and `DOTDRIFT_BACKEND` in the environment. Unlike other sections, hooks merge by **append** across layers (base → host → user) and modules, in selection order. A failing hook fails its step and resume re-runs it, so write post-hooks to be idempotent. Hooks are listed in `dotdrift plan`; skip them with `dotdrift apply --no-hooks` or `DOTDRIFT_NO_HOOKS=1`.
 
+## Scope
+
+A module applies to the home directory by default. Set `scope = "system"` in
+its `module.toml` to manage system dotfiles (e.g. targets under `/etc`):
+
+```toml
+# modules/<id>/module.toml
+scope = "system"
+
+[dotfiles]
+"/etc/demo.conf" = { source = "demo.conf", mode = "copy" }
+```
+
+One `dotdrift apply` covers both scopes: user dotfiles apply as usual, and
+system dotfiles apply in a `dotfiles-system` step via `sudo` (one password
+prompt per apply, thanks to sudo's timestamp cache; no sudo at all when
+already running as root). System-scope entries are marked `[system]` in
+`dotdrift plan`. Packages self-elevate via the distro backend and hooks carry
+their own inline privilege, so neither needs scope machinery.
+
 See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
 
 > Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.

@@ -64,6 +64,7 @@ disable = ["id1", "id2"]
 ```toml
 id = "optional-id"
 app = "optional-app"
+scope = "user"
 
 [when]
 hosts = ["myhost"]
@@ -90,6 +91,12 @@ post = ["echo apply finished"]
 ```
 
 - `when` filters are ANDed. An empty list means "any". `gpu` empty means any.
+- `scope` is module-level: `"user"` (the default when omitted) or `"system"`.
+  It decides how the module's dotfiles are applied — user-scope entries are
+  applied as the invoking user, system-scope entries are applied with root
+  privileges during `dotdrift apply`. Dotfile targets under `/etc` (or other
+  root-owned paths) belong in a `scope = "system"` module. Any other value is
+  a resolve-time error naming the module and the value.
 - `packages.absent` cancels a `present` entry from a lower layer.
 - `dotfiles` keys are target paths (absolute or `~/...`). Values are tables with:
   - `source`: relative path inside the module directory.

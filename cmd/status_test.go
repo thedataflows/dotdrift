@@ -64,7 +64,7 @@ func TestStatus_showsProgressUpdatedAndNext(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "progress: 2/5 steps")
+	require.Contains(t, out, "progress: 2/6 steps")
 	require.Contains(t, out, "updated: ")
 	require.Contains(t, out, "next: dotdrift apply  (resumes at dotfiles)")
 }
@@ -77,7 +77,7 @@ func TestStatus_completePrintsFullProgressWithoutNext(t *testing.T) {
 	s := state.New()
 	s.Selection = "abc123"
 	s.Status = state.StatusComplete
-	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
+	for _, step := range pipelineStepNames {
 		s.Completed[step] = true
 	}
 	require.NoError(t, store.Save(s))
@@ -88,7 +88,7 @@ func TestStatus_completePrintsFullProgressWithoutNext(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "progress: 5/5 steps")
+	require.Contains(t, out, "progress: 6/6 steps")
 	require.Contains(t, out, "updated: ")
 	require.NotContains(t, out, "next:")
 }

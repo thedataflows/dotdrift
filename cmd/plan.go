@@ -59,6 +59,7 @@ type planJSONDotfile struct {
 	Mode   string `json:"mode"`
 	Module string `json:"module"`
 	Layer  string `json:"layer"`
+	Scope  string `json:"scope"`
 }
 
 type planJSONDoc struct {
@@ -100,6 +101,7 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 			Mode:   e.Mode,
 			Module: e.Module,
 			Layer:  e.Layer,
+			Scope:  e.Scope,
 		})
 	}
 
@@ -130,7 +132,13 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 		fmt.Fprintf(out, "  %s:\n", e.Target)
 		fmt.Fprintf(out, "    source: %s\n", e.Source)
 		fmt.Fprintf(out, "    mode: %s\n", e.Mode)
-		fmt.Fprintf(out, "    module: %s\n", e.Module)
+		// System-scope entries are marked on the module line; user scope is
+		// the default and stays unmarked.
+		marker := ""
+		if e.Scope == profile.ScopeSystem {
+			marker = " [system]"
+		}
+		fmt.Fprintf(out, "    module: %s%s\n", e.Module, marker)
 		fmt.Fprintf(out, "    layer: %s\n", e.Layer)
 	}
 	fmt.Fprintln(out, "hooks:")

@@ -1,0 +1,5 @@
+id = "shell"
+scope = "user"
+
+[dotfiles]
+"~/.bashrc" = { source = ".bashrc", mode = "link" }

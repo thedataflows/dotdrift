@@ -21,15 +21,34 @@ type ModulesConfig struct {
 	Disable []string `toml:"disable"`
 }
 
+// Scope values for ModuleConfig.Scope. Scope is module-level: it decides
+// whether the module's dotfiles are applied as the invoking user (into ~/)
+// or with root privileges (into /etc and other system paths).
+const (
+	ScopeUser   = "user"
+	ScopeSystem = "system"
+)
+
 // ModuleConfig is the base module.toml configuration.
 type ModuleConfig struct {
-	ID       string            `toml:"id"`
-	App      string            `toml:"app"`
-	When     When              `toml:"when"`
-	Packages Packages          `toml:"packages"`
-	Tools    map[string]string `toml:"tools"`
+	ID       string             `toml:"id"`
+	App      string             `toml:"app"`
+	Scope    string             `toml:"scope"`
+	When     When               `toml:"when"`
+	Packages Packages           `toml:"packages"`
+	Tools    map[string]string  `toml:"tools"`
 	Dotfiles map[string]Dotfile `toml:"dotfiles"`
-	Hooks    Hooks             `toml:"hooks"`
+	Hooks    Hooks              `toml:"hooks"`
+}
+
+// ScopeOrDefault returns the module's dotfile scope, defaulting to user when
+// the key is omitted. Validity is not checked here — resolve rejects unknown
+// values loudly.
+func (c ModuleConfig) ScopeOrDefault() string {
+	if c.Scope == "" {
+		return ScopeUser
+	}
+	return c.Scope
 }
 
 // When filters a module by host, user, os, or gpu.

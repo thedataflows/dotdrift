@@ -1,0 +1,5 @@
+id = "demo"
+scope = "system"
+
+[dotfiles]
+"/etc/demo.conf" = { source = "demo.conf", mode = "copy" }

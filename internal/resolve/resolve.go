@@ -44,6 +44,7 @@ type DotfileEntry struct {
 	Mode   string
 	Module string
 	Layer  string
+	Scope  string
 }
 
 // HooksStep lists the pre/post apply hook commands aggregated across all
@@ -100,6 +101,14 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 			return nil, err
 		}
 
+		// Scope is module-level (base layer only, like id/app) and validated
+		// for every selected module — an unknown value must never pass
+		// silently, even for a module with no dotfiles.
+		scope := m.Config.ScopeOrDefault()
+		if scope != profile.ScopeUser && scope != profile.ScopeSystem {
+			return nil, fmt.Errorf("module %s: unknown scope %q (valid: user, system)", m.ID, m.Config.Scope)
+		}
+
 		base := layerConfig{name: "base", path: m.Path, cfg: m.Config}
 		hostPath := filepath.Join(root, "hosts", f.Hostname, "modules", filepath.Base(m.Path))
 		hostCfg, err := loadModuleConfig(hostPath)
@@ -129,7 +138,7 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 			plan.Tools.Versions[k] = v
 		}
 
-		entries, err := mergeDotfiles(base, host, user)
+		entries, err := mergeDotfiles(base, host, user, scope)
 		if err != nil {
 			return nil, err
 		}
@@ -262,7 +271,7 @@ var validDotfileModes = map[string]bool{
 	"template":     true,
 }
 
-func mergeDotfiles(base, host, user layerConfig) ([]DotfileEntry, error) {
+func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, error) {
 	winners := make(map[string]dotfileWinner)
 	for target, df := range base.cfg.Dotfiles {
 		winners[target] = dotfileWinner{layer: "base", path: base.path, df: df}
@@ -290,6 +299,7 @@ func mergeDotfiles(base, host, user layerConfig) ([]DotfileEntry, error) {
 			Mode:   winner.df.Mode,
 			Module: moduleID,
 			Layer:  winner.layer,
+			Scope:  scope,
 		})
 	}
 	return entries, nil

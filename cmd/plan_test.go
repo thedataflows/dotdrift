@@ -26,6 +26,7 @@ type planJSON struct {
 		Mode   string `json:"mode"`
 		Module string `json:"module"`
 		Layer  string `json:"layer"`
+		Scope  string `json:"scope"`
 	} `json:"dotfiles"`
 	Hooks struct {
 		Pre  []string `json:"pre"`
@@ -156,6 +157,44 @@ func TestCLI_plan_jsonOutput(t *testing.T) {
 
 	require.Equal(t, []string{"echo base-pre", "echo host-pre", "echo user-pre"}, got.Hooks.Pre)
 	require.Equal(t, []string{"echo base-post", "echo host-post", "echo user-post"}, got.Hooks.Post)
+}
+
+// System-scope entries are marked in the text plan (`module: <id> [system]`);
+// user-scope entries stay unmarked.
+func TestCLI_plan_scopeMarker(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+	}
+	require.NoError(t, c.Run())
+
+	out := buf.String()
+	require.Contains(t, out, "module: demo [system]")
+	require.Contains(t, out, "module: shell\n", "user-scope modules render without a scope marker")
+}
+
+// plan --json carries the scope on every dotfile entry.
+func TestCLI_plan_jsonScope(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+		JSON:    true,
+	}
+	require.NoError(t, c.Run())
+
+	var got planJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+
+	byTarget := make(map[string]string, len(got.Dotfiles))
+	for _, d := range got.Dotfiles {
+		byTarget[d.Target] = d.Scope
+	}
+	require.Equal(t, "system", byTarget["/etc/demo.conf"])
+	require.Equal(t, "user", byTarget["~/.bashrc"])
 }
 
 func TestCLI_plan_jsonNotInDefaultOutput(t *testing.T) {

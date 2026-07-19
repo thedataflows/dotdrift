@@ -34,7 +34,11 @@ var (
 // pipelineStepNames is the single source of truth for the ordered pipeline
 // step names: apply builds its steps in this order and status reports
 // progress against it. Update this list when adding or removing a step.
-var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"}
+// hooks-pre/hooks-post and dotfiles-system are conditional: they only run
+// when the plan has hook commands / system-scope dotfile entries, so a
+// completed apply may legitimately show fewer completed steps than the
+// denominator.
+var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "hooks-post"}
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
@@ -130,6 +134,7 @@ func (c *ApplyCmd) Run() error {
 	// with no tasks.
 	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
 	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
+	dotfilesSystemConfigPath := filepath.Join(configDir, "dotfiles-system", "mise.toml")
 
 	// Hooks steps are skipped at construction when their command list is
 	// empty or when the user opted out via --no-hooks / DOTDRIFT_NO_HOOKS=1
@@ -138,6 +143,22 @@ func (c *ApplyCmd) Run() error {
 	// before any side effect; hooks-post runs last.
 	hooksDisabled := c.NoHooks || os.Getenv("DOTDRIFT_NO_HOOKS") == "1"
 	backend := packagesFor(f.Backend)
+
+	// The dotfiles portion splits by scope: user entries apply as today via
+	// the DotfilesStep (against a scope-filtered plan copy), system entries
+	// get their own step applied with root privileges. The dotfiles-system
+	// step is appended only when at least one system-scope entry exists.
+	userPlan := *plan
+	var userEntries, systemEntries []resolve.DotfileEntry
+	for _, e := range plan.Dotfiles.Entries {
+		if e.Scope == profile.ScopeSystem {
+			systemEntries = append(systemEntries, e)
+		} else {
+			userEntries = append(userEntries, e)
+		}
+	}
+	userPlan.Dotfiles.Entries = userEntries
+
 	var steps []apply.Step
 	if !hooksDisabled && len(plan.Hooks.Pre) > 0 {
 		steps = append(steps, &mise.HooksStep{
@@ -148,8 +169,13 @@ func (c *ApplyCmd) Run() error {
 	steps = append(steps,
 		packages.NewStep(backend, plan),
 		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: toolsConfigPath},
-		&mise.DotfilesStep{Runner: runner, Plan: plan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
+		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
 	)
+	if len(systemEntries) > 0 {
+		steps = append(steps, &mise.DotfilesSystemStep{
+			Exec: runner, Entries: systemEntries, ConfigPath: dotfilesSystemConfigPath, Yes: c.Yes,
+		})
+	}
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: configPath,

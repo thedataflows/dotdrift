@@ -10,10 +10,10 @@ timestamp: 2026-07-14T00:00:00Z
 
 | Command | Behavior |
 |---------|----------|
-| `dotdrift init [git-url]` | Create or clone profile; set local path |
-| `dotdrift detect` | Print facts (host, user, gpu, os, package backend) |
-| `dotdrift modules` | List modules (default action; no `ls` subcommand) with selected/skipped + reason |
-| `dotdrift plan` | Print effective plan; no side effects (still may ensure mise if plan includes mise dry-run) |
+| `dotdrift init [path-or-git-url]` | Local path: create the profile and git-initialize it. Git URL: clone into a dir named from the URL minus any trailing `.git`, relative to the given path; the clone must be a dotdrift profile (`dotdrift.toml` present) or init errors |
+| `dotdrift detect` | Print facts (host, user, os, distro, gpu, package backend) |
+| `dotdrift modules` | List modules with selected/skipped + reason (no `modules ls` form; bare `dotdrift` prints help and exits with a usage error) |
+| `dotdrift plan` | Print effective plan; side-effect-free, never touches mise |
 | `dotdrift apply [--yes]` | Full pipeline; always resumes; optional `--only` later as power-user only |
 | `dotdrift status` | Resume cursor, selection, last error |
 | `dotdrift onboard <path>...` | Create/update module; mise apply immediately |
@@ -25,8 +25,8 @@ timestamp: 2026-07-14T00:00:00Z
 | (none) | mode=link, module inferred, enabled by presence | Happy path |
 | `--app ID` | inferred | Inference wrong |
 | `--mode link\|copy\|template` | link | Apps that rewrite configs → copy |
-| `--package P` | none | Declare distro package in module.toml |
-| `--tool T` | none | Declare mise tool |
+| `--packages P` | none | Declare distro package in module.toml (comma-separated or repeated for several) |
+| `--tools T` | none | Declare mise tool (comma-separated or repeated for several) |
 | `--host` | base module files | Host overlay only |
 | `--dry-run` | false | Preview only |
 

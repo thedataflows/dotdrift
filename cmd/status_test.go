@@ -42,3 +42,53 @@ func TestStatus_defaultsToProfileStatePath(t *testing.T) {
 	require.NoError(t, cmd.Run())
 	require.Contains(t, buf.String(), "state: "+state.ProfileStatePath(dir))
 }
+
+// Failed run with two completed steps: status reports progress against the
+// pipeline step list, the state file's mtime, and a resume hint.
+func TestStatus_showsProgressUpdatedAndNext(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	store := state.NewFileStore(statePath)
+	s := state.New()
+	s.Selection = "abc123"
+	s.Status = state.StatusFailed
+	s.Current = "dotfiles"
+	s.Error = "boom"
+	s.Completed["packages"] = true
+	s.Completed["tools"] = true
+	require.NoError(t, store.Save(s))
+
+	var buf bytes.Buffer
+	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
+	require.NoError(t, cmd.Run())
+
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "progress: 2/4 steps")
+	require.Contains(t, out, "updated: ")
+	require.Contains(t, out, "next: dotdrift apply  (resumes at dotfiles)")
+}
+
+// Complete run: full progress, mtime, and no next-step hint.
+func TestStatus_completePrintsFullProgressWithoutNext(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	store := state.NewFileStore(statePath)
+	s := state.New()
+	s.Selection = "abc123"
+	s.Status = state.StatusComplete
+	for _, step := range []string{"packages", "tools", "dotfiles", "hooks"} {
+		s.Completed[step] = true
+	}
+	require.NoError(t, store.Save(s))
+
+	var buf bytes.Buffer
+	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
+	require.NoError(t, cmd.Run())
+
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "progress: 4/4 steps")
+	require.Contains(t, out, "updated: ")
+	require.NotContains(t, out, "next:")
+}

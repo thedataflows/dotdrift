@@ -224,6 +224,7 @@ func TestOnboard_conflictKeepsModule(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "conflict")
+	require.Contains(t, err.Error(), "already exists in module (remove it or onboard into a different module id)")
 	require.FileExists(t, filepath.Join(profile, "modules", "bash", "module.toml"))
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/thedataflows/dotdrift/internal/state"
 )
@@ -40,6 +41,23 @@ func (c *StatusCmd) Run() error {
 	}
 	if s.Error != "" {
 		fmt.Fprintf(out, "error: %s\n", s.Error)
+	}
+	if info, err := os.Stat(statePath); err == nil {
+		completed := 0
+		for _, step := range pipelineStepNames {
+			if s.IsCompleted(step) {
+				completed++
+			}
+		}
+		fmt.Fprintf(out, "progress: %d/%d steps\n", completed, len(pipelineStepNames))
+		fmt.Fprintf(out, "updated: %s\n", info.ModTime().UTC().Format(time.RFC3339))
+		if s.Status == state.StatusFailed || s.Status == state.StatusInProgress {
+			if s.Current != "" {
+				fmt.Fprintf(out, "next: dotdrift apply  (resumes at %s)\n", s.Current)
+			} else {
+				fmt.Fprintln(out, "next: dotdrift apply")
+			}
+		}
 	}
 	return nil
 }

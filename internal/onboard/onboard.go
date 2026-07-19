@@ -106,7 +106,7 @@ func (o *Onboard) Run(opts Options) error {
 		}
 		if !opts.DryRun {
 			if _, err := os.Stat(source); err == nil {
-				return fmt.Errorf("conflict: %s already exists in module", source)
+				return fmt.Errorf("conflict: %s already exists in module (remove it or onboard into a different module id)", source)
 			}
 			if err := copyPath(p, source); err != nil {
 				return fmt.Errorf("copy %s: %w", p, err)

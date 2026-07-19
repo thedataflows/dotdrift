@@ -197,6 +197,34 @@ func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
 	}
 }
 
+// Apply prints the effective resolved plan (same rendering as `dotdrift plan`)
+// to its Out writer before the pipeline runs.
+func TestApply_printsPlan(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+
+	var buf bytes.Buffer
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true, Out: &buf}
+	require.NoError(t, cmd.Run())
+
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "fingerprint:")
+	require.Contains(t, out, "packages:")
+	require.Contains(t, out, "  - ripgrep")
+	require.Contains(t, out, "remove:")
+	require.Contains(t, out, "  - emacs")
+	require.Contains(t, out, "tools:")
+	require.Contains(t, out, "  node: 22")
+	require.Contains(t, out, "dotfiles:")
+	require.Contains(t, out, "~/.bashrc")
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+}
+
 // Decision D8a (keep + test): apply writes the FULL mise config (tools +
 // dotfiles) before the pipeline starts. When apply fails at the first
 // pipeline step, the crash snapshot on disk still contains that full config

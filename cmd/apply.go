@@ -3,6 +3,7 @@ package dotdrift
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -30,11 +31,17 @@ var (
 	packagesFor = packages.For
 )
 
+// pipelineStepNames is the single source of truth for the ordered pipeline
+// step names: apply builds its steps in this order and status reports
+// progress against it. Update this list when adding or removing a step.
+var pipelineStepNames = []string{"packages", "tools", "dotfiles", "hooks"}
+
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
-	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
-	State   string `help:"Path to state file" type:"path" default:""`
-	Yes     bool   `help:"Answer yes to mise prompts" default:"false"`
+	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
+	State   string    `help:"Path to state file" type:"path" default:""`
+	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
+	Out     io.Writer `kong:"-"`
 }
 
 // Run executes the apply pipeline with resume semantics.
@@ -78,6 +85,14 @@ func (c *ApplyCmd) Run() error {
 		}
 		s.ResetForSelection()
 		s.Selection = fingerprint
+	}
+
+	out := c.Out
+	if out == nil {
+		out = os.Stdout
+	}
+	if err := printPlan(out, plan, p, f); err != nil {
+		return err
 	}
 
 	m := defaultMise()

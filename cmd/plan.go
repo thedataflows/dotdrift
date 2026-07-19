@@ -49,6 +49,9 @@ func (c *PlanCmd) Run() error {
 }
 
 func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts) error {
+	if len(p.Selected) == 0 {
+		fmt.Fprintln(out, "warning: no modules selected")
+	}
 	fmt.Fprintf(out, "fingerprint:\n%s", resolve.Fingerprint(p, f))
 	fmt.Fprintln(out, "packages:")
 	for _, pkg := range plan.Packages.Install {

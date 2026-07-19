@@ -1,0 +1,2 @@
+# Profile without a modules/ directory: Load must refuse it.
+[modules]

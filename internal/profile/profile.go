@@ -142,16 +142,34 @@ func (p *Profile) loadConfig(root string, f *facts.Facts) error {
 	if err != nil {
 		return err
 	}
-	host, err := loadDotdriftTOML(filepath.Join(root, "hosts", f.Hostname, "dotdrift.toml"))
+	host, err := loadOverlay(filepath.Join(root, "hosts", f.Hostname, "dotdrift.toml"), f.Hostname, "hostname")
 	if err != nil {
 		return err
 	}
-	user, err := loadDotdriftTOML(filepath.Join(root, "users", f.Username, "dotdrift.toml"))
+	user, err := loadOverlay(filepath.Join(root, "users", f.Username, "dotdrift.toml"), f.Username, "username")
 	if err != nil {
 		return err
 	}
 	p.Config = unionConfig(base, host, user)
 	return nil
+}
+
+// loadOverlay loads a host/user dotdrift.toml layer. An empty fact value
+// collapses the overlay path onto the parent directory (e.g.
+// hosts/dotdrift.toml); if a file exists at that collapsed path it would be
+// silently merged into every configuration, so refuse it loudly. When no file
+// exists at the collapsed path the overlay is simply absent.
+func loadOverlay(path, value, name string) (Config, error) {
+	var cfg Config
+	if value != "" {
+		return loadDotdriftTOML(path)
+	}
+	if _, err := os.Stat(path); err == nil {
+		return cfg, fmt.Errorf("empty %s: refusing to load collapsed overlay %s", name, path)
+	} else if !os.IsNotExist(err) {
+		return cfg, err
+	}
+	return cfg, nil
 }
 
 func loadDotdriftTOML(path string) (Config, error) {
@@ -192,10 +210,11 @@ func (p *Profile) discover(root string) error {
 	entries, err := os.ReadDir(modulesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return fmt.Errorf("not a dotdrift profile: %s missing modules/ directory", root)
 		}
 		return err
 	}
+	seen := make(map[string]string)
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -208,6 +227,10 @@ func (p *Profile) discover(root string) error {
 		if mod == nil {
 			continue
 		}
+		if prev, dup := seen[mod.ID]; dup {
+			return fmt.Errorf("duplicate module id %q: %s and %s", mod.ID, prev, modPath)
+		}
+		seen[mod.ID] = modPath
 		p.Modules = append(p.Modules, *mod)
 	}
 	sort.Slice(p.Modules, func(i, j int) bool { return p.Modules[i].ID < p.Modules[j].ID })

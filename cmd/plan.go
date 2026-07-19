@@ -73,10 +73,6 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 		fmt.Fprintf(out, "    module: %s\n", e.Module)
 		fmt.Fprintf(out, "    layer: %s\n", e.Layer)
 	}
-	fmt.Fprintln(out, "hooks:")
-	if len(plan.Hooks.Pre) == 0 && len(plan.Hooks.Post) == 0 {
-		fmt.Fprintln(out, "  (none)")
-	}
 	return nil
 }
 

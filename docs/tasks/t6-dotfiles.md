@@ -17,8 +17,9 @@ Dotfiles only through mise.
 - `TestMise_dotfilesApplyArgs_noForce` — `mise dotfiles apply` is invoked without `--force`.
 - `TestDotfilesStep_conflictStops` — fake runner returns conflict; state current=dotfiles, error saved.
 - `TestDotfilesStep_ok` — successful apply advances state.
-- `TestHooksStep_noop` — hooks step is a placeholder in v0.1.
-- `TestApplyPipeline_fullFake` — full fake pipeline resolve→packages→tools→dotfiles→hooks green.
+- `TestApplyPipeline_fullFake` — full fake pipeline resolve→packages→tools→dotfiles green.
+
+(Hooks: the `HooksStep` noop placeholder and `TestHooksStep_noop` were removed for v0.1, decision D4a — hooks are out of scope for the pipeline.)
 
 # Implementation notes
 

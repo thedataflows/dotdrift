@@ -75,28 +75,3 @@ func (p *Pipeline) Run(ctx context.Context) error {
 func (p *Pipeline) State() *state.State {
 	return p.state
 }
-
-// StepNames returns the ordered step names.
-func (p *Pipeline) StepNames() []string {
-	names := make([]string, len(p.steps))
-	for i, step := range p.steps {
-		names[i] = step.Name()
-	}
-	return names
-}
-
-// Steps returns the ordered steps.
-func (p *Pipeline) Steps() []Step {
-	return p.steps
-}
-
-// NoOpStep is a step that does nothing; useful for placeholders like hooks in v0.1.
-type NoOpStep struct{ name string }
-
-// NewNoOpStep creates a no-op step with the given name.
-func NewNoOpStep(name string) *NoOpStep {
-	return &NoOpStep{name: name}
-}
-
-func (s *NoOpStep) Name() string                    { return s.name }
-func (s *NoOpStep) Run(ctx context.Context) error { return nil }

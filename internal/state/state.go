@@ -308,19 +308,3 @@ func profileHash(path string) string {
 	h := sha256.Sum256([]byte(path))
 	return fmt.Sprintf("%x", h)
 }
-
-// Load reads state from the given path. If the file does not exist, it returns a default state.
-func Load(path string) (State, error) {
-	fs := NewFileStore(path)
-	s, err := fs.Load()
-	if err != nil {
-		return State{}, err
-	}
-	return *s, nil
-}
-
-// Save writes state to the given path.
-func Save(path string, s State) error {
-	fs := NewFileStore(path)
-	return fs.Save(&s)
-}

@@ -6,11 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/resolve"
+	"github.com/thedataflows/dotdrift/internal/state"
 )
 
 // Options configures the onboard operation.
@@ -23,6 +25,7 @@ type Options struct {
 	Tools       []string
 	Host        bool
 	DryRun      bool
+	Yes         bool
 	Home        string
 	Hostname    string
 }
@@ -129,14 +132,14 @@ func (o *Onboard) Run(opts Options) error {
 		return fmt.Errorf("no mise runner configured")
 	}
 
-	configPath, err := writeMiseConfig(moduleDir, entries)
+	configPath, err := writeMiseConfig(opts.ProfileRoot, moduleDir, entries)
 	if err != nil {
 		return err
 	}
 	if err := o.Mise.EnsureAndInstall(configPath); err != nil {
 		return fmt.Errorf("mise install: %w", err)
 	}
-	if err := o.Mise.DotfilesApply(configPath, false); err != nil {
+	if err := o.Mise.DotfilesApply(configPath, opts.Yes); err != nil {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil
@@ -181,17 +184,62 @@ func mapPath(p, home, moduleDir string) (target, source string, err error) {
 	return target, source, nil
 }
 
+// copyPath copies src to dst preserving file modes. Ownership is not
+// preserved: copied files are owned by the current user.
 func copyPath(src, dst string) error {
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
 	}
 	if info.IsDir() {
-		if err := os.MkdirAll(dst, 0o755); err != nil {
+		return copyDir(src, dst, info.Mode())
+	}
+	return copyFile(src, dst, info.Mode())
+}
+
+func copyDir(src, dst string, mode os.FileMode) error {
+	if err := os.MkdirAll(dst, mode); err != nil {
+		return err
+	}
+	// MkdirAll applies mode only to newly created dirs; enforce it.
+	if err := os.Chmod(dst, mode); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		s := filepath.Join(src, e.Name())
+		d := filepath.Join(dst, e.Name())
+		if e.Type()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(s)
+			if err != nil {
+				return err
+			}
+			if err := os.Symlink(target, d); err != nil {
+				return err
+			}
+			continue
+		}
+		info, err := e.Info()
+		if err != nil {
 			return err
 		}
-		return os.CopyFS(dst, os.DirFS(src))
+		if info.IsDir() {
+			if err := copyDir(s, d, info.Mode()); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := copyFile(s, d, info.Mode()); err != nil {
+			return err
+		}
 	}
+	return nil
+}
+
+func copyFile(src, dst string, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
 	}
@@ -200,15 +248,19 @@ func copyPath(src, dst string) error {
 		return err
 	}
 	defer func() { _ = in.Close() }()
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = out.Close() }()
 	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
 		return err
 	}
-	return out.Close()
+	if err := out.Close(); err != nil {
+		return err
+	}
+	// umask may have stripped bits at creation; enforce the source mode.
+	return os.Chmod(dst, mode)
 }
 
 func writeModuleTOML(moduleDir string, cfg moduleConfig) error {
@@ -223,24 +275,39 @@ func writeModuleTOML(moduleDir string, cfg moduleConfig) error {
 	return os.WriteFile(path, data, 0o644)
 }
 
-func writeMiseConfig(moduleDir string, entries map[string]dotfileEntry) (string, error) {
+// writeMiseConfig generates the onboard mise config under the profile's XDG
+// state directory (alongside apply's config) so the profile directory stays
+// free of runtime state. Dotfile sources are absolute because mise resolves
+// them against the config's directory.
+func writeMiseConfig(profileRoot, moduleDir string, entries map[string]dotfileEntry) (string, error) {
+	absModule, err := filepath.Abs(moduleDir)
+	if err != nil {
+		absModule = moduleDir
+	}
+
+	targets := make([]string, 0, len(entries))
+	for target := range entries {
+		targets = append(targets, target)
+	}
+	sort.Strings(targets)
+
 	plan := &resolve.Plan{
 		Dotfiles: resolve.DotfilesStep{Entries: make([]resolve.DotfileEntry, 0, len(entries))},
 	}
-	for target, e := range entries {
+	for _, target := range targets {
+		e := entries[target]
 		plan.Dotfiles.Entries = append(plan.Dotfiles.Entries, resolve.DotfileEntry{
 			Target: target,
-			Source: e.Source,
+			Source: filepath.Join(absModule, e.Source),
 			Mode:   e.Mode,
 		})
 	}
 	cfg := mise.GenerateConfig(plan)
 
-	configDir := filepath.Join(moduleDir, ".mise")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
+	configPath := filepath.Join(filepath.Dir(state.ProfileStatePath(profileRoot)), "onboard", "mise.toml")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return "", err
 	}
-	configPath := filepath.Join(configDir, "mise.toml")
 	if err := os.WriteFile(configPath, []byte(cfg), 0o644); err != nil {
 		return "", err
 	}

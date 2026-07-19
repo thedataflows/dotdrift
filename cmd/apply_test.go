@@ -126,7 +126,7 @@ func resolveFixture(t *testing.T) string {
 	return filepath.Join("..", "testdata", "profiles", "resolve")
 }
 
-// Happy path: detect → load → resolve → ensure → packages/tools/dotfiles/hooks
+// Happy path: detect → load → resolve → ensure → packages/tools/dotfiles
 // in order, ending in a complete state with the current selection fingerprint.
 func TestApply_happyPath(t *testing.T) {
 	dir := t.TempDir()
@@ -155,7 +155,7 @@ func TestApply_happyPath(t *testing.T) {
 	require.Empty(t, s.Current)
 	require.Empty(t, s.Error)
 	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-	for _, step := range []string{"packages", "tools", "dotfiles", "hooks"} {
+	for _, step := range []string{"packages", "tools", "dotfiles"} {
 		require.True(t, s.IsCompleted(step), "step %s not completed", step)
 	}
 }
@@ -192,7 +192,7 @@ func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
 	s := loadStateFile(t, statePath)
 	require.Equal(t, state.StatusComplete, s.Status)
 	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-	for _, step := range []string{"packages", "tools", "dotfiles", "hooks"} {
+	for _, step := range []string{"packages", "tools", "dotfiles"} {
 		require.True(t, s.IsCompleted(step), "step %s not completed", step)
 	}
 }

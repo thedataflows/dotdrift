@@ -64,7 +64,7 @@ func TestStatus_showsProgressUpdatedAndNext(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "progress: 2/4 steps")
+	require.Contains(t, out, "progress: 2/3 steps")
 	require.Contains(t, out, "updated: ")
 	require.Contains(t, out, "next: dotdrift apply  (resumes at dotfiles)")
 }
@@ -88,7 +88,7 @@ func TestStatus_completePrintsFullProgressWithoutNext(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "progress: 4/4 steps")
+	require.Contains(t, out, "progress: 3/3 steps")
 	require.Contains(t, out, "updated: ")
 	require.NotContains(t, out, "next:")
 }

@@ -34,7 +34,7 @@ var (
 // pipelineStepNames is the single source of truth for the ordered pipeline
 // step names: apply builds its steps in this order and status reports
 // progress against it. Update this list when adding or removing a step.
-var pipelineStepNames = []string{"packages", "tools", "dotfiles", "hooks"}
+var pipelineStepNames = []string{"packages", "tools", "dotfiles"}
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {

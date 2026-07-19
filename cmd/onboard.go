@@ -3,7 +3,6 @@ package dotdrift
 import (
 	"fmt"
 
-	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/onboard"
 )
@@ -17,19 +16,25 @@ type OnboardCmd struct {
 	Mode     string   `help:"Dotfile mode" enum:"link,copy,template" default:"link"`
 	Packages []string `help:"Distro packages to declare"`
 	Tools    []string `help:"Mise tools to declare"`
-	Host     bool     `help:"Host overlay only"`
-	DryRun   bool     `help:"Preview only"`
-	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
+	Host     bool         `help:"Host overlay only"`
+	DryRun   bool         `help:"Preview only"`
+	Yes      bool         `help:"Answer yes to mise prompts" default:"false"`
+	// Mise injects a runner for tests; nil uses the real mise bootstrap.
+	Mise mise.Runner `kong:"-"`
 }
 
 // Run implements the onboard command.
 func (c *OnboardCmd) Run() error {
-	f, err := detect.Detect()
+	f, err := detectFacts()
 	if err != nil {
 		return fmt.Errorf("detect: %w", err)
 	}
 
-	o := &onboard.Onboard{Mise: mise.NewExecMise(mise.DefaultMise())}
+	runner := c.Mise
+	if runner == nil {
+		runner = mise.NewExecMise(mise.DefaultMise())
+	}
+	o := &onboard.Onboard{Mise: runner}
 	return o.Run(onboard.Options{
 		ProfileRoot: c.Profile,
 		Paths:       c.Paths,

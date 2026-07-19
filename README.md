@@ -95,6 +95,14 @@ go test ./...
 
 Unit tests run offline. Integration tests against real tools can be added with `//go:build integration`.
 
+### Integration tests
+
+```bash
+./tests/e2e/run.sh
+```
+
+Builds and runs a Docker end-to-end suite for the debian family (`debian:bookworm-slim` and `ubuntu:24.04`; requires Docker and network access). Each container builds dotdrift from this repo, onboards a live file with a real `mise.run` bootstrap, and runs `dotdrift apply` against a fixture profile — then asserts a real `apt-get install curl` (verified via `dpkg`), dotfile symlinking, pre/post hooks executed as mise tasks, resume no-op on a second apply, complete state on disk, and no runtime pollution inside the profile. Runs on push to `main` via `.github/workflows/e2e.yml`; the offline `go test ./...` gate is unchanged.
+
 ---
 
 ## License

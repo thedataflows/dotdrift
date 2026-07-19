@@ -1,0 +1,20 @@
+# syntax=docker/dockerfile:1
+# E2E image: build dotdrift from this repo, then run the scenario on a slim
+# Ubuntu runtime with real apt + real mise bootstrap.
+
+FROM golang:1.26-bookworm AS builder
+WORKDIR /src
+COPY . .
+RUN go build -mod=vendor -o /out/dotdrift .
+
+FROM ubuntu:24.04
+# See Dockerfile.debian: curl ships only for the mise.run bootstrap and is
+# purged by the scenario before apply; the apt index is wiped on purpose.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl git \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /out/dotdrift /usr/local/bin/dotdrift
+COPY tests/e2e/profile /profile
+COPY tests/e2e/scenario.sh /scenario.sh
+RUN chmod +x /scenario.sh
+CMD ["/scenario.sh"]

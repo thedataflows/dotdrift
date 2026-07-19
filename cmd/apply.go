@@ -122,6 +122,15 @@ func (c *ApplyCmd) Run() error {
 		return fmt.Errorf("write mise config: %w", err)
 	}
 
+	// The tools/dotfiles steps rewrite their config file with a single
+	// section each. Giving each step its own config — in its own directory
+	// so `mise --cd` still discovers it as mise.toml — keeps the shared
+	// full config (and its [tasks] hook definitions) intact for the hooks
+	// steps; otherwise hooks-post would run `mise run` against a config
+	// with no tasks.
+	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
+	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
+
 	// Hooks steps are skipped at construction when their command list is
 	// empty or when the user opted out via --no-hooks / DOTDRIFT_NO_HOOKS=1
 	// (HooksStep.Run also no-ops on an empty list as a second line of
@@ -138,8 +147,8 @@ func (c *ApplyCmd) Run() error {
 	}
 	steps = append(steps,
 		packages.NewStep(backend, plan),
-		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: configPath},
-		&mise.DotfilesStep{Runner: runner, Plan: plan, ConfigPath: configPath, Yes: c.Yes},
+		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: toolsConfigPath},
+		&mise.DotfilesStep{Runner: runner, Plan: plan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
 	)
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{

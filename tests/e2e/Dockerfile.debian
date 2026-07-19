@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+# E2E image: build dotdrift from this repo, then run the scenario on a slim
+# Debian runtime with real apt + real mise bootstrap.
+
+FROM golang:1.26-bookworm AS builder
+WORKDIR /src
+COPY . .
+RUN go build -mod=vendor -o /out/dotdrift .
+
+FROM debian:bookworm-slim
+# curl is required at container runtime for the mise.run bootstrap; the
+# scenario purges it before `dotdrift apply` so the packages step performs a
+# REAL install. The apt index is wiped (standard slim practice), which is
+# exactly the "fresh container, empty index" condition this suite exercises.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl git \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /out/dotdrift /usr/local/bin/dotdrift
+COPY tests/e2e/profile /profile
+COPY tests/e2e/scenario.sh /scenario.sh
+RUN chmod +x /scenario.sh
+CMD ["/scenario.sh"]

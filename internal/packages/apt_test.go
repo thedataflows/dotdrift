@@ -13,15 +13,30 @@ func TestApt_Present(t *testing.T) {
 	r := &recordingRunner{}
 	apt := &packages.Apt{Runner: r}
 	require.NoError(t, apt.Present(context.Background(), []string{"neovim", "ripgrep"}))
-	require.Equal(t, "apt-get", r.name)
-	require.Equal(t, []string{"install", "-y", "neovim", "ripgrep"}, r.args)
+	// Present must refresh the apt index before installing: a fresh
+	// machine/container has an empty or stale index and `apt-get install`
+	// fails with "Unable to locate package".
+	require.Len(t, r.calls, 2)
+	require.Equal(t, "apt-get", r.calls[0].Name)
+	require.Equal(t, []string{"update"}, r.calls[0].Args)
+	require.Equal(t, "apt-get", r.calls[1].Name)
+	require.Equal(t, []string{"install", "-y", "neovim", "ripgrep"}, r.calls[1].Args)
+}
+
+func TestApt_Present_updateErrorStopsInstall(t *testing.T) {
+	boom := errors.New("apt index unreachable")
+	r := &recordingRunner{err: boom}
+	apt := &packages.Apt{Runner: r}
+	require.ErrorIs(t, apt.Present(context.Background(), []string{"curl"}), boom)
+	require.Len(t, r.calls, 1)
+	require.Equal(t, []string{"update"}, r.calls[0].Args)
 }
 
 func TestApt_Present_empty(t *testing.T) {
 	r := &recordingRunner{}
 	apt := &packages.Apt{Runner: r}
 	require.NoError(t, apt.Present(context.Background(), nil))
-	require.Empty(t, r.name)
+	require.Empty(t, r.calls)
 }
 
 func TestApt_Absent(t *testing.T) {
@@ -59,16 +74,23 @@ func TestApt_IsInstalled_errorPropagates(t *testing.T) {
 	require.False(t, ok)
 }
 
+type recordedCall struct {
+	Name string
+	Args []string
+}
+
 type recordingRunner struct {
-	ctx  context.Context
-	name string
-	args []string
-	err  error
+	ctx   context.Context
+	name  string
+	args  []string
+	calls []recordedCall
+	err   error
 }
 
 func (r *recordingRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
 	r.ctx = ctx
 	r.name = name
 	r.args = args
+	r.calls = append(r.calls, recordedCall{Name: name, Args: args})
 	return "", r.err
 }

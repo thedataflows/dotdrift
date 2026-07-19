@@ -1,0 +1,17 @@
+name: E2E
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docker-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Run debian-family docker e2e suite
+        run: ./tests/e2e/run.sh

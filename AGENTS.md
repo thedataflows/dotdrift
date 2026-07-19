@@ -10,6 +10,7 @@ On top of the global rules:
 2. **Update all docs**: Any change that affects user-facing docs, README,
    `docs/`, milestones, tasks, or examples must update them before finishing.
    Keep `docs/log.md` current with completed milestones and tasks.
+3. MUST follow OKF format: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
 
 When in doubt, prefer deletion, simplicity, and the documented project conventions
 in `docs/`.

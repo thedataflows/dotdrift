@@ -12,6 +12,10 @@ timestamp: 2026-07-14T00:00:00Z
 2. `hosts/<hostname>/`
 3. `users/<username>/` — **wins on conflicts**
 
+`<username>` is the OS account name (`os/user.Current()`), never `$USER`.
+Under `sudo dotdrift apply` the process account is root, so **root's overlays
+are selected**, not the invoking user's.
+
 # Rules
 
 | Kind | Resolution |
@@ -22,6 +26,11 @@ timestamp: 2026-07-14T00:00:00Z
 | Tools map keys | Higher layer wins |
 | `modules.disable` | **Union** across layers (any disable sticks; no silent re-enable in v0.1) |
 | `when` filters | Evaluated on module; fail → not selected |
+
+`when` filter values match detected facts by **case-sensitive exact match**
+(`when.distro: Arch` never matches detected `arch`). GPU detection is
+**first-match** over `lspci` output (nvidia → amd → intel), and `when.gpu` is
+a **single string**, not a list.
 
 # Plan visibility
 

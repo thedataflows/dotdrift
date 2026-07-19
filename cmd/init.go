@@ -6,7 +6,18 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
+
+// runGit executes git in dir; swapped out by tests.
+var runGit = func(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
 
 // InitCmd creates or clones a profile.
 type InitCmd struct {
@@ -43,23 +54,30 @@ func (c *InitCmd) create() error {
 			return fmt.Errorf("create %s directory: %w", dir, err)
 		}
 	}
+	if err := runGit(c.Path, "init", "-q"); err != nil {
+		log.Warn().Err(err).Str("path", c.Path).Msg("git init failed; profile created without git")
+	}
 	fmt.Printf("Initialized profile at %s\n", c.Path)
 	return nil
 }
 
 func (c *InitCmd) clone() error {
 	// Infer directory name from URL unless the current path is explicitly provided.
-	dir := filepath.Base(c.Path)
+	dir := strings.TrimSuffix(filepath.Base(strings.TrimSuffix(c.Path, "/")), ".git")
 	if dir == "" || dir == "." {
 		return fmt.Errorf("cannot infer clone directory from %s", c.Path)
 	}
-	cmd := exec.Command("git", "clone", c.Path, dir)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	target, err := filepath.Abs(dir)
+	if err != nil {
+		return fmt.Errorf("resolve clone target: %w", err)
+	}
+	if err := runGit(filepath.Dir(target), "clone", c.Path, target); err != nil {
 		return fmt.Errorf("clone profile: %w", err)
 	}
-	fmt.Printf("Cloned profile from %s into %s\n", c.Path, dir)
+	if _, err := os.Stat(filepath.Join(target, "dotdrift.toml")); err != nil {
+		return fmt.Errorf("cloned repository at %s is not a dotdrift profile: missing dotdrift.toml", target)
+	}
+	fmt.Printf("Cloned profile from %s into %s\n", c.Path, target)
 	return nil
 }
 

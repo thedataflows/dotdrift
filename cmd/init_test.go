@@ -62,6 +62,63 @@ func TestInit_clonesProfile(t *testing.T) {
 	require.FileExists(t, filepath.Join(work, base, "dotdrift.toml"))
 }
 
+func TestInit_cloneStripsGitSuffix(t *testing.T) {
+	remoteParent := t.TempDir()
+	remote := filepath.Join(remoteParent, "bar.git")
+	require.NoError(t, os.MkdirAll(remote, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(remote, "dotdrift.toml"), []byte("[modules]\n"), 0o644))
+
+	gitExec(t, remote, "init")
+	gitExec(t, remote, "config", "user.email", "test@example.com")
+	gitExec(t, remote, "config", "user.name", "Test")
+	gitExec(t, remote, "add", ".")
+	gitExec(t, remote, "commit", "-m", "initial")
+
+	work := t.TempDir()
+	orig, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(work))
+	t.Cleanup(func() {
+		if err := os.Chdir(orig); err != nil {
+			t.Logf("restore dir: %v", err)
+		}
+	})
+
+	err = cmd.Run("dev", []string{"init", "file://" + remote})
+	require.NoError(t, err)
+
+	require.FileExists(t, filepath.Join(work, "bar", "dotdrift.toml"))
+	require.NoDirExists(t, filepath.Join(work, "bar.git"))
+}
+
+func TestInit_cloneRequiresDotdriftToml(t *testing.T) {
+	remote := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(remote, "README.md"), []byte("not a profile\n"), 0o644))
+
+	gitExec(t, remote, "init")
+	gitExec(t, remote, "config", "user.email", "test@example.com")
+	gitExec(t, remote, "config", "user.name", "Test")
+	gitExec(t, remote, "add", ".")
+	gitExec(t, remote, "commit", "-m", "initial")
+
+	work := t.TempDir()
+	orig, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(work))
+	t.Cleanup(func() {
+		if err := os.Chdir(orig); err != nil {
+			t.Logf("restore dir: %v", err)
+		}
+	})
+
+	err = cmd.Run("dev", []string{"init", "file://" + remote})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not a dotdrift profile")
+
+	// The cloned directory is left in place for inspection.
+	require.DirExists(t, filepath.Join(work, filepath.Base(remote)))
+}
+
 func gitExec(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	c := exec.Command("git", args...)

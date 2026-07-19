@@ -16,11 +16,17 @@ func NewApt() *Apt {
 	return &Apt{Runner: ExecRunner{}}
 }
 
-// Present installs packages idempotently.
+// Present installs packages idempotently. Unlike dnf (which refreshes
+// repository metadata as part of install), apt needs an explicit index
+// refresh first: on a fresh machine/container the index is empty or stale
+// and `apt-get install` fails with "Unable to locate package".
 func (a *Apt) Present(ctx context.Context, pkgs []string) error {
 	pkgs = uniqueSorted(pkgs)
 	if len(pkgs) == 0 {
 		return nil
+	}
+	if _, err := a.Runner.Run(ctx, "apt-get", "update"); err != nil {
+		return fmt.Errorf("apt update: %w", err)
 	}
 	args := append([]string{"install", "-y"}, pkgs...)
 	if _, err := a.Runner.Run(ctx, "apt-get", args...); err != nil {

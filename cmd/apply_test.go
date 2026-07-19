@@ -151,7 +151,7 @@ func TestApply_happyPath(t *testing.T) {
 	)
 	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep")
 	require.Contains(t, *events, "packages:absent emacs,nano")
-	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise")+" --yes")
+	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
 
 	s := loadStateFile(t, statePath)
 	require.Equal(t, state.StatusComplete, s.Status)
@@ -161,6 +161,29 @@ func TestApply_happyPath(t *testing.T) {
 	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
 		require.True(t, s.IsCompleted(step), "step %s not completed", step)
 	}
+}
+
+// The tools/dotfiles steps each get their own config (in their own
+// directory) so rewriting them cannot clobber the shared full config: the
+// [tasks] hook definitions must survive the whole pipeline, or hooks-post
+// would run `mise run` against a config with no tasks.
+func TestApply_stepsDoNotClobberSharedMiseConfig(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	shared, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(shared), `[tasks."hooks:post"]`, "shared config must keep hook tasks after the pipeline")
+	require.Contains(t, string(shared), "[dotfiles]")
+
+	dotfiles, err := os.ReadFile(filepath.Join(dir, "mise", "dotfiles", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(dotfiles), "[dotfiles]")
 }
 
 // When the persisted selection fingerprint differs from the current one, apply

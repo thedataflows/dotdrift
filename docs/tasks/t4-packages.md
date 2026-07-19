@@ -40,6 +40,7 @@ Package step for apply.
 - `Backend` methods (`Present`/`Absent`/`IsInstalled`) take `ctx` and forward it to the runner; the apply `Step.Run(ctx)` is the source of that context.
 - Unknown backend names or failed `auto` resolution return a failing `noop` backend: every operation errors with `no supported package backend for distro "X"`, so the packages step fails loudly rather than reporting success without installing anything.
 - `IsInstalled` treats exit code 1 as "not installed" `(false, nil)` on all backends (paru/pacman, apt/dpkg, dnf/rpm); any other runner error is propagated.
+- `Apt.Present` runs `apt-get update` before `apt-get install -y`: a fresh machine/container has an empty or stale index and install fails with `E: Unable to locate package` (live-reproduced by the debian e2e container). This is intentionally asymmetric with `Dnf.Present` — dnf refreshes repository metadata as part of install and needs no separate index-update step. `Apt.Absent` does no update either (removal only reads the local dpkg database).
 
 # Acceptance
 

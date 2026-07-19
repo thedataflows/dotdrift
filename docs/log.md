@@ -27,3 +27,19 @@
 ## 2026-07-19
 
 * **Added**: `.github/workflows/ci.yml` — CI workflow running `go test ./...` and `go vet ./...` (with `GOFLAGS=-mod=vendor`) plus golangci-lint v2 on push to `main` and pull requests, closing the M0 "CI runs test + vet" exit criterion.
+
+* **Fixed (onboard, M8 re-validated)**: generated mise config moved out of the profile into the XDG state dir (`profiles/<hash>/onboard/mise.toml`) with absolute dotfile sources — previously mise resolved relative sources against `<module>/.mise/` and failed end-to-end; `--yes` plumbed through `cmd/onboard.go` → `onboard.Options` → `mise.DotfilesApply`; directory-tree materialization now preserves per-file modes (ownership not preserved, documented); `TestOnboard_orderCopyThenEnsureThenMiseApply` now records and asserts the copy → ensure → apply sequence.
+
+* **Fixed (state)**: concurrent `dotdrift apply` now serializes on a sidecar lock `<state-path>.lock` (`flock(LOCK_EX)`) held across the entire load→pipeline→save window — the previous per-op flock was orphaned by tmp+rename (live-reproduced lost-update). Corrupt `state.json` errors now carry a recovery hint; `ProfileStatePath` canonicalizes via `EvalSymlinks`; `Save` fsyncs before rename; `DefaultPath` returns an explicit error when no state dir is determinable. Contract invariant 11 added. Race-clean under `go test -race`.
+
+* **Fixed (resolve)**: dotfile `source` paths escaping the layer root (e.g. `../../outside`) are now a resolve-time error naming module and source (contract invariant 8); declared sources missing from all layers are errors; malformed host/user overlay `module.toml` errors are propagated instead of silently ignored; cross-module `present`+`absent` package conflicts are errors (invariant 9); empty hostname/username facts error when modules are selected. Fingerprint scope documented as broader than selection (invariant 10).
+
+* **Fixed (detect)**: username now comes from `os/user.Current()` with `$USER`/`$USERNAME` as fallback and an explicit error when both fail — `sudo dotdrift apply` previously selected the invoking user's overlays while running as root. `merge-rules.md` documents OS-account username, case-sensitive `when` matching, and GPU first-match semantics. README carries a sudo warning.
+
+* **Fixed (packages)**: unknown or unresolvable package backends now fail loudly (`no supported package backend for distro "X"`) instead of silently no-op'ing; `Runner`/`Backend` take `context.Context` and `ExecRunner` uses `exec.CommandContext` so Ctrl-C kills in-flight paru/apt-get/dnf processes; `Apt`/`Dnf.IsInstalled` propagate non-exit-1 errors like Paru; added `dnf_test.go`.
+
+* **Fixed (profile)**: `Load` errors on a missing `modules/` directory (`not a dotdrift profile`) instead of silently loading an empty profile; duplicate module IDs fail naming both paths; an empty hostname/username errors when a `dotdrift.toml` exists at the collapsed overlay path; `dotdrift plan` prints `warning: no modules selected` when selection is empty.
+
+* **Fixed (init)**: `git clone` runs with `Dir` set to the target's parent (no longer dependent on process CWD); clone dir name strips the `.git` suffix; cloned repos must contain `dotdrift.toml` or init errors; newly created profiles are `git init`'d (warn, not fail, when git is unavailable).
+
+* **Docs (cli-surface)**: `--packages`/`--tools` (was `--package`/`--tool`), bare `dotdrift` prints help (was ambiguous "default action"), `detect` fact list includes `distro`, `plan` documented as never touching mise, `init` section describes clone validation and git initialization.

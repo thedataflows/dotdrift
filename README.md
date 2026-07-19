@@ -54,14 +54,16 @@ profile/
 
 See `examples/simple/` for a minimal profile.
 
-> Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state.
+> Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
+
+> sudo warning: `dotdrift` resolves the username from the OS account, not `$USER`. Running `sudo dotdrift apply` selects **root's** overlays and writes into root's `HOME`. To manage your own dotfiles, run `dotdrift` as your normal user; use `sudo` only if you intentionally maintain a `users/root/` overlay.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `dotdrift init [path]` | Create a new profile directory |
-| `dotdrift detect` | Print host/user/os/gpu/backend facts |
+| `dotdrift init [path|git-url]` | Create a new profile (git-initialized) or clone a profile repo |
+| `dotdrift detect` | Print host/user/os/distro/gpu/backend facts |
 | `dotdrift modules` | List selected and skipped modules |
 | `dotdrift plan` | Print the effective plan without side effects |
 | `dotdrift apply [--yes]` | Run the full pipeline and resume from state |

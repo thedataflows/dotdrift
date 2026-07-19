@@ -73,8 +73,36 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	return nil
 }
 
-func writeConfig(path, content string) error {
-	if path == "" {
+// HooksStep runs one pre/post hook command list as a mise task from the
+// generated apply config. cmd/apply.go only constructs HooksSteps for
+// non-empty command lists; Run also no-ops on an empty list as a second line
+// of defense.
+type HooksStep struct {
+	Exec       *ExecMise
+	Commands   []string
+	ConfigPath string
+	Task       string // mise task name, e.g. "hooks:pre"
+	StepName   string // pipeline step name, e.g. "hooks-pre"
+}
+
+var _ apply.Step = (*HooksStep)(nil)
+
+func (s *HooksStep) Name() string { return s.StepName }
+
+func (s *HooksStep) Run(ctx context.Context) error {
+	if len(s.Commands) == 0 {
+		return nil
+	}
+	if s.Exec == nil {
+		return fmt.Errorf("no mise exec configured")
+	}
+	if err := s.Exec.RunTask(ctx, s.ConfigPath, s.Task); err != nil {
+		return fmt.Errorf("mise task %s: %w", s.Task, err)
+	}
+	return nil
+}
+
+func writeConfig(path, content string) error {	if path == "" {
 		return fmt.Errorf("config path is empty")
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

@@ -56,6 +56,19 @@ profile/
 
 The `dotdrift.toml` in each layer may carry a `[modules]` `disable` list; disables are unioned across base, host, and user layers.
 
+## Hooks
+
+A module may declare shell commands to run around the apply pipeline:
+
+```toml
+# modules/<id>/module.toml
+[hooks]
+pre = ["echo about to apply"]
+post = ["systemctl --user daemon-reload"]
+```
+
+`pre` commands run as the `hooks-pre` step **before** packages are installed; `post` commands run as the `hooks-post` step **after** dotfiles. Commands execute as [mise tasks](https://mise.jdx.dev) from the profile root with `DOTDRIFT_PROFILE`, `DOTDRIFT_HOSTNAME`, `DOTDRIFT_USERNAME`, `DOTDRIFT_OS`, and `DOTDRIFT_BACKEND` in the environment. Unlike other sections, hooks merge by **append** across layers (base → host → user) and modules, in selection order. A failing hook fails its step and resume re-runs it, so write post-hooks to be idempotent. Hooks are listed in `dotdrift plan`; skip them with `dotdrift apply --no-hooks` or `DOTDRIFT_NO_HOOKS=1`.
+
 See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
 
 > Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
@@ -70,7 +83,7 @@ See `examples/simple/` for a minimal single-module profile, and `examples/profil
 | `dotdrift detect` | Print host/user/os/distro/gpu/backend facts |
 | `dotdrift modules` | List selected and skipped modules |
 | `dotdrift plan [--json]` | Print the effective plan without side effects (`--json` for machine-readable output) |
-| `dotdrift apply [--yes]` | Run the full pipeline and resume from state |
+| `dotdrift apply [--yes] [--no-hooks]` | Run the full pipeline and resume from state |
 | `dotdrift status` | Show resume cursor, selection, and last error |
 | `dotdrift onboard <path>...` | Copy live paths into a module and apply |
 

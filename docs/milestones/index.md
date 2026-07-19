@@ -13,6 +13,7 @@ Execute in order. Each milestone links tasks. Complete TDD acceptance before mov
 * [M8 Onboard](m8-onboard.md) - Module factory + immediate mise
 * [M9 Polish](m9-polish.md) - init, status, docs, v0.1 ✅
 * [M10 Stretch](m10-stretch.md) - Extra backends, locks ✅
+* [M11 Hooks](m11-hooks.md) - Pre/post apply hooks via mise tasks
 
 # Dependency graph
 

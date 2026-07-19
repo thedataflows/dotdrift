@@ -70,6 +70,10 @@ type planJSONDoc struct {
 	} `json:"packages"`
 	Tools    map[string]string `json:"tools"`
 	Dotfiles []planJSONDotfile `json:"dotfiles"`
+	Hooks    struct {
+		Pre  []string `json:"pre"`
+		Post []string `json:"post"`
+	} `json:"hooks"`
 }
 
 // printPlanJSON renders the plan as one JSON object. The no-modules warning is
@@ -87,6 +91,8 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 	sort.Strings(doc.Modules)
 	doc.Packages.Install = plan.Packages.Install
 	doc.Packages.Remove = plan.Packages.Remove
+	doc.Hooks.Pre = append([]string{}, plan.Hooks.Pre...)
+	doc.Hooks.Post = append([]string{}, plan.Hooks.Post...)
 	for _, e := range plan.Dotfiles.Entries {
 		doc.Dotfiles = append(doc.Dotfiles, planJSONDotfile{
 			Target: e.Target,
@@ -126,6 +132,15 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 		fmt.Fprintf(out, "    mode: %s\n", e.Mode)
 		fmt.Fprintf(out, "    module: %s\n", e.Module)
 		fmt.Fprintf(out, "    layer: %s\n", e.Layer)
+	}
+	fmt.Fprintln(out, "hooks:")
+	fmt.Fprintln(out, "  pre:")
+	for _, c := range plan.Hooks.Pre {
+		fmt.Fprintf(out, "    - %s\n", c)
+	}
+	fmt.Fprintln(out, "  post:")
+	for _, c := range plan.Hooks.Post {
+		fmt.Fprintf(out, "    - %s\n", c)
 	}
 	return nil
 }

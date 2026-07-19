@@ -34,13 +34,14 @@ var (
 // pipelineStepNames is the single source of truth for the ordered pipeline
 // step names: apply builds its steps in this order and status reports
 // progress against it. Update this list when adding or removing a step.
-var pipelineStepNames = []string{"packages", "tools", "dotfiles"}
+var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"}
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
 	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
 	State   string    `help:"Path to state file" type:"path" default:""`
 	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
+	NoHooks bool      `help:"Skip pre/post hook commands (also DOTDRIFT_NO_HOOKS=1)" default:"false"`
 	Out     io.Writer `kong:"-"`
 }
 
@@ -104,24 +105,47 @@ func (c *ApplyCmd) Run() error {
 	runner := mise.NewExecMise(m)
 
 	// Decision D8a (keep + test): write the FULL mise config ([tools] +
-	// [dotfiles]) before the pipeline starts. The tools/dotfiles steps later
+	// [dotfiles] + [tasks]) before the pipeline starts. The tools/dotfiles steps later
 	// rewrite this file section-by-section, so if apply crashes or fails
 	// before them, the on-disk config still mirrors the whole resolved plan
 	// for crash recovery and manual mise runs.
+	profileRoot, err := filepath.Abs(p.Root)
+	if err != nil {
+		return fmt.Errorf("resolve profile root: %w", err)
+	}
 	configDir := filepath.Join(filepath.Dir(statePath), "mise")
 	configPath := filepath.Join(configDir, "mise.toml")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return fmt.Errorf("create mise config dir: %w", err)
 	}
-	if err := os.WriteFile(configPath, []byte(mise.GenerateConfig(plan)), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(mise.GenerateApplyConfig(plan, profileRoot, f)), 0o644); err != nil {
 		return fmt.Errorf("write mise config: %w", err)
 	}
 
+	// Hooks steps are skipped at construction when their command list is
+	// empty or when the user opted out via --no-hooks / DOTDRIFT_NO_HOOKS=1
+	// (HooksStep.Run also no-ops on an empty list as a second line of
+	// defense). hooks-pre runs before packages so a pre-hook failure aborts
+	// before any side effect; hooks-post runs last.
+	hooksDisabled := c.NoHooks || os.Getenv("DOTDRIFT_NO_HOOKS") == "1"
 	backend := packagesFor(f.Backend)
-	steps := []apply.Step{
+	var steps []apply.Step
+	if !hooksDisabled && len(plan.Hooks.Pre) > 0 {
+		steps = append(steps, &mise.HooksStep{
+			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: configPath,
+			Task: "hooks:pre", StepName: "hooks-pre",
+		})
+	}
+	steps = append(steps,
 		packages.NewStep(backend, plan),
 		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: configPath},
 		&mise.DotfilesStep{Runner: runner, Plan: plan, ConfigPath: configPath, Yes: c.Yes},
+	)
+	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
+		steps = append(steps, &mise.HooksStep{
+			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: configPath,
+			Task: "hooks:post", StepName: "hooks-post",
+		})
 	}
 
 	pipeline := apply.NewPipeline(steps, store.Save)

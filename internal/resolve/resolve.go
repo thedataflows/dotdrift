@@ -18,6 +18,7 @@ type Plan struct {
 	Packages PackagesStep
 	Tools    ToolsStep
 	Dotfiles DotfilesStep
+	Hooks    HooksStep
 }
 
 // PackagesStep lists packages that should be present or removed from the system.
@@ -43,6 +44,14 @@ type DotfileEntry struct {
 	Mode   string
 	Module string
 	Layer  string
+}
+
+// HooksStep lists the pre/post apply hook commands aggregated across all
+// selected modules. Hooks are ordered sequences: per module the layers
+// append base → host → user, and modules aggregate in selection order.
+type HooksStep struct {
+	Pre  []string
+	Post []string
 }
 
 type layerConfig struct {
@@ -125,6 +134,13 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 			return nil, err
 		}
 		plan.Dotfiles.Entries = append(plan.Dotfiles.Entries, entries...)
+
+		plan.Hooks.Pre = append(plan.Hooks.Pre, base.cfg.Hooks.Pre...)
+		plan.Hooks.Pre = append(plan.Hooks.Pre, host.cfg.Hooks.Pre...)
+		plan.Hooks.Pre = append(plan.Hooks.Pre, user.cfg.Hooks.Pre...)
+		plan.Hooks.Post = append(plan.Hooks.Post, base.cfg.Hooks.Post...)
+		plan.Hooks.Post = append(plan.Hooks.Post, host.cfg.Hooks.Post...)
+		plan.Hooks.Post = append(plan.Hooks.Post, user.cfg.Hooks.Post...)
 	}
 
 	if err := checkPackageConflicts(presentIn, absentIn); err != nil {

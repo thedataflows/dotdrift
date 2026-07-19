@@ -83,6 +83,10 @@ python = "3.12"
 "~/.bashrc" = { source = ".bashrc", mode = "link" }
 "~/.config/nvim" = { source = "nvim", mode = "symlink-each" }
 "~/.config/app/config.toml" = { source = "config.toml", mode = "copy" }
+
+[hooks]
+pre = ["echo about to apply"]
+post = ["echo apply finished"]
 ```
 
 - `when` filters are ANDed. An empty list means "any". `gpu` empty means any.
@@ -91,3 +95,8 @@ python = "3.12"
   - `source`: relative path inside the module directory.
   - `mode`: `link`, `symlink-each`, `copy`, or `template`.
 - Higher layers (user > host > module) override lower layers for the same dotfile target.
+- `hooks.pre` / `hooks.post` are arrays of shell commands run as mise tasks during
+  `dotdrift apply` (`hooks-pre` before packages, `hooks-post` after dotfiles).
+  Unlike every other section, hooks merge by **append** across layers — base,
+  then host, then user — and aggregate across modules in selection order;
+  nothing is deduplicated or overridden.

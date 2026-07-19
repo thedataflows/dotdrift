@@ -27,6 +27,10 @@ type planJSON struct {
 		Module string `json:"module"`
 		Layer  string `json:"layer"`
 	} `json:"dotfiles"`
+	Hooks struct {
+		Pre  []string `json:"pre"`
+		Post []string `json:"post"`
+	} `json:"hooks"`
 }
 
 func TestCLI_plan_output(t *testing.T) {
@@ -48,6 +52,30 @@ func TestCLI_plan_output(t *testing.T) {
 	require.Contains(t, out, "dotfiles:")
 	require.Contains(t, out, "~/.bashrc")
 	require.True(t, strings.Contains(out, "users/cri/modules/shell"), "plan should resolve user overlay file")
+}
+
+// Hooks are visible in the text plan: the actual pre/post commands, appended
+// base → host → user.
+func TestCLI_plan_hooksSection(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "resolve"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+	}
+	require.NoError(t, c.Run())
+
+	out := buf.String()
+	require.Contains(t, out, "hooks:")
+	require.Contains(t, out, "  pre:")
+	require.Contains(t, out, "  post:")
+	for _, cmd := range []string{"echo base-pre", "echo host-pre", "echo user-pre",
+		"echo base-post", "echo host-post", "echo user-post"} {
+		require.Contains(t, out, "- "+cmd)
+	}
+	// Append order base → host → user must be visible in the rendering.
+	require.Less(t, strings.Index(out, "echo base-pre"), strings.Index(out, "echo host-pre"))
+	require.Less(t, strings.Index(out, "echo host-pre"), strings.Index(out, "echo user-pre"))
 }
 
 func TestCLI_plan_noSideEffects(t *testing.T) {
@@ -125,6 +153,9 @@ func TestCLI_plan_jsonOutput(t *testing.T) {
 	require.True(t, ok, "dotfiles must include ~/.config/fish")
 	require.Equal(t, "symlink-each", fish.Mode)
 	require.Equal(t, "host", fish.Layer)
+
+	require.Equal(t, []string{"echo base-pre", "echo host-pre", "echo user-pre"}, got.Hooks.Pre)
+	require.Equal(t, []string{"echo base-post", "echo host-post", "echo user-post"}, got.Hooks.Post)
 }
 
 func TestCLI_plan_jsonNotInDefaultOutput(t *testing.T) {

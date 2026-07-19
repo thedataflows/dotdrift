@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -418,6 +419,16 @@ func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes boo
 	return err
 }
 
+// RunTask runs a named task (e.g. "hooks:pre") from the generated config.
+func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) error {
+	path, err := e.mise.EnsureContext(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = e.mise.runner()(ctx, path, "run", "--cd", filepath.Dir(configPath), taskName)
+	return err
+}
+
 // Runner abstracts mise operations used by apply steps.
 type Runner interface {
 	EnsureAndInstall(ctx context.Context, configPath string) error
@@ -489,6 +500,46 @@ func GenerateConfig(plan *resolve.Plan) string {
 	}
 	if dotfiles := GenerateDotfiles(plan.Dotfiles.Entries); dotfiles != "" {
 		out += dotfiles + "\n"
+	}
+	return out
+}
+
+// GenerateHookTasks emits a [tasks] section with one mise task per non-empty
+// hook list ("hooks:pre" and/or "hooks:post"). Each task runs its commands in
+// order from dir (the absolute profile root) with the DOTDRIFT_* facts
+// environment. Returns "" when both lists are empty.
+func GenerateHookTasks(hooks resolve.HooksStep, profileRoot string, f *facts.Facts) string {
+	var b strings.Builder
+	writeHookTask(&b, "hooks:pre", hooks.Pre, profileRoot, f)
+	writeHookTask(&b, "hooks:post", hooks.Post, profileRoot, f)
+	return b.String()
+}
+
+func writeHookTask(b *strings.Builder, name string, commands []string, profileRoot string, f *facts.Facts) {
+	if len(commands) == 0 {
+		return
+	}
+	if b.Len() > 0 {
+		b.WriteString("\n")
+	}
+	fmt.Fprintf(b, "[tasks.%q]\n", name)
+	b.WriteString("run = [\n")
+	for _, c := range commands {
+		fmt.Fprintf(b, "  \"%s\",\n", tomlEscape(c))
+	}
+	b.WriteString("]\n")
+	fmt.Fprintf(b, "dir = \"%s\"\n", tomlEscape(profileRoot))
+	fmt.Fprintf(b, "env = { DOTDRIFT_PROFILE = \"%s\", DOTDRIFT_HOSTNAME = \"%s\", DOTDRIFT_USERNAME = \"%s\", DOTDRIFT_OS = \"%s\", DOTDRIFT_BACKEND = \"%s\" }\n",
+		tomlEscape(profileRoot), tomlEscape(f.Hostname), tomlEscape(f.Username), tomlEscape(f.OS), tomlEscape(f.Backend))
+}
+
+// GenerateApplyConfig emits the full apply-time mise.toml: tools, dotfiles,
+// and hook tasks. The hook tasks need facts and the absolute profile root, so
+// only apply uses this; onboard keeps using GenerateConfig.
+func GenerateApplyConfig(plan *resolve.Plan, profileRoot string, f *facts.Facts) string {
+	out := GenerateConfig(plan)
+	if tasks := GenerateHookTasks(plan.Hooks, profileRoot, f); tasks != "" {
+		out += tasks + "\n"
 	}
 	return out
 }

@@ -126,8 +126,9 @@ func resolveFixture(t *testing.T) string {
 	return filepath.Join("..", "testdata", "profiles", "resolve")
 }
 
-// Happy path: detect → load → resolve → ensure → packages/tools/dotfiles
-// in order, ending in a complete state with the current selection fingerprint.
+// Happy path: detect → load → resolve → ensure → hooks-pre →
+// packages/tools/dotfiles → hooks-post in order, ending in a complete state
+// with the current selection fingerprint.
 func TestApply_happyPath(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -141,10 +142,12 @@ func TestApply_happyPath(t *testing.T) {
 		"load",
 		"resolve",
 		"mise:ensure",
+		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks:pre",
 		"packages:absent",
 		"packages:present",
 		"mise:run install",
 		"mise:run dotfiles apply",
+		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks:post",
 	)
 	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep")
 	require.Contains(t, *events, "packages:absent emacs,nano")
@@ -155,7 +158,7 @@ func TestApply_happyPath(t *testing.T) {
 	require.Empty(t, s.Current)
 	require.Empty(t, s.Error)
 	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-	for _, step := range []string{"packages", "tools", "dotfiles"} {
+	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
 		require.True(t, s.IsCompleted(step), "step %s not completed", step)
 	}
 }
@@ -192,7 +195,7 @@ func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
 	s := loadStateFile(t, statePath)
 	require.Equal(t, state.StatusComplete, s.Status)
 	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-	for _, step := range []string{"packages", "tools", "dotfiles"} {
+	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
 		require.True(t, s.IsCompleted(step), "step %s not completed", step)
 	}
 }
@@ -246,6 +249,7 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	require.Equal(t, state.StatusFailed, s.Status)
 	require.Contains(t, s.Error, "boom")
 	require.False(t, s.IsCompleted("packages"))
+	require.True(t, s.IsCompleted("hooks-pre"), "hooks-pre runs before packages and must be complete")
 	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
 
 	configPath := filepath.Join(dir, "mise", "mise.toml")
@@ -256,8 +260,55 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	require.Contains(t, cfg, `node = "22"`)
 	require.Contains(t, cfg, "[dotfiles]")
 	require.Contains(t, cfg, "~/.bashrc")
+	require.Contains(t, cfg, `[tasks."hooks:pre"]`)
+	require.Contains(t, cfg, `[tasks."hooks:post"]`)
 
 	for _, e := range *events {
 		require.NotContains(t, e, "mise:run install", "tools step must not run after the packages failure")
 	}
+}
+
+// --no-hooks suppresses both hooks steps: no mise task runs and the state
+// records only packages/tools/dotfiles.
+func TestApply_noHooksFlag(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true, NoHooks: true}
+	require.NoError(t, cmd.Run())
+
+	for _, e := range *events {
+		require.NotContains(t, e, "hooks:", "--no-hooks must not run any hook task")
+	}
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+	require.False(t, s.IsCompleted("hooks-pre"))
+	require.False(t, s.IsCompleted("hooks-post"))
+	for _, step := range []string{"packages", "tools", "dotfiles"} {
+		require.True(t, s.IsCompleted(step), "step %s not completed", step)
+	}
+}
+
+// DOTDRIFT_NO_HOOKS=1 suppresses hooks exactly like --no-hooks.
+func TestApply_noHooksEnv(t *testing.T) {
+	t.Setenv("DOTDRIFT_NO_HOOKS", "1")
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	for _, e := range *events {
+		require.NotContains(t, e, "hooks:", "DOTDRIFT_NO_HOOKS=1 must not run any hook task")
+	}
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+	require.False(t, s.IsCompleted("hooks-pre"))
+	require.False(t, s.IsCompleted("hooks-post"))
 }

@@ -29,6 +29,7 @@ type ModuleConfig struct {
 	Packages Packages          `toml:"packages"`
 	Tools    map[string]string `toml:"tools"`
 	Dotfiles map[string]Dotfile `toml:"dotfiles"`
+	Hooks    Hooks             `toml:"hooks"`
 }
 
 // When filters a module by host, user, os, or gpu.
@@ -44,6 +45,14 @@ type When struct {
 type Packages struct {
 	Present []string `toml:"present"`
 	Absent  []string `toml:"absent"`
+}
+
+// Hooks declares pre/post apply shell commands for a module. Unlike
+// packages/tools/dotfiles, hooks are ordered sequences: layers merge by
+// appending base → host → user (see internal/resolve).
+type Hooks struct {
+	Pre  []string `toml:"pre"`
+	Post []string `toml:"post"`
 }
 
 // Dotfile describes a single managed path.

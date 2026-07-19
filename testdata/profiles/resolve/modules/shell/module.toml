@@ -10,3 +10,7 @@ node = "20"
 
 [dotfiles]
 "~/.bashrc" = { source = ".bashrc", mode = "link" }
+
+[hooks]
+pre = ["echo base-pre"]
+post = ["echo base-post"]

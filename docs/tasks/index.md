@@ -13,3 +13,4 @@ Each task: write failing tests first, then implement.
 * [T7 Detect](t7-detect.md)
 * [T8 Onboard](t8-onboard.md)
 * [T9 Polish](t9-polish.md)
+* [T-hooks](t-hooks.md)

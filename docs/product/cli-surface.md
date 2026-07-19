@@ -13,8 +13,8 @@ timestamp: 2026-07-14T00:00:00Z
 | `dotdrift init [path-or-git-url]` | Local path: create the profile and git-initialize it. Git URL: clone into a dir named from the URL minus any trailing `.git`, relative to the given path; the clone must be a dotdrift profile (`dotdrift.toml` present) or init errors |
 | `dotdrift detect` | Print facts (host, user, os, distro, gpu, package backend) |
 | `dotdrift modules` | List modules with selected/skipped + reason (no `modules ls` form; bare `dotdrift` prints help and exits with a usage error) |
-| `dotdrift plan [--json]` | Print effective plan; side-effect-free, never touches mise. `--json` emits a single JSON object (`fingerprint`, `modules`, `packages.install`/`remove`, `tools`, `dotfiles[]` with target/source/mode/module/layer) instead of the text rendering; the no-modules warning is suppressed so stdout stays parseable |
-| `dotdrift apply [--yes]` | Full pipeline; always resumes; optional `--only` later as power-user only |
+| `dotdrift plan [--json]` | Print effective plan; side-effect-free, never touches mise. `--json` emits a single JSON object (`fingerprint`, `modules`, `packages.install`/`remove`, `tools`, `dotfiles[]` with target/source/mode/module/layer, `hooks.pre`/`post`) instead of the text rendering; the no-modules warning is suppressed so stdout stays parseable |
+| `dotdrift apply [--yes] [--no-hooks]` | Full pipeline; always resumes; optional `--only` later as power-user only. `--no-hooks` (or `DOTDRIFT_NO_HOOKS=1`) skips the `hooks-pre`/`hooks-post` steps |
 | `dotdrift status` | Resume cursor, selection, last error |
 | `dotdrift onboard <path>...` | Create/update module; mise apply immediately |
 

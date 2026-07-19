@@ -7,3 +7,7 @@ python = "3.12"
 
 [dotfiles]
 "~/.bashrc" = { source = ".bashrc", mode = "copy" }
+
+[hooks]
+pre = ["echo user-pre"]
+post = ["echo user-post"]

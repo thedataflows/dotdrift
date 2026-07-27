@@ -1,0 +1,20 @@
+[backup]
+comment = backup
+path = /mnt/backup
+valid users = @backupops
+public = no
+writable = yes
+
+[media]
+comment = media
+path = /mnt/synology/media
+valid users = @smb
+public = yes
+writable = no
+
+[photos]
+comment = Family photos
+path = /mnt/synology/photos
+valid users = cri
+public = no
+writable = yes

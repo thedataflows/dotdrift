@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-07-28
+
+* **Closed (oracle nits, generate)**: Oracle's final round verified the M13 work and flagged two documentation drifts, now fixed: `unionAbsent`'s docstring states the actual union-only present-list semantics (a module that ever required a package keeps it installed), the migration recipe's apply section documents `packages.absent = ["ntfs-3g"]` for ntfs3 mounts (with the both-drivers skip), and `t-generate.md`'s registry notes cover the `absent` field and `unionAbsent`. The M13 `generate` milestone is complete: reviewer gate approved after one fix round, Oracle verified after two.
+
 ## 2026-07-27
 
 * **Oracle-verification fixes (generate)**: second adversarial pass (Oracle) found five gaps, all fixed TDD: (1) stale-artifact GC now warns via zerolog when a removed unit may still be live, with the exact `systemctl disable --now` + `rm` remediation command (`TestWriter_gcWarnsAboutLiveUnit`) — the placed-unit orphan is surfaced instead of silent; (2) the smb wizard can no longer reach the write confirm with zero shares — declining "add a share?" with none configured prints "at least one share is required" and falls through to the share prompt, matching the CLI's rejection (state-machine guard locked by `TestSmbWizard_writeRequiresShare`); (3) the registry gained `absent` packages per entry — `ntfs3` carries `absent = ["ntfs-3g"]`, mirroring the legacy script's kernel >= 7.1 cleanup, unioned into `packages.absent` by the writer with a self-conflict skip for modules using both drivers (`TestRegistry_ntfs3AbsentCarriesRemoval`, `TestWriter_absentPackagesUnioned`, `TestWriter_absentSkipsSelfConflict`); (4) dead exported `generate.LoadDefault` deleted; (5) migration recipe documents the cosmetic After= blank-line delta. Gates: `go test ./...`, `go vet`, `golangci-lint` (0 issues), `-race` — all green.

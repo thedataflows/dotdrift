@@ -44,14 +44,15 @@ type RootFlags struct {
 type CLI struct {
 	RootFlags `kong:"embed"`
 
-	Init    InitCmd    `cmd:"" help:"Create or clone a profile"`
-	Detect  DetectCmd  `cmd:"" help:"Detect system facts"`
-	Modules ModulesCmd `cmd:"" help:"List selected and skipped modules"`
-	Plan    PlanCmd    `cmd:"" help:"Print the effective plan"`
-	Apply   ApplyCmd   `cmd:"" help:"Apply the profile"`
-	Status  StatusCmd  `cmd:"" help:"Show status"`
-	Onboard OnboardCmd `cmd:"" help:"Onboard paths into a module"`
-	Version VersionCmd `cmd:"" help:"Show version information"`
+	Init     InitCmd     `cmd:"" help:"Create or clone a profile"`
+	Detect   DetectCmd   `cmd:"" help:"Detect system facts"`
+	Modules  ModulesCmd  `cmd:"" help:"List selected and skipped modules"`
+	Plan     PlanCmd     `cmd:"" help:"Print the effective plan"`
+	Apply    ApplyCmd    `cmd:"" help:"Apply the profile"`
+	Status   StatusCmd   `cmd:"" help:"Show status"`
+	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module"`
+	Generate GenerateCmd `cmd:"" help:"Generate mounts/smb modules"`
+	Version  VersionCmd  `cmd:"" help:"Show version information"`
 
 	args []string // original args, used to detect --help before side effects
 }

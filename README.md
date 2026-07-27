@@ -106,6 +106,14 @@ See `examples/simple/` for a minimal single-module profile, and `examples/profil
 | `dotdrift apply [--yes] [--no-hooks]` | Run the full pipeline and resume from state |
 | `dotdrift status` | Show resume cursor, selection, and last error |
 | `dotdrift onboard <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file) |
+| `dotdrift generate mounts\|smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise |
+
+```bash
+# Generate an NFS mount module with a nightly timer, then two samba shares
+dotdrift generate mounts --name syn01 --source nas:/volume1/syn01 \
+  --destination /mnt/synology/syn01 --type nfs --startat "*-*-* 18:05:00"
+dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
+```
 
 ## Testing
 

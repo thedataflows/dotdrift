@@ -3,7 +3,7 @@ type: Specification
 title: CLI surface
 description: Commands and minimal flags for dotdrift.
 tags: [product, cli]
-timestamp: 2026-07-14T00:00:00Z
+timestamp: 2026-07-28T00:00:00Z
 ---
 
 # Commands
@@ -17,6 +17,77 @@ timestamp: 2026-07-14T00:00:00Z
 | `dotdrift apply [--yes] [--no-hooks]` | Full pipeline; always resumes; optional `--only` later as power-user only. Step order: `hooks-pre` → `packages` → `tools` → `dotfiles` → `dotfiles-system` → `mounts` → `smb` → `hooks-post`. `--no-hooks` (or `DOTDRIFT_NO_HOOKS=1`) skips the `hooks-pre`/`hooks-post` steps. When the plan contains `scope = "system"` modules, a `dotfiles-system` step applies their dotfiles via `sudo` (skipped when already root); sudo's timestamp cache means at most one password prompt per apply. `mounts` (mkdir destinations, `systemctl daemon-reload`, enable/disable units + startat timers) and `smb` (group/user membership, avahi, testparm gate, service enablement, samba accounts) are conditional activation steps constructed only when the plan declares mounts/smb; they never write config files — placement is mise's job |
 | `dotdrift status` | Resume cursor, selection, last error. Progress prints `completed/8 steps` against the static pipeline superset; the conditional steps (`hooks-pre`/`hooks-post`, `dotfiles-system`, `mounts`, `smb`) legitimately leave a completed apply below 8/8 — status never resolves the plan, it counts completed steps against the static list |
 | `dotdrift onboard <path>...` | Create/update module; mise apply immediately |
+| `dotdrift generate mounts` | Generate a mounts module: systemd `.mount` units (plus `.service`/`.timer` for `--startat`), `module.toml` with `scope = "system"`, `[mounts]`, packages, and dotfile entries targeting `/usr/local/lib/systemd/system`. Idempotent: same invocation → byte-identical tree; stale generated units are garbage-collected |
+| `dotdrift generate smb` | Generate an smb module: `shares.conf`, a one-time `smb.conf` seed (then user-owned), `module.toml` with `scope = "system"`, `[smb]`, packages (`samba`, plus `avahi` unless disabled), and dotfile entries targeting `/etc/samba` |
+
+# Generate
+
+Both subcommands write a self-contained module at one profile layer via the
+same engine (`internal/generate.WriteModule`); the regular apply pipeline
+(packages → dotfiles → mounts/smb steps) then activates what was generated.
+
+## Shared flags
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--profile PATH` | `.` | Profile root |
+| `--layer base\|host\|user` | `base` | Target layer: `modules/`, `hosts/<hostname>/modules/`, `users/<username>/modules/` |
+| `--module ID` | `mounts` / `smb` | Module directory name |
+| `--hostname H` | detected | Required resolution for `--layer host` (detected when omitted) |
+| `--username U` | detected | Required resolution for `--layer user` (detected when omitted) |
+| `--tui` / `--no-tui` | auto | `--tui` forces the interactive wizard (terminal required), even with input flags — they pre-fill the wizard; `--no-tui` forces CLI mode |
+
+## `generate mounts` input flags
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--name NAME` | — | Mount name (`[mounts.<name>]`); required in CLI mode |
+| `--source SRC` | — | e.g. `UUID=<uuid>` or `server:/export`; required in CLI mode |
+| `--destination DEST` | — | Mount point; the unit stem is `EscapePath(DEST)`; required in CLI mode |
+| `--type TYPE` | — | Filesystem type; must exist in the generate registry; required in CLI mode |
+| `--option OPT` | registry preset for `--type` | Repeatable; when omitted entirely the registry preset applies (bare `uid`/`gid` tokens expand to the invoking user's ids) |
+| `--startat CAL` | none | OnCalendar expression; adds a `.service` + `.timer` pair |
+| `--state enabled\|disabled` | `enabled` | Recorded in the mount spec |
+| `--list-volumes` | off | Print the detected volume table (`UUID FSTYPE LABEL SIZE MOUNTPOINTS MANAGED`) and exit 0; `MANAGED` marks UUIDs already used as sources in the target module's `[mounts]` (absent module tolerated) |
+
+## `generate smb` input flags
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--share name=path` | — | Repeatable; at least one required in CLI mode; both sides must be non-empty |
+| `--group G` | `smb` | Samba group for `valid users = @<group>` |
+| `--user U` | invoking user | Repeatable |
+| `--avahi` / `--no-avahi` | on (unset) | No flag: `avahi` key left unset (default-on semantics); `--no-avahi` records an explicit `avahi = false` and drops the `avahi` package |
+| `--writable` / `--no-writable` | on | `--readonly` is the shorthand for `--no-writable` (and wins when both are given) |
+| `--readonly` | off | Sets `writable = false` on every share |
+| `--public` | off | Guest access on every share |
+
+## Mode selection (strict, both subcommands)
+
+1. Any input flag present → **CLI mode**: the required input flags are
+   validated loudly (the error names each missing flag), a
+   `generate.Input` is assembled, `WriteModule` runs, and a summary
+   (module dir + written files) is printed.
+2. No input flags + terminal → the interactive **wizard** (TUI, T13).
+3. No input flags + no terminal → an actionable error listing the flags
+   CLI mode needs.
+4. `--tui` without a terminal → loud error.
+
+## Examples
+
+```bash
+# NFS mount with a nightly timer, written to the host overlay
+dotdrift generate mounts --layer host --hostname h1 --module nas \
+  --name syn01 --source synology.local:/volume1/syn01 \
+  --destination /mnt/synology/syn01 --type nfs --startat "*-*-* 18:05:00"
+
+# See which local volumes are already managed by the mounts module
+dotdrift generate mounts --list-volumes
+
+# Two shares, avahi off
+dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
+```
+
 
 # Onboard flags (minimal)
 

@@ -98,8 +98,13 @@ byte-equivalent to the CLI.
   options verbatim from the reference script with bare `uid`/`gid`
   substitution tokens; `family` groups alternatives (ntfs3/ntfs-3g);
   `recommended_if` supports only `kernel <op> <version>` with
-  zero-padded numeric segment compare. The registry is a generate-time
-  concern only — resolve never validates mount types against it.
+  zero-padded numeric segment compare. Entries also carry `packages`
+  (required) and `absent` (removals — ntfs3 removes ntfs-3g, mirroring
+  the legacy script's kernel >= 7.1 cleanup); the writer unions both
+  into the module's `[packages]`, skipping an absent candidate that is
+  present in the unioned present list (`unionAbsent`). The registry is a
+  generate-time concern only — resolve never validates mount types
+  against it.
 - `internal/generate/escape.go`: `EscapePath` is a pure-Go
   `systemd-escape --path` port; documented divergence — the real binary
   hard-fails on non-normalized mid-path `..`, `EscapePath` normalizes.

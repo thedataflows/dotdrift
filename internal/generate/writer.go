@@ -319,9 +319,10 @@ func updateModuleConfig(cfg *profile.ModuleConfig, input Input, presets map[stri
 
 // unionAbsent merges registry-required package removals (e.g. the ntfs3
 // preset's ntfs-3g removal, mirroring the legacy script's kernel >= 7.1
-// cleanup) into packages.absent. A removal candidate that the same input
-// requires as present is skipped: a module using both ntfs3 and ntfs-3g
-// mounts keeps ntfs-3g installed.
+// cleanup) into packages.absent. A removal candidate already in the
+// unioned present list is skipped: packages are union-only, so a module
+// that ever required the package keeps it installed (removing a mount
+// never removes its packages either).
 func unionAbsent(existing []string, presets map[string]Entry, present []string) []string {
 	skip := make(map[string]struct{}, len(present))
 	for _, p := range present {

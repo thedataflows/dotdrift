@@ -160,7 +160,9 @@ On apply, placement and activation stay separate
 
 1. **packages** — the backend installs the union: registry packages per
    mount type (`nfs-utils`, `nfsidmap`, `ntfsprogs-plus`, …) plus
-   `samba` and `avahi`.
+   `samba` and `avahi`. Removals carry over too: an `ntfs3` mount also
+   records `packages.absent = ["ntfs-3g"]`, mirroring the legacy script's
+   kernel >= 7.1 cleanup (skipped when the module also uses `ntfs-3g`).
 2. **dotfiles-system** — mise copies the generated units to
    `/usr/local/lib/systemd/system/` and `smb.conf` + `shares.conf` into
    `/etc/samba/` (`smb.conf` is seeded once in the module and then

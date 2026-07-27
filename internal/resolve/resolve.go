@@ -19,6 +19,8 @@ type Plan struct {
 	Tools    ToolsStep
 	Dotfiles DotfilesStep
 	Hooks    HooksStep
+	Mounts   MountsStep
+	Smb      SmbStep
 }
 
 // PackagesStep lists packages that should be present or removed from the system.
@@ -161,6 +163,20 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		plan.Hooks.Post = append(plan.Hooks.Post, base.cfg.Hooks.Post...)
 		plan.Hooks.Post = append(plan.Hooks.Post, host.cfg.Hooks.Post...)
 		plan.Hooks.Post = append(plan.Hooks.Post, user.cfg.Hooks.Post...)
+
+		mounts, err := mergeMounts(base, host, user, dir, scope)
+		if err != nil {
+			return nil, err
+		}
+		plan.Mounts.Entries = append(plan.Mounts.Entries, mounts...)
+
+		smb, contributed, err := mergeSmb(base, host, user, dir)
+		if err != nil {
+			return nil, err
+		}
+		if contributed {
+			plan.Smb.Modules = append(plan.Smb.Modules, SmbModuleSpec{Module: dir, Spec: smb})
+		}
 	}
 
 	if err := checkPackageConflicts(presentIn, absentIn); err != nil {
@@ -172,6 +188,8 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 	}
 	sort.Strings(plan.Packages.Install)
 	sortEntries(plan.Dotfiles.Entries)
+	sortMountEntries(plan.Mounts.Entries)
+	sortSmbModules(plan.Smb.Modules)
 
 	return plan, nil
 }

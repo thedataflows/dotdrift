@@ -97,6 +97,26 @@ python = "3.12"
 [hooks]
 pre = ["echo about to apply"]
 post = ["echo apply finished"]
+
+[mounts.data]
+source = "UUID=abcd-1234"
+destination = "/mnt/data"
+type = "ext4"
+options = ["noatime", "nofail"]
+startat = "18:00"
+state = "enabled"
+
+[smb]
+group = "WORKGROUP"
+users = ["cri", "media"]
+avahi = true
+
+[smb.shares.media]
+path = "/mnt/data/media"
+comment = "Media library"
+valid_users = "cri, media"
+writable = true
+public = false
 ```
 
 - `when` filters are ANDed. An empty list means "any". `gpu` empty means any.
@@ -124,3 +144,35 @@ post = ["echo apply finished"]
   Unlike every other section, hooks merge by **append** across layers — base,
   then host, then user — and aggregate across modules in selection order;
   nothing is deduplicated or overridden.
+- `mounts` declares filesystem attachments as keyed tables `[mounts.<name>]`
+  (ADR-0002). Keys are mount names; values are tables with:
+  - `source`: what to attach (e.g. `UUID=...` for volumes, `//server/share`
+    for network mounts). Required — empty is a resolve-time error naming the
+    module and mount.
+  - `destination`: where to attach it. Required — same error contract.
+  - `type`: filesystem type (e.g. `ext4`, `btrfs`, `nfs`, `cifs`). Required,
+    but **never validated against a registry** — any string resolves; the
+    mount-type registry lives outside resolve and evolves independently.
+  - `options`: list of mount options. Optional.
+  - `startat` (one word, all lowercase): optional schedule at which the
+    mount is started.
+  - `state`: `enabled` or `disabled`; omitted means the apply default. Any
+    other value is a resolve-time error naming the module, mount, and value.
+  - Layers merge **whole-entry by name**: a higher layer's `[mounts.<name>]`
+    fully replaces the lower layer's entry — no field-level merge.
+- `smb` declares Samba server settings and shares:
+  - `group`: workgroup name.
+  - `users`: list of Samba users. Layers **replace** the list wholesale when
+    set (non-empty); never appended — the deliberate contrast to hooks.
+  - `avahi`: boolean advertising shares via Avahi/mDNS. When omitted the
+    default is **true** (advertise); set `avahi = false` to disable. The
+    omitted and explicit-false cases are distinguishable in the schema.
+  - Scalar fields (`group`, `users`, `avahi`) merge by **replacement when
+    the higher layer sets them**; an unset key in a higher layer leaves the
+    lower layer's value in place.
+  - `[smb.shares.<name>]` declares one share. `path` is required — empty is a
+    resolve-time error naming the module and share. `comment`, `valid_users`
+    (with the underscore spelling), `writable`, and `public` are optional.
+    Shares merge **whole-entry by name** across layers, exactly like mounts.
+    A share's path may coincide with a mount's destination, but shares and
+    mounts are declared independently — no derivation exists between them.

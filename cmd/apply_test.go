@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -13,9 +14,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
+	"github.com/thedataflows/dotdrift/internal/smb"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
@@ -62,6 +65,32 @@ func fakeMise(events *[]string) *mise.Mise {
 	}
 }
 
+// recordingMountsRunner is a mounts.Runner fake that records every argv.
+type recordingMountsRunner struct {
+	events *[]string
+}
+
+func (r *recordingMountsRunner) Run(_ context.Context, argv []string) error {
+	*r.events = append(*r.events, "mounts:run "+strings.Join(argv, " "))
+	return nil
+}
+
+// recordingSmbRunner is a smb.Runner fake that records every command and
+// reports success with empty output (so pdbedit -L lists no accounts).
+type recordingSmbRunner struct {
+	events *[]string
+}
+
+func (r *recordingSmbRunner) Run(_ context.Context, name string, args ...string) (string, error) {
+	*r.events = append(*r.events, "smb:run "+name+" "+strings.Join(args, " "))
+	return "", nil
+}
+
+func (r *recordingSmbRunner) RunInteractive(_ context.Context, name string, args ...string) error {
+	*r.events = append(*r.events, "smb:run-interactive "+name+" "+strings.Join(args, " "))
+	return nil
+}
+
 // stubApplyDeps swaps the package-level seams in apply.go for fakes and
 // returns the shared event log plus the recording packages backend.
 // profile.Load and resolve.Resolve run for real (wrapped to record order) so
@@ -72,8 +101,10 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	backend := &recordingBackend{events: events}
 
 	origDetect, origLoad, origResolve, origMise, origFor := detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor
+	origMountsRunner, origSmbRunner := newMountsRunner, newSmbRunner
 	t.Cleanup(func() {
 		detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor = origDetect, origLoad, origResolve, origMise, origFor
+		newMountsRunner, newSmbRunner = origMountsRunner, origSmbRunner
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
@@ -87,6 +118,8 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	}
 	defaultMise = func() *mise.Mise { return fakeMise(events) }
 	packagesFor = func(string) packages.Backend { return backend }
+	newMountsRunner = func() mounts.Runner { return &recordingMountsRunner{events: events} }
+	newSmbRunner = func() smb.Runner { return &recordingSmbRunner{events: events} }
 	return events, backend
 }
 
@@ -334,4 +367,128 @@ func TestApply_noHooksEnv(t *testing.T) {
 	require.Equal(t, state.StatusComplete, s.Status)
 	require.False(t, s.IsCompleted("hooks-pre"))
 	require.False(t, s.IsCompleted("hooks-post"))
+}
+
+func mountsFixture(t *testing.T) string {
+	t.Helper()
+	return filepath.Join("..", "testdata", "profiles", "mounts")
+}
+
+// eventIdx returns the index of the first event containing sub, or -1.
+func eventIdx(events []string, sub string) int {
+	for i, e := range events {
+		if strings.Contains(e, sub) {
+			return i
+		}
+	}
+	return -1
+}
+
+// A plan with mount entries gains a mounts step constructed after
+// dotfiles-system and before smb/hooks-post; it runs mkdir for every
+// destination, one daemon-reload, then enable/disable per entry state.
+func TestApply_mountsStepConditional(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	preIdx := eventIdx(*events, "hooks:pre")
+	systemIdx := eventIdx(*events, "dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles-system"))
+	mountsIdx := eventIdx(*events, "mounts:run")
+	smbIdx := eventIdx(*events, "smb:run")
+	postIdx := eventIdx(*events, "hooks:post")
+	require.GreaterOrEqual(t, preIdx, 0, "hooks-pre missing in %v", *events)
+	require.Greater(t, systemIdx, preIdx, "dotfiles-system must run after hooks-pre in %v", *events)
+	require.Greater(t, mountsIdx, systemIdx, "mounts must run after dotfiles-system in %v", *events)
+	require.Greater(t, smbIdx, mountsIdx, "smb must run after mounts in %v", *events)
+	require.Greater(t, postIdx, smbIdx, "hooks-post must run after smb in %v", *events)
+
+	joined := strings.Join(*events, "\n")
+	require.Contains(t, joined, "mkdir -p /mnt/data")
+	require.Contains(t, joined, "mkdir -p /mnt/backup")
+	require.Contains(t, joined, "systemctl daemon-reload")
+	require.Contains(t, joined, "enable --now mnt-data.mount")
+	require.Contains(t, joined, "enable --now mnt-data.timer", "startat entry activates its timer")
+	require.Contains(t, joined, "disable --now mnt-backup.mount", "state=disabled entry is disabled")
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+	for _, step := range []string{"dotfiles-system", "mounts", "smb", "hooks-post"} {
+		require.True(t, s.IsCompleted(step), "step %s not completed", step)
+	}
+}
+
+// A plan with smb modules gains an smb step that activates group/users,
+// validates config, and ensures the service — after mounts, before
+// hooks-post. The missing-password notice goes to the command's Out writer.
+func TestApply_smbStepConditional(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	var buf bytes.Buffer
+	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Out: &buf}
+	require.NoError(t, cmd.Run())
+
+	mountsIdx := eventIdx(*events, "mounts:run")
+	smbIdx := eventIdx(*events, "smb:run")
+	postIdx := eventIdx(*events, "hooks:post")
+	require.GreaterOrEqual(t, mountsIdx, 0, "mounts missing in %v", *events)
+	require.Greater(t, smbIdx, mountsIdx, "smb must run after mounts in %v", *events)
+	require.Greater(t, postIdx, smbIdx, "hooks-post must run after smb in %v", *events)
+
+	joined := strings.Join(*events, "\n")
+	require.Contains(t, joined, "smb:run sudo -E getent group nas")
+	require.Contains(t, joined, "usermod -aG nas cri")
+	require.Contains(t, joined, "testparm -s")
+	require.Contains(t, joined, "is-enabled smb")
+	require.Contains(t, joined, "pdbedit -L")
+	require.NotContains(t, joined, "avahi-daemon", "avahi = false in the fixture must skip avahi")
+
+	// The recording runner's pdbedit -L output is empty, so cri has no samba
+	// account: interactively the step runs smbpasswd; without a TTY it warns
+	// on the command's Out writer. Both prove the Out wiring.
+	if eventIdx(*events, "smb:run-interactive") >= 0 {
+		require.Contains(t, joined, "smbpasswd -a cri")
+	} else {
+		require.Contains(t, buf.String(), "samba password missing for cri; run: sudo smbpasswd -a cri")
+	}
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+	require.True(t, s.IsCompleted("smb"))
+}
+
+// Without mounts/smb aggregates no mounts/smb step is constructed: the
+// recorded steps are exactly today's set (S3 byte-equal guard).
+func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	for _, e := range *events {
+		require.NotContains(t, e, "mounts:run", "no mounts step must run for a plan without mounts")
+		require.NotContains(t, e, "smb:run", "no smb step must run for a plan without smb")
+	}
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+	require.False(t, s.IsCompleted("mounts"))
+	require.False(t, s.IsCompleted("smb"))
+	completed := make([]string, 0, len(s.Completed))
+	for step := range s.Completed {
+		completed = append(completed, step)
+	}
+	sort.Strings(completed)
+	require.Equal(t, []string{"dotfiles", "hooks-post", "hooks-pre", "packages", "tools"}, completed,
+		"completed steps must be exactly today's unconditional+hooks set")
 }

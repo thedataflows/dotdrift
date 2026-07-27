@@ -64,7 +64,7 @@ func TestStatus_showsProgressUpdatedAndNext(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "progress: 2/6 steps")
+	require.Contains(t, out, "progress: 2/8 steps")
 	require.Contains(t, out, "updated: ")
 	require.Contains(t, out, "next: dotdrift apply  (resumes at dotfiles)")
 }
@@ -88,7 +88,36 @@ func TestStatus_completePrintsFullProgressWithoutNext(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "progress: 6/6 steps")
+	require.Contains(t, out, "progress: 8/8 steps")
 	require.Contains(t, out, "updated: ")
 	require.NotContains(t, out, "next:")
+}
+
+// The progress denominator is the static 8-step pipeline superset in
+// pipelineStepNames order. hooks-pre/hooks-post, dotfiles-system, mounts, and
+// smb are conditional — constructed only when the plan needs them — so a
+// completed apply can legitimately show fewer completed steps than 8/8.
+// Status never resolves the plan; it counts completed steps against the
+// static list (same convention as the pre-existing conditional steps).
+func TestStatus_denominatorEight(t *testing.T) {
+	require.Equal(t, []string{
+		"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "mounts", "smb", "hooks-post",
+	}, pipelineStepNames, "pipeline step order: mounts/smb after dotfiles-system, before hooks-post")
+
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	store := state.NewFileStore(statePath)
+	s := state.New()
+	s.Selection = "abc123"
+	s.Status = state.StatusComplete
+	for _, step := range []string{"packages", "tools", "dotfiles"} {
+		s.Completed[step] = true
+	}
+	require.NoError(t, store.Save(s))
+
+	var buf bytes.Buffer
+	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
+	require.NoError(t, cmd.Run())
+	require.Contains(t, buf.String(), "progress: 3/8 steps",
+		"conditional steps absent from state must not inflate the count")
 }

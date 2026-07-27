@@ -1,0 +1,4 @@
+[Mount]
+What=//server/data
+Where=/mnt/data
+Type=cifs

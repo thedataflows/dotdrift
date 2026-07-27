@@ -1,0 +1,39 @@
+id = "nas"
+scope = "system"
+
+[packages]
+present = ["cifs-utils"]
+
+[dotfiles]
+"/etc/systemd/system/mnt-data.mount" = { source = "mnt-data.mount", mode = "copy" }
+
+[mounts.data]
+source = "//server/data"
+destination = "/mnt/data"
+type = "cifs"
+options = ["noatime", "nofail"]
+startat = "*-*-* 04:00"
+
+[mounts.backup]
+source = "UUID=backup-1"
+destination = "/mnt/backup"
+type = "ext4"
+state = "disabled"
+
+[smb]
+group = "nas"
+users = ["cri"]
+avahi = false
+
+[smb.shares.media]
+path = "/srv/media"
+comment = "media share"
+writable = true
+
+[smb.shares.data]
+path = "/mnt/data"
+public = true
+
+[hooks]
+pre = ["echo nas-pre"]
+post = ["echo nas-post"]

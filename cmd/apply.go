@@ -11,9 +11,11 @@ import (
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
+	"github.com/thedataflows/dotdrift/internal/smb"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
@@ -29,16 +31,20 @@ var (
 	defaultMise = mise.DefaultMise
 	// packagesFor selects the distro package backend; swapped out by tests.
 	packagesFor = packages.For
+	// newMountsRunner builds the mounts step runner; swapped out by tests.
+	newMountsRunner = func() mounts.Runner { return mounts.ExecRunner{} }
+	// newSmbRunner builds the smb step runner; swapped out by tests.
+	newSmbRunner = func() smb.Runner { return smb.ExecRunner{} }
 )
 
 // pipelineStepNames is the single source of truth for the ordered pipeline
 // step names: apply builds its steps in this order and status reports
 // progress against it. Update this list when adding or removing a step.
-// hooks-pre/hooks-post and dotfiles-system are conditional: they only run
-// when the plan has hook commands / system-scope dotfile entries, so a
-// completed apply may legitimately show fewer completed steps than the
-// denominator.
-var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "hooks-post"}
+// hooks-pre/hooks-post, dotfiles-system, mounts, and smb are conditional:
+// they only run when the plan has hook commands / system-scope dotfile
+// entries / mount entries / smb modules, so a completed apply may
+// legitimately show fewer completed steps than the denominator.
+var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "mounts", "smb", "hooks-post"}
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
@@ -175,6 +181,16 @@ func (c *ApplyCmd) Run() error {
 		steps = append(steps, &mise.DotfilesSystemStep{
 			Exec: runner, Entries: systemEntries, ConfigPath: dotfilesSystemConfigPath, Yes: c.Yes,
 		})
+	}
+	// Mounts and smb activate what mise already placed (unit files, smb.conf):
+	// they never write config files, so they run after every dotfiles step
+	// and before the post hooks (a post-hook may depend on an active mount or
+	// a running smb service). Both are conditional on a non-empty aggregate.
+	if len(plan.Mounts.Entries) > 0 {
+		steps = append(steps, &mounts.Step{Runner: newMountsRunner(), Plan: plan.Mounts})
+	}
+	if len(plan.Smb.Modules) > 0 {
+		steps = append(steps, &smb.Step{Runner: newSmbRunner(), Plan: plan.Smb, Out: out})
 	}
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{

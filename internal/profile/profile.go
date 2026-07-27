@@ -113,7 +113,7 @@ func Load(root string, f *facts.Facts) (*Profile, error) {
 	if err := p.loadConfig(root, f); err != nil {
 		return nil, err
 	}
-	if err := p.discover(root); err != nil {
+	if err := p.discover(root, f); err != nil {
 		return nil, err
 	}
 	p.Select(f)
@@ -231,59 +231,6 @@ func unionConfig(base, host, user Config) Config {
 	}
 	sort.Strings(list)
 	return Config{Modules: ModulesConfig{Disable: list}}
-}
-
-func (p *Profile) discover(root string) error {
-	modulesDir := filepath.Join(root, "modules")
-	entries, err := os.ReadDir(modulesDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("not a dotdrift profile: %s missing modules/ directory", root)
-		}
-		return err
-	}
-	seen := make(map[string]string)
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		modPath := filepath.Join(modulesDir, entry.Name())
-		mod, err := loadModule(modPath, entry.Name())
-		if err != nil {
-			return err
-		}
-		if mod == nil {
-			continue
-		}
-		if prev, dup := seen[mod.ID]; dup {
-			return fmt.Errorf("duplicate module id %q: %s and %s", mod.ID, prev, modPath)
-		}
-		seen[mod.ID] = modPath
-		p.Modules = append(p.Modules, *mod)
-	}
-	sort.Slice(p.Modules, func(i, j int) bool { return p.Modules[i].ID < p.Modules[j].ID })
-	return nil
-}
-
-func loadModule(path, dirName string) (*Module, error) {
-	modToml := filepath.Join(path, "module.toml")
-	if _, err := os.Stat(modToml); err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	var cfg ModuleConfig
-	if _, err := toml.DecodeFile(modToml, &cfg); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", modToml, err)
-	}
-	if cfg.ID == "" {
-		cfg.ID = dirName
-	}
-	if cfg.App == "" {
-		cfg.App = cfg.ID
-	}
-	return &Module{ID: cfg.ID, App: cfg.App, Path: path, Config: cfg}, nil
 }
 
 func (p *Profile) isDisabled(m Module) (string, bool) {

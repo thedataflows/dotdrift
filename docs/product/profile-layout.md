@@ -28,6 +28,11 @@ profile/
 ```
 
 - `modules/<id>` is selected by presence if it has a valid `module.toml`.
+  The same holds per layer: `hosts/<hostname>/modules/<id>` and
+  `users/<username>/modules/<id>` are selected by presence too, so a module
+  existing only in a host or user layer (an overlay-only module) is managed
+  like a base module. A host/user directory with the same name as a base
+  module is that module's overlay, not a second module.
 - `id` is the directory name unless overridden by `id` in `module.toml`.
 - `app` defaults to `id` unless overridden.
 
@@ -36,9 +41,13 @@ profile/
 - `modules/` must exist. Loading a directory without it fails with
   `not a dotdrift profile: <path> missing modules/ directory` — a typo'd
   profile path is never silently treated as an empty profile.
-- Module IDs must be unique across `modules/`. Two modules resolving to the
-  same `id` (via directory name or `id` override) fail with an error naming
-  both module paths.
+- Module IDs must be unique across all scanned layers (`modules/`,
+  `hosts/<hostname>/modules/`, `users/<username>/modules/`). Directories
+  sharing a name across layers are overlays of one module (discovery
+  precedence base → host → user: the representative path/config is the base
+  layer's). Two different directory names resolving to the same `id` (via
+  directory name or `id` override) fail with an error naming both module
+  paths.
 - Host/user overlays require a non-empty hostname/username. An empty value
   collapses the overlay path onto the parent directory (e.g.
   `hosts/dotdrift.toml`); if a file exists at that collapsed path, loading

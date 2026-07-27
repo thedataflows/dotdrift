@@ -15,6 +15,7 @@ Execute in order. Each milestone links tasks. Complete TDD acceptance before mov
 * [M10 Stretch](m10-stretch.md) - Extra backends, locks ✅
 * [M11 Hooks](m11-hooks.md) - Pre/post apply hooks via mise tasks
 * [M12 Scope](m12-scope.md) - User/system dotfile scope, sudo-applied system step
+* [M13 Generate](m13-generate.md) - `generate mounts|smb` CLI+TUI, mount/smb specs, activation steps
 
 # Dependency graph
 
@@ -22,5 +23,6 @@ Execute in order. Each milestone links tasks. Complete TDD acceptance before mov
 M0 → M1 → M2 → M3 → M4
                  ├→ M5 → M6 → M8 → M9
                  └→ M7 (parallel after M1)
+M9 → M11 → M12 → M13
 Mise ensure (tasks/t-mise-ensure) → before M5/M6/M8 integration
 ```

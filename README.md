@@ -89,6 +89,27 @@ already running as root). System-scope entries are marked `[system]` in
 `dotdrift plan`. Packages self-elevate via the distro backend and hooks carry
 their own inline privilege, so neither needs scope machinery.
 
+## Generate
+
+`dotdrift generate mounts` writes a system-scoped module holding systemd
+`.mount` units (plus `.service`/`.timer` for `--startat`), and
+`dotdrift generate smb` writes one holding `shares.conf` and a one-time
+`smb.conf` seed. Mounts and shares are declared as `[mounts.<name>]` and
+`[smb]`/`[smb.shares.<name>]` tables in the module's `module.toml`
+(merged whole-entry by name across layers); the rendered files are
+derived artifacts. On a terminal with no input flags an interactive
+wizard runs (same byte-identical result as the flag mode); with any
+input flag the strict CLI mode applies. `--layer base|host|user` picks
+where the module lands — a host-layer-only module needs no base stub.
+One CLI run writes one mount (the `[mounts]` section is replaced
+wholesale, so use the wizard's "add another mount?" loop or one
+`--module` per mount for several); `--share` is repeatable. The regular
+apply pipeline then places the files via mise and activates them in the
+conditional `mounts`/`smb` steps (unit enablement, timers, samba
+group/users/service). See `docs/product/cli-surface.md` for the full
+flag reference and `docs/product/migrate-pimp-my-cachyos.md` for a
+worked migration.
+
 See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
 
 > Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.

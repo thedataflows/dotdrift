@@ -15,3 +15,5 @@ Each task: write failing tests first, then implement.
 * [T9 Polish](t9-polish.md)
 * [T-hooks](t-hooks.md)
 * [T-scope](t-scope.md)
+* [T-overlay-discovery](t-overlay-discovery.md)
+* [T-generate](t-generate.md)

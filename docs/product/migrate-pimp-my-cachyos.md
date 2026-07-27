@@ -171,6 +171,9 @@ On apply, placement and activation stay separate
    deliberate strictness delta: the legacy script swallowed
    `enable --now` failures (`|| true`); dotdrift fails the step loudly
    (resume re-runs it), so a broken unit surfaces instead of hiding.
+   Cosmetic only: the legacy envsubst templates left a blank line where
+   `After=` would go on non-network mounts; dotdrift omits the empty
+   line — the units are functionally identical.
 4. **smb step** — creates the group and memberships, enables
    `avahi-daemon` when avahi is on, gates on `testparm -s` (a failure
    stops before any restart), enables/restarts `smb`, and runs

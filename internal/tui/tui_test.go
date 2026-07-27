@@ -181,3 +181,15 @@ func TestWizard_addMountValidation(t *testing.T) {
 	require.NoError(t, os.WriteFile(blocker, []byte("file"), 0o644))
 	require.Error(t, bad.Write(blocker, 1000, 1000), "write under a file path fails")
 }
+
+func TestSmbWizard_writeRequiresShare(t *testing.T) {
+	w := NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
+	w.SetServer(SmbServerChoice{Group: "smb", Users: []string{"cri"}})
+
+	err := w.Write(t.TempDir(), "cri", 1000, 1000)
+	require.Error(t, err, "zero shares must not write a module (CLI parity)")
+	require.Contains(t, err.Error(), "at least one share")
+
+	require.NoError(t, w.AddShare(ShareChoice{Name: "media", Path: "/srv/media", Writable: true}))
+	require.NoError(t, w.Write(t.TempDir(), "cri", 1000, 1000), "one share writes fine")
+}

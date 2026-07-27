@@ -275,3 +275,13 @@ func TestRegistry_malformedTOMLErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), path, "error must name the offending file")
 }
+
+func TestRegistry_ntfs3AbsentCarriesRemoval(t *testing.T) {
+	noOverride(t)
+	reg, err := Load()
+	require.NoError(t, err)
+	e, ok := reg.Entry("ntfs3")
+	require.True(t, ok)
+	require.Equal(t, []string{"ntfs-3g"}, e.Absent,
+		"ntfs3 preset carries the legacy ntfs-3g removal (kernel >= 7.1)")
+}

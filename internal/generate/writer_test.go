@@ -1,6 +1,7 @@
 package generate
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
@@ -11,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
@@ -487,4 +489,75 @@ func TestWriter_unknownTypeErrors(t *testing.T) {
 	} else {
 		require.ErrorIs(t, readErr, os.ErrNotExist, "module dir must not even be created")
 	}
+}
+
+func TestWriter_absentPackagesUnioned(t *testing.T) {
+	noOverride(t)
+	root := t.TempDir()
+	sel := Selection{Layer: LayerBase, ModuleID: "media"}
+	dir := moduleDirFor(root, sel)
+
+	in := Input{
+		Mounts: map[string]profile.MountSpec{
+			"win": {Source: "UUID=1", Destination: "/mnt/win", Type: "ntfs3"},
+		},
+		UID: 1, GID: 1,
+	}
+	require.NoError(t, WriteModule(root, sel, in))
+
+	cfg := decodeModule(t, dir)
+	require.Contains(t, cfg.Packages.Present, "ntfsprogs-plus")
+	require.Contains(t, cfg.Packages.Absent, "ntfs-3g",
+		"ntfs3 preset carries the legacy ntfs-3g removal into packages.absent")
+}
+
+func TestWriter_absentSkipsSelfConflict(t *testing.T) {
+	noOverride(t)
+	root := t.TempDir()
+	sel := Selection{Layer: LayerBase, ModuleID: "media"}
+	dir := moduleDirFor(root, sel)
+
+	// A module using BOTH ntfs3 and ntfs-3g mounts must not end up with
+	// ntfs-3g in both present and absent.
+	in := Input{
+		Mounts: map[string]profile.MountSpec{
+			"win":  {Source: "UUID=1", Destination: "/mnt/win", Type: "ntfs3"},
+			"win2": {Source: "UUID=2", Destination: "/mnt/win2", Type: "ntfs-3g"},
+		},
+		UID: 1, GID: 1,
+	}
+	require.NoError(t, WriteModule(root, sel, in))
+
+	cfg := decodeModule(t, dir)
+	require.Contains(t, cfg.Packages.Present, "ntfs-3g")
+	require.NotContains(t, cfg.Packages.Absent, "ntfs-3g",
+		"absent candidates required present by the same input are skipped")
+}
+
+func TestWriter_gcWarnsAboutLiveUnit(t *testing.T) {
+	noOverride(t)
+	root := t.TempDir()
+	sel := Selection{Layer: LayerBase, ModuleID: "media"}
+
+	withTimer := Input{
+		Mounts: map[string]profile.MountSpec{"data": nfsMount("/mnt/data", "*-*-* 18:05:00")},
+		UID:    1, GID: 1,
+	}
+	require.NoError(t, WriteModule(root, sel, withTimer))
+
+	var buf bytes.Buffer
+	prev := log.Logger
+	log.Logger = log.Output(&buf)
+	t.Cleanup(func() { log.Logger = prev })
+
+	withoutTimer := Input{
+		Mounts: map[string]profile.MountSpec{"data": nfsMount("/mnt/data", "")},
+		UID:    1, GID: 1,
+	}
+	require.NoError(t, WriteModule(root, sel, withoutTimer))
+
+	require.Contains(t, buf.String(), "disable --now",
+		"GC warns that the placed unit may still be live")
+	require.Contains(t, buf.String(), "mnt-data.service")
+	require.Contains(t, buf.String(), "mnt-data.timer")
 }

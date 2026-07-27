@@ -64,7 +64,13 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 				return friendlyAbort(err)
 			}
 			if !more {
-				break
+				if len(wizard.shares) > 0 {
+					break
+				}
+				// CLI parity: a shareless smb module is not writable — fall
+				// through to the share prompt instead of dead-ending at the
+				// write confirm.
+				fmt.Fprintln(os.Stderr, "at least one share is required")
 			}
 		}
 		share, err := promptShare()

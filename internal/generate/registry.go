@@ -45,6 +45,10 @@ type Entry struct {
 	RecommendedIf string `toml:"recommended_if"`
 	// Packages are the distro packages the filesystem type needs.
 	Packages []string `toml:"packages"`
+	// Absent lists distro packages to remove when the type is used (e.g.
+	// the ntfs3 preset removes ntfs-3g on kernel >= 7.1, mirroring the
+	// legacy script's cleanup).
+	Absent []string `toml:"absent"`
 }
 
 // familyName is the entry's family, defaulting to its own type.
@@ -102,11 +106,6 @@ func (r *Registry) Recommend(family string) (Entry, error) {
 		}
 	}
 	return Entry{}, fmt.Errorf("%w for family %q", ErrNoRecommendation, family)
-}
-
-// LoadDefault loads the registry with the default override resolution.
-func LoadDefault() (*Registry, error) {
-	return Load()
 }
 
 // Load loads the embedded registry and merges the user override file

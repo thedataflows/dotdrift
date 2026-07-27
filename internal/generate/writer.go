@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
@@ -257,6 +258,7 @@ func gcStaleUnits(dir string, dotfiles map[string]profile.Dotfile, rendered map[
 			continue
 		}
 		delete(dotfiles, target)
+		log.Warn().Msgf("removed generated unit %s from the module; the placed unit may still be live — run: sudo systemctl disable --now %s && sudo rm %s/%s", df.Source, df.Source, unitTargetDir, df.Source)
 	}
 }
 
@@ -299,6 +301,7 @@ func updateModuleConfig(cfg *profile.ModuleConfig, input Input, presets map[stri
 		cfg.Smb = *input.Smb
 	}
 	cfg.Packages.Present = unionPackages(cfg.Packages.Present, input, presets)
+	cfg.Packages.Absent = unionAbsent(cfg.Packages.Absent, presets, cfg.Packages.Present)
 	if cfg.Dotfiles == nil {
 		cfg.Dotfiles = make(map[string]profile.Dotfile, len(rendered)+2)
 	}
@@ -312,6 +315,34 @@ func updateModuleConfig(cfg *profile.ModuleConfig, input Input, presets map[stri
 	if input.Smb != nil {
 		cfg.Dotfiles[smbConfTarget] = profile.Dotfile{Source: smbConfFileName, Mode: dotfileMode}
 	}
+}
+
+// unionAbsent merges registry-required package removals (e.g. the ntfs3
+// preset's ntfs-3g removal, mirroring the legacy script's kernel >= 7.1
+// cleanup) into packages.absent. A removal candidate that the same input
+// requires as present is skipped: a module using both ntfs3 and ntfs-3g
+// mounts keeps ntfs-3g installed.
+func unionAbsent(existing []string, presets map[string]Entry, present []string) []string {
+	skip := make(map[string]struct{}, len(present))
+	for _, p := range present {
+		skip[p] = struct{}{}
+	}
+	set := make(map[string]struct{}, len(existing)+1)
+	for _, p := range existing {
+		set[p] = struct{}{}
+	}
+	for _, preset := range presets {
+		for _, p := range preset.Absent {
+			if _, conflict := skip[p]; conflict {
+				continue
+			}
+			set[p] = struct{}{}
+		}
+	}
+	if len(set) == 0 {
+		return nil
+	}
+	return slices.Sorted(maps.Keys(set))
 }
 
 // unionPackages returns the sorted, deduped union of the existing present

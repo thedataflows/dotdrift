@@ -36,7 +36,7 @@ func requireGolden(t *testing.T, name, got string) {
 func mustEntry(t *testing.T, typ string) Entry {
 	t.Helper()
 	noOverride(t)
-	reg, err := LoadDefault()
+	reg, err := Load()
 	require.NoError(t, err)
 	e, ok := reg.Entry(typ)
 	require.True(t, ok, "embedded registry must contain %q", typ)

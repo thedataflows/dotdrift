@@ -36,6 +36,7 @@ family = "ntfs"
 options = ["auto", "rw", "uid", "gid", "dmask=027", "fmask=027", "dev", "exec", "noatime", "iocharset=utf8", "windows_names", "suid", "discard"]
 recommended_if = "kernel >= 7.1"
 packages = ["ntfsprogs-plus"]
+absent = ["ntfs-3g"]
 
 [filesystems.ntfs-3g]
 kind = "volume"

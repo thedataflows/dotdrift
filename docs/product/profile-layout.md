@@ -107,7 +107,7 @@ startat = "18:00"
 state = "enabled"
 
 [smb]
-group = "WORKGROUP"
+group = "smb"
 users = ["cri", "media"]
 avahi = true
 
@@ -145,7 +145,9 @@ public = false
   then host, then user — and aggregate across modules in selection order;
   nothing is deduplicated or overridden.
 - `mounts` declares filesystem attachments as keyed tables `[mounts.<name>]`
-  (ADR-0002). Keys are mount names; values are tables with:
+  (ADR-0002). Mounts and smb require `scope = "system"` — their artifacts
+  land in root-owned paths, so a user-scope module declaring either is a
+  resolve-time error naming the module. Keys are mount names; values are tables with:
   - `source`: what to attach (e.g. `UUID=...` for volumes, `//server/share`
     for network mounts). Required — empty is a resolve-time error naming the
     module and mount.
@@ -161,7 +163,8 @@ public = false
   - Layers merge **whole-entry by name**: a higher layer's `[mounts.<name>]`
     fully replaces the lower layer's entry — no field-level merge.
 - `smb` declares Samba server settings and shares:
-  - `group`: workgroup name.
+  - `group`: Linux group granted share access (`valid users = @<group>`;
+    created at apply time). Defaults to `smb`.
   - `users`: list of Samba users. Layers **replace** the list wholesale when
     set (non-empty); never appended — the deliberate contrast to hooks.
   - `avahi`: boolean advertising shares via Avahi/mDNS. When omitted the

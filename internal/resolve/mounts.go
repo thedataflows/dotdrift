@@ -102,6 +102,13 @@ func validateMountSpec(moduleID, name string, spec profile.MountSpec) error {
 // replaces when the key is present (a *bool, so explicit false is settable).
 // Shares merge whole-entry by name like mounts. contributed reports whether
 // any layer declared smb content at all.
+// hasSmbContent reports whether an smb spec carries any declaration —
+// the same "contributed" predicate mergeSmb uses, for the scope guard in
+// resolve.go.
+func hasSmbContent(s profile.SmbSpec) bool {
+	return s.Group != "" || len(s.Users) > 0 || s.Avahi != nil || len(s.Shares) > 0
+}
+
 func mergeSmb(base, host, user layerConfig, moduleID string) (spec profile.SmbSpec, contributed bool, err error) {
 	for _, layer := range []layerConfig{base, host, user} {
 		s := layer.cfg.Smb

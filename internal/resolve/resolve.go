@@ -164,6 +164,14 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		plan.Hooks.Post = append(plan.Hooks.Post, host.cfg.Hooks.Post...)
 		plan.Hooks.Post = append(plan.Hooks.Post, user.cfg.Hooks.Post...)
 
+		// Mounts and smb artifacts land in root-owned paths (systemd unit
+		// dirs, /etc/samba), so they require system scope; a user-scope
+		// module declaring them fails here rather than inside mise.
+		if scope != profile.ScopeSystem && (len(base.cfg.Mounts)+len(host.cfg.Mounts)+len(user.cfg.Mounts) > 0 ||
+			hasSmbContent(base.cfg.Smb) || hasSmbContent(host.cfg.Smb) || hasSmbContent(user.cfg.Smb)) {
+			return nil, fmt.Errorf("module %s: mounts/smb require scope = \"system\" (got %q)", m.ID, scope)
+		}
+
 		mounts, err := mergeMounts(base, host, user, dir, scope)
 		if err != nil {
 			return nil, err

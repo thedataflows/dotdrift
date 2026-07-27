@@ -100,7 +100,11 @@ module; no base stub needed). From `mounts.cri-pc.yaml`:
 ```bash
 # win_c: legacy "ntfs" splits by kernel — ntfs3 (kernel >= 7.1) or
 # ntfs-3g (kernel < 7.1). Pick per host; the wizard preselects the
-# kernel-recommended one. The share:false key is dropped (see step 3).
+# kernel-recommended one. Note: the legacy kernel >= 7.1 path kept the
+# bare "ntfs" type with its own preset (umask=027,nocase,preallocated_size=
+# 131072); dotdrift's registry has no bare "ntfs" entry, so that exact
+# preset is not carried over — ntfs3's preset matches the reference's
+# ntfs3 case verbatim. The share:false key is dropped (see step 3).
 dotdrift generate mounts --layer host --hostname cri-pc --module win-c --name win_c \
   --source UUID=01D97D07D7C008F0 --destination /mnt/win/c --type ntfs3
 
@@ -163,7 +167,10 @@ On apply, placement and activation stay separate
    user-owned; edit the module copy, not `/etc/samba/smb.conf`).
 3. **mounts step** — `mkdir -p` destinations, one `daemon-reload`, then
    `enable --now` per `.mount` (plus `.timer` for `startat` entries);
-   `state = "disabled"` entries get a tolerant `disable --now`.
+   `state = "disabled"` entries get a tolerant `disable --now`. Note the
+   deliberate strictness delta: the legacy script swallowed
+   `enable --now` failures (`|| true`); dotdrift fails the step loudly
+   (resume re-runs it), so a broken unit surfaces instead of hiding.
 4. **smb step** — creates the group and memberships, enables
    `avahi-daemon` when avahi is on, gates on `testparm -s` (a failure
    stops before any restart), enables/restarts `smb`, and runs

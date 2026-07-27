@@ -37,6 +37,8 @@ func smbByModule(t *testing.T, mods []resolve.SmbModuleSpec, module string) reso
 func TestMergeMounts_wholeEntryByName(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mnt", `
+scope = "system"
+
 [mounts.a]
 source = "UUID=base-a"
 destination = "/mnt/a"
@@ -84,6 +86,8 @@ type = "cifs"
 func TestMergeSmb_sharesWholeEntryAndScalarReplace(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "srv", `
+scope = "system"
+
 [smb]
 group = "BASEWG"
 users = ["base-user"]
@@ -127,6 +131,8 @@ path = "/srv/media-host"
 func TestMergeSmb_usersReplaceNotAppend(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "srv", `
+scope = "system"
+
 [smb]
 users = ["base-a", "base-b"]
 `)
@@ -145,6 +151,8 @@ users = ["user-c"]
 func TestResolveMounts_missingSourceErrors(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mnt", `
+scope = "system"
+
 [mounts.x]
 destination = "/mnt/x"
 type = "ext4"
@@ -159,6 +167,8 @@ type = "ext4"
 func TestResolveMounts_missingDestinationErrors(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mnt", `
+scope = "system"
+
 [mounts.x]
 source = "UUID=1"
 type = "ext4"
@@ -173,6 +183,8 @@ type = "ext4"
 func TestResolveMounts_missingTypeErrors(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mnt", `
+scope = "system"
+
 [mounts.x]
 source = "UUID=1"
 destination = "/mnt/x"
@@ -187,6 +199,8 @@ destination = "/mnt/x"
 func TestResolveMounts_unknownStateErrors(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mnt", `
+scope = "system"
+
 [mounts.x]
 source = "UUID=1"
 destination = "/mnt/x"
@@ -205,6 +219,8 @@ state = "paused"
 func TestResolveMounts_unknownTypePasses(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mnt", `
+scope = "system"
+
 [mounts.z]
 source = "tank/data"
 destination = "/mnt/z"
@@ -219,6 +235,8 @@ type = "zfs"
 func TestResolveSmb_shareMissingPathErrors(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "srv", `
+scope = "system"
+
 [smb.shares.media]
 comment = "no path"
 `)
@@ -256,6 +274,8 @@ type = "ext4"
 func TestResolveMounts_deterministicOrder(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "zeta", `
+scope = "system"
+
 [mounts.b]
 source = "s"
 destination = "/d"
@@ -266,6 +286,8 @@ destination = "/d"
 type = "t"
 `)
 	writeModule(t, root, "alpha", `
+scope = "system"
+
 [mounts.z]
 source = "s"
 destination = "/d"
@@ -306,4 +328,52 @@ present = ["vim"]
 	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
 	require.NoError(t, err)
 	require.Empty(t, plan.Smb.Modules)
+}
+
+// Mounts and smb require system scope: their artifacts land in root-owned
+// paths, so a user-scope module declaring them fails loudly at resolve
+// instead of dying later inside mise.
+func TestResolveMounts_userScopeModuleErrors(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "bad", `
+[mounts.data]
+source = "server:/export"
+destination = "/mnt/data"
+type = "nfs"
+`)
+	_, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bad")
+	require.Contains(t, err.Error(), "scope")
+}
+
+func TestResolveSmb_userScopeModuleErrors(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "bad", `
+[smb.shares.media]
+path = "/srv/media"
+`)
+	_, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bad")
+	require.Contains(t, err.Error(), "scope")
+}
+
+func TestResolveMounts_systemScopeModulePasses(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "good", `
+scope = "system"
+
+[mounts.data]
+source = "server:/export"
+destination = "/mnt/data"
+type = "nfs"
+
+[smb.shares.media]
+path = "/srv/media"
+`)
+	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
+	require.NoError(t, err)
+	require.Len(t, plan.Mounts.Entries, 1)
+	require.Len(t, plan.Smb.Modules, 1)
 }

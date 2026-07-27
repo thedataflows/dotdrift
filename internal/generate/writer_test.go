@@ -325,6 +325,46 @@ func TestWriter_smbConfSeededOnceNotClobbered(t *testing.T) {
 	require.Contains(t, string(sharesConf), "[backup]")
 }
 
+func TestWriter_mountsNilLeavesExistingAlone(t *testing.T) {
+	noOverride(t)
+	root := t.TempDir()
+	sel := Selection{Layer: LayerBase, ModuleID: "media"}
+	dir := moduleDirFor(root, sel)
+
+	// First run WITH mounts: establishes [mounts] + unit files + unit dotfile entries.
+	withMounts := Input{
+		Mounts: map[string]profile.MountSpec{"data": nfsMount("/mnt/data", "*-*-* 18:05:00")},
+		UID:    1, GID: 1,
+	}
+	require.NoError(t, WriteModule(root, sel, withMounts))
+	unitBefore, err := os.ReadFile(filepath.Join(dir, "mnt-data.mount"))
+	require.NoError(t, err)
+	mountsBefore := decodeModule(t, dir).Mounts
+	require.NotEmpty(t, mountsBefore)
+
+	// Rerun with Mounts nil (exactly what generate smb produces): nil means
+	// "not managed by this run" — [mounts], unit files, and their dotfile
+	// entries stay exactly as they were, while smb is managed by the same run.
+	withoutMounts := Input{
+		Mounts: nil,
+		Smb:    smbInput(),
+		UID:    1, GID: 1,
+	}
+	require.NoError(t, WriteModule(root, sel, withoutMounts))
+
+	unitAfter, err := os.ReadFile(filepath.Join(dir, "mnt-data.mount"))
+	require.NoError(t, err, "unit file must survive a Mounts-nil run")
+	require.Equal(t, string(unitBefore), string(unitAfter))
+	for _, f := range []string{"mnt-data.service", "mnt-data.timer"} {
+		require.FileExists(t, filepath.Join(dir, f), f+" must survive a Mounts-nil run")
+	}
+	cfg := decodeModule(t, dir)
+	require.Equal(t, mountsBefore, cfg.Mounts, "mounts section untouched when Mounts is nil")
+	require.Contains(t, cfg.Dotfiles, "/usr/local/lib/systemd/system/mnt-data.mount")
+	require.Contains(t, cfg.Dotfiles, "/usr/local/lib/systemd/system/mnt-data.timer")
+	require.NotEmpty(t, cfg.Smb.Shares, "smb still managed by the same run")
+}
+
 func TestWriter_smbNilLeavesExistingAlone(t *testing.T) {
 	noOverride(t)
 	root := t.TempDir()

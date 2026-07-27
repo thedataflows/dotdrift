@@ -125,32 +125,6 @@ func invokingUser() (uid int, gid int, username string, err error) {
 	return uid, gid, u.Username, nil
 }
 
-// generateModuleDir mirrors generate's (unexported) layer placement so
-// the command can locate the module dir without writing: base →
-// <root>/modules/<id>, host → <root>/hosts/<hostname>/modules/<id>,
-// user → <root>/users/<username>/modules/<id>.
-func generateModuleDir(root string, sel generate.Selection) (string, error) {
-	if sel.ModuleID == "" {
-		return "", fmt.Errorf("empty module id")
-	}
-	switch sel.Layer {
-	case generate.LayerBase:
-		return filepath.Join(root, "modules", sel.ModuleID), nil
-	case generate.LayerHost:
-		if sel.Hostname == "" {
-			return "", fmt.Errorf("host layer for module %q requires a hostname", sel.ModuleID)
-		}
-		return filepath.Join(root, "hosts", sel.Hostname, "modules", sel.ModuleID), nil
-	case generate.LayerUser:
-		if sel.Username == "" {
-			return "", fmt.Errorf("user layer for module %q requires a username", sel.ModuleID)
-		}
-		return filepath.Join(root, "users", sel.Username, "modules", sel.ModuleID), nil
-	default:
-		return "", fmt.Errorf("unknown layer %q for module %q", sel.Layer, sel.ModuleID)
-	}
-}
-
 // existingMountSources decodes the target module's module.toml (when
 // present) and returns its mounts' sources in name order; an absent
 // file yields nil (nothing managed).
@@ -175,7 +149,7 @@ func existingMountSources(dir string) ([]string, error) {
 // volume's UUID already appears as a source in the target module's
 // [mounts] section (an absent module is tolerated: nothing managed).
 func printGenerateVolumes(out io.Writer, root string, sel generate.Selection) error {
-	dir, err := generateModuleDir(root, sel)
+	dir, err := generate.ModuleDir(root, sel)
 	if err != nil {
 		return err
 	}
@@ -219,7 +193,7 @@ func printGenerateVolumes(out io.Writer, root string, sel generate.Selection) er
 // printGenerateSummary lists what WriteModule materialized: the module
 // dir and its files (os.ReadDir is name-sorted).
 func printGenerateSummary(out io.Writer, root string, sel generate.Selection) error {
-	dir, err := generateModuleDir(root, sel)
+	dir, err := generate.ModuleDir(root, sel)
 	if err != nil {
 		return err
 	}

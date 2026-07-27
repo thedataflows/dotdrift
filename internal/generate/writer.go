@@ -83,7 +83,9 @@ type Selection struct {
 // Input carries the resolved specs and the uid/gid used for mount-option
 // token expansion (the caller resolves them via os/user).
 type Input struct {
-	// Mounts replaces the module's [mounts] section wholesale.
+	// Mounts replaces the module's [mounts] section wholesale when
+	// non-nil; nil means mounts are not managed by this run (existing
+	// mounts, unit files, and their dotfile entries are left untouched).
 	Mounts map[string]profile.MountSpec
 	// Smb, when non-nil, replaces the module's [smb] section wholesale and
 	// (re)generates shares.conf. Nil means "smb is not managed by this
@@ -141,7 +143,10 @@ func WriteModule(root string, sel Selection, input Input) error {
 		return err
 	}
 
-	rendered := renderUnits(input, presets)
+	rendered := map[string]string{}
+	if input.Mounts != nil {
+		rendered = renderUnits(input, presets)
+	}
 	if input.Smb != nil {
 		rendered[sharesFileName] = RenderSharesConf(*input.Smb)
 	}
@@ -149,7 +154,9 @@ func WriteModule(root string, sel Selection, input Input) error {
 	if err := os.MkdirAll(dir, dirPermission); err != nil {
 		return fmt.Errorf("create module dir %s: %w", dir, err)
 	}
-	gcStaleUnits(dir, cfg.Dotfiles, rendered)
+	if input.Mounts != nil {
+		gcStaleUnits(dir, cfg.Dotfiles, rendered)
+	}
 	for _, name := range slices.Sorted(maps.Keys(rendered)) {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(rendered[name]), filePermission); err != nil {
 			return fmt.Errorf("write %s: %w", filepath.Join(dir, name), err)
@@ -279,12 +286,15 @@ func seedSmbConf(dir string) error {
 }
 
 // updateModuleConfig applies the writer-managed sections to cfg: scope,
-// mounts (wholesale replace), smb (wholesale replace when provided),
+// mounts (wholesale replace when provided; nil Mounts means "not managed
+// by this run", mirroring nil Smb), smb (wholesale replace when provided),
 // packages (sorted union), and dotfile entries for every rendered file.
 // All unrelated sections pass through untouched.
 func updateModuleConfig(cfg *profile.ModuleConfig, input Input, presets map[string]Entry, rendered map[string]string) {
 	cfg.Scope = profile.ScopeSystem
-	cfg.Mounts = input.Mounts
+	if input.Mounts != nil {
+		cfg.Mounts = input.Mounts
+	}
 	if input.Smb != nil {
 		cfg.Smb = *input.Smb
 	}

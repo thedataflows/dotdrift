@@ -96,27 +96,38 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 	presentIn := make(map[string][]string)
 	absentIn := make(map[string][]string)
 	for _, m := range p.Selected {
-		root, err := rootFromModule(m)
-		if err != nil {
-			return nil, err
-		}
+		// Layer paths derive from the profile root and the module directory
+		// name, never from m.Path: for an overlay-only module (ADR-0001) the
+		// representative path points into hosts/<h>/modules/<dir> or
+		// users/<u>/modules/<dir>, so going up two levels would not reach the
+		// profile root. Overlays key on the directory name, not the declared
+		// id. An absent layer is an empty layerConfig: loadModuleConfig
+		// returns a zero config for a missing module.toml.
+		dir := filepath.Base(m.Path)
 
-		// Scope is module-level (base layer only, like id/app) and validated
-		// for every selected module — an unknown value must never pass
-		// silently, even for a module with no dotfiles.
+		// Scope comes from the representative config m.Config (base-preferred
+		// by discovery order); overlay scope declarations are ignored. Scope
+		// is module-level and validated for every selected module — an
+		// unknown value must never pass silently, even for a module with no
+		// dotfiles.
 		scope := m.Config.ScopeOrDefault()
 		if scope != profile.ScopeUser && scope != profile.ScopeSystem {
 			return nil, fmt.Errorf("module %s: unknown scope %q (valid: user, system)", m.ID, m.Config.Scope)
 		}
 
-		base := layerConfig{name: "base", path: m.Path, cfg: m.Config}
-		hostPath := filepath.Join(root, "hosts", f.Hostname, "modules", filepath.Base(m.Path))
+		basePath := filepath.Join(p.Root, "modules", dir)
+		baseCfg, err := loadModuleConfig(basePath)
+		if err != nil {
+			return nil, fmt.Errorf("module %s: base layer %s: %w", m.ID, basePath, err)
+		}
+		base := layerConfig{name: "base", path: basePath, cfg: baseCfg}
+		hostPath := filepath.Join(p.Root, "hosts", f.Hostname, "modules", dir)
 		hostCfg, err := loadModuleConfig(hostPath)
 		if err != nil {
 			return nil, fmt.Errorf("module %s: host overlay %s: %w", m.ID, hostPath, err)
 		}
 		host := layerConfig{name: "host", path: hostPath, cfg: hostCfg}
-		userPath := filepath.Join(root, "users", f.Username, "modules", filepath.Base(m.Path))
+		userPath := filepath.Join(p.Root, "users", f.Username, "modules", dir)
 		userCfg, err := loadModuleConfig(userPath)
 		if err != nil {
 			return nil, fmt.Errorf("module %s: user overlay %s: %w", m.ID, userPath, err)
@@ -195,13 +206,6 @@ func Fingerprint(p *profile.Profile, f *facts.Facts) string {
 	fmt.Fprintf(&b, "backend=%s\n", f.Backend)
 
 	return b.String()
-}
-
-func rootFromModule(m profile.Module) (string, error) {
-	// m.Path is root/modules/<id>; go up two levels to reach the profile root.
-	modulesDir := filepath.Dir(m.Path)
-	root := filepath.Dir(modulesDir)
-	return root, nil
 }
 
 func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {

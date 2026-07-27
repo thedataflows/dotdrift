@@ -1,0 +1,46 @@
+{
+   "blockdevices": [
+      {
+         "name": "zram0",
+         "uuid": "3545981e-8e0f-4420-9f7a-d2db0ab67284",
+         "fstype": "swap",
+         "label": "zram0",
+         "size": "30.5G",
+         "mountpoints": [
+             "[SWAP]"
+         ],
+         "type": "disk"
+      },{
+         "name": "nvme0n1",
+         "uuid": null,
+         "fstype": null,
+         "label": null,
+         "size": "953.9G",
+         "mountpoints": [],
+         "type": "disk",
+         "children": [
+            {
+               "name": "nvme0n1p1",
+               "uuid": "DDC5-1595",
+               "fstype": "vfat",
+               "label": null,
+               "size": "4G",
+               "mountpoints": [
+                   "/boot"
+               ],
+               "type": "part"
+            },{
+               "name": "nvme0n1p2",
+               "uuid": "d83cb072-48f1-4d25-bef5-147b27c41fb7",
+               "fstype": "btrfs",
+               "label": null,
+               "size": "949.9G",
+               "mountpoints": [
+                   "/var/log", "/home", "/var/cache", "/root", "/var/tmp", "/srv", "/"
+               ],
+               "type": "part"
+            }
+         ]
+      }
+   ]
+}

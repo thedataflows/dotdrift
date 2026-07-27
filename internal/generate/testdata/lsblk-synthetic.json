@@ -1,0 +1,128 @@
+{
+   "blockdevices": [
+      {
+         "name": "sda",
+         "uuid": null,
+         "fstype": null,
+         "label": null,
+         "size": "1T",
+         "mountpoints": [],
+         "type": "disk",
+         "children": [
+            {
+               "name": "sda1",
+               "uuid": "AAAA-1111",
+               "fstype": "vfat",
+               "label": "EFI",
+               "size": "512M",
+               "mountpoints": [
+                   "/boot/efi"
+               ],
+               "type": "part"
+            },{
+               "name": "sda2",
+               "uuid": "bbbb2222-1111-4000-8000-000000000002",
+               "fstype": "btrfs",
+               "label": null,
+               "size": "200G",
+               "mountpoints": [
+                   "/", "/home"
+               ],
+               "type": "part"
+            },{
+               "name": "sda3",
+               "uuid": "CCCC3333DDDD4444",
+               "fstype": "ntfs",
+               "label": "Windows",
+               "size": "300G",
+               "mountpoints": [],
+               "type": "part"
+            },{
+               "name": "sda4",
+               "uuid": "eeee5555-6666-4000-8000-000000000005",
+               "fstype": "nfs",
+               "label": null,
+               "size": "50G",
+               "mountpoints": [],
+               "type": "part"
+            },{
+               "name": "sda5",
+               "uuid": "ffff6666-7777-4000-8000-000000000006",
+               "fstype": "zfs",
+               "label": "tank",
+               "size": "100G",
+               "mountpoints": [],
+               "type": "part"
+            },{
+               "name": "sda6",
+               "uuid": "",
+               "fstype": "vfat",
+               "label": null,
+               "size": "1G",
+               "mountpoints": [],
+               "type": "part"
+            },{
+               "name": "sda7",
+               "uuid": "aaaa7777-8888-4000-8000-000000000007",
+               "fstype": null,
+               "label": null,
+               "size": "10G",
+               "mountpoints": [],
+               "type": "part"
+            }
+         ]
+      },{
+         "name": "sdb",
+         "uuid": null,
+         "fstype": null,
+         "label": null,
+         "size": "2T",
+         "mountpoints": [],
+         "type": "disk",
+         "children": [
+            {
+               "name": "sdb1",
+               "uuid": "dddd4444-5555-4000-8000-000000000004",
+               "fstype": "btrfs",
+               "label": "data",
+               "size": "2T",
+               "mountpoints": [
+                   "/data"
+               ],
+               "type": "part",
+               "children": [
+                  {
+                     "name": "sdb1_crypt",
+                     "uuid": "88888888-9999-4000-8000-000000000008",
+                     "fstype": "btrfs",
+                     "label": null,
+                     "size": "2T",
+                     "mountpoints": [
+                         "/vault"
+                     ],
+                     "type": "crypt"
+                  }
+               ]
+            }
+         ]
+      },{
+         "name": "sr0",
+         "uuid": "99999999-aaaa-4000-8000-000000000009",
+         "fstype": "iso9660",
+         "label": "INSTALL_MEDIA",
+         "size": "4.7G",
+         "mountpoints": [],
+         "type": "rom"
+      },{
+         "name": "loop0",
+         "uuid": "00000000-bbbb-4000-8000-000000000000",
+         "fstype": "squashfs",
+         "label": null,
+         "size": "128M",
+         "mountpoints": [
+             "/snap/core/1234"
+         ],
+         "type": "loop"
+      }
+   ]
+}

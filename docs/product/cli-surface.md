@@ -68,10 +68,54 @@ same engine (`internal/generate.WriteModule`); the regular apply pipeline
    validated loudly (the error names each missing flag), a
    `generate.Input` is assembled, `WriteModule` runs, and a summary
    (module dir + written files) is printed.
-2. No input flags + terminal → the interactive **wizard** (TUI, T13).
+2. No input flags + terminal → the interactive **wizard** (see below).
 3. No input flags + no terminal → an actionable error listing the flags
    CLI mode needs.
 4. `--tui` without a terminal → loud error.
+
+## The interactive wizard
+
+The wizard (charmbracelet huh forms over a pure spec-builder state
+machine, lipgloss chrome) owns everything after mode selection,
+including `WriteModule`.
+
+- **Tabs.** A lipgloss tab bar shows `mounts | smb` with the active
+  flow highlighted; a top-level select (`mounts | smb | quit`) acts as
+  the tab switcher. The invoking subcommand preselects its tab;
+  switching runs the other flow with the same profile/layer values.
+- **Pre-fill.** Any already-parsed input flags (`--tui` forces the
+  wizard even with flags) become the wizard's defaults: the first
+  mount's fields, or the smb group/users/avahi/shares.
+- **Mounts steps.** (1) layer select + module id (+ hostname/username
+  inputs shown only for the matching layer, defaulting to detected
+  values); (2) kind select: volume | network; (3a) volume: a
+  MultiSelect of lsblk-detected volumes with already-managed ones
+  marked `[managed]` (on lsblk failure the error is shown and a
+  manual-source fallback is offered), then per volume: name, type
+  select with the kernel-recommended entry preselected and marked
+  `(recommended)`, destination (default `/mnt/<label-or-uuid-short>`),
+  options MultiSelect (registry preset pre-checked) plus free-form
+  additions; (3b) network: source input validated as `host:/export`
+  (nfs-style) or `//host/share` (cifs-style), type select, same
+  options step; (4) optional `--startat` schedule via a confirm +
+  OnCalendar input; (5) state select (enabled/disabled); (6) a review
+  screen and keep-confirm per mount.
+- **Multiple mounts, one write.** After a mount is kept, "add another
+  mount?" loops back to the kind select. All accumulated mounts are
+  written with ONE `WriteModule` call at the end (a mid-loop write
+  would wipe earlier iterations, since `[mounts]` is replaced
+  wholesale). Aborting (ctrl+c/esc) before the end writes nothing.
+- **Smb steps.** Group (default `smb`), users (comma-separated, default
+  the invoking user), avahi confirm (default yes — a "yes" keeps the
+  key unset like the CLI default, a "no" records `avahi = false`), then
+  a shares loop (name, path, comment, writable confirm default yes,
+  public confirm default no, "add a share?"), a review, and one
+  `WriteModule` call.
+- **Equivalence guarantee.** CLI mode and the wizard assemble
+  `generate.Input` through the same shared helpers
+  (`internal/tui.MountsInput` / `SmbInput` / `ParseShareFlags`), so the
+  same logical inputs produce a byte-identical module tree either way
+  (locked by `TestGenerate_cliTuiEquivalence_*`).
 
 ## Examples
 

@@ -1,6 +1,7 @@
 package dotdrift
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/tui"
 )
 
 // The generate command group materializes self-contained mounts/smb
@@ -24,16 +26,47 @@ import (
 // Test seams (package-level vars, same pattern as detectFacts in
 // apply.go; the isTTY probe lives in generate_support.go):
 
-// runWizard is the interactive generate wizard seam owned by T13.
-//
-// T13: implement the wizard and reassign this var (e.g. from the tui
-// package's wiring) — the call sites in Run need no further changes.
-// The invocation carries the parsed subcommand so the wizard can
-// pre-fill from any already-parsed input flags; the wizard owns
+// runWizard hands a generate subcommand to the interactive TUI wizard
+// (internal/tui). The invocation carries the parsed subcommand so the
+// wizard pre-fills from any already-parsed input flags; the wizard owns
 // everything after invocation (including generate.WriteModule).
-// Until then the stub fails loudly.
-var runWizard = func(wizardInvocation) error {
-	return errors.New("generate: wizard not yet available (T13); pass input flags for CLI mode or --no-tui")
+var runWizard = func(inv wizardInvocation) error {
+	switch {
+	case inv.Mounts != nil:
+		c := inv.Mounts
+		return tui.RunMountsWizard(context.Background(), tui.MountsParams{
+			Profile:     c.Profile,
+			Layer:       c.Layer,
+			ModuleID:    c.Module,
+			Hostname:    c.Hostname,
+			Username:    c.Username,
+			Name:        c.Name,
+			Source:      c.Source,
+			Destination: c.Destination,
+			Type:        c.Type,
+			Options:     c.Option,
+			StartAt:     c.StartAt,
+			State:       c.State,
+		})
+	case inv.Smb != nil:
+		c := inv.Smb
+		return tui.RunSmbWizard(context.Background(), tui.SmbParams{
+			Profile:  c.Profile,
+			Layer:    c.Layer,
+			ModuleID: c.Module,
+			Hostname: c.Hostname,
+			Username: c.Username,
+			Group:    c.Group,
+			Users:    c.Users,
+			Avahi:    c.Avahi,
+			Shares:   c.Shares,
+			Writable: c.Writable,
+			Readonly: c.Readonly,
+			Public:   c.Public,
+		})
+	default:
+		return errors.New("generate: empty wizard invocation")
+	}
 }
 
 // wizardInvocation carries the invoking generate subcommand to the
@@ -117,24 +150,16 @@ func (c *GenerateMountsCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	state := c.State
-	if state == "" {
-		state = "enabled"
-	}
-	input := generate.Input{
-		Mounts: map[string]profile.MountSpec{
-			c.Name: {
-				Source:      c.Source,
-				Destination: c.Destination,
-				Type:        c.Type,
-				Options:     c.Option,
-				StartAt:     c.StartAt,
-				State:       state,
-			},
+	input := tui.MountsInput(map[string]profile.MountSpec{
+		c.Name: {
+			Source:      c.Source,
+			Destination: c.Destination,
+			Type:        c.Type,
+			Options:     c.Option,
+			StartAt:     c.StartAt,
+			State:       c.State,
 		},
-		UID: uid,
-		GID: gid,
-	}
+	}, uid, gid)
 	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
 		return fmt.Errorf("generate mounts: %w", err)
 	}
@@ -222,7 +247,7 @@ func (c *GenerateSmbCmd) Run() error {
 		return runWizard(wizardInvocation{Smb: c})
 	}
 
-	shares, err := c.parseShares()
+	shares, err := tui.ParseShareFlags(c.Shares, tui.ResolveWritable(c.Writable, c.Readonly), c.Public)
 	if err != nil {
 		return err
 	}
@@ -231,57 +256,9 @@ func (c *GenerateSmbCmd) Run() error {
 	if err != nil {
 		return err
 	}
-	users := c.Users
-	if len(users) == 0 {
-		users = []string{username}
-	}
-	group := c.Group
-	if group == "" {
-		group = "smb"
-	}
-	// Writable defaults on; --no-writable stores an explicit false and
-	// --readonly is its shorthand (and wins when both are given).
-	writable := true
-	if c.Writable != nil {
-		writable = *c.Writable
-	}
-	if c.Readonly {
-		writable = false
-	}
-	for name, share := range shares {
-		share.Writable = writable
-		share.Public = c.Public
-		shares[name] = share
-	}
-
-	input := generate.Input{
-		Smb: &profile.SmbSpec{
-			Group:  group,
-			Users:  users,
-			Avahi:  c.Avahi, // nil keeps the default-on semantics; --no-avahi records explicit false
-			Shares: shares,
-		},
-		UID: uid,
-		GID: gid,
-	}
+	input := tui.SmbInput(c.Group, c.Users, c.Avahi, shares, username, uid, gid)
 	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
 		return fmt.Errorf("generate smb: %w", err)
 	}
 	return printGenerateSummary(out, c.Profile, sel)
-}
-
-// parseShares validates and decodes the --share name=path values.
-func (c *GenerateSmbCmd) parseShares() (map[string]profile.ShareSpec, error) {
-	if len(c.Shares) == 0 {
-		return nil, fmt.Errorf("generate smb: missing required flag: --share name=path (at least one share)")
-	}
-	shares := make(map[string]profile.ShareSpec, len(c.Shares))
-	for _, s := range c.Shares {
-		name, path, ok := strings.Cut(s, "=")
-		if !ok || name == "" || path == "" {
-			return nil, fmt.Errorf("generate smb: invalid --share %q: want name=path with both name and path non-empty", s)
-		}
-		shares[name] = profile.ShareSpec{Path: path}
-	}
-	return shares, nil
 }

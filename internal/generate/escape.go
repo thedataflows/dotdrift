@@ -50,7 +50,7 @@ func EscapePath(s string) string {
 				ch >= 'A' && ch <= 'Z',
 				ch >= '0' && ch <= '9',
 				ch == ':', ch == '_',
-				ch == '.' && !(i == 0 && j == 0):
+				ch == '.' && (i != 0 || j != 0):
 				b.WriteByte(ch)
 			default:
 				fmt.Fprintf(&b, `\x%02x`, ch)

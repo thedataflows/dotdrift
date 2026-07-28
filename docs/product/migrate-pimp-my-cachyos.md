@@ -26,8 +26,16 @@ behavior change (see [ADR-0002](/adr/0002-mount-specs-in-module-toml.md)).
   templates into `/usr/local/lib/systemd/system/`, created the
   destination directories, ran `daemon-reload`, and `enable --now`'d
   each unit (or `disable` for `state: disabled`). Unit names were the
-  destination path with slashes turned to dashes — the same names
-  dotdrift's `EscapePath` produces.
+  destination path with slashes turned to dashes. dotdrift's
+  `EscapePath` produces the same names for normalized paths
+  (`[a-z0-9_.]`), but differs where the legacy did no escaping at all —
+  destinations with spaces, unicode, or trailing slashes (e.g. the
+  legacy named a unit `mnt-My Disk.mount`; dotdrift names it
+  `mnt-My\x20Disk.mount`, which is what systemd requires). Unit
+  *content* paths (`Where=`, `ConditionPathExists=`) stay raw in both —
+  verified against live `systemd-analyze verify`: a raw `Where=` matches
+  the unescaped unit name, while an escaped `Where=` is rejected, so
+  dotdrift deliberately does not escape content.
 - `mise-tasks/system/smb.sh` — installed samba/avahi, copied a static
   `smb.conf` to `/etc/samba/`, created the `smb` group, added the user,
   ran `smbpasswd -a`, wrote one `/etc/samba/smb.conf.d/<name>.conf` per
@@ -180,7 +188,9 @@ On apply, placement and activation stay separate
    `avahi-daemon` when avahi is on, gates on `testparm -s` (a failure
    stops before any restart), enables/restarts `smb`, and runs
    `smbpasswd -a <user>` interactively on a terminal for each declared
-   user missing from `pdbedit -L`.
+   user missing from `pdbedit -L`. The `testparm -s` gate is a
+   deliberate addition with no legacy counterpart — the legacy script
+   restarted `smb` against an unvalidated config.
 
 ## Retirement checklist
 

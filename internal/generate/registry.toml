@@ -12,7 +12,8 @@
 #   options        mount-option preset                     (required)
 #   after          systemd unit dependencies               (optional)
 #   recommended_if only "kernel <op> <version>"            (optional)
-#   packages       distro packages the type needs          (optional)
+#   packages       distro packages the type needs          (required)
+#   absent         distro packages to remove when used     (optional)
 
 [filesystems.default]
 kind = "volume"

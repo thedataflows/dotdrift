@@ -9,10 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
@@ -238,40 +236,6 @@ func readModuleConfig(dir string) (profile.ModuleConfig, error) {
 	return cfg, nil
 }
 
-// gcStaleUnits removes previously generated unit files that are not in the
-// freshly rendered set. "Generated" is defined precisely: the file name
-// matches the unit naming scheme AND module.toml tracks it via a dotfile
-// entry whose target is under unitTargetDir. Anything else in the module
-// dir — smb.conf, untracked files, user dotfiles — is never touched. The
-// stale dotfile entries are dropped from cfg in place.
-func gcStaleUnits(dir string, dotfiles map[string]profile.Dotfile, rendered map[string]string) {
-	for _, target := range slices.Sorted(maps.Keys(dotfiles)) {
-		df := dotfiles[target]
-		if !strings.HasPrefix(target, unitTargetDir+"/") || !isUnitFile(df.Source) {
-			continue
-		}
-		if _, ok := rendered[filepath.Base(df.Source)]; ok {
-			continue
-		}
-		if err := os.Remove(filepath.Join(dir, df.Source)); err != nil && !errors.Is(err, fs.ErrNotExist) {
-			// Removal failed: keep the entry so file and tracking stay consistent.
-			continue
-		}
-		delete(dotfiles, target)
-		log.Warn().Msgf("removed generated unit %s from the module; the placed unit may still be live — run: sudo systemctl disable --now %s && sudo rm %s/%s", df.Source, df.Source, unitTargetDir, df.Source)
-	}
-}
-
-// isUnitFile reports whether name matches the generated unit naming scheme.
-func isUnitFile(name string) bool {
-	for _, suffix := range unitSuffixes {
-		if strings.HasSuffix(name, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
 // seedSmbConf writes smb.conf only when absent. Once seeded the file is
 // user-owned and never clobbered.
 func seedSmbConf(dir string) error {
@@ -315,57 +279,6 @@ func updateModuleConfig(cfg *profile.ModuleConfig, input Input, presets map[stri
 	if input.Smb != nil {
 		cfg.Dotfiles[smbConfTarget] = profile.Dotfile{Source: smbConfFileName, Mode: dotfileMode}
 	}
-}
-
-// unionAbsent merges registry-required package removals (e.g. the ntfs3
-// preset's ntfs-3g removal, mirroring the legacy script's kernel >= 7.1
-// cleanup) into packages.absent. A removal candidate already in the
-// unioned present list is skipped: packages are union-only, so a module
-// that ever required the package keeps it installed (removing a mount
-// never removes its packages either).
-func unionAbsent(existing []string, presets map[string]Entry, present []string) []string {
-	skip := make(map[string]struct{}, len(present))
-	for _, p := range present {
-		skip[p] = struct{}{}
-	}
-	set := make(map[string]struct{}, len(existing)+1)
-	for _, p := range existing {
-		set[p] = struct{}{}
-	}
-	for _, preset := range presets {
-		for _, p := range preset.Absent {
-			if _, conflict := skip[p]; conflict {
-				continue
-			}
-			set[p] = struct{}{}
-		}
-	}
-	if len(set) == 0 {
-		return nil
-	}
-	return slices.Sorted(maps.Keys(set))
-}
-
-// unionPackages returns the sorted, deduped union of the existing present
-// list, the registry-required packages of every used mount type, and the
-// samba/avahi packages when smb is managed (avahi only when enabled).
-func unionPackages(existing []string, input Input, presets map[string]Entry) []string {
-	set := make(map[string]struct{}, len(existing)+4)
-	for _, p := range existing {
-		set[p] = struct{}{}
-	}
-	for _, preset := range presets {
-		for _, p := range preset.Packages {
-			set[p] = struct{}{}
-		}
-	}
-	if input.Smb != nil {
-		set[sambaPackage] = struct{}{}
-		if input.Smb.Avahi == nil || *input.Smb.Avahi {
-			set[avahiPackage] = struct{}{}
-		}
-	}
-	return slices.Sorted(maps.Keys(set))
 }
 
 // writeModuleConfig encodes cfg as module.toml in dir. BurntSushi encodes

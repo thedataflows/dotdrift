@@ -20,9 +20,7 @@ func RunMountsWizard(ctx context.Context, p MountsParams) error {
 		return err
 	}
 	if tab == "smb" {
-		return RunSmbWizard(ctx, SmbParams{
-			Profile: p.Profile, Layer: p.Layer, Hostname: p.Hostname, Username: p.Username,
-		})
+		return RunSmbWizard(ctx, smbParamsFromMounts(p))
 	}
 	return runMountsFlow(ctx, p)
 }
@@ -99,12 +97,7 @@ func runMountsFlow(ctx context.Context, p MountsParams) error {
 // the assembled choices — one per picked volume, or a single one for
 // the network/manual paths.
 func promptMount(ctx context.Context, reg *generate.Registry, root string, sel generate.Selection, defaults MountChoice) ([]MountChoice, error) {
-	kind := generate.KindVolume
-	if e, ok := reg.Entry(defaults.Type); ok {
-		kind = e.Kind
-	} else if ValidateNetworkSource(defaults.Source) == nil && defaults.Source != "" {
-		kind = generate.KindNetwork
-	}
+	kind := kindForDefaults(reg, defaults)
 	kindForm := huh.NewForm(huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Mount kind").
@@ -133,12 +126,12 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 		if cerr != nil {
 			return nil, cerr
 		}
-		if !fallback {
+		if volumePathAction(err, 0, fallback) == volumeFail {
 			return nil, err
 		}
 		return promptManualVolume(reg, defaults)
 	}
-	if len(vols) == 0 {
+	if volumePathAction(nil, len(vols), false) == volumeManual {
 		fmt.Fprintln(os.Stderr, "no volumes detected; falling back to a manual source input")
 		return promptManualVolume(reg, defaults)
 	}
@@ -165,21 +158,7 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 	out := make([]MountChoice, 0, len(picked))
 	for i, uuid := range picked {
 		c := choices[slices.IndexFunc(choices, func(c VolumeChoice) bool { return c.Volume.UUID == uuid })]
-		d := MountChoice{Name: c.Name, Destination: c.Destination, Type: c.Type}
-		if i == 0 && defaults.Name != "" {
-			d = defaults // flag pre-fill wins for the first volume
-			if d.Destination == "" {
-				d.Destination = c.Destination
-			}
-			if d.Type == "" {
-				d.Type = c.Type
-			}
-			if d.Name == "" {
-				d.Name = c.Name
-			}
-		}
-		d.Source = "UUID=" + uuid
-		choice, err := promptMountDetails(reg, c, d)
+		choice, err := promptMountDetails(reg, c, prefillForVolume(c, defaults, i == 0))
 		if err != nil {
 			return nil, err
 		}

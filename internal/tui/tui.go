@@ -214,6 +214,9 @@ func (w *MountsWizard) Input(uid, gid int) generate.Input {
 // accumulated mounts. uid/gid expand the registry's bare uid/gid option
 // tokens (the interactive runner resolves them via os/user).
 func (w *MountsWizard) Write(root string, uid, gid int) error {
+	if len(w.mounts) == 0 {
+		return errors.New("generate mounts: at least one mount is required")
+	}
 	if err := generate.WriteModule(root, w.sel, w.Input(uid, gid)); err != nil {
 		return fmt.Errorf("generate mounts: %w", err)
 	}

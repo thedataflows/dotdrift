@@ -19,9 +19,7 @@ func RunSmbWizard(ctx context.Context, p SmbParams) error {
 		return err
 	}
 	if tab == "mounts" {
-		return RunMountsWizard(ctx, MountsParams{
-			Profile: p.Profile, Layer: p.Layer, Hostname: p.Hostname, Username: p.Username,
-		})
+		return RunMountsWizard(ctx, mountsParamsFromSmb(p))
 	}
 	return runSmbFlow(ctx, p)
 }
@@ -63,10 +61,10 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 			if err != nil {
 				return friendlyAbort(err)
 			}
+			if shareLoopDone(more, len(wizard.shares)) {
+				break
+			}
 			if !more {
-				if len(wizard.shares) > 0 {
-					break
-				}
 				// CLI parity: a shareless smb module is not writable — fall
 				// through to the share prompt instead of dead-ending at the
 				// write confirm.

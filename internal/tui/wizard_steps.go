@@ -32,7 +32,7 @@ func promptTarget(flagLayer, flagModule, defaultModule, flagHostname, flagUserna
 		}
 	}
 	if username == "" {
-		if _, _, u, err := invokingUser(); err == nil {
+		if _, _, u, err := InvokingUser(); err == nil {
 			username = u
 		}
 	}

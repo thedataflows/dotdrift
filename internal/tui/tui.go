@@ -23,9 +23,7 @@ package tui
 import (
 	"errors"
 	"fmt"
-	"os/user"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/generate"
@@ -302,21 +300,3 @@ func (w *SmbWizard) Write(root, defaultUser string, uid, gid int) error {
 	return nil
 }
 
-// invokingUser resolves the invoking OS user for the interactive
-// runner: numeric uid/gid for option-token expansion and the username
-// for smb's default user list.
-func invokingUser() (uid, gid int, username string, err error) {
-	u, err := user.Current()
-	if err != nil {
-		return 0, 0, "", fmt.Errorf("resolve current user: %w", err)
-	}
-	uid, err = strconv.Atoi(u.Uid)
-	if err != nil {
-		return 0, 0, "", fmt.Errorf("parse current user uid %q: %w", u.Uid, err)
-	}
-	gid, err = strconv.Atoi(u.Gid)
-	if err != nil {
-		return 0, 0, "", fmt.Errorf("parse current user gid %q: %w", u.Gid, err)
-	}
-	return uid, gid, u.Username, nil
-}

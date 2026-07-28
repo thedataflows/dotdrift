@@ -31,7 +31,7 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 		return friendlyAbort(err)
 	}
 
-	_, _, username, err := invokingUser()
+	_, _, username, err := InvokingUser()
 	if err != nil {
 		return err
 	}
@@ -96,14 +96,14 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 		return nil
 	}
 
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := InvokingUser()
 	if err != nil {
 		return err
 	}
 	if err := wizard.Write(p.Profile, username, uid, gid); err != nil {
 		return err
 	}
-	return printSummary(p.Profile, sel)
+	return PrintSummary(os.Stderr, p.Profile, sel)
 }
 
 // promptServer runs the server-level form: group, users

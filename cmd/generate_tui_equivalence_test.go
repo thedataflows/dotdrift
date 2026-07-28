@@ -20,7 +20,7 @@ func readTreeFile(dir, name string) (string, error) {
 }
 
 func TestGenerate_cliTuiEquivalence_mounts(t *testing.T) {
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	// CLI path: the happy-path invocation from TestGenerateMountsCLI_happyPath.
@@ -62,7 +62,7 @@ func TestGenerate_cliTuiEquivalence_mounts(t *testing.T) {
 }
 
 func TestGenerate_cliTuiEquivalence_smb(t *testing.T) {
-	uid, gid, username, err := invokingUser()
+	uid, gid, username, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	// CLI path: the happy-path invocation from TestGenerateSmbCLI_happyPath.
@@ -100,7 +100,7 @@ func TestGenerate_cliTuiEquivalence_smb(t *testing.T) {
 // The wizard default-avahi answer ("yes") must match the CLI default
 // (avahi key unset), not an explicit true.
 func TestGenerate_cliTuiEquivalence_smbDefaultAvahi(t *testing.T) {
-	uid, gid, username, err := invokingUser()
+	uid, gid, username, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -125,7 +125,7 @@ func TestGenerate_cliTuiEquivalence_smbDefaultAvahi(t *testing.T) {
 // Volume-kind mounts are the only presets carrying bare uid/gid tokens;
 // both assemblies must expand them identically into the rendered units.
 func TestGenerate_cliTuiEquivalence_volumeKindUidGid(t *testing.T) {
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -164,7 +164,7 @@ func TestGenerate_cliTuiEquivalence_volumeKindUidGid(t *testing.T) {
 
 // Custom options (--option) must record identically from both assemblies.
 func TestGenerate_cliTuiEquivalence_customOptions(t *testing.T) {
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -200,7 +200,7 @@ func TestGenerate_cliTuiEquivalence_customOptions(t *testing.T) {
 
 // --state disabled must record identically from both assemblies.
 func TestGenerate_cliTuiEquivalence_stateDisabled(t *testing.T) {
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -236,7 +236,7 @@ func TestGenerate_cliTuiEquivalence_stateDisabled(t *testing.T) {
 
 // --readonly must record writable = no identically from both assemblies.
 func TestGenerate_cliTuiEquivalence_smbReadonly(t *testing.T) {
-	uid, gid, username, err := invokingUser()
+	uid, gid, username, err := tui.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)

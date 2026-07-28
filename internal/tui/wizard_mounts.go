@@ -83,14 +83,14 @@ func runMountsFlow(ctx context.Context, p MountsParams) error {
 		fmt.Fprintln(os.Stderr, "no mounts configured; nothing written")
 		return nil
 	}
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := InvokingUser()
 	if err != nil {
 		return err
 	}
 	if err := wizard.Write(p.Profile, uid, gid); err != nil {
 		return err
 	}
-	return printSummary(p.Profile, sel)
+	return PrintSummary(os.Stderr, p.Profile, sel)
 }
 
 // promptMount runs one mounts-loop iteration (steps 2–5) and returns
@@ -119,7 +119,11 @@ func promptMount(ctx context.Context, reg *generate.Registry, root string, sel g
 // promptVolumeMounts runs the volume path: lsblk detection (with a
 // manual-source fallback), the volume picker, and the per-volume forms.
 func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string, sel generate.Selection, defaults MountChoice) ([]MountChoice, error) {
-	vols, err := generate.Volumes(ctx, reg, existingSources(root, sel))
+	sources, err := ExistingMountSources(root, sel)
+	if err != nil {
+		return nil, err
+	}
+	vols, err := generate.Volumes(ctx, reg, sources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "detecting volumes failed: %v\n", err)
 		fallback, cerr := confirm("Fall back to a manual source input?", true)

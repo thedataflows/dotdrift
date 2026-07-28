@@ -146,7 +146,7 @@ func (c *GenerateMountsCmd) Run() error {
 		return err
 	}
 
-	uid, gid, _, err := invokingUser()
+	uid, gid, _, err := tui.InvokingUser()
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func (c *GenerateMountsCmd) Run() error {
 	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
 		return fmt.Errorf("generate mounts: %w", err)
 	}
-	return printGenerateSummary(out, c.Profile, sel)
+	return tui.PrintSummary(out, c.Profile, sel)
 }
 
 // validate enforces the CLI-mode required flags loudly, naming every
@@ -252,7 +252,7 @@ func (c *GenerateSmbCmd) Run() error {
 		return err
 	}
 
-	uid, gid, username, err := invokingUser()
+	uid, gid, username, err := tui.InvokingUser()
 	if err != nil {
 		return err
 	}
@@ -260,5 +260,5 @@ func (c *GenerateSmbCmd) Run() error {
 	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
 		return fmt.Errorf("generate smb: %w", err)
 	}
-	return printGenerateSummary(out, c.Profile, sel)
+	return tui.PrintSummary(out, c.Profile, sel)
 }

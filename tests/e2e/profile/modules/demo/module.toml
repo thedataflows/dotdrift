@@ -5,7 +5,7 @@ app = "demo"
 present = ["jq"]
 
 [dotfiles]
-"~/.demorc" = { source = "home/.demorc", mode = "link" }
+"~/.demorc" = { source = "home/.demorc", mode = "symlink" }
 
 [hooks]
 pre = ["echo pre-hook >> /tmp/hooks.log"]

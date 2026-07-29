@@ -114,7 +114,7 @@ func TestOnboard_detectErrorPropagates(t *testing.T) {
 
 // Every dotfile mode documented in docs/product/profile-layout.md must parse.
 func TestOnboard_modeFlag_acceptsDocumentedModes(t *testing.T) {
-	for _, mode := range []string{"link", "copy", "template", "symlink-each"} {
+	for _, mode := range []string{"symlink", "copy", "template", "symlink-each"} {
 		t.Run(mode, func(t *testing.T) {
 			var cli CLI
 			parser, err := kong.New(&cli, kong.Name(appName))

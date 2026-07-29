@@ -137,9 +137,9 @@ dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 
 | Flag | Default | When to use |
 |------|---------|-------------|
-| (none) | mode=link, module inferred, enabled by presence | Happy path |
+| (none) | mode=symlink, module inferred, enabled by presence | Happy path |
 | `--app ID` | inferred | Inference wrong |
-| `--mode link\|copy\|template` | link | Apps that rewrite configs → copy |
+| `--mode symlink\|copy\|template` | symlink | Apps that rewrite configs → copy |
 | `--packages P` | none | Declare distro package in module.toml (comma-separated or repeated for several) |
 | `--tools T` | none | Declare mise tool (comma-separated or repeated for several) |
 | `--host` | base module files | Host overlay only |

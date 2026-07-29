@@ -75,7 +75,7 @@ func TestLoadModuleTOML_dotfiles(t *testing.T) {
 	p, err := profile.Load(fixture(t, "simple"), &facts.Facts{})
 	require.NoError(t, err)
 	m := findModule(t, p, "named")
-	require.Equal(t, profile.Dotfile{Source: ".bashrc", Mode: "link"}, m.Config.Dotfiles["~/.bashrc"])
+	require.Equal(t, profile.Dotfile{Source: ".bashrc", Mode: "symlink"}, m.Config.Dotfiles["~/.bashrc"])
 	require.Equal(t, profile.Dotfile{Source: "nvim", Mode: "symlink-each"}, m.Config.Dotfiles["~/.config/nvim"])
 	require.Equal(t, profile.Dotfile{Source: "config.toml", Mode: "copy"}, m.Config.Dotfiles["~/.config/app/config.toml"])
 }

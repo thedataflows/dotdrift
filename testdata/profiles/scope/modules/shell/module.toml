@@ -2,4 +2,4 @@ id = "shell"
 scope = "user"
 
 [dotfiles]
-"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.bashrc" = { source = ".bashrc", mode = "symlink" }

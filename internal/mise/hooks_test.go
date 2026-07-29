@@ -94,7 +94,7 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 	plan := &resolve.Plan{
 		Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}},
 		Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
-			{Target: "~/.bashrc", Source: "/src/.bashrc", Mode: "link"},
+			{Target: "~/.bashrc", Source: "/src/.bashrc", Mode: "symlink"},
 		}},
 		Hooks: resolve.HooksStep{Pre: []string{"echo pre"}, Post: []string{"echo post"}},
 	}

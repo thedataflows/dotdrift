@@ -13,7 +13,7 @@ Dotfiles only through mise.
 
 # Tests first
 
-- `TestGenerate_dotfilesEntries` (link/copy/template goldens) — `[dotfiles]` section from resolved plan.
+- `TestGenerate_dotfilesEntries` (symlink/copy/template goldens) — `[dotfiles]` section from resolved plan.
 - `TestMise_dotfilesApplyArgs_noForce` — `mise dotfiles apply` is invoked without `--force`.
 - `TestDotfilesStep_conflictStops` — fake runner returns conflict; state current=dotfiles, error saved.
 - `TestDotfilesStep_ok` — successful apply advances state.

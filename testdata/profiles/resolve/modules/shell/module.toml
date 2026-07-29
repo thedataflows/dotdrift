@@ -9,7 +9,7 @@ absent = ["emacs"]
 node = "20"
 
 [dotfiles]
-"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 
 [hooks]
 pre = ["echo base-pre"]

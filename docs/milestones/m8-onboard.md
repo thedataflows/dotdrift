@@ -13,7 +13,7 @@ Day-2 workflow to grow modules; EnsureMise then mise apply.
 
 # Exit criteria
 
-- Default link mode
+- Default symlink mode
 - Copy then mise order asserted by an order-recording test
 - Module presence selects app automatically
 - Conflict keeps module files, fails command

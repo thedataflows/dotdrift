@@ -249,7 +249,7 @@ pre = ["echo hi"]
 post = ["echo done"]
 
 [dotfiles]
-"~/.mediarc" = { source = "mediarc", mode = "link" }
+"~/.mediarc" = { source = "mediarc", mode = "symlink" }
 `)
 	input := Input{Mounts: map[string]profile.MountSpec{"data": nfsMount("/mnt/data", "")}, UID: 1, GID: 1}
 	require.NoError(t, WriteModule(root, sel, input))
@@ -262,7 +262,7 @@ post = ["echo done"]
 	require.Contains(t, cfg.Packages.Present, "curl")
 	require.Equal(t, map[string]string{"go": "1.26"}, cfg.Tools)
 	require.Equal(t, profile.Hooks{Pre: []string{"echo hi"}, Post: []string{"echo done"}}, cfg.Hooks)
-	require.Equal(t, profile.Dotfile{Source: "mediarc", Mode: "link"}, cfg.Dotfiles["~/.mediarc"],
+	require.Equal(t, profile.Dotfile{Source: "mediarc", Mode: "symlink"}, cfg.Dotfiles["~/.mediarc"],
 		"unrelated dotfile target must survive")
 }
 

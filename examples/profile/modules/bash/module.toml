@@ -5,4 +5,4 @@ app = "bash"
 present = ["bash"]
 
 [dotfiles]
-"~/.bashrc" = { source = "home/.bashrc", mode = "link" }
+"~/.bashrc" = { source = "home/.bashrc", mode = "symlink" }

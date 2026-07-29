@@ -13,6 +13,6 @@ timestamp: 2026-07-14T00:00:00Z
 - [x] [Mise ensure](/product/mise-bootstrap.md) fully tested
 - [x] No `--enable` / `--resume` in CLI or docs
 - [x] Merge rules tested (user > host; disable union)
-- [x] Onboard: copy then mise; default link
+- [x] Onboard: copy then mise; default symlink
 - [x] Apply always resumes; selection change resets
 - [x] README + example profile

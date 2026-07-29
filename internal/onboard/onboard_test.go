@@ -44,7 +44,7 @@ func TestPathMap_homeAndSystem(t *testing.T) {
 		ProfileRoot: profile,
 		Paths:       []string{src, sys},
 		App:         "bash",
-		Mode:        "link",
+		Mode:        "symlink",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -180,7 +180,7 @@ func TestOnboard_orderCopyThenEnsureThenMiseApply(t *testing.T) {
 	require.Equal(t, []string{"ensure", "dotfiles"}, rr.calls)
 }
 
-func TestOnboard_defaultModeLink(t *testing.T) {
+func TestOnboard_defaultModeSymlink(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
 	isolateState(t)
@@ -201,7 +201,7 @@ func TestOnboard_defaultModeLink(t *testing.T) {
 	modToml := filepath.Join(profile, "modules", "bash", "module.toml")
 	content, err := readFile(modToml)
 	require.NoError(t, err)
-	require.Contains(t, content, `mode = "link"`)
+	require.Contains(t, content, `mode = "symlink"`)
 }
 
 func TestOnboard_conflictKeepsModule(t *testing.T) {

@@ -289,13 +289,13 @@ func mergeTools(base, host, user map[string]string) map[string]string {
 }
 
 // validDotfileModes is dotdrift's dotfile mode vocabulary (see
-// docs/product/profile-layout.md). Unknown or empty modes are resolve-time
-// errors: mise silently ignores entries whose mode it does not recognize
-// (exit 0, no file created), so anything outside this set would no-op
-// without a loud failure. The `link` → `symlink` translation happens later,
-// at mise config generation (mise.MiseDotfileMode).
+// docs/product/profile-layout.md) — exactly mise's mode vocabulary, so modes
+// pass through to the generated mise.toml unchanged. Unknown or empty modes
+// are resolve-time errors: mise silently ignores entries whose mode it does
+// not recognize (exit 0, no file created), so anything outside this set would
+// no-op without a loud failure.
 var validDotfileModes = map[string]bool{
-	"link":         true,
+	"symlink":      true,
 	"symlink-each": true,
 	"copy":         true,
 	"template":     true,
@@ -317,7 +317,7 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 	entries := make([]DotfileEntry, 0, len(winners))
 	for target, winner := range winners {
 		if !validDotfileModes[winner.df.Mode] {
-			return nil, fmt.Errorf("module %s: dotfile %q: unknown mode %q (valid: link, symlink-each, copy, template)", moduleID, target, winner.df.Mode)
+			return nil, fmt.Errorf("module %s: dotfile %q: unknown mode %q (valid: symlink, symlink-each, copy, template)", moduleID, target, winner.df.Mode)
 		}
 		source, err := resolveSource(winner, moduleID, base, host, user)
 		if err != nil {

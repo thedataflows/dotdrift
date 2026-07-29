@@ -7,7 +7,7 @@ node = "22"
 python = "3.11"
 
 [dotfiles]
-"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 "~/.config/fish" = { source = "fish", mode = "symlink-each" }
 
 [hooks]

@@ -16,6 +16,6 @@ node = "20"
 python = "3.12"
 
 [dotfiles]
-"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 "~/.config/nvim" = { source = "nvim", mode = "symlink-each" }
 "~/.config/app/config.toml" = { source = "config.toml", mode = "copy" }

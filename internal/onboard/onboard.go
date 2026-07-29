@@ -88,7 +88,7 @@ func (o *Onboard) Run(opts Options) error {
 
 	mode := opts.Mode
 	if mode == "" {
-		mode = "link"
+		mode = "symlink"
 	}
 
 	moduleDir := filepath.Join(opts.ProfileRoot, "modules", app)

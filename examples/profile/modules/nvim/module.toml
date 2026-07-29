@@ -8,5 +8,5 @@ present = ["neovim"]
 node = "20"
 
 [dotfiles]
-"~/.config/nvim/init.lua" = { source = "config/init.lua", mode = "link" }
-"~/.config/nvim/lua/options.lua" = { source = "config/lua/options.lua", mode = "link" }
+"~/.config/nvim/init.lua" = { source = "config/init.lua", mode = "symlink" }
+"~/.config/nvim/lua/options.lua" = { source = "config/lua/options.lua", mode = "symlink" }

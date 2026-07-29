@@ -76,7 +76,7 @@ func TestResolveScope_invalidScopeErrors(t *testing.T) {
 	modDir := filepath.Join(root, "modules", "bad")
 	require.NoError(t, os.MkdirAll(modDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(
-		"id = \"bad\"\nscope = \"bogus\"\n\n[dotfiles]\n\"~/x\" = { source = \"x\", mode = \"link\" }\n"), 0o644))
+		"id = \"bad\"\nscope = \"bogus\"\n\n[dotfiles]\n\"~/x\" = { source = \"x\", mode = \"symlink\" }\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "x"), []byte("x"), 0o644))
 
 	p, err := profile.Load(root, scopeFacts())

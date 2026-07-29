@@ -19,7 +19,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - `TestOnboard_writesToml` — `module.toml` is written with discovered metadata.
 - `TestOnboard_noEnableFlagNeeded` — created module is selected by presence on next `apply`.
 - `TestOnboard_orderCopyThenEnsureThenMiseApply` — records the mise call sequence and asserts copy → ensure mise → dotfiles apply order.
-- `TestOnboard_defaultModeLink` — default mode is `link`.
+- `TestOnboard_defaultModeSymlink` — default mode is `symlink`.
 - `TestOnboard_conflictKeepsModule` — if target exists, keep module files and fail the command.
 - `TestOnboard_forceReplacesExistingFile` / `TestOnboard_forceReplacesExistingDir` — with `--force`, a conflicting destination is removed and re-copied from the live path (file refresh; dir add/modify/delete refresh).
 - `TestOnboard_dryRun_noSideEffects` — `--dry-run` writes nothing and invokes nothing.
@@ -35,7 +35,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - `--yes` is plumbed from the CLI through `onboard.Options` to `DotfilesApply` for non-interactive runs.
 - `--force` turns a destination conflict into a refresh: the existing module destination is removed (`os.RemoveAll`, covering both file and directory destinations) and re-copied from the live path. Without `--force`, a conflict errors and leaves the module untouched.
 - File modes are preserved when copying files and directory trees; ownership is not (copies belong to the current user).
-- Default mode is `link`; `--mode copy|template` overrides.
+- Default mode is `symlink`; `--mode copy|template` overrides.
 - `--app` overrides inferred app name.
 - `--package` and `--tool` add entries to `module.toml`.
 - `--host` writes files only to the host overlay directory.

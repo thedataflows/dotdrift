@@ -23,13 +23,11 @@ func TestGenerateTools(t *testing.T) {
 	require.Contains(t, out, `rust = "stable"`)
 }
 
-// dotdrift's user-facing mode vocabulary is `link`, but real mise only
-// accepts `symlink` (verified against mise 2026.7.10: `mode = "link"` is
-// ignored with "unknown mode 'link', ignoring entry" and exit code 0).
-// GenerateDotfiles must translate at the boundary.
+// dotdrift's mode vocabulary is exactly mise's (symlink, symlink-each, copy,
+// template), so GenerateDotfiles emits modes unchanged.
 func TestGenerateDotfiles(t *testing.T) {
 	out := mise.GenerateDotfiles([]resolve.DotfileEntry{
-		{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 		{Target: "~/.config/nvim", Source: "nvim", Mode: "symlink-each"},
 	})
 	require.Contains(t, out, "[dotfiles]")
@@ -37,29 +35,10 @@ func TestGenerateDotfiles(t *testing.T) {
 	require.Contains(t, out, `"~/.config/nvim" = { source = "nvim", mode = "symlink-each" }`)
 }
 
-// `link` in (dotdrift vocabulary) → `symlink` out (mise vocabulary),
-// verified by a BurntSushi round-trip of the generated TOML.
-func TestGenerateDotfiles_translatesLinkToSymlink(t *testing.T) {
-	out := mise.GenerateDotfiles([]resolve.DotfileEntry{
-		{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
-	})
-
-	var decoded struct {
-		Dotfiles map[string]struct {
-			Source string `toml:"source"`
-			Mode   string `toml:"mode"`
-		} `toml:"dotfiles"`
-	}
-	_, err := toml.Decode(out, &decoded)
-	require.NoError(t, err, "generated TOML must be parseable: %q", out)
-	require.Equal(t, "symlink", decoded.Dotfiles["~/.bashrc"].Mode,
-		"dotdrift's link must become mise's symlink (real mise ignores mode=link)")
-}
-
-// Every other dotdrift mode is already valid mise vocabulary (verified
-// against mise 2026.7.10) and must pass through unchanged.
+// Every documented mode is valid mise vocabulary (verified against mise
+// 2026.7.10) and must pass through unchanged.
 func TestGenerateDotfiles_passthroughModes(t *testing.T) {
-	for _, mode := range []string{"copy", "template", "symlink-each"} {
+	for _, mode := range []string{"symlink", "copy", "template", "symlink-each"} {
 		t.Run(mode, func(t *testing.T) {
 			out := mise.GenerateDotfiles([]resolve.DotfileEntry{
 				{Target: "~/target", Source: "src", Mode: mode},
@@ -81,7 +60,7 @@ func TestGenerateConfig(t *testing.T) {
 	plan := &resolve.Plan{
 		Tools: resolve.ToolsStep{Versions: map[string]string{"node": "20"}},
 		Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
-			{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
+			{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 		}},
 	}
 	out := mise.GenerateConfig(plan)
@@ -113,7 +92,7 @@ func TestToolsStep_failurePersistsError(t *testing.T) {
 func TestDotfilesStep_callsApply(t *testing.T) {
 	fr := &mise.FakeRunner{}
 	plan := &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
-		{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 	}}}
 	step := &mise.DotfilesStep{Runner: fr, Plan: plan, ConfigPath: "/tmp/mise-dotfiles.toml", Yes: true}
 	require.Equal(t, "dotfiles", step.Name())
@@ -127,7 +106,7 @@ func TestDotfilesStep_conflictStops(t *testing.T) {
 	boom := errors.New("conflict")
 	fr := &mise.FakeRunner{Err: boom}
 	plan := &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
-		{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 	}}}
 	step := &mise.DotfilesStep{Runner: fr, Plan: plan, ConfigPath: "/tmp/mise-dotfiles.toml", Yes: false}
 	err := step.Run(context.Background())
@@ -151,8 +130,8 @@ func TestGenerateTools_escapesQuotesAndBackslashes(t *testing.T) {
 
 func TestGenerateDotfiles_escapesQuotesAndBackslashes(t *testing.T) {
 	entries := []resolve.DotfileEntry{
-		{Target: `~/weird"dir\file`, Source: `mod\src"x`, Mode: "link"},
-		{Target: "~/.bashrc", Source: ".bashrc", Mode: "link"},
+		{Target: `~/weird"dir\file`, Source: `mod\src"x`, Mode: "symlink"},
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 	}
 	out := mise.GenerateDotfiles(entries)
 

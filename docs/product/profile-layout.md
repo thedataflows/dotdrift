@@ -90,7 +90,7 @@ node = "20"
 python = "3.12"
 
 [dotfiles]
-"~/.bashrc" = { source = ".bashrc", mode = "link" }
+"~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 "~/.config/nvim" = { source = "nvim", mode = "symlink-each" }
 "~/.config/app/config.toml" = { source = "config.toml", mode = "copy" }
 
@@ -129,13 +129,11 @@ public = false
 - `packages.absent` cancels a `present` entry from a lower layer.
 - `dotfiles` keys are target paths (absolute or `~/...`). Values are tables with:
   - `source`: relative path inside the module directory.
-  - `mode`: `link`, `symlink-each`, `copy`, or `template`. Any other value
-    (including an omitted mode) is a resolve-time error naming the module and
-    the mode — mise silently ignores entries with an unrecognized mode, so
-    dotdrift fails loudly instead.
-  - `link` is dotdrift's vocabulary: it is translated to mise's `symlink`
-    when the `mise.toml` is generated (real mise does not accept `link`).
-    `copy`, `template`, and `symlink-each` pass through unchanged.
+  - `mode`: `symlink`, `symlink-each`, `copy`, or `template` — exactly mise's
+    mode vocabulary, passed through to the generated `mise.toml` unchanged.
+    Any other value (including an omitted mode) is a resolve-time error naming
+    the module and the mode — mise silently ignores entries with an
+    unrecognized mode, so dotdrift fails loudly instead.
     `symlink-each` requires the source to be a directory; each file inside it
     is symlinked individually into the target directory.
 - Higher layers (user > host > module) override lower layers for the same dotfile target.

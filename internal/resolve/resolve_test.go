@@ -256,7 +256,7 @@ func TestResolveDotfileMode_emptyModeErrors(t *testing.T) {
 
 // Every mode documented in docs/product/profile-layout.md must resolve.
 func TestResolveDotfileMode_documentedModesPass(t *testing.T) {
-	for _, mode := range []string{"link", "symlink-each", "copy", "template"} {
+	for _, mode := range []string{"symlink", "symlink-each", "copy", "template"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			dir := writeModule(t, root, "mod", `

@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/apply"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -32,7 +33,8 @@ type Runner interface {
 }
 
 // ExecRunner is the real command runner. Verbose streams child stdout/stderr
-// live to Out/Err while still capturing: Run callers parse (id -Gn,
+// live to Out/Err while still capturing and echoes each command line
+// set -x-style ("+ argv") to Err before it runs: Run callers parse (id -Gn,
 // pdbedit -L) and append (testparm gate) the returned output, so streaming
 // must never starve them.
 type ExecRunner struct {
@@ -64,6 +66,7 @@ func (r ExecRunner) Run(ctx context.Context, name string, args ...string) (strin
 	cmd.Stderr = &buf
 	if r.Verbose {
 		out, errW := r.writers()
+		executil.EchoCommand(errW, append([]string{name}, args...))
 		cmd.Stdout = io.MultiWriter(out, &buf)
 		cmd.Stderr = io.MultiWriter(errW, &buf)
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog/log"
@@ -244,6 +245,22 @@ func TestExecRunner_verboseStreamsAndPreservesErrorOutput(t *testing.T) {
 	require.Contains(t, out.String(), "out-line", "stdout must stream live")
 	require.Contains(t, errW.String(), "err-line", "stderr must stream live")
 	require.Contains(t, err.Error(), "out-line", "captured output must stay in the error (streamed AND captured)")
+}
+
+// Verbose ExecRunner echoes the command line (bash set -x style: "+ argv")
+// to Err before the streamed output; the echo never lands in the captured
+// error suffix or on Out.
+func TestExecRunner_verboseEchoesCommandLine(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: true, Out: &out, Err: &errW}
+
+	require.NoError(t, r.Run(context.Background(), []string{"sh", "-c", "echo out-line; echo err-line >&2"}))
+
+	echo := "+ sh -c 'echo out-line; echo err-line >&2'\n"
+	require.Contains(t, errW.String(), echo, "verbose must echo the command line to Err")
+	require.Less(t, strings.Index(errW.String(), echo), strings.Index(errW.String(), "err-line"),
+		"the echo must precede the command's own stderr output")
+	require.NotContains(t, out.String(), "+ ", "the echo goes to Err, never Out")
 }
 
 // Non-verbose ExecRunner keeps today's capture-and-discard: success output

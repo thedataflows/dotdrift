@@ -269,3 +269,82 @@ func TestMise_versionProbeStaysCapturedWhenVerbose(t *testing.T) {
 	require.Empty(t, out.String(), "version probe output must be captured for parsing, not streamed")
 	require.Empty(t, errW.String(), "version probe output must be captured for parsing, not streamed")
 }
+
+// Verbose operations echo the command line (bash set -x style: "+ argv") to
+// the Err writer immediately before the command's own output.
+func TestExecMise_verboseEchoesCommandLine(t *testing.T) {
+	orig := geteuid
+	geteuid = func() int { return 0 } // root: DotfilesApplySudo runs mise directly, no sudo
+	t.Cleanup(func() { geteuid = orig })
+
+	cases := []struct {
+		name     string
+		invoke   func(ctx context.Context, em *ExecMise, cfg string) error
+		wantArgv func(script, cfgDir string) []string
+	}{
+		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.DotfilesApply(ctx, cfg, true)
+		}, func(script, cfgDir string) []string {
+			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
+		}},
+		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.DotfilesApplySudo(ctx, cfg, true)
+		}, func(script, cfgDir string) []string {
+			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
+		}},
+		{"EnsureAndInstall", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.EnsureAndInstall(ctx, cfg)
+		}, func(script, cfgDir string) []string {
+			return []string{script, "install", "--cd", cfgDir}
+		}},
+		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.RunTask(ctx, cfg, "hooks:pre")
+		}, func(script, cfgDir string) []string {
+			return []string{script, "run", "--cd", cfgDir, "hooks:pre"}
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errW bytes.Buffer
+			script := echoMiseScript(t)
+			em := verboseExecMise(t, script, true, &out, &errW)
+			cfgDir, cfg := generatedConfig(t)
+
+			require.NoError(t, tc.invoke(context.Background(), em, cfg))
+
+			echo := "+ " + strings.Join(tc.wantArgv(script, cfgDir), " ") + "\n"
+			require.Contains(t, errW.String(), echo, "verbose must echo the command line to Err")
+			require.Less(t, strings.Index(errW.String(), echo), strings.Index(errW.String(), "err-"),
+				"the echo must precede the command's own stderr output")
+			require.NotContains(t, out.String(), "+ ", "the echo goes to Err, never Out")
+		})
+	}
+}
+
+// Non-verbose is byte-identical to today: no echo line anywhere.
+func TestExecMise_nonVerboseNoEcho(t *testing.T) {
+	var out, errW bytes.Buffer
+	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW)
+	_, cfg := generatedConfig(t)
+
+	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true))
+	require.Empty(t, out.String())
+	require.Empty(t, errW.String())
+}
+
+// Probes stay silent AND unechoed: `mise --version` must not produce a
+// "+ ..." line even when Verbose is set.
+func TestMise_versionProbeNeverEchoedWhenVerbose(t *testing.T) {
+	var out, errW bytes.Buffer
+	m := &Mise{
+		LookPath: func(string) (string, error) { return echoMiseScript(t), nil },
+		Verbose:  true,
+		Out:      &out,
+		Err:      &errW,
+	}
+
+	_, err := m.EnsureContext(context.Background())
+	require.NoError(t, err)
+	require.NotContains(t, errW.String(), "+ ", "probes must never be echoed")
+	require.NotContains(t, out.String(), "+ ", "probes must never be echoed")
+}

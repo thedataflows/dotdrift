@@ -147,7 +147,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file). |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 
-`--verbose` (also `DD_VERBOSE=1`) streams package manager and mise output live on `apply` and `onboard`; without it child-process output is captured and only surfaced in errors.
+`-v` / `--verbose` (also `DD_VERBOSE=1`) streams package manager and mise output live on `apply` and `onboard`, echoing each command line `set -x`-style to stderr immediately before it runs — e.g. `+ paru -S --needed --noconfirm jq`; without it child-process output is captured and only surfaced in errors.
 
 ```bash
 # Generate an NFS mount module with a nightly timer, then two samba shares

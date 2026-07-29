@@ -1,19 +1,23 @@
 ---
 type: Task
 title: T-verbose-output
-description: --verbose flag on apply/onboard streaming child-process output live instead of capture-and-discard.
+description: --verbose flag on apply/onboard streaming child-process output live instead of capture-and-discard, with -v short alias and set -x-style command echo.
 tags: [task, tdd, cli, ux]
 timestamp: 2026-07-29T00:00:00Z
 ---
 
 # Goal
 
-`dotdrift apply` and `dotdrift onboard` gain `--verbose` (default false).
-When set, child-process stdout/stderr — mise operations, package manager
-commands, mounts/smb activation commands — streams **live** to the terminal
-instead of being captured and discarded. When unset, behavior is
-byte-identical to before. kong `DefaultEnvars("DD")` makes `DD_VERBOSE=1`
-work with no extra code.
+`dotdrift apply` and `dotdrift onboard` gain `--verbose` (default false;
+short alias `-v` via kong `short:"v"`). When set, child-process
+stdout/stderr — mise operations, package manager commands, mounts/smb
+activation commands — streams **live** to the terminal instead of being
+captured and discarded, and each command line is echoed `set -x`-style
+(`+ <argv>`) to the Err writer (stderr, like bash) immediately before the
+command runs. When unset, behavior is byte-identical to before (no stream,
+no echo). kong `DefaultEnvars("DD")` makes `DD_VERBOSE=1` work with no
+extra code. `-v` collides with nothing: no other short flags exist and
+`version` is a subcommand, not a flag.
 
 # Tests first
 
@@ -56,6 +60,22 @@ work with no extra code.
 - `TestKong_verboseFlagParses` / `TestKong_verboseDefaultEnvar` — flag
   parses on apply+onboard; `DD_VERBOSE=1` enables it via
   `DefaultEnvars("DD")`.
+- executil `TestShellJoin_*` (plain args unquoted, whitespace/tab
+  single-quoted, `'` escaped `'\''`, empty argv) +
+  `TestEchoCommand_setXStyleLine` — the shared echo helper.
+- `TestExecMise_verboseEchoesCommandLine` (all four ops: `+ <argv>` on Err
+  BEFORE the command's own stderr output; never on Out) /
+  `TestExecMise_nonVerboseNoEcho` /
+  `TestMise_versionProbeNeverEchoedWhenVerbose` — echo contract on the mise
+  path, probes unechoed.
+- packages `TestExecRunner_RunStream_verboseEchoesCommandLine` /
+  `TestExecRunner_Run_neverEchoesEvenWhenVerbose` — streaming path echoes,
+  captured probe path never does.
+- mounts + smb `TestExecRunner_verboseEchoesCommandLine` — verbose echoes
+  before streaming; smb additionally asserts the echo never enters the
+  returned capture (parsing contract).
+- `TestKong_verboseShortFlagParses` — `-v` aliases `--verbose` on apply and
+  onboard.
 
 # Implementation notes
 
@@ -82,14 +102,28 @@ work with no extra code.
   is mechanically identical to `CombinedOutput()`. The interactive
   `smbpasswd` path already streams — untouched.
 - **cmd wiring**: `ApplyCmd`/`OnboardCmd` gain
-  `Verbose bool `help:"Stream package manager and mise output live"
-  default:"false"``. Apply sets the field on the concrete `*mise.Mise` from
-  the `defaultMise` seam and passes the flag to packages/mounts/smb runners
-  through the narrow `verboseRunner interface{ SetVerbose(bool) }`
-  (`setVerboseRunner`) — interface shapes unchanged, fakes untouched. The
+  `Verbose bool `help:"…" short:"v" default:"false"``. Apply sets the field
+  on the concrete `*mise.Mise` from the `defaultMise` seam and passes the
+  flag to packages/mounts/smb runners through the narrow
+  `verboseRunner interface{ SetVerbose(bool) }` (`setVerboseRunner`) —
+  interface shapes unchanged, fakes untouched. The
   `newMountsRunner`/`newSmbRunner` seams now return `*ExecRunner` (pointer,
   so `SetVerbose` is reachable). Onboard's real-mise path switched from a
   direct `mise.DefaultMise()` call to the shared `defaultMise` seam so tests
   can observe the constructed value.
 - No `--verbose` on other commands; kong `DefaultEnvars("DD")` covers
   `DD_VERBOSE` for free (locked by test).
+- **`-v` short alias**: kong `short:"v"` on the same `Verbose` field of both
+  commands. Collision check: no other `short:` tags exist anywhere, and
+  `version` is a subcommand rather than a flag, so `-v` is unambiguous.
+- **Command echo (`set -x` style)**: one shared helper package
+  `internal/executil` — `ShellJoin(argv)` (join with spaces; single-quote
+  any arg containing whitespace or a single quote, escaping `'` as `'\''`;
+  simple args unquoted) and `EchoCommand(w, argv)` (writes `+ <argv>\n`).
+  All four streaming call sites use it: mise `runOp`, packages `RunStream`,
+  mounts and smb `ExecRunner` verbose paths — the echo is written to the
+  same Err writer the runner streams to (stderr, like bash `set -x`; stdout
+  stays parseable) immediately before `cmd.Run()`. Captured paths never
+  echo: probes (`mise --version`, `pacman -Q`/`dpkg -l`/`rpm -q`, mise.run
+  bootstrap) stay silent AND unechoed, and the smb/mounts capture buffers
+  never contain the echo line.

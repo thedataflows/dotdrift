@@ -12,6 +12,7 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -32,8 +33,9 @@ type Runner interface {
 
 // ExecRunner is the real command runner. Run always captures stdout and
 // discards it (probe path). Verbose streams child stdout/stderr live to
-// Out/Err on the streaming entry point (RunStream) used by install/remove;
-// probes via Run stay captured either way.
+// Out/Err on the streaming entry point (RunStream) used by install/remove,
+// echoing each command line set -x-style ("+ argv") to Err before it runs;
+// probes via Run stay captured and unechoed either way.
 type ExecRunner struct {
 	Verbose bool
 	// Out/Err are the Verbose streaming destinations; nil defaults to
@@ -49,8 +51,10 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string,
 }
 
 // RunStream runs like Run but streams the child's stdout/stderr live to
-// Out/Err when Verbose is set, returning no captured output (the terminal
-// already shows it). With Verbose unset it is byte-identical to Run.
+// Out/Err when Verbose is set, echoing the command line set -x-style
+// ("+ argv") to Err immediately before execution, and returning no captured
+// output (the terminal already shows it). With Verbose unset it is
+// byte-identical to Run.
 func (e ExecRunner) RunStream(ctx context.Context, name string, args ...string) (string, error) {
 	if !e.Verbose {
 		return e.Run(ctx, name, args...)
@@ -63,6 +67,7 @@ func (e ExecRunner) RunStream(ctx context.Context, name string, args ...string) 
 	if errW == nil {
 		errW = os.Stderr
 	}
+	executil.EchoCommand(errW, append([]string{name}, args...))
 	cmd.Stdout = out
 	cmd.Stderr = errW
 	return "", cmd.Run()

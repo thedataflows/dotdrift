@@ -16,6 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/thedataflows/dotdrift/internal/apply"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
@@ -26,8 +27,9 @@ type Runner interface {
 }
 
 // ExecRunner runs commands via exec.CommandContext. Verbose streams child
-// stdout/stderr live to Out/Err while still capturing, so failure errors
-// keep their output suffix.
+// stdout/stderr live to Out/Err while still capturing and echoes each
+// command line set -x-style ("+ argv") to Err before it runs, so failure
+// errors keep their output suffix.
 type ExecRunner struct {
 	Verbose bool
 	// Out/Err are the Verbose streaming destinations; nil defaults to
@@ -52,8 +54,9 @@ func (r ExecRunner) writers() (io.Writer, io.Writer) {
 
 // Run executes argv[0] with argv[1:], returning the combined output on
 // failure so callers can log systemctl's own diagnostics (e.g. "not
-// loaded"). In Verbose mode the output also streams live (MultiWriter), so
-// the error contract is unchanged.
+// loaded"). In Verbose mode the output also streams live (MultiWriter) and
+// the command line is echoed set -x-style ("+ argv") to Err immediately
+// before execution, so the error contract is unchanged.
 func (r ExecRunner) Run(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
 		return fmt.Errorf("empty argv")
@@ -64,6 +67,7 @@ func (r ExecRunner) Run(ctx context.Context, argv []string) error {
 	cmd.Stderr = &buf
 	if r.Verbose {
 		out, errW := r.writers()
+		executil.EchoCommand(errW, argv)
 		cmd.Stdout = io.MultiWriter(out, &buf)
 		cmd.Stderr = io.MultiWriter(errW, &buf)
 	}

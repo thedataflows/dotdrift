@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog/log"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
@@ -61,9 +62,11 @@ type Mise struct {
 	Env []string
 
 	// Verbose streams operation subprocesses (install/dotfiles/tasks) live
-	// to Out/Err instead of capturing and discarding their output. Only the
-	// ExecMise operation calls stream: version probes and the mise.run
-	// bootstrap always stay captured (their output is parsed or one-time).
+	// to Out/Err instead of capturing and discarding their output, echoing
+	// each command line set -x-style ("+ argv") to Err before it runs. Only
+	// the ExecMise operation calls stream: version probes and the mise.run
+	// bootstrap always stay captured and unechoed (their output is parsed
+	// or one-time).
 	Verbose bool
 
 	// Out/Err are the Verbose streaming destinations; nil defaults to
@@ -158,10 +161,11 @@ func (m *Mise) writers() (io.Writer, io.Writer) {
 
 // runOp executes one operation command (install/dotfiles/task). In Verbose
 // mode on the real exec path the child's stdout/stderr stream live to the
-// configured writers and a failure returns the bare error (the output is
-// already on the terminal, so nothing is appended). Fakes bypass streaming
-// (they own their output); non-verbose is byte-identical to runWithEnv.
-// Probes never come through here.
+// configured writers, the command line is echoed set -x-style ("+ argv") to
+// Err immediately before execution, and a failure returns the bare error
+// (the output is already on the terminal, so nothing is appended). Fakes
+// bypass streaming (they own their output); non-verbose is byte-identical
+// to runWithEnv. Probes never come through here.
 func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
 	if !m.Verbose || m.RunContext != nil || m.Run != nil {
 		return m.runWithEnv(ctx, extraEnv, name, args...)
@@ -173,7 +177,9 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
-	cmd.Stdout, cmd.Stderr = m.writers()
+	out, errW := m.writers()
+	executil.EchoCommand(errW, append([]string{name}, args...))
+	cmd.Stdout, cmd.Stderr = out, errW
 	return "", cmd.Run()
 }
 

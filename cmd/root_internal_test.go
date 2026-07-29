@@ -59,6 +59,26 @@ func TestKong_verboseDefaultEnvar(t *testing.T) {
 	require.True(t, cli.Apply.Verbose, "DD_VERBOSE=1 must enable apply --verbose via DefaultEnvars")
 }
 
+// -v is the short alias for --verbose on apply and onboard (and collides
+// with nothing: no other short flags exist, and version is a subcommand).
+func TestKong_verboseShortFlagParses(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"apply", "-v"})
+	require.NoError(t, err)
+	require.True(t, cli.Apply.Verbose, "-v must alias --verbose on apply")
+	require.False(t, cli.Onboard.Verbose)
+
+	cli = CLI{}
+	parser, err = kong.New(&cli)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", "-v"})
+	require.NoError(t, err)
+	require.True(t, cli.Onboard.Verbose, "-v must alias --verbose on onboard")
+	require.False(t, cli.Apply.Verbose)
+}
+
 func TestLoadDotenvFiles_loadsEnvFiles(t *testing.T) {
 	const marker = "DOTDRIFT_TEST_ROOT_MARKER"
 	require.NoError(t, os.Unsetenv(marker))

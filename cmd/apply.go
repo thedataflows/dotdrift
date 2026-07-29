@@ -67,7 +67,7 @@ type ApplyCmd struct {
 	State   string    `help:"Path to state file" type:"path" default:""`
 	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
 	NoHooks bool      `help:"Skip pre/post hook commands (also DOTDRIFT_NO_HOOKS=1)" default:"false"`
-	Verbose bool      `help:"Stream package manager and mise output live" default:"false"`
+	Verbose bool      `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
 	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Out     io.Writer `kong:"-"`
 }

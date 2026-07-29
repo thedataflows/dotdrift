@@ -64,9 +64,10 @@ happens afterwards, idempotently.
 ### Verbose
 
 An opt-in, per-invocation widening of observability on `apply` and `onboard`
-(`--verbose`, `DD_VERBOSE=1`): child-process output (mise operations,
+(`-v` / `--verbose`, `DD_VERBOSE=1`): child-process output (mise operations,
 package manager commands, activation commands) streams live to the terminal
-instead of being captured and discarded. Absence means quiet — output is
-captured and surfaced only on failure. Probes (version checks,
-installed-package queries) are never streamed: they exist to be parsed, not
-seen.
+instead of being captured and discarded, and each command line is echoed
+`set -x`-style (`+ <argv>`) to stderr immediately before it runs. Absence
+means quiet — output is captured and surfaced only on failure. Probes
+(version checks, installed-package queries) are never streamed or echoed:
+they exist to be parsed, not seen.

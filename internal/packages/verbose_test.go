@@ -3,6 +3,7 @@ package packages_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -47,6 +48,35 @@ func TestExecRunner_RunStream_nonVerboseBehavesLikeRun(t *testing.T) {
 	r := packages.ExecRunner{Verbose: false, Out: &out, Err: &errW}
 
 	got, err := r.RunStream(context.Background(), "echo", "hello")
+	require.NoError(t, err)
+	require.Equal(t, "hello\n", got)
+	require.Empty(t, out.String())
+	require.Empty(t, errW.String())
+}
+
+// Verbose RunStream echoes the command line (bash set -x style: "+ argv")
+// to Err before the streamed output; whitespace-bearing args are quoted.
+func TestExecRunner_RunStream_verboseEchoesCommandLine(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := packages.ExecRunner{Verbose: true, Out: &out, Err: &errW}
+
+	_, err := r.RunStream(context.Background(), "sh", "-c", "echo out-line; echo err-line >&2")
+	require.NoError(t, err)
+
+	echo := "+ sh -c 'echo out-line; echo err-line >&2'\n"
+	require.Contains(t, errW.String(), echo, "verbose must echo the command line to Err")
+	require.Less(t, strings.Index(errW.String(), echo), strings.Index(errW.String(), "err-line"),
+		"the echo must precede the command's own stderr output")
+	require.NotContains(t, out.String(), "+ ", "the echo goes to Err, never Out")
+}
+
+// The captured Run path never echoes, even on a verbose runner: probes
+// (pacman -Q, dpkg -l, rpm -q) stay silent AND unechoed.
+func TestExecRunner_Run_neverEchoesEvenWhenVerbose(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := packages.ExecRunner{Verbose: true, Out: &out, Err: &errW}
+
+	got, err := r.Run(context.Background(), "echo", "hello")
 	require.NoError(t, err)
 	require.Equal(t, "hello\n", got)
 	require.Empty(t, out.String())

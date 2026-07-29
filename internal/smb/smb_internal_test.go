@@ -200,6 +200,24 @@ func TestExecRunner_nonVerboseCapturesOnly(t *testing.T) {
 	require.Empty(t, errW.String())
 }
 
+// Verbose ExecRunner echoes the command line (bash set -x style: "+ argv")
+// to Err before streaming; the echo never pollutes the returned capture
+// (id -Gn / pdbedit -L parsing contract) nor Out.
+func TestExecRunner_verboseEchoesCommandLine(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: true, Out: &out, Err: &errW}
+
+	got, err := r.Run(context.Background(), "sh", "-c", "echo out-line; echo err-line >&2")
+	require.NoError(t, err)
+
+	echo := "+ sh -c 'echo out-line; echo err-line >&2'\n"
+	require.Contains(t, errW.String(), echo, "verbose must echo the command line to Err")
+	require.Less(t, strings.Index(errW.String(), echo), strings.Index(errW.String(), "err-line"),
+		"the echo must precede the command's own stderr output")
+	require.NotContains(t, out.String(), "+ ", "the echo goes to Err, never Out")
+	require.NotContains(t, got, "+ ", "the echo must not enter the captured output (parsing contract)")
+}
+
 func TestExecRunner_setVerbose(t *testing.T) {
 	r := &ExecRunner{}
 	require.False(t, r.Verbose)

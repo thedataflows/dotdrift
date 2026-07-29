@@ -150,7 +150,7 @@ Unit tests run offline. Integration tests against real tools can be added with `
 ./tests/e2e/run.sh
 ```
 
-Builds and runs a Docker end-to-end suite for the debian family (`debian:bookworm-slim` and `ubuntu:24.04`; requires Docker and network access). Each container builds dotdrift from this repo, onboards a live file with a real `mise.run` bootstrap, and runs `dotdrift apply` against a fixture profile — then asserts a real `apt-get install curl` (verified via `dpkg`), dotfile symlinking, pre/post hooks executed as mise tasks, resume no-op on a second apply, complete state on disk, and no runtime pollution inside the profile. Runs on push to `main` via `.github/workflows/e2e.yml`; the offline `go test ./...` gate is unchanged.
+Builds and runs a Docker end-to-end suite across three distros — the debian family (`debian:bookworm-slim`, `ubuntu:24.04`) and CachyOS (`cachyos/cachyos`); requires Docker and network access. Each container builds dotdrift from this repo, onboards a live file with a real `mise.run` bootstrap, and runs `dotdrift apply` against a fixture profile — then asserts a real package install (`apt` on the debian family, `pacman`/`paru` on CachyOS) of a leaf package (`jq`), dotfile symlinking, pre/post hooks executed as mise tasks, resume no-op on a second apply, complete state on disk, and no runtime pollution inside the profile. The CachyOS image is the first coverage of dotdrift's Arch backend (`paru -S` install + `pacman -Q` idempotency); it ships `paru` from the CachyOS binary repo, so no AUR build is needed. Runs on push to `main` via `.github/workflows/e2e.yml`; the offline `go test ./...` gate is unchanged.
 
 ---
 

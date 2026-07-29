@@ -2,7 +2,7 @@ id = "demo"
 app = "demo"
 
 [packages]
-present = ["curl"]
+present = ["jq"]
 
 [dotfiles]
 "~/.demorc" = { source = "home/.demorc", mode = "link" }

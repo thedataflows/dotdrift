@@ -1,7 +1,8 @@
 #!/bin/sh
 # dotdrift end-to-end scenario. Runs INSIDE the e2e container as root.
-# Exercises: real mise bootstrap (mise.run), real apt install, real dotfile
-# linking, real hooks-as-mise-tasks, resume, and profile-pollution checks.
+# Exercises: real mise bootstrap (mise.run), a real package install (apt on
+# debian-family, pacman/paru on CachyOS), real dotfile linking, real
+# hooks-as-mise-tasks, resume, and profile-pollution checks.
 # Any failed assertion prints "FAIL: <reason>" and exits non-zero.
 
 fail() {
@@ -12,6 +13,20 @@ fail() {
 step() {
 	echo
 	echo "== $* =="
+}
+
+# Package-manager verbs: debian-family images use dpkg; the CachyOS image uses
+# pacman (dotdrift installs via paru, which `pacman -Q` then observes). jq is a
+# leaf package absent from every base image, so `dotdrift apply` performs a
+# REAL install (decoupled from curl, which the image keeps only for the
+# mise.run bootstrap). On CachyOS curl is a hard dependency of pacman itself
+# and cannot be removed, so it cannot serve as the purge/reinstall target there.
+have_pacman() { command -v pacman >/dev/null 2>&1; }
+TEST_PKG=jq
+# Exit 0 when TEST_PKG IS installed.
+pkg_present() {
+	if have_pacman; then pacman -Q "$TEST_PKG" >/dev/null 2>&1
+	else dpkg -l "$TEST_PKG" >/dev/null 2>&1; fi
 }
 
 step "detect"
@@ -29,26 +44,23 @@ dotdrift onboard --yes --profile /profile /root/.liverc || fail "onboard exited 
 step "plan"
 PLAN=$(dotdrift plan --profile /profile) || fail "plan exited non-zero"
 echo "$PLAN"
-echo "$PLAN" | grep -q "curl" || fail "plan output does not mention package curl"
+echo "$PLAN" | grep -q "$TEST_PKG" || fail "plan output does not mention package $TEST_PKG"
 echo "$PLAN" | grep -q "\.demorc" || fail "plan output does not mention ~/.demorc"
 echo "$PLAN" | grep -q "pre-hook" || fail "plan output does not list the pre hook"
 echo "$PLAN" | grep -q "post-hook" || fail "plan output does not list the post hook"
 
-# The image ships curl only so the mise.run bootstrap above can download
-# mise. Purge it so the packages step must perform a REAL install against
-# the (intentionally empty) apt index.
-step "purge image curl (force a real install)"
-apt-get purge -y curl > /dev/null || fail "could not purge curl"
-if dpkg -l curl > /dev/null 2>&1; then
-	fail "curl still installed after purge"
-fi
+# The test package ships in none of the base images, so `dotdrift apply` must
+# perform a REAL install (curl stays installed only for the mise.run bootstrap
+# above). Asserting it absent beforehand proves the install is not a no-op.
+step "verify $TEST_PKG absent before apply"
+pkg_present && fail "$TEST_PKG unexpectedly present in base image"
 
 # --- apply ---------------------------------------------------------------
 step "apply"
 dotdrift apply --profile /profile --yes || fail "apply exited non-zero"
 
 # (a) real package-manager verification
-dpkg -l curl > /dev/null 2>&1 || fail "dpkg: curl is not installed after apply"
+pkg_present || fail "$TEST_PKG is not installed after apply"
 
 # (b) dotfile symlink resolves into the profile's demo module
 [ -L /root/.demorc ] || fail "/root/.demorc is not a symlink"

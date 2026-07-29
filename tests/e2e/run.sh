@@ -8,7 +8,7 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-OSES="debian ubuntu"
+OSES="debian ubuntu cachyos"
 overall=0
 results=""
 

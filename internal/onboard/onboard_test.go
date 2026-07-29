@@ -2,6 +2,7 @@ package onboard_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,7 +32,11 @@ func TestPathMap_homeAndSystem(t *testing.T) {
 
 	src := filepath.Join(home, ".bashrc")
 	require.NoError(t, writeFile(src, "bashrc"))
-	sys := filepath.Join("/etc", "pacman.conf")
+	// System paths are absolute paths outside $HOME. Use a temp file the test
+	// owns rather than a real system file: /etc/pacman.conf exists only on
+	// Arch/CachyOS, so hardcoding it failed the test on Ubuntu CI.
+	sys := filepath.Join(t.TempDir(), "pacman.conf")
+	require.NoError(t, writeFile(sys, "pacman"))
 
 	fr := &mise.FakeRunner{}
 	o := &onboard.Onboard{Mise: fr}
@@ -50,8 +55,10 @@ func TestPathMap_homeAndSystem(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, content, `"~/.bashrc"`)
 	require.Contains(t, content, `"home/.bashrc"`)
-	require.Contains(t, content, `"/etc/pacman.conf"`)
-	require.Contains(t, content, `"system/etc/pacman.conf"`)
+	// System path: target is the absolute path verbatim; the source strips the
+	// leading separator and is prefixed with system/.
+	require.Contains(t, content, fmt.Sprintf("%q", sys))
+	require.Contains(t, content, fmt.Sprintf(`"system/%s"`, strings.TrimPrefix(sys, "/")))
 }
 
 func TestInferApp_configDir(t *testing.T) {

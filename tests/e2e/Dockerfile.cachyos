@@ -1,0 +1,22 @@
+# syntax=docker/dockerfile:1
+# E2E image: build dotdrift from this repo, then run the scenario on CachyOS
+# with real pacman/paru + real mise bootstrap. CachyOS ships paru in its own
+# binary repo (cachyos/paru), so dotdrift's Arch backend works without an AUR
+# build, and paru installs repo packages as root.
+
+FROM golang:1.26-bookworm AS builder
+WORKDIR /src
+COPY . .
+RUN go build -mod=vendor -o /out/dotdrift .
+
+FROM cachyos/cachyos:latest
+# curl is required at container runtime for the mise.run bootstrap; the
+# scenario purges it before `dotdrift apply` so the packages step performs a
+# REAL paru/pacman install. paru is dotdrift's Arch backend (cachyos/paru).
+# The sync DB is left in place so paru can resolve curl back after the purge.
+RUN pacman -Sy --noconfirm --noprogressbar ca-certificates curl git paru sudo
+COPY --from=builder /out/dotdrift /usr/local/bin/dotdrift
+COPY tests/e2e/profile /profile
+COPY tests/e2e/scenario.sh /scenario.sh
+RUN chmod +x /scenario.sh
+CMD ["/scenario.sh"]

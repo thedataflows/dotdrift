@@ -16,7 +16,7 @@
 #   curl -fsSL <raw>/install.sh | bash                 # latest, piped
 #   curl -fsSL <raw>/install.sh | bash -s v0.4.0       # pinned, piped
 #
-# Requires: curl, tar, sha256sum. Linux only (amd64, arm64).
+# Requires: curl or wget, tar, sha256sum. Linux only (amd64, arm64).
 
 set -euo pipefail
 
@@ -24,12 +24,35 @@ OWNER_REPO="thedataflows/dotdrift"
 BINDIR="${DOTDRIFT_BINDIR:-$HOME/.local/bin}"
 VERSION="${1:-latest}"
 
-err() { printf 'install: error: %s\n' "$*" >&2; }
-die() { err "$*"; exit 1; }
+err()  { printf 'install: error: %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
+have() { command -v "$1" >/dev/null 2>&1; }
 
-for dep in curl tar sha256sum; do
-	command -v "$dep" >/dev/null 2>&1 || die "required command not found: $dep"
+have curl || have wget || die "required command not found: curl (or wget)"
+for dep in tar sha256sum; do
+	have "$dep" || die "required command not found: $dep"
 done
+
+# Fetch a URL to a local path with whichever HTTP client is available.
+http_get() {  # http_get <url> <dest>
+	if have curl; then curl -fsSL -o "$2" "$1"
+	else              wget -qO "$2" "$1"
+	fi
+}
+
+# Resolve the newest release tag. curl follows the releases/latest redirect
+# and reads the final URL; wget falls back to the GitHub releases API.
+resolve_latest() {
+	if have curl; then
+		local url
+		url="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
+			"https://github.com/${OWNER_REPO}/releases/latest")"
+		printf '%s\n' "${url##*/}"
+	else
+		wget -qO- "https://api.github.com/repos/${OWNER_REPO}/releases/latest" \
+			| sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1
+	fi
+}
 
 # --- platform --------------------------------------------------------------
 
@@ -46,11 +69,9 @@ esac
 
 # --- resolve version -------------------------------------------------------
 
-# "latest" is resolved by following the releases/latest redirect to its tag.
+# "latest" resolves to the newest release tag (see resolve_latest).
 if [[ "$VERSION" == "latest" ]]; then
-	redirect="$(curl -fsSL -o /dev/null -w '%{url_effective}' \
-		"https://github.com/${OWNER_REPO}/releases/latest")"
-	VERSION="${redirect##*/}"
+	VERSION="$(resolve_latest || true)"
 	[[ -n "$VERSION" ]] || die "could not resolve the latest release tag"
 fi
 
@@ -63,8 +84,8 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 printf '==> dotdrift %s (%s/%s)\n' "$VERSION" "$os" "$arch"
-curl -fsSL -o "${tmp}/${asset}" "${base}/${asset}"
-curl -fsSL -o "${tmp}/sha256sums.txt" "${base}/sha256sums.txt" \
+http_get "${base}/${asset}" "${tmp}/${asset}"
+http_get "${base}/sha256sums.txt" "${tmp}/sha256sums.txt" \
 	|| die "no checksum published for ${VERSION}; refusing to install unverified"
 
 # --- verify + install ------------------------------------------------------

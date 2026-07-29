@@ -5,8 +5,10 @@
 package mounts
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -23,20 +25,50 @@ type Runner interface {
 	Run(ctx context.Context, argv []string) error
 }
 
-// ExecRunner runs commands via exec.CommandContext.
-type ExecRunner struct{}
+// ExecRunner runs commands via exec.CommandContext. Verbose streams child
+// stdout/stderr live to Out/Err while still capturing, so failure errors
+// keep their output suffix.
+type ExecRunner struct {
+	Verbose bool
+	// Out/Err are the Verbose streaming destinations; nil defaults to
+	// os.Stdout/os.Stderr.
+	Out io.Writer
+	Err io.Writer
+}
+
+// SetVerbose toggles live output streaming.
+func (r *ExecRunner) SetVerbose(v bool) { r.Verbose = v }
+
+func (r ExecRunner) writers() (io.Writer, io.Writer) {
+	out, errW := r.Out, r.Err
+	if out == nil {
+		out = os.Stdout
+	}
+	if errW == nil {
+		errW = os.Stderr
+	}
+	return out, errW
+}
 
 // Run executes argv[0] with argv[1:], returning the combined output on
 // failure so callers can log systemctl's own diagnostics (e.g. "not
-// loaded").
-func (ExecRunner) Run(ctx context.Context, argv []string) error {
+// loaded"). In Verbose mode the output also streams live (MultiWriter), so
+// the error contract is unchanged.
+func (r ExecRunner) Run(ctx context.Context, argv []string) error {
 	if len(argv) == 0 {
 		return fmt.Errorf("empty argv")
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %w: %s", strings.Join(argv, " "), err, strings.TrimSpace(string(out)))
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if r.Verbose {
+		out, errW := r.writers()
+		cmd.Stdout = io.MultiWriter(out, &buf)
+		cmd.Stderr = io.MultiWriter(errW, &buf)
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w: %s", strings.Join(argv, " "), err, strings.TrimSpace(buf.String()))
 	}
 	return nil
 }

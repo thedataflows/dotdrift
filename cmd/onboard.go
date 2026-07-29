@@ -20,6 +20,7 @@ type OnboardCmd struct {
 	DryRun   bool         `help:"Preview only"`
 	Force    bool         `help:"Replace existing module content on conflict"`
 	Yes      bool         `help:"Answer yes to mise prompts" default:"false"`
+	Verbose  bool         `help:"Stream package manager and mise output live" default:"false"`
 	// Mise injects a runner for tests; nil uses the real mise bootstrap.
 	Mise mise.Runner `kong:"-"`
 }
@@ -33,7 +34,9 @@ func (c *OnboardCmd) Run() error {
 
 	runner := c.Mise
 	if runner == nil {
-		runner = mise.NewExecMise(mise.DefaultMise())
+		m := defaultMise()
+		m.Verbose = c.Verbose
+		runner = mise.NewExecMise(m)
 	}
 	o := &onboard.Onboard{Mise: runner}
 	return o.Run(onboard.Options{

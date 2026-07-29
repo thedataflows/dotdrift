@@ -60,3 +60,13 @@ declarative and diffable; activation is a side effect (reloading a daemon,
 enabling a unit, restarting a service). The two are never conflated:
 generated content is placed like any other module content, and activation
 happens afterwards, idempotently.
+
+### Verbose
+
+An opt-in, per-invocation widening of observability on `apply` and `onboard`
+(`--verbose`, `DD_VERBOSE=1`): child-process output (mise operations,
+package manager commands, activation commands) streams live to the terminal
+instead of being captured and discarded. Absence means quiet — output is
+captured and surfaced only on failure. Probes (version checks,
+installed-package queries) are never streamed: they exist to be parsed, not
+seen.

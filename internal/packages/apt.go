@@ -25,11 +25,11 @@ func (a *Apt) Present(ctx context.Context, pkgs []string) error {
 	if len(pkgs) == 0 {
 		return nil
 	}
-	if _, err := a.Runner.Run(ctx, "apt-get", "update"); err != nil {
+	if _, err := runMutating(ctx, a.Runner, "apt-get", "update"); err != nil {
 		return fmt.Errorf("apt update: %w", err)
 	}
 	args := append([]string{"install", "-y"}, pkgs...)
-	if _, err := a.Runner.Run(ctx, "apt-get", args...); err != nil {
+	if _, err := runMutating(ctx, a.Runner, "apt-get", args...); err != nil {
 		return fmt.Errorf("apt install %v: %w", pkgs, err)
 	}
 	return nil
@@ -42,11 +42,15 @@ func (a *Apt) Absent(ctx context.Context, pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"remove", "-y"}, pkgs...)
-	if _, err := a.Runner.Run(ctx, "apt-get", args...); err != nil {
+	if _, err := runMutating(ctx, a.Runner, "apt-get", args...); err != nil {
 		return fmt.Errorf("apt remove %v: %w", pkgs, err)
 	}
 	return nil
 }
+
+// SetVerbose toggles live output streaming when the backend runs on the real
+// ExecRunner.
+func (a *Apt) SetVerbose(v bool) { setVerboseOn(&a.Runner, v) }
 
 // IsInstalled checks if a package is installed via dpkg.
 func (a *Apt) IsInstalled(ctx context.Context, pkg string) (bool, error) {
@@ -77,7 +81,7 @@ func (d *Dnf) Present(ctx context.Context, pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"install", "-y"}, pkgs...)
-	if _, err := d.Runner.Run(ctx, "dnf", args...); err != nil {
+	if _, err := runMutating(ctx, d.Runner, "dnf", args...); err != nil {
 		return fmt.Errorf("dnf install %v: %w", pkgs, err)
 	}
 	return nil
@@ -90,11 +94,15 @@ func (d *Dnf) Absent(ctx context.Context, pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"remove", "-y"}, pkgs...)
-	if _, err := d.Runner.Run(ctx, "dnf", args...); err != nil {
+	if _, err := runMutating(ctx, d.Runner, "dnf", args...); err != nil {
 		return fmt.Errorf("dnf remove %v: %w", pkgs, err)
 	}
 	return nil
 }
+
+// SetVerbose toggles live output streaming when the backend runs on the real
+// ExecRunner.
+func (d *Dnf) SetVerbose(v bool) { setVerboseOn(&d.Runner, v) }
 
 // IsInstalled checks if a package is installed via rpm.
 func (d *Dnf) IsInstalled(ctx context.Context, pkg string) (bool, error) {

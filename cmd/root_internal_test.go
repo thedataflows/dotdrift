@@ -28,6 +28,37 @@ func TestKong_applyPositionalModules(t *testing.T) {
 	require.Equal(t, []string{"vim,git", "extra"}, cli.Apply.Modules)
 }
 
+// --verbose parses on apply and onboard (and only there).
+func TestKong_verboseFlagParses(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"apply", "--verbose"})
+	require.NoError(t, err)
+	require.True(t, cli.Apply.Verbose)
+	require.False(t, cli.Onboard.Verbose)
+
+	cli = CLI{}
+	parser, err = kong.New(&cli)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", "--verbose"})
+	require.NoError(t, err)
+	require.True(t, cli.Onboard.Verbose)
+	require.False(t, cli.Apply.Verbose)
+}
+
+// kong's DefaultEnvars("DD") maps DD_VERBOSE onto --verbose with no extra
+// code.
+func TestKong_verboseDefaultEnvar(t *testing.T) {
+	t.Setenv("DD_VERBOSE", "1")
+	var cli CLI
+	parser, err := kong.New(&cli, kong.DefaultEnvars("DD"))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"apply"})
+	require.NoError(t, err)
+	require.True(t, cli.Apply.Verbose, "DD_VERBOSE=1 must enable apply --verbose via DefaultEnvars")
+}
+
 func TestLoadDotenvFiles_loadsEnvFiles(t *testing.T) {
 	const marker = "DOTDRIFT_TEST_ROOT_MARKER"
 	require.NoError(t, os.Unsetenv(marker))

@@ -6,6 +6,7 @@
 package smb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -30,13 +31,44 @@ type Runner interface {
 	RunInteractive(ctx context.Context, name string, args ...string) error
 }
 
-// ExecRunner is the real command runner.
-type ExecRunner struct{}
+// ExecRunner is the real command runner. Verbose streams child stdout/stderr
+// live to Out/Err while still capturing: Run callers parse (id -Gn,
+// pdbedit -L) and append (testparm gate) the returned output, so streaming
+// must never starve them.
+type ExecRunner struct {
+	Verbose bool
+	// Out/Err are the Verbose streaming destinations; nil defaults to
+	// os.Stdout/os.Stderr.
+	Out io.Writer
+	Err io.Writer
+}
 
-func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
+// SetVerbose toggles live output streaming.
+func (r *ExecRunner) SetVerbose(v bool) { r.Verbose = v }
+
+func (r ExecRunner) writers() (io.Writer, io.Writer) {
+	out, errW := r.Out, r.Err
+	if out == nil {
+		out = os.Stdout
+	}
+	if errW == nil {
+		errW = os.Stderr
+	}
+	return out, errW
+}
+
+func (r ExecRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	var buf bytes.Buffer
+	cmd.Stdout = &buf
+	cmd.Stderr = &buf
+	if r.Verbose {
+		out, errW := r.writers()
+		cmd.Stdout = io.MultiWriter(out, &buf)
+		cmd.Stderr = io.MultiWriter(errW, &buf)
+	}
+	err := cmd.Run()
+	return buf.String(), err
 }
 
 func (ExecRunner) RunInteractive(ctx context.Context, name string, args ...string) error {

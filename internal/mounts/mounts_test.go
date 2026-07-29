@@ -232,3 +232,47 @@ func TestMountsStep_unitNameEscapesDestination(t *testing.T) {
 		{"systemctl", "enable", "--now", `mnt-my\x20files.mount`},
 	}, r.calls)
 }
+
+// Verbose ExecRunner streams child stdout/stderr live to the injected
+// writers while still capturing, so the error keeps today's output suffix.
+func TestExecRunner_verboseStreamsAndPreservesErrorOutput(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: true, Out: &out, Err: &errW}
+
+	err := r.Run(context.Background(), []string{"sh", "-c", "echo out-line; echo err-line >&2; exit 3"})
+	require.Error(t, err)
+	require.Contains(t, out.String(), "out-line", "stdout must stream live")
+	require.Contains(t, errW.String(), "err-line", "stderr must stream live")
+	require.Contains(t, err.Error(), "out-line", "captured output must stay in the error (streamed AND captured)")
+}
+
+// Non-verbose ExecRunner keeps today's capture-and-discard: success output
+// reaches neither writer.
+func TestExecRunner_nonVerboseSuccessDiscardsOutput(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: false, Out: &out, Err: &errW}
+
+	require.NoError(t, r.Run(context.Background(), []string{"sh", "-c", "echo out-line; echo err-line >&2"}))
+	require.Empty(t, out.String())
+	require.Empty(t, errW.String())
+}
+
+// Non-verbose failure keeps today's contract: captured combined output in
+// the error, nothing streamed.
+func TestExecRunner_nonVerboseErrorAppendsOutput(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: false, Out: &out, Err: &errW}
+
+	err := r.Run(context.Background(), []string{"sh", "-c", "echo out-line; exit 3"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "out-line")
+	require.Empty(t, out.String())
+	require.Empty(t, errW.String())
+}
+
+func TestExecRunner_setVerbose(t *testing.T) {
+	r := &ExecRunner{}
+	require.False(t, r.Verbose)
+	r.SetVerbose(true)
+	require.True(t, r.Verbose)
+}

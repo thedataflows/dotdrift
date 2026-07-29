@@ -547,3 +547,93 @@ func TestApply_moduleFilterUnknownErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "shell", "error must list the valid module ids")
 	require.NotContains(t, *events, "resolve", "resolvePlan must not run when the filter is invalid")
 }
+
+// verboseRecordingBackend records SetVerbose calls while satisfying
+// packages.Backend through the embedded recording fake.
+type verboseRecordingBackend struct {
+	*recordingBackend
+	verbose bool
+}
+
+func (b *verboseRecordingBackend) SetVerbose(v bool) { b.verbose = v }
+
+// verboseMountsRunner records SetVerbose calls while satisfying
+// mounts.Runner through the embedded recording fake.
+type verboseMountsRunner struct {
+	*recordingMountsRunner
+	verbose bool
+}
+
+func (r *verboseMountsRunner) SetVerbose(v bool) { r.verbose = v }
+
+// verboseSmbRunner records SetVerbose calls while satisfying smb.Runner
+// through the embedded recording fake.
+type verboseSmbRunner struct {
+	*recordingSmbRunner
+	verbose bool
+}
+
+func (r *verboseSmbRunner) SetVerbose(v bool) { r.verbose = v }
+
+// stubVerboseDeps swaps the runner-construction seams for verbose-recording
+// fakes and returns them plus the captured mise, so tests can assert where
+// --verbose landed. The mounts fixture is required (it builds the mounts and
+// smb steps).
+func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, mr *verboseMountsRunner, sr *verboseSmbRunner) {
+	t.Helper()
+	events := &[]string{}
+	backend = &verboseRecordingBackend{recordingBackend: &recordingBackend{events: events}}
+	mr = &verboseMountsRunner{recordingMountsRunner: &recordingMountsRunner{events: events}}
+	sr = &verboseSmbRunner{recordingSmbRunner: &recordingSmbRunner{events: events}}
+
+	var captured *mise.Mise
+	origDetect, origMise, origFor := detectFacts, defaultMise, packagesFor
+	origMountsRunner, origSmbRunner := newMountsRunner, newSmbRunner
+	t.Cleanup(func() {
+		detectFacts, defaultMise, packagesFor = origDetect, origMise, origFor
+		newMountsRunner, newSmbRunner = origMountsRunner, origSmbRunner
+	})
+
+	detectFacts = func() (*facts.Facts, error) { return f, nil }
+	defaultMise = func() *mise.Mise { captured = fakeMise(events); return captured }
+	packagesFor = func(string) packages.Backend { return backend }
+	newMountsRunner = func() mounts.Runner { return mr }
+	newSmbRunner = func() smb.Runner { return sr }
+	return &captured, backend, mr, sr
+}
+
+// --verbose threads through the existing construction seams: the mise
+// bootstrapper's Verbose field is set and every interface runner receives
+// SetVerbose(true).
+func TestApply_verbosePropagatesToRunners(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	capturedMise, backend, mr, sr := stubVerboseDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Verbose: true}
+	require.NoError(t, cmd.Run())
+
+	require.NotNil(t, *capturedMise)
+	require.True(t, (*capturedMise).Verbose, "mise must stream in verbose mode")
+	require.True(t, backend.verbose, "packages backend must receive --verbose")
+	require.True(t, mr.verbose, "mounts runner must receive --verbose")
+	require.True(t, sr.verbose, "smb runner must receive --verbose")
+}
+
+// Without --verbose every runner stays non-verbose (today's behavior).
+func TestApply_nonVerboseLeavesRunnersQuiet(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	capturedMise, backend, mr, sr := stubVerboseDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	require.NotNil(t, *capturedMise)
+	require.False(t, (*capturedMise).Verbose, "mise must stay quiet without --verbose")
+	require.False(t, backend.verbose, "packages backend must stay quiet without --verbose")
+	require.False(t, mr.verbose, "mounts runner must stay quiet without --verbose")
+	require.False(t, sr.verbose, "smb runner must stay quiet without --verbose")
+}

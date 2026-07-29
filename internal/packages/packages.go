@@ -4,6 +4,8 @@ package packages
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -28,13 +30,67 @@ type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (string, error)
 }
 
-// ExecRunner is the real command runner.
-type ExecRunner struct{}
+// ExecRunner is the real command runner. Run always captures stdout and
+// discards it (probe path). Verbose streams child stdout/stderr live to
+// Out/Err on the streaming entry point (RunStream) used by install/remove;
+// probes via Run stay captured either way.
+type ExecRunner struct {
+	Verbose bool
+	// Out/Err are the Verbose streaming destinations; nil defaults to
+	// os.Stdout/os.Stderr.
+	Out io.Writer
+	Err io.Writer
+}
 
 func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	out, err := cmd.Output()
 	return string(out), err
+}
+
+// RunStream runs like Run but streams the child's stdout/stderr live to
+// Out/Err when Verbose is set, returning no captured output (the terminal
+// already shows it). With Verbose unset it is byte-identical to Run.
+func (e ExecRunner) RunStream(ctx context.Context, name string, args ...string) (string, error) {
+	if !e.Verbose {
+		return e.Run(ctx, name, args...)
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	out, errW := e.Out, e.Err
+	if out == nil {
+		out = os.Stdout
+	}
+	if errW == nil {
+		errW = os.Stderr
+	}
+	cmd.Stdout = out
+	cmd.Stderr = errW
+	return "", cmd.Run()
+}
+
+// streamRunner is ExecRunner's verbose-capable surface. Fakes implement only
+// Runner, so they stay on the captured path untouched.
+type streamRunner interface {
+	RunStream(ctx context.Context, name string, args ...string) (string, error)
+}
+
+// runMutating runs an install/remove command: through the streaming surface
+// when the runner offers one, otherwise the captured Run path. Probes never
+// come through here — they call Runner.Run directly.
+func runMutating(ctx context.Context, r Runner, name string, args ...string) (string, error) {
+	if sr, ok := r.(streamRunner); ok {
+		return sr.RunStream(ctx, name, args...)
+	}
+	return r.Run(ctx, name, args...)
+}
+
+// setVerboseOn flips Verbose when the backend's runner is the real
+// ExecRunner; injected fakes are left untouched.
+func setVerboseOn(r *Runner, v bool) {
+	if er, ok := (*r).(ExecRunner); ok {
+		er.Verbose = v
+		*r = er
+	}
 }
 
 // Paru is the Arch/CachyOS backend.
@@ -54,7 +110,7 @@ func (p *Paru) Present(ctx context.Context, pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"-S", "--needed", "--noconfirm"}, pkgs...)
-	_, err := p.Runner.Run(ctx, "paru", args...)
+	_, err := runMutating(ctx, p.Runner, "paru", args...)
 	if err != nil {
 		return fmt.Errorf("paru install %v: %w", pkgs, err)
 	}
@@ -68,12 +124,16 @@ func (p *Paru) Absent(ctx context.Context, pkgs []string) error {
 		return nil
 	}
 	args := append([]string{"-R", "--noconfirm"}, pkgs...)
-	_, err := p.Runner.Run(ctx, "paru", args...)
+	_, err := runMutating(ctx, p.Runner, "paru", args...)
 	if err != nil {
 		return fmt.Errorf("paru remove %v: %w", pkgs, err)
 	}
 	return nil
 }
+
+// SetVerbose toggles live output streaming when the backend runs on the real
+// ExecRunner.
+func (p *Paru) SetVerbose(v bool) { setVerboseOn(&p.Runner, v) }
 
 // IsInstalled checks if a package is installed via pacman.
 func (p *Paru) IsInstalled(ctx context.Context, pkg string) (bool, error) {

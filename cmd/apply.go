@@ -32,10 +32,25 @@ var (
 	// packagesFor selects the distro package backend; swapped out by tests.
 	packagesFor = packages.For
 	// newMountsRunner builds the mounts step runner; swapped out by tests.
-	newMountsRunner = func() mounts.Runner { return mounts.ExecRunner{} }
+	newMountsRunner = func() mounts.Runner { return &mounts.ExecRunner{} }
 	// newSmbRunner builds the smb step runner; swapped out by tests.
-	newSmbRunner = func() smb.Runner { return smb.ExecRunner{} }
+	newSmbRunner = func() smb.Runner { return &smb.ExecRunner{} }
 )
+
+// verboseRunner is the narrow seam concrete runners implement to receive the
+// --verbose flag. Interface shapes (packages.Backend, mounts.Runner,
+// smb.Runner) stay untouched; fakes without it keep working unchanged.
+type verboseRunner interface{ SetVerbose(bool) }
+
+// setVerboseRunner passes the --verbose value to every runner that opts in
+// via SetVerbose; others are left as-is.
+func setVerboseRunner(v bool, rs ...any) {
+	for _, r := range rs {
+		if vr, ok := r.(verboseRunner); ok {
+			vr.SetVerbose(v)
+		}
+	}
+}
 
 // pipelineStepNames is the single source of truth for the ordered pipeline
 // step names: apply builds its steps in this order and status reports
@@ -52,6 +67,7 @@ type ApplyCmd struct {
 	State   string    `help:"Path to state file" type:"path" default:""`
 	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
 	NoHooks bool      `help:"Skip pre/post hook commands (also DOTDRIFT_NO_HOOKS=1)" default:"false"`
+	Verbose bool      `help:"Stream package manager and mise output live" default:"false"`
 	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Out     io.Writer `kong:"-"`
 }
@@ -111,6 +127,7 @@ func (c *ApplyCmd) Run() error {
 	}
 
 	m := defaultMise()
+	m.Verbose = c.Verbose
 	path, err := m.Ensure()
 	if err != nil {
 		return fmt.Errorf("ensure mise: %w", err)
@@ -153,6 +170,7 @@ func (c *ApplyCmd) Run() error {
 	// before any side effect; hooks-post runs last.
 	hooksDisabled := c.NoHooks || os.Getenv("DOTDRIFT_NO_HOOKS") == "1"
 	backend := packagesFor(f.Backend)
+	setVerboseRunner(c.Verbose, backend)
 
 	// The dotfiles portion splits by scope: user entries apply as today via
 	// the DotfilesStep (against a scope-filtered plan copy), system entries
@@ -191,10 +209,14 @@ func (c *ApplyCmd) Run() error {
 	// and before the post hooks (a post-hook may depend on an active mount or
 	// a running smb service). Both are conditional on a non-empty aggregate.
 	if len(plan.Mounts.Entries) > 0 {
-		steps = append(steps, &mounts.Step{Runner: newMountsRunner(), Plan: plan.Mounts})
+		mr := newMountsRunner()
+		setVerboseRunner(c.Verbose, mr)
+		steps = append(steps, &mounts.Step{Runner: mr, Plan: plan.Mounts})
 	}
 	if len(plan.Smb.Modules) > 0 {
-		steps = append(steps, &smb.Step{Runner: newSmbRunner(), Plan: plan.Smb, Out: out})
+		sr := newSmbRunner()
+		setVerboseRunner(c.Verbose, sr)
+		steps = append(steps, &smb.Step{Runner: sr, Plan: plan.Smb, Out: out})
 	}
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{

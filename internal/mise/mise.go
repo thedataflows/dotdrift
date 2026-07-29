@@ -4,6 +4,7 @@ package mise
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -58,6 +59,17 @@ type Mise struct {
 	// Env is extra environment ("KEY=value") appended to the subprocess
 	// environment on the real exec path; fakes (Run/RunContext) bypass it.
 	Env []string
+
+	// Verbose streams operation subprocesses (install/dotfiles/tasks) live
+	// to Out/Err instead of capturing and discarding their output. Only the
+	// ExecMise operation calls stream: version probes and the mise.run
+	// bootstrap always stay captured (their output is parsed or one-time).
+	Verbose bool
+
+	// Out/Err are the Verbose streaming destinations; nil defaults to
+	// os.Stdout/os.Stderr.
+	Out io.Writer
+	Err io.Writer
 
 	ensureOnce sync.Once
 	ensurePath string
@@ -130,6 +142,39 @@ func (m *Mise) runWithEnv(ctx context.Context, extraEnv []string, name string, a
 		return runContextEnv(ctx, env, name, args...)
 	}
 	return m.runner()(ctx, name, args...)
+}
+
+// writers resolves the Verbose streaming destinations.
+func (m *Mise) writers() (io.Writer, io.Writer) {
+	out, errW := m.Out, m.Err
+	if out == nil {
+		out = os.Stdout
+	}
+	if errW == nil {
+		errW = os.Stderr
+	}
+	return out, errW
+}
+
+// runOp executes one operation command (install/dotfiles/task). In Verbose
+// mode on the real exec path the child's stdout/stderr stream live to the
+// configured writers and a failure returns the bare error (the output is
+// already on the terminal, so nothing is appended). Fakes bypass streaming
+// (they own their output); non-verbose is byte-identical to runWithEnv.
+// Probes never come through here.
+func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
+	if !m.Verbose || m.RunContext != nil || m.Run != nil {
+		return m.runWithEnv(ctx, extraEnv, name, args...)
+	}
+	env := make([]string, 0, len(m.Env)+len(extraEnv))
+	env = append(env, m.Env...)
+	env = append(env, extraEnv...)
+	cmd := exec.CommandContext(ctx, name, args...)
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	cmd.Stdout, cmd.Stderr = m.writers()
+	return "", cmd.Run()
 }
 
 // trustEnv returns a MISE_TRUSTED_CONFIG_PATHS entry covering the directory
@@ -448,7 +493,7 @@ func (e *ExecMise) EnsureAndInstall(ctx context.Context, configPath string) erro
 	if err != nil {
 		return err
 	}
-	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), path, "install", "--cd", filepath.Dir(configPath))
+	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, "install", "--cd", filepath.Dir(configPath))
 	return err
 }
 
@@ -461,7 +506,7 @@ func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes boo
 	if yes {
 		args = append(args, "--yes")
 	}
-	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), path, args...)
+	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, args...)
 	return err
 }
 
@@ -494,7 +539,7 @@ func (e *ExecMise) DotfilesApplySudo(ctx context.Context, configPath string, yes
 		return err
 	}
 	argv := dotfilesApplyArgv(geteuid(), path, configPath, yes)
-	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), argv[0], argv[1:]...)
+	_, err = e.mise.runOp(ctx, trustEnv(configPath), argv[0], argv[1:]...)
 	return err
 }
 
@@ -504,7 +549,7 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 	if err != nil {
 		return err
 	}
-	_, err = e.mise.runWithEnv(ctx, trustEnv(configPath), path, "run", "--cd", filepath.Dir(configPath), taskName)
+	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, "run", "--cd", filepath.Dir(configPath), taskName)
 	return err
 }
 

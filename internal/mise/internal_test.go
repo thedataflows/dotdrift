@@ -1,6 +1,7 @@
 package mise
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -142,4 +143,129 @@ func TestMise_envAppendedOnDefaultExecPath(t *testing.T) {
 
 	lines := captureLines(t, capture)
 	require.Equal(t, "SENTINEL=present", lines[1])
+}
+
+// echoMiseScript writes an executable fake `mise` that answers `--version`
+// and otherwise echoes a distinct line to stdout and stderr, failing when
+// DOTDRIFT_TEST_FAIL=1 is in the environment.
+func echoMiseScript(t *testing.T) string {
+	t.Helper()
+	script := filepath.Join(t.TempDir(), "mise")
+	content := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.7.10; exit 0; fi\n" +
+		"echo out-$1\n" +
+		"echo err-$1 >&2\n" +
+		"if [ \"$DOTDRIFT_TEST_FAIL\" = \"1\" ]; then exit 1; fi\n"
+	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
+	return script
+}
+
+// verboseExecMise returns an ExecMise on the real exec path (no Run fakes)
+// with the given verbose setting and streaming writers.
+func verboseExecMise(t *testing.T, script string, verbose bool, out, errW *bytes.Buffer) *ExecMise {
+	t.Helper()
+	return NewExecMise(&Mise{
+		LookPath: func(string) (string, error) { return script, nil },
+		Verbose:  verbose,
+		Out:      out,
+		Err:      errW,
+	})
+}
+
+// Verbose mode streams every ExecMise operation's child stdout/stderr live
+// to the injected writers.
+func TestExecMise_verboseStreamsOperationOutput(t *testing.T) {
+	orig := geteuid
+	geteuid = func() int { return 0 } // root: DotfilesApplySudo runs mise directly, no sudo
+	t.Cleanup(func() { geteuid = orig })
+
+	cases := []struct {
+		name    string
+		invoke  func(ctx context.Context, em *ExecMise, cfg string) error
+		wantArg string
+	}{
+		{"EnsureAndInstall", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.EnsureAndInstall(ctx, cfg)
+		}, "install"},
+		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.DotfilesApply(ctx, cfg, true)
+		}, "dotfiles"},
+		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.DotfilesApplySudo(ctx, cfg, true)
+		}, "dotfiles"},
+		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.RunTask(ctx, cfg, "hooks:pre")
+		}, "run"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errW bytes.Buffer
+			em := verboseExecMise(t, echoMiseScript(t), true, &out, &errW)
+			_, cfg := generatedConfig(t)
+
+			require.NoError(t, tc.invoke(context.Background(), em, cfg))
+			require.Contains(t, out.String(), "out-"+tc.wantArg, "operation stdout must stream to Out")
+			require.Contains(t, errW.String(), "err-"+tc.wantArg, "operation stderr must stream to Err")
+		})
+	}
+}
+
+// Non-verbose keeps today's capture-and-discard: success output reaches
+// neither writer.
+func TestExecMise_nonVerboseDiscardsSuccessOutput(t *testing.T) {
+	var out, errW bytes.Buffer
+	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW)
+	_, cfg := generatedConfig(t)
+
+	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true))
+	require.Empty(t, out.String(), "non-verbose must not stream stdout")
+	require.Empty(t, errW.String(), "non-verbose must not stream stderr")
+}
+
+// Non-verbose failure keeps today's contract: captured output is appended to
+// the returned error, nothing streams.
+func TestExecMise_nonVerboseErrorAppendsCapturedOutput(t *testing.T) {
+	t.Setenv("DOTDRIFT_TEST_FAIL", "1")
+	var out, errW bytes.Buffer
+	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW)
+	_, cfg := generatedConfig(t)
+
+	err := em.DotfilesApply(context.Background(), cfg, true)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "out-dotfiles", "captured output must stay appended to the error")
+	require.Empty(t, out.String())
+	require.Empty(t, errW.String())
+}
+
+// Streaming failure returns the bare error: the output is already live on
+// the terminal, so nothing is appended to the error.
+func TestExecMise_verboseErrorReturnsBareErr(t *testing.T) {
+	t.Setenv("DOTDRIFT_TEST_FAIL", "1")
+	var out, errW bytes.Buffer
+	em := verboseExecMise(t, echoMiseScript(t), true, &out, &errW)
+	_, cfg := generatedConfig(t)
+
+	err := em.DotfilesApply(context.Background(), cfg, true)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "out-dotfiles", "streamed output must not be duplicated into the error")
+	require.Contains(t, out.String(), "out-dotfiles")
+	require.Contains(t, errW.String(), "err-dotfiles")
+}
+
+// The version probe is parsed, never shown: even in verbose mode
+// `mise --version` output must be captured, not streamed.
+func TestMise_versionProbeStaysCapturedWhenVerbose(t *testing.T) {
+	var out, errW bytes.Buffer
+	m := &Mise{
+		LookPath: func(string) (string, error) { return echoMiseScript(t), nil },
+		Verbose:  true,
+		Out:      &out,
+		Err:      &errW,
+	}
+
+	path, err := m.EnsureContext(context.Background())
+	require.NoError(t, err)
+	require.NotEmpty(t, path)
+	require.Empty(t, out.String(), "version probe output must be captured for parsing, not streamed")
+	require.Empty(t, errW.String(), "version probe output must be captured for parsing, not streamed")
 }

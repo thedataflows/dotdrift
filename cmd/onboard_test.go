@@ -2,6 +2,7 @@ package dotdrift
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,6 +111,38 @@ func TestOnboard_detectErrorPropagates(t *testing.T) {
 	cmd := &OnboardCmd{Paths: []string{"/x"}, Profile: t.TempDir(), Mise: &mise.FakeRunner{}}
 	err := cmd.Run()
 	require.ErrorContains(t, err, "detect")
+}
+
+// --verbose flows into the real mise construction path: with no injected
+// runner, onboard builds its mise through the defaultMise seam and sets
+// Verbose on it; without the flag it stays quiet.
+func TestOnboard_verbosePropagation(t *testing.T) {
+	for _, verbose := range []bool{true, false} {
+		t.Run(fmt.Sprintf("verbose=%v", verbose), func(t *testing.T) {
+			t.Setenv("XDG_STATE_HOME", t.TempDir())
+			profDir := t.TempDir()
+			live := filepath.Join(t.TempDir(), "live.conf")
+			require.NoError(t, os.WriteFile(live, []byte("x=1\n"), 0o644))
+
+			origDetect := detectFacts
+			detectFacts = func() (*facts.Facts, error) { return &facts.Facts{Hostname: "testhost"}, nil }
+			origMise := defaultMise
+			events := &[]string{}
+			var captured *mise.Mise
+			defaultMise = func() *mise.Mise { captured = fakeMise(events); return captured }
+			t.Cleanup(func() { detectFacts, defaultMise = origDetect, origMise })
+
+			cmd := &OnboardCmd{
+				Paths:   []string{live},
+				Profile: profDir,
+				App:     "myapp",
+				Verbose: verbose,
+			}
+			require.NoError(t, cmd.Run())
+			require.NotNil(t, captured, "onboard must build its mise through the defaultMise seam when no runner is injected")
+			require.Equal(t, verbose, captured.Verbose, "mise.Verbose must mirror the flag")
+		})
+	}
 }
 
 // Every dotfile mode documented in docs/product/profile-layout.md must parse.

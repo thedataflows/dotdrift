@@ -170,3 +170,39 @@ func TestSmbStep_testparmFailureStopsStep(t *testing.T) {
 	require.NotContains(t, lines, "sudo -E systemctl is-active smb")
 	require.NotContains(t, lines, "sudo -E systemctl restart smb")
 }
+
+// Verbose ExecRunner streams child stdout/stderr live AND still returns the
+// combined capture — callers parse (id -Gn, pdbedit -L) and append (testparm
+// gate) the returned output, so streaming must never starve them.
+func TestExecRunner_verboseStreamsAndCaptures(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: true, Out: &out, Err: &errW}
+
+	got, err := r.Run(context.Background(), "sh", "-c", "echo out-line; echo err-line >&2")
+	require.NoError(t, err)
+	require.Contains(t, out.String(), "out-line", "stdout must stream live")
+	require.Contains(t, errW.String(), "err-line", "stderr must stream live")
+	require.Contains(t, got, "out-line", "returned capture must survive streaming (parsing contract)")
+	require.Contains(t, got, "err-line", "returned capture must survive streaming (parsing contract)")
+}
+
+// Non-verbose ExecRunner keeps today's contract: combined output captured
+// and returned, nothing on the writers.
+func TestExecRunner_nonVerboseCapturesOnly(t *testing.T) {
+	var out, errW bytes.Buffer
+	r := ExecRunner{Verbose: false, Out: &out, Err: &errW}
+
+	got, err := r.Run(context.Background(), "sh", "-c", "echo out-line; echo err-line >&2")
+	require.NoError(t, err)
+	require.Contains(t, got, "out-line")
+	require.Contains(t, got, "err-line")
+	require.Empty(t, out.String())
+	require.Empty(t, errW.String())
+}
+
+func TestExecRunner_setVerbose(t *testing.T) {
+	r := &ExecRunner{}
+	require.False(t, r.Verbose)
+	r.SetVerbose(true)
+	require.True(t, r.Verbose)
+}

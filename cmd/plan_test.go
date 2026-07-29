@@ -381,3 +381,30 @@ func TestCLI_plan_jsonMountsSmb(t *testing.T) {
 	require.Equal(t, []string{"cifs-utils"}, got.Packages.Install)
 	require.Equal(t, []string{"echo nas-pre"}, got.Hooks.Pre)
 }
+
+// A positional module filter limits the plan: the --json modules array
+// contains only the filtered ids and the excluded module's dotfile entries
+// are absent. The scope fixture selects demo (system) and shell (user).
+func TestCLI_plan_filterLimitsScope(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+		JSON:    true,
+		Modules: []string{"shell"},
+	}
+	require.NoError(t, c.Run())
+
+	var got planJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+
+	require.Equal(t, []string{"shell"}, got.Modules)
+	for _, d := range got.Dotfiles {
+		require.NotEqual(t, "demo", d.Module, "excluded module must not contribute dotfiles")
+		require.NotEqual(t, "/etc/demo.conf", d.Target)
+	}
+	require.Len(t, got.Dotfiles, 1)
+	require.Equal(t, "~/.bashrc", got.Dotfiles[0].Target)
+	require.Equal(t, "shell", got.Dotfiles[0].Module)
+}

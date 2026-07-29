@@ -21,6 +21,7 @@ import (
 type PlanCmd struct {
 	Profile string       `help:"Path to profile directory" type:"existingdir" default:"."`
 	JSON    bool         `help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
+	Modules []string     `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Facts   *facts.Facts `kong:"-"`
 	Out     io.Writer    `kong:"-"`
 }
@@ -39,6 +40,9 @@ func (c *PlanCmd) Run() error {
 	p, err := profile.Load(c.Profile, f)
 	if err != nil {
 		return fmt.Errorf("load profile: %w", err)
+	}
+	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
+		return err
 	}
 
 	plan, err := resolve.Resolve(p, f)

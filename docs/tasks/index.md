@@ -17,3 +17,4 @@ Each task: write failing tests first, then implement.
 * [T-scope](t-scope.md)
 * [T-overlay-discovery](t-overlay-discovery.md)
 * [T-generate](t-generate.md)
+* [T-module-filter](t-module-filter.md)

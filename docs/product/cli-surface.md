@@ -12,13 +12,34 @@ timestamp: 2026-07-28T00:00:00Z
 |---------|----------|
 | `dotdrift init [path-or-git-url]` | Local path: create the profile and git-initialize it. Git URL: clone into a dir named from the URL minus any trailing `.git`, relative to the given path; the clone must be a dotdrift profile (`dotdrift.toml` present) or init errors |
 | `dotdrift detect` | Print facts (host, user, os, distro, gpu, package backend) |
-| `dotdrift modules` | List modules with selected/skipped + reason (no `modules ls` form; bare `dotdrift` prints help and exits with a usage error) |
-| `dotdrift plan [--json]` | Print effective plan; side-effect-free, never touches mise. `--json` emits a single JSON object (`fingerprint`, `modules`, `packages.install`/`remove`, `tools`, `dotfiles[]` with target/source/mode/module/layer/scope, `hooks.pre`/`post`, `mounts[]` with module/name/source/destination/type/options/startat/state/layer/scope, `smb[]` with module plus the merged spec — group/users/avahi (`null` when unset)/shares) instead of the text rendering; the no-modules warning is suppressed so stdout stays parseable. System-scope dotfiles are marked `[system]` in the text rendering. The text rendering ends with conditional sections when the profile declares them: `mounts:` lists each entry as `<module>: <name> <type> <source> -> <destination> [layer][scope]` plus `startat=`/`state=` markers when set; `smb:` lists per module the effective group (unset → `smb`), users, avahi (unset → `true`), and each share as `name -> path`. Both sections are omitted entirely when their aggregates are empty |
-| `dotdrift apply [--yes] [--no-hooks]` | Full pipeline; always resumes; optional `--only` later as power-user only. Step order: `hooks-pre` → `packages` → `tools` → `dotfiles` → `dotfiles-system` → `mounts` → `smb` → `hooks-post`. `--no-hooks` (or `DOTDRIFT_NO_HOOKS=1`) skips the `hooks-pre`/`hooks-post` steps. When the plan contains `scope = "system"` modules, a `dotfiles-system` step applies their dotfiles via `sudo` (skipped when already root); sudo's timestamp cache means at most one password prompt per apply. `mounts` (mkdir destinations, `systemctl daemon-reload`, enable/disable units + startat timers) and `smb` (group/user membership, avahi, testparm gate, service enablement, samba accounts) are conditional activation steps constructed only when the plan declares mounts/smb; they never write config files — placement is mise's job |
+| `dotdrift modules [modules...]` | List modules with selected/skipped + reason (no `modules ls` form; bare `dotdrift` prints help and exits with a usage error). Optional positional module ids (space or comma separated) limit the listing; selected-but-excluded modules show as skipped with reason `module filter` |
+| `dotdrift plan [--json] [modules...]` | Print effective plan; side-effect-free, never touches mise. Optional positional module ids (space or comma separated) limit the resolved plan's scope. `--json` emits a single JSON object (`fingerprint`, `modules`, `packages.install`/`remove`, `tools`, `dotfiles[]` with target/source/mode/module/layer/scope, `hooks.pre`/`post`, `mounts[]` with module/name/source/destination/type/options/startat/state/layer/scope, `smb[]` with module plus the merged spec — group/users/avahi (`null` when unset)/shares) instead of the text rendering; the no-modules warning is suppressed so stdout stays parseable. System-scope dotfiles are marked `[system]` in the text rendering. The text rendering ends with conditional sections when the profile declares them: `mounts:` lists each entry as `<module>: <name> <type> <source> -> <destination> [layer][scope]` plus `startat=`/`state=` markers when set; `smb:` lists per module the effective group (unset → `smb`), users, avahi (unset → `true`), and each share as `name -> path`. Both sections are omitted entirely when their aggregates are empty |
+| `dotdrift apply [--yes] [--no-hooks] [modules...]` | Full pipeline; always resumes. Optional positional module ids (space or comma separated) limit the run's scope to the listed modules. Step order: `hooks-pre` → `packages` → `tools` → `dotfiles` → `dotfiles-system` → `mounts` → `smb` → `hooks-post`. `--no-hooks` (or `DOTDRIFT_NO_HOOKS=1`) skips the `hooks-pre`/`hooks-post` steps. When the plan contains `scope = "system"` modules, a `dotfiles-system` step applies their dotfiles via `sudo` (skipped when already root); sudo's timestamp cache means at most one password prompt per apply. `mounts` (mkdir destinations, `systemctl daemon-reload`, enable/disable units + startat timers) and `smb` (group/user membership, avahi, testparm gate, service enablement, samba accounts) are conditional activation steps constructed only when the plan declares mounts/smb; they never write config files — placement is mise's job |
 | `dotdrift status` | Resume cursor, selection, last error. Progress prints `completed/8 steps` against the static pipeline superset; the conditional steps (`hooks-pre`/`hooks-post`, `dotfiles-system`, `mounts`, `smb`) legitimately leave a completed apply below 8/8 — status never resolves the plan, it counts completed steps against the static list |
 | `dotdrift onboard <path>...` | Create/update module; mise apply immediately |
 | `dotdrift generate mounts` | Generate a mounts module: systemd `.mount` units (plus `.service`/`.timer` for `--startat`), `module.toml` with `scope = "system"`, `[mounts]`, packages, and dotfile entries targeting `/usr/local/lib/systemd/system`. Idempotent: same invocation → byte-identical tree; stale generated units are garbage-collected |
 | `dotdrift generate smb` | Generate an smb module: `shares.conf`, a one-time `smb.conf` seed (then user-owned), `module.toml` with `scope = "system"`, `[smb]`, packages (`samba`, plus `avahi` unless disabled), and dotfile entries targeting `/etc/samba` |
+
+# Module filter
+
+`modules`, `plan`, and `apply` share an optional positional module filter
+(`dotdrift apply vim git` ≡ `dotdrift apply vim,git`; comma and space forms
+mix, duplicates collapse, whitespace is trimmed). Semantics:
+
+- No ids → behavior is unchanged.
+- Unknown id → error naming the unknown ids and listing the valid module ids;
+  nothing runs.
+- Id naming a module that exists but is not selected (`[modules] disable` or
+  `when` filter) → error naming it and its existing skip reason. The filter
+  never resurrects skipped modules.
+- Otherwise the command's scope shrinks to the listed modules; excluded
+  selected modules are reported as skipped with reason `module filter`.
+
+Fingerprint caveat: the selection fingerprint hashes the selected module ids,
+so a filtered apply produces a different fingerprint and the existing
+selection-change path resets the resume state (with its standard warning) on
+the first scoped run; alternating scoped and unscoped applies resets the
+cursor each time.
 
 # Generate
 

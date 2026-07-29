@@ -466,8 +466,7 @@ func TestApply_smbStepConditional(t *testing.T) {
 
 // Without mounts/smb aggregates no mounts/smb step is constructed: the
 // recorded steps are exactly today's set (S3 byte-equal guard).
-func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {
-	dir := t.TempDir()
+func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	events, _ := stubApplyDeps(t, f)
@@ -491,4 +490,60 @@ func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {
 	sort.Strings(completed)
 	require.Equal(t, []string{"dotfiles", "hooks-post", "hooks-pre", "packages", "tools"}, completed,
 		"completed steps must be exactly today's unconditional+hooks set")
+}
+
+// A positional module filter limits the apply: resolvePlan observes a profile
+// whose Selected holds only the filtered ids, with excluded modules skipped
+// as "module filter" (observed via the resolvePlan seam wrapper). The scope
+// fixture selects demo (system) and shell (user); filtering to shell keeps
+// demo out of the plan entirely.
+func TestApply_moduleFilterLimitsSelection(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	var selectedIDs []string
+	skippedReasons := map[string]string{}
+	innerResolve := resolvePlan
+	resolvePlan = func(p *profile.Profile, ff *facts.Facts) (*resolve.Plan, error) {
+		for _, m := range p.Selected {
+			selectedIDs = append(selectedIDs, m.ID)
+		}
+		for _, s := range p.Skipped {
+			skippedReasons[s.Module.ID] = s.Reason
+		}
+		return innerResolve(p, ff)
+	}
+
+	cmd := &ApplyCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
+		State:   statePath,
+		Yes:     true,
+		Modules: []string{"shell"},
+	}
+	require.NoError(t, cmd.Run())
+
+	requireOrder(t, *events, "load", "resolve")
+	require.Equal(t, []string{"shell"}, selectedIDs)
+	require.Equal(t, "module filter", skippedReasons["demo"])
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+}
+
+// An unknown module id fails after profile load and before plan resolution:
+// Run returns the error and resolvePlan is never called.
+func TestApply_moduleFilterUnknownErrors(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Modules: []string{"nope"}}
+	err := cmd.Run()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nope")
+	require.Contains(t, err.Error(), "shell", "error must list the valid module ids")
+	require.NotContains(t, *events, "resolve", "resolvePlan must not run when the filter is invalid")
 }

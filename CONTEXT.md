@@ -25,6 +25,13 @@ independent: a host-layer module can be system-scoped.
 A directory of related configuration plus a `module.toml` describing it.
 Presence in any layer means managed; there is no enable list.
 
+### Filter
+
+An explicit, per-invocation narrowing of scope to named modules on `modules`,
+`plan`, and `apply`. A filter only ever shrinks what is already selected —
+it can exclude, but never resurrect a module that was skipped for its own
+reason (disabled, `when` mismatch). Absence of a filter means full scope.
+
 ### Generate
 
 The act of producing module content (files and `module.toml`) from

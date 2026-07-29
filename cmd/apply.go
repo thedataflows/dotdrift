@@ -52,6 +52,7 @@ type ApplyCmd struct {
 	State   string    `help:"Path to state file" type:"path" default:""`
 	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
 	NoHooks bool      `help:"Skip pre/post hook commands (also DOTDRIFT_NO_HOOKS=1)" default:"false"`
+	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Out     io.Writer `kong:"-"`
 }
 
@@ -65,6 +66,9 @@ func (c *ApplyCmd) Run() error {
 	p, err := profileLoad(c.Profile, f)
 	if err != nil {
 		return fmt.Errorf("load profile: %w", err)
+	}
+	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
+		return err
 	}
 
 	plan, err := resolvePlan(p, f)

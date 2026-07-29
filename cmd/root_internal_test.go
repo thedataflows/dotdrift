@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/require"
 )
 
@@ -14,6 +15,17 @@ func TestProfilingListenOn_defaultIsLoopback(t *testing.T) {
 	require.True(t, ok, "RootFlags.ProfilingListenOn must exist")
 	require.Equal(t, "127.0.0.1:6060", field.Tag.Get("default"),
 		"pprof must not bind to all interfaces by default")
+}
+
+// Positional module-filter args land on the command's Modules slice as raw
+// argv tokens; comma splitting happens later in profile.ParseModuleFilter.
+func TestKong_applyPositionalModules(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"apply", "vim,git", "extra"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"vim,git", "extra"}, cli.Apply.Modules)
 }
 
 func TestLoadDotenvFiles_loadsEnvFiles(t *testing.T) {

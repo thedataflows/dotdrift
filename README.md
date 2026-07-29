@@ -122,9 +122,9 @@ See `examples/simple/` for a minimal single-module profile, and `examples/profil
 |---------|---------|
 | `dotdrift init [path|git-url]` | Create a new profile (git-initialized) or clone a profile repo |
 | `dotdrift detect` | Print host/user/os/distro/gpu/backend facts |
-| `dotdrift modules` | List selected and skipped modules |
-| `dotdrift plan [--json]` | Print the effective plan without side effects (`--json` for machine-readable output) |
-| `dotdrift apply [--yes] [--no-hooks]` | Run the full pipeline and resume from state |
+| `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules) |
+| `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules) |
+| `dotdrift apply [--yes] [--no-hooks] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules) |
 | `dotdrift status` | Show resume cursor, selection, and last error |
 | `dotdrift onboard <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file) |
 | `dotdrift generate mounts\|smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise |
@@ -135,6 +135,28 @@ dotdrift generate mounts --name syn01 --source nas:/volume1/syn01 \
   --destination /mnt/synology/syn01 --type nfs --startat "*-*-* 18:05:00"
 dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 ```
+
+## Module filter
+
+`modules`, `plan`, and `apply` accept optional positional module ids limiting
+the command's scope to those modules. Ids are space or comma separated (both
+forms mix freely):
+
+```bash
+dotdrift apply vim git      # only vim and git
+dotdrift apply vim,git      # same
+dotdrift plan shell --json  # plan for shell only
+```
+
+With no ids the behavior is unchanged. An unknown id is a loud error naming
+the unknown ids and listing the valid module ids. Naming a module that exists
+but is not selected (disabled via `[modules] disable` or excluded by a `when`
+filter) is also an error naming it and its skip reason — the filter never
+resurrects skipped modules.
+
+> Resume caveat: a filtered apply changes the selection fingerprint, so the
+> resume state resets (with the standard warning) on the first scoped run.
+> Alternating scoped and unscoped applies resets the cursor each time.
 
 ## Testing
 

@@ -12,6 +12,7 @@ import (
 // ModulesCmd lists selected and skipped modules for a profile.
 type ModulesCmd struct {
 	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
+	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Out     io.Writer `kong:"-"`
 }
 
@@ -24,6 +25,9 @@ func (c *ModulesCmd) Run() error {
 	p, err := profile.Load(c.Profile, f)
 	if err != nil {
 		return fmt.Errorf("load profile: %w", err)
+	}
+	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
+		return err
 	}
 	out := c.Out
 	if out == nil {

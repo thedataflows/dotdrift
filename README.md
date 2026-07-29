@@ -13,20 +13,20 @@ A CLI tool for managing Linux configuration through git-backed profiles.
 
 ### From a release (recommended)
 
-Download the archive and its checksum from [the releases page](https://github.com/thedataflows/dotdrift/releases), then verify and install the binary onto your `PATH`:
+Run the installer with `curl | bash`. It resolves the **latest** release, verifies the SHA-256 checksum, and installs the binary to `~/.local/bin`:
 
 ```bash
-VERSION=v0.4.0          # latest tag from the releases page
-ARCH=linux_amd64        # or linux_arm64
-
-curl -LO https://github.com/thedataflows/dotdrift/releases/download/${VERSION}/dotdrift_${VERSION}_${ARCH}.tar.gz
-curl -LO https://github.com/thedataflows/dotdrift/releases/download/${VERSION}/sha256sums.txt
-sha256sum -c --ignore-missing sha256sums.txt        # verify before installing
-tar -xzf dotdrift_${VERSION}_${ARCH}.tar.gz dotdrift
-install -m 0755 dotdrift ~/.local/bin/dotdrift      # ensure ~/.local/bin is on your PATH
+curl -fsSL https://raw.githubusercontent.com/thedataflows/dotdrift/main/install.sh | bash
 ```
 
-Each release ships prebuilt Linux binaries for `amd64` and `arm64`, with an SHA-256 checksum.
+Pin a specific release, or install somewhere else:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/thedataflows/dotdrift/main/install.sh | bash -s v0.4.0
+curl -fsSL https://raw.githubusercontent.com/thedataflows/dotdrift/main/install.sh | DOTDRIFT_BINDIR=/usr/local/bin bash
+```
+
+From a clone, run it directly: `./install.sh [version]`. It needs `curl`, `tar`, and `sha256sum`, and supports Linux on `amd64`/`arm64`. Each release ships prebuilt binaries with an SHA-256 checksum.
 
 ### From source
 
@@ -142,10 +142,12 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift detect` | Print host/user/os/distro/gpu/backend facts. |
 | `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules). |
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
-| `dotdrift apply [--yes] [--no-hooks] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules). |
+| `dotdrift apply [--yes] [--no-hooks] [--verbose] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules). |
 | `dotdrift status` | Show resume cursor, selection, and last error. |
-| `dotdrift onboard <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file). |
+| `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file). |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
+
+`--verbose` (also `DD_VERBOSE=1`) streams package manager and mise output live on `apply` and `onboard`; without it child-process output is captured and only surfaced in errors.
 
 ```bash
 # Generate an NFS mount module with a nightly timer, then two samba shares

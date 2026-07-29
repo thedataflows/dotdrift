@@ -11,9 +11,32 @@ A CLI tool for managing Linux configuration through git-backed profiles.
 
 ## Installation
 
+### From a release (recommended)
+
+Download the archive and its checksum from [the releases page](https://github.com/thedataflows/dotdrift/releases), then verify and install the binary onto your `PATH`:
+
+```bash
+VERSION=v0.4.0          # latest tag from the releases page
+ARCH=linux_amd64        # or linux_arm64
+
+curl -LO https://github.com/thedataflows/dotdrift/releases/download/${VERSION}/dotdrift_${VERSION}_${ARCH}.tar.gz
+curl -LO https://github.com/thedataflows/dotdrift/releases/download/${VERSION}/sha256sums.txt
+sha256sum -c --ignore-missing sha256sums.txt        # verify before installing
+tar -xzf dotdrift_${VERSION}_${ARCH}.tar.gz dotdrift
+install -m 0755 dotdrift ~/.local/bin/dotdrift      # ensure ~/.local/bin is on your PATH
+```
+
+Each release ships prebuilt Linux binaries for `amd64` and `arm64`, with an SHA-256 checksum.
+
+### From source
+
+With [Go](https://go.dev) 1.26 or newer:
+
 ```bash
 go install github.com/thedataflows/dotdrift@latest
 ```
+
+### Runtime dependency
 
 `dotdrift` requires [mise](https://mise.jdx.dev) on `PATH`. When missing or too old, it installs a user-local copy via <https://mise.run>.
 

@@ -15,7 +15,7 @@ A CLI tool for managing Linux configuration through git-backed profiles.
 go install github.com/thedataflows/dotdrift@latest
 ```
 
-`dotdrift` requires [mise](https://mise.jdx.dev) on PATH. It will install a user-local copy via <https://mise.run> when missing or too old.
+`dotdrift` requires [mise](https://mise.jdx.dev) on `PATH`. When missing or too old, it installs a user-local copy via <https://mise.run>.
 
 ## Quick start
 
@@ -54,7 +54,7 @@ profile/
     └── modules/<id>/...        # user overlays (highest precedence)
 ```
 
-The `dotdrift.toml` in each layer may carry a `[modules]` `disable` list; disables are unioned across base, host, and user layers.
+Each layer's `dotdrift.toml` may carry a `[modules] disable` list. Disables are unioned across the base, host, and user layers.
 
 ## Hooks
 
@@ -67,12 +67,15 @@ pre = ["echo about to apply"]
 post = ["systemctl --user daemon-reload"]
 ```
 
-`pre` commands run as the `hooks-pre` step **before** packages are installed; `post` commands run as the `hooks-post` step **after** dotfiles. Commands execute as [mise tasks](https://mise.jdx.dev) from the profile root with `DOTDRIFT_PROFILE`, `DOTDRIFT_HOSTNAME`, `DOTDRIFT_USERNAME`, `DOTDRIFT_OS`, and `DOTDRIFT_BACKEND` in the environment. Unlike other sections, hooks merge by **append** across layers (base → host → user) and modules, in selection order. A failing hook fails its step and resume re-runs it, so write post-hooks to be idempotent. Hooks are listed in `dotdrift plan`; skip them with `dotdrift apply --no-hooks` or `DOTDRIFT_NO_HOOKS=1`.
+- **When they run** — `pre` runs as the `hooks-pre` step, **before** packages are installed; `post` runs as `hooks-post`, **after** dotfiles.
+- **How they run** — commands execute as [mise tasks](https://mise.jdx.dev) from the profile root, with `DOTDRIFT_PROFILE`, `DOTDRIFT_HOSTNAME`, `DOTDRIFT_USERNAME`, `DOTDRIFT_OS`, and `DOTDRIFT_BACKEND` in the environment.
+- **How they merge** — unlike other sections, hooks are **appended** across layers (base → host → user) and modules, in selection order.
+- **Failure and resume** — a failing hook fails its step, and resume re-runs it. Write `post` hooks to be idempotent.
+- **Visibility** — hooks are listed in `dotdrift plan`. Skip them with `dotdrift apply --no-hooks` or `DOTDRIFT_NO_HOOKS=1`.
 
 ## Scope
 
-A module applies to the home directory by default. Set `scope = "system"` in
-its `module.toml` to manage system dotfiles (e.g. targets under `/etc`):
+A module applies to the home directory by default. Set `scope = "system"` in its `module.toml` to manage system dotfiles (e.g. targets under `/etc`):
 
 ```toml
 # modules/<id>/module.toml
@@ -82,52 +85,44 @@ scope = "system"
 "/etc/demo.conf" = { source = "demo.conf", mode = "copy" }
 ```
 
-One `dotdrift apply` covers both scopes: user dotfiles apply as usual, and
-system dotfiles apply in a `dotfiles-system` step via `sudo` (one password
-prompt per apply, thanks to sudo's timestamp cache; no sudo at all when
-already running as root). System-scope entries are marked `[system]` in
-`dotdrift plan`. Packages self-elevate via the distro backend and hooks carry
-their own inline privilege, so neither needs scope machinery.
+A single `dotdrift apply` covers both scopes. User dotfiles apply as usual; system dotfiles apply in a `dotfiles-system` step via `sudo`.
+
+- One password prompt per apply, thanks to sudo's timestamp cache — none at all when already running as root.
+- System-scope entries are marked `[system]` in `dotdrift plan`.
+- Packages self-elevate via the distro backend, and hooks carry their own inline privilege, so neither needs scope machinery.
 
 ## Generate
 
-`dotdrift generate mounts` writes a system-scoped module holding systemd
-`.mount` units (plus `.service`/`.timer` for `--startat`), and
-`dotdrift generate smb` writes one holding `shares.conf` and a one-time
-`smb.conf` seed. Mounts and shares are declared as `[mounts.<name>]` and
-`[smb]`/`[smb.shares.<name>]` tables in the module's `module.toml`
-(merged whole-entry by name across layers); the rendered files are
-derived artifacts. On a terminal with no input flags an interactive
-wizard runs (same byte-identical result as the flag mode); with any
-input flag the strict CLI mode applies. `--layer base|host|user` picks
-where the module lands — a host-layer-only module needs no base stub.
-One CLI run writes one mount (the `[mounts]` section is replaced
-wholesale, so use the wizard's "add another mount?" loop or one
-`--module` per mount for several); `--share` is repeatable. The regular
-apply pipeline then places the files via mise and activates them in the
-conditional `mounts`/`smb` steps (unit enablement, timers, samba
-group/users/service). See `docs/product/cli-surface.md` for the full
-flag reference and `docs/product/migrate-pimp-my-cachyos.md` for a
-worked migration.
+`dotdrift generate` renders a derived module from declarations in `module.toml`:
 
-See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
+- **`generate mounts`** — writes a system-scoped module holding systemd `.mount` units (plus `.service`/`.timer` when `--startat` is set).
+- **`generate smb`** — writes a module holding `shares.conf` and a one-time `smb.conf` seed.
 
-> Note: `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`) so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
+Mounts and shares are declared as `[mounts.<name>]` and `[smb]` / `[smb.shares.<name>]` tables in the module's `module.toml`, merged whole-entry by name across layers. The rendered files are derived artifacts.
 
-> sudo warning: `dotdrift` resolves the username from the OS account, not `$USER`. Running `sudo dotdrift apply` selects **root's** overlays and writes into root's `HOME`. To manage your own dotfiles, run `dotdrift` as your normal user; use `sudo` only if you intentionally maintain a `users/root/` overlay.
+- **Interactive vs strict mode** — on a terminal with no input flags, an interactive wizard runs (byte-identical result to the flag mode); with any input flag, strict CLI mode applies.
+- **Layer selection** — `--layer base|host|user` picks where the module lands. A host-layer-only module needs no base stub.
+- **Batching** — one CLI run writes one mount, since the `[mounts]` section is replaced wholesale. Use the wizard's "add another mount?" loop, or one `--module` per mount, for several mounts. `--share` is repeatable.
+- **Activation** — the regular apply pipeline places the files via mise and activates them in the conditional `mounts` / `smb` steps (unit enablement, timers, samba group/users/service).
+
+See `docs/product/cli-surface.md` for the full flag reference, and `docs/product/migrate-pimp-my-cachyos.md` for a worked migration. See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
+
+> **Note:** `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`), so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
+
+> **sudo warning:** `dotdrift` resolves the username from the OS account, not `$USER`. Running `sudo dotdrift apply` selects **root's** overlays and writes into root's `HOME`. To manage your own dotfiles, run `dotdrift` as your normal user; use `sudo` only if you intentionally maintain a `users/root/` overlay.
 
 ## Commands
 
 | Command | Purpose |
 |---------|---------|
-| `dotdrift init [path|git-url]` | Create a new profile (git-initialized) or clone a profile repo |
-| `dotdrift detect` | Print host/user/os/distro/gpu/backend facts |
-| `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules) |
-| `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules) |
-| `dotdrift apply [--yes] [--no-hooks] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules) |
-| `dotdrift status` | Show resume cursor, selection, and last error |
-| `dotdrift onboard <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file) |
-| `dotdrift generate mounts\|smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise |
+| `dotdrift init [path&#124;git-url]` | Create a new profile (git-initialized) or clone a profile repo. |
+| `dotdrift detect` | Print host/user/os/distro/gpu/backend facts. |
+| `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules). |
+| `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
+| `dotdrift apply [--yes] [--no-hooks] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules). |
+| `dotdrift status` | Show resume cursor, selection, and last error. |
+| `dotdrift onboard <path>...` | Copy live paths into a module and apply (`--force` replaces a conflicting module copy with the live file). |
+| `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 
 ```bash
 # Generate an NFS mount module with a nightly timer, then two samba shares
@@ -138,9 +133,7 @@ dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 
 ## Module filter
 
-`modules`, `plan`, and `apply` accept optional positional module ids limiting
-the command's scope to those modules. Ids are space or comma separated (both
-forms mix freely):
+`modules`, `plan`, and `apply` accept optional positional module ids that limit the command's scope to those modules. Ids are space- or comma-separated (both forms mix freely):
 
 ```bash
 dotdrift apply vim git      # only vim and git
@@ -148,15 +141,12 @@ dotdrift apply vim,git      # same
 dotdrift plan shell --json  # plan for shell only
 ```
 
-With no ids the behavior is unchanged. An unknown id is a loud error naming
-the unknown ids and listing the valid module ids. Naming a module that exists
-but is not selected (disabled via `[modules] disable` or excluded by a `when`
-filter) is also an error naming it and its skip reason — the filter never
-resurrects skipped modules.
+With no ids the behavior is unchanged.
 
-> Resume caveat: a filtered apply changes the selection fingerprint, so the
-> resume state resets (with the standard warning) on the first scoped run.
-> Alternating scoped and unscoped applies resets the cursor each time.
+- **Unknown id** — a loud error naming the unknown ids and listing the valid module ids.
+- **Selected but skipped** — naming a module that exists but is not selected (disabled via `[modules] disable` or excluded by a `when` filter) is also an error, naming it and its skip reason. The filter never resurrects skipped modules.
+
+> **Resume caveat:** a filtered apply changes the selection fingerprint, so the resume state resets (with the standard warning) on the first scoped run. Alternating scoped and unscoped applies resets the cursor each time.
 
 ## Testing
 
@@ -172,7 +162,18 @@ Unit tests run offline. Integration tests against real tools can be added with `
 ./tests/e2e/run.sh
 ```
 
-Builds and runs a Docker end-to-end suite across three distros — the debian family (`debian:bookworm-slim`, `ubuntu:24.04`) and CachyOS (`cachyos/cachyos`); requires Docker and network access. Each container builds dotdrift from this repo, onboards a live file with a real `mise.run` bootstrap, and runs `dotdrift apply` against a fixture profile — then asserts a real package install (`apt` on the debian family, `pacman`/`paru` on CachyOS) of a leaf package (`jq`), dotfile symlinking, pre/post hooks executed as mise tasks, resume no-op on a second apply, complete state on disk, and no runtime pollution inside the profile. The CachyOS image is the first coverage of dotdrift's Arch backend (`paru -S` install + `pacman -Q` idempotency); it ships `paru` from the CachyOS binary repo, so no AUR build is needed. Runs on push to `main` via `.github/workflows/e2e.yml`; the offline `go test ./...` gate is unchanged.
+Builds and runs a Docker end-to-end suite across three distros — the debian family (`debian:bookworm-slim`, `ubuntu:24.04`) and CachyOS (`cachyos/cachyos`). It requires Docker and network access.
+
+Each container builds dotdrift from this repo, onboards a live file with a real `mise.run` bootstrap, and runs `dotdrift apply` against a fixture profile. The suite then asserts:
+
+- a real package install (`apt` on the debian family, `pacman`/`paru` on CachyOS) of a leaf package (`jq`);
+- dotfile symlinking;
+- `pre`/`post` hooks executed as mise tasks;
+- resume no-op on a second apply;
+- complete state on disk; and
+- no runtime pollution inside the profile.
+
+The CachyOS image is the first coverage of dotdrift's Arch backend (`paru -S` install + `pacman -Q` idempotency); it ships `paru` from the CachyOS binary repo, so no AUR build is needed. The suite runs on push to `main` via `.github/workflows/e2e.yml`; the offline `go test ./...` gate is unchanged.
 
 ---
 

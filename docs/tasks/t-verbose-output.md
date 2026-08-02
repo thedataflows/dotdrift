@@ -95,10 +95,13 @@ extra code. `-v` collides with nothing: no other short flags exist and
   verbose on the runner, backend chooses per method).
 - **mounts + smb** (`internal/mounts/mounts.go`, `internal/smb/smb.go`):
   `ExecRunner` gains `Verbose`/`Out`/`Err` + pointer `SetVerbose`. Verbose
-  mode wires `io.MultiWriter(live, &buf)` so output streams AND is captured
+  mode wires `io.MultiWriter(live, cap)` so output streams AND is captured
   (decision: MultiWriter, not a captured exception) — mounts errors keep
   their `argv: err: output` shape and smb's `id -Gn`/`pdbedit -L` parsing
-  plus the testparm gate's error output survive verbatim. Non-verbose wiring
+  plus the testparm gate's error output survive verbatim. `cap` is an
+  `executil.LockedWriter` wrapping the shared buffer: distinct MultiWriter
+  values give os/exec two pipes with two concurrent copy goroutines, which
+  raced (and lost writes) on a bare `*bytes.Buffer`. Non-verbose wiring
   is mechanically identical to `CombinedOutput()`. The interactive
   `smbpasswd` path already streams — untouched.
 - **cmd wiring**: `ApplyCmd`/`OnboardCmd` gain

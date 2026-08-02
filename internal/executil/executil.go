@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"unicode"
 )
 
@@ -35,4 +36,19 @@ func ShellJoin(argv []string) string {
 // EchoCommand writes the set -x-style echo line "+ <argv>\n" to w.
 func EchoCommand(w io.Writer, argv []string) {
 	fmt.Fprintf(w, "+ %s\n", ShellJoin(argv))
+}
+
+// LockedWriter serializes concurrent writes to W. os/exec spawns one copy
+// goroutine per stream when Stdout and Stderr are different writers, so two
+// MultiWriters capturing into one bytes.Buffer race (and silently lose
+// writes) without it.
+type LockedWriter struct {
+	mu sync.Mutex
+	W  io.Writer
+}
+
+func (l *LockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.W.Write(p)
 }

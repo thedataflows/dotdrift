@@ -91,7 +91,7 @@ func TestExecMise_trustsGeneratedConfigDir(t *testing.T) {
 			return em.EnsureAndInstall(ctx, cfg)
 		}},
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApply(ctx, cfg, true)
+			return em.DotfilesApply(ctx, cfg, true, false)
 		}},
 		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.RunTask(ctx, cfg, "hooks:pre")
@@ -188,7 +188,7 @@ func TestExecMise_verboseStreamsOperationOutput(t *testing.T) {
 			return em.EnsureAndInstall(ctx, cfg)
 		}, "install"},
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApply(ctx, cfg, true)
+			return em.DotfilesApply(ctx, cfg, true, false)
 		}, "dotfiles"},
 		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.DotfilesApplySudo(ctx, cfg, true)
@@ -217,7 +217,7 @@ func TestExecMise_nonVerboseDiscardsSuccessOutput(t *testing.T) {
 	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW)
 	_, cfg := generatedConfig(t)
 
-	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true))
+	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true, false))
 	require.Empty(t, out.String(), "non-verbose must not stream stdout")
 	require.Empty(t, errW.String(), "non-verbose must not stream stderr")
 }
@@ -230,7 +230,7 @@ func TestExecMise_nonVerboseErrorAppendsCapturedOutput(t *testing.T) {
 	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW)
 	_, cfg := generatedConfig(t)
 
-	err := em.DotfilesApply(context.Background(), cfg, true)
+	err := em.DotfilesApply(context.Background(), cfg, true, false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "out-dotfiles", "captured output must stay appended to the error")
 	require.Empty(t, out.String())
@@ -245,7 +245,7 @@ func TestExecMise_verboseErrorReturnsBareErr(t *testing.T) {
 	em := verboseExecMise(t, echoMiseScript(t), true, &out, &errW)
 	_, cfg := generatedConfig(t)
 
-	err := em.DotfilesApply(context.Background(), cfg, true)
+	err := em.DotfilesApply(context.Background(), cfg, true, false)
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "out-dotfiles", "streamed output must not be duplicated into the error")
 	require.Contains(t, out.String(), "out-dotfiles")
@@ -283,7 +283,7 @@ func TestExecMise_verboseEchoesCommandLine(t *testing.T) {
 		wantArgv func(script, cfgDir string) []string
 	}{
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApply(ctx, cfg, true)
+			return em.DotfilesApply(ctx, cfg, true, false)
 		}, func(script, cfgDir string) []string {
 			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
 		}},
@@ -327,9 +327,35 @@ func TestExecMise_nonVerboseNoEcho(t *testing.T) {
 	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW)
 	_, cfg := generatedConfig(t)
 
-	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true))
+	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true, false))
 	require.Empty(t, out.String())
 	require.Empty(t, errW.String())
+}
+
+// DotfilesApply with force=true adds --force to the argv (onboard takeover
+// of a live file it just copied); force=false keeps today's argv.
+func TestExecMise_dotfilesApplyForceFlag(t *testing.T) {
+	cases := []struct {
+		name  string
+		force bool
+		tail  []string
+	}{
+		{"force", true, []string{"--yes", "--force"}},
+		{"noForce", false, []string{"--yes"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var out, errW bytes.Buffer
+			script := echoMiseScript(t)
+			em := verboseExecMise(t, script, true, &out, &errW)
+			cfgDir, cfg := generatedConfig(t)
+
+			require.NoError(t, em.DotfilesApply(context.Background(), cfg, true, tc.force))
+
+			want := append([]string{"+", script, "dotfiles", "apply", "--cd", cfgDir}, tc.tail...)
+			require.Contains(t, errW.String(), strings.Join(want, " ")+"\n")
+		})
+	}
 }
 
 // Probes stay silent AND unechoed: `mise --version` must not produce a

@@ -3,6 +3,7 @@ package mise
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/executil"
@@ -100,6 +102,18 @@ func defaultRunContext(ctx context.Context, name string, args ...string) (string
 // one, so callers can override (merged) variables.
 func runContextEnv(ctx context.Context, env []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	// Cancel must kill the whole process group: the default Cancel kills only
+	// the direct child, and a shell wrapper (sh -c) may fork — surviving
+	// grandchildren keep the output pipes open and Wait hangs until they exit
+	// (observed with dash: ctx cancel blocked for the child's full runtime).
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
@@ -503,7 +517,7 @@ func (e *ExecMise) EnsureAndInstall(ctx context.Context, configPath string) erro
 	return err
 }
 
-func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes bool) error {
+func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes, force bool) error {
 	path, err := e.mise.EnsureContext(ctx)
 	if err != nil {
 		return err
@@ -511,6 +525,9 @@ func (e *ExecMise) DotfilesApply(ctx context.Context, configPath string, yes boo
 	args := []string{"dotfiles", "apply", "--cd", filepath.Dir(configPath)}
 	if yes {
 		args = append(args, "--yes")
+	}
+	if force {
+		args = append(args, "--force")
 	}
 	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, args...)
 	return err
@@ -562,7 +579,7 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 // Runner abstracts mise operations used by apply steps.
 type Runner interface {
 	EnsureAndInstall(ctx context.Context, configPath string) error
-	DotfilesApply(ctx context.Context, configPath string, yes bool) error
+	DotfilesApply(ctx context.Context, configPath string, yes, force bool) error
 }
 
 // FakeRunner records mise invocations for tests.
@@ -570,6 +587,7 @@ type FakeRunner struct {
 	InstallCalled  bool
 	DotfilesCalled bool
 	Yes            bool
+	Force          bool
 	Err            error
 }
 
@@ -578,9 +596,10 @@ func (f *FakeRunner) EnsureAndInstall(ctx context.Context, configPath string) er
 	return f.Err
 }
 
-func (f *FakeRunner) DotfilesApply(ctx context.Context, configPath string, yes bool) error {
+func (f *FakeRunner) DotfilesApply(ctx context.Context, configPath string, yes, force bool) error {
 	f.DotfilesCalled = true
 	f.Yes = yes
+	f.Force = force
 	return f.Err
 }
 

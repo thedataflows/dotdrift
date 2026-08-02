@@ -67,8 +67,9 @@ func (r ExecRunner) Run(ctx context.Context, name string, args ...string) (strin
 	if r.Verbose {
 		out, errW := r.writers()
 		executil.EchoCommand(errW, append([]string{name}, args...))
-		cmd.Stdout = io.MultiWriter(out, &buf)
-		cmd.Stderr = io.MultiWriter(errW, &buf)
+		cap := &executil.LockedWriter{W: &buf}
+		cmd.Stdout = io.MultiWriter(out, cap)
+		cmd.Stderr = io.MultiWriter(errW, cap)
 	}
 	err := cmd.Run()
 	return buf.String(), err

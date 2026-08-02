@@ -204,6 +204,30 @@ func TestOnboard_defaultModeSymlink(t *testing.T) {
 	require.Contains(t, content, `mode = "symlink"`)
 }
 
+// Onboard takes over the live file it just copied into the module, so its
+// dotfiles apply must run forced — real mise refuses to overwrite existing
+// files otherwise (docker-e2e onboard failure: "refusing to overwrite
+// existing files (use --force)").
+func TestOnboard_dotfilesApplyForced(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	src := filepath.Join(home, ".bashrc")
+	require.NoError(t, writeFile(src, "bashrc"))
+
+	fr := &mise.FakeRunner{}
+	o := &onboard.Onboard{Mise: fr}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{src},
+		App:         "bash",
+		Home:        home,
+	}))
+	require.True(t, fr.DotfilesCalled)
+	require.True(t, fr.Force, "onboard's dotfiles apply must pass force (it owns the content it just copied)")
+}
+
 func TestOnboard_conflictKeepsModule(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
@@ -347,7 +371,7 @@ func (r *recordingRunner) EnsureAndInstall(ctx context.Context, configPath strin
 	return nil
 }
 
-func (r *recordingRunner) DotfilesApply(ctx context.Context, configPath string, yes bool) error {
+func (r *recordingRunner) DotfilesApply(ctx context.Context, configPath string, yes, force bool) error {
 	r.ctx = ctx
 	r.calls = append(r.calls, "dotfiles")
 	r.configPath = configPath
@@ -371,7 +395,7 @@ func (v *validatingRunner) EnsureAndInstall(ctx context.Context, configPath stri
 	return nil
 }
 
-func (v *validatingRunner) DotfilesApply(ctx context.Context, configPath string, yes bool) error {
+func (v *validatingRunner) DotfilesApply(ctx context.Context, configPath string, yes, force bool) error {
 	v.configPath = configPath
 	cwd := filepath.Dir(configPath)
 	require.True(v.t, strings.HasPrefix(cwd, v.stateRoot+string(os.PathSeparator)),

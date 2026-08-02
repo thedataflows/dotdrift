@@ -68,8 +68,9 @@ func (r ExecRunner) Run(ctx context.Context, argv []string) error {
 	if r.Verbose {
 		out, errW := r.writers()
 		executil.EchoCommand(errW, argv)
-		cmd.Stdout = io.MultiWriter(out, &buf)
-		cmd.Stderr = io.MultiWriter(errW, &buf)
+		cap := &executil.LockedWriter{W: &buf}
+		cmd.Stdout = io.MultiWriter(out, cap)
+		cmd.Stderr = io.MultiWriter(errW, cap)
 	}
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w: %s", strings.Join(argv, " "), err, strings.TrimSpace(buf.String()))

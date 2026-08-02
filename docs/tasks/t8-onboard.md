@@ -27,6 +27,8 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - `TestOnboard_miseConfigInStateDir_absoluteSources` — the generated mise config lives under the XDG state dir (`$XDG_STATE_HOME/dotdrift/profiles/<hash>/onboard/mise.toml`), its dotfile sources are absolute and exist, and the module dir contains no runtime files.
 - `TestOnboard_preservesDirTreeModes` — materializing a directory tree preserves per-file and per-directory modes (ownership is not preserved).
 - `TestOnboard_yesPropagatesToDotfilesApply` — `--yes` reaches `mise dotfiles apply`.
+- `TestOnboard_dotfilesApplyForced` — onboard's dotfiles apply is forced (it owns the content it just copied); real mise refuses to overwrite existing live files otherwise.
+- `TestExecMise_dotfilesApplyForceFlag` — `--force` reaches the mise argv iff `DotfilesApply(force=true)`.
 
 # Implementation notes
 
@@ -34,6 +36,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - Copies live paths into `modules/<app>/` under the profile, writes a `module.toml`, then runs `EnsureMise` and `mise dotfiles apply`.
 - The generated mise config is written to the profile's state directory (`onboard/mise.toml` next to apply's `mise/mise.toml`), never inside the profile; dotfile sources in it are absolute so mise's `--cd` resolution finds the materialized files.
 - `--yes` is plumbed from the CLI through `onboard.Options` to `DotfilesApply` for non-interactive runs.
+- Onboard's dotfiles apply passes `force=true` (the module just snapshotted the live content, so takeover is lossless); the apply pipeline's dotfiles step passes `force=false` — it must refuse to clobber files it does not own.
 - `--force` turns a destination conflict into a refresh: the existing module destination is removed (`os.RemoveAll`, covering both file and directory destinations) and re-copied from the live path. Without `--force`, a conflict errors and leaves the module untouched.
 - File modes are preserved when copying files and directory trees; ownership is not (copies belong to the current user).
 - Default mode is `symlink`; `--mode copy|template` overrides.

@@ -152,7 +152,10 @@ func (o *Onboard) Run(opts Options) error {
 	if err := o.Mise.EnsureAndInstall(ctx, configPath); err != nil {
 		return fmt.Errorf("mise install: %w", err)
 	}
-	if err := o.Mise.DotfilesApply(ctx, configPath, opts.Yes); err != nil {
+	// Onboard just copied the live paths into the module, so takeover is
+	// lossless and forced: mise otherwise refuses to overwrite the
+	// still-present live files.
+	if err := o.Mise.DotfilesApply(ctx, configPath, opts.Yes, true); err != nil {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil

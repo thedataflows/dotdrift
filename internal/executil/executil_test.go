@@ -2,6 +2,10 @@ package executil_test
 
 import (
 	"bytes"
+	"fmt"
+	"io"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -50,4 +54,39 @@ func TestEchoCommand_setXStyleLine(t *testing.T) {
 	var buf bytes.Buffer
 	executil.EchoCommand(&buf, []string{"sudo", "-E", "/home/u/.local/bin/mise", "dotfiles", "apply", "--cd", "/path"})
 	require.Equal(t, "+ sudo -E /home/u/.local/bin/mise dotfiles apply --cd /path\n", buf.String())
+}
+
+// Two MultiWriters sharing one LockedWriter capture (the verbose exec
+// pattern: stdout and stderr pipes copied by concurrent goroutines) must
+// deliver every byte exactly once — run under -race to catch a regression
+// to an unsynchronized buffer.
+func TestLockedWriter_concurrentStreamsDeliverAllBytes(t *testing.T) {
+	var buf bytes.Buffer
+	cap1 := &executil.LockedWriter{W: &buf}
+	var liveOut, liveErr bytes.Buffer
+	stdout := io.MultiWriter(&liveOut, cap1)
+	stderr := io.MultiWriter(&liveErr, cap1)
+
+	const lines = 200
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range lines {
+			fmt.Fprintf(stdout, "out-%d\n", i)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := range lines {
+			fmt.Fprintf(stderr, "err-%d\n", i)
+		}
+	}()
+	wg.Wait()
+
+	for i := range lines {
+		require.Contains(t, buf.String(), fmt.Sprintf("out-%d\n", i))
+		require.Contains(t, buf.String(), fmt.Sprintf("err-%d\n", i))
+	}
+	require.Equal(t, 2*lines, strings.Count(buf.String(), "\n"), "no write may be lost or duplicated")
 }

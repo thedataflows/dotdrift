@@ -67,7 +67,9 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	if err := writeConfig(s.ConfigPath, cfg); err != nil {
 		return fmt.Errorf("write dotfiles mise config: %w", err)
 	}
-	if err := s.Runner.DotfilesApply(ctx, s.ConfigPath, s.Yes); err != nil {
+	// Not forced: apply must refuse to clobber pre-existing files it does not
+	// own (mise errors naming them; onboard is the takeover path).
+	if err := s.Runner.DotfilesApply(ctx, s.ConfigPath, s.Yes, false); err != nil {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil

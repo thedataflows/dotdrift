@@ -443,7 +443,10 @@ func TestApply_smbStepConditional(t *testing.T) {
 	require.Greater(t, postIdx, smbIdx, "hooks-post must run after smb in %v", *events)
 
 	joined := strings.Join(*events, "\n")
-	require.Contains(t, joined, "smb:run sudo -E getent group nas")
+	// No sudo -E prefix assertions: privArgv drops the prefix when the test
+	// runs as root (containers); the mounts assertions above use the same
+	// prefix-free convention. Privilege logic is covered in internal/smb.
+	require.Contains(t, joined, "getent group nas")
 	require.Contains(t, joined, "usermod -aG nas cri")
 	require.Contains(t, joined, "testparm -s")
 	require.Contains(t, joined, "is-enabled smb")

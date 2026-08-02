@@ -371,7 +371,7 @@ func TestEnsureMise_ensureRunsOnceAcrossCalls(t *testing.T) {
 
 	execM := mise.NewExecMise(m)
 	require.NoError(t, execM.EnsureAndInstall(context.Background(), "/fake/mise.toml"))
-	require.NoError(t, execM.DotfilesApply(context.Background(), "/fake/mise.toml", true))
+	require.NoError(t, execM.DotfilesApply(context.Background(), "/fake/mise.toml", true, false))
 
 	require.Equal(t, int32(1), atomic.LoadInt32(&lookPathCalls), "Ensure must run at most once per process")
 	require.Equal(t, int32(1), atomic.LoadInt32(&versionCalls), "version probe must run at most once per process")

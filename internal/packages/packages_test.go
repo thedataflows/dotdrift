@@ -1,6 +1,7 @@
 package packages_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"os/exec"
@@ -8,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -158,6 +160,7 @@ type fakeBackend struct {
 	presentCalls [][]string
 	absentCalls  [][]string
 	err          error
+	absentErr    error
 }
 
 func (f *fakeBackend) Present(ctx context.Context, pkgs []string) error {
@@ -169,6 +172,9 @@ func (f *fakeBackend) Present(ctx context.Context, pkgs []string) error {
 func (f *fakeBackend) Absent(ctx context.Context, pkgs []string) error {
 	f.ctx = ctx
 	f.absentCalls = append(f.absentCalls, pkgs)
+	if f.absentErr != nil {
+		return f.absentErr
+	}
 	return f.err
 }
 
@@ -208,8 +214,15 @@ func TestPackagesStep_propagatesContext(t *testing.T) {
 	require.Equal(t, "step-ctx", b.ctx.Value(ctxKey{}), "step must pass its ctx through to the backend")
 }
 
-func TestPackagesStep_removeErrorFails(t *testing.T) {
-	b := &fakeBackend{err: errors.New("remove failed")}
+// A failed remove (e.g. paru exits 1 on already-missing packages) must warn
+// and proceed to install, not fail the whole apply.
+func TestPackagesStep_removeErrorWarnsAndProceeds(t *testing.T) {
+	var buf bytes.Buffer
+	orig := log.Logger
+	log.Logger = log.Output(&buf)
+	t.Cleanup(func() { log.Logger = orig })
+
+	b := &fakeBackend{absentErr: errors.New("remove failed")}
 	plan := &resolve.Plan{
 		Packages: resolve.PackagesStep{
 			Install: []string{"neovim"},
@@ -218,9 +231,9 @@ func TestPackagesStep_removeErrorFails(t *testing.T) {
 	}
 
 	step := packages.NewStep(b, plan)
-	err := step.Run(context.Background())
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "remove failed")
+	require.NoError(t, step.Run(context.Background()))
+	require.Len(t, b.presentCalls, 1, "install must still run after a failed remove")
+	require.Contains(t, buf.String(), "remove failed", "warning must carry the remove error")
 }
 
 func TestPackagesStep_noPackagesNoBackendCalls(t *testing.T) {

@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/executil"
@@ -183,13 +185,15 @@ func NewStep(backend Backend, plan *resolve.Plan) *Step {
 func (s *Step) Name() string { return "packages" }
 
 // Run applies the package backend, removing absent packages first, then installing present ones.
+// A failed remove (e.g. packages already missing) only warns — removal is
+// best-effort cleanup and must not block the rest of the apply.
 func (s *Step) Run(ctx context.Context) error {
 	if s.plan == nil {
 		return fmt.Errorf("plan is nil")
 	}
 	if len(s.plan.Packages.Remove) > 0 {
 		if err := s.backend.Absent(ctx, s.plan.Packages.Remove); err != nil {
-			return fmt.Errorf("remove packages: %w", err)
+			log.Warn().Err(err).Msg("remove packages failed; continuing")
 		}
 	}
 	if len(s.plan.Packages.Install) > 0 {

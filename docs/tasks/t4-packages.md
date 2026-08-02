@@ -19,7 +19,7 @@ Package step for apply.
 - `TestPacman_isInstalledNotFound` / `TestPacman_isInstalledErrorPropagates` — exit code 1 means "not installed"; any other runner error propagates.
 - `TestPackagesStep_callsPresent` — packages step invokes backend with merged present set.
 - `TestPackagesStep_callsAbsentAndPresent` — packages step invokes `Absent` before `Present`, executing explicit exceptions.
-- `TestPackagesStep_removeErrorFails` — a failing remove stops the pipeline.
+- `TestPackagesStep_removeErrorWarnsAndProceeds` — a failing remove (e.g. `paru -R` exit 1 on already-missing packages) warns and the step proceeds to install.
 - `TestPackagesStep_propagatesContext` — the step passes its `ctx` through to the backend.
 - `TestPackagesStep_idempotent` — already-installed packages are skipped.
 - `TestFor_unknown` / `TestFor_auto_fallbackOnError` — unknown distro or failed auto-resolution yields a backend whose `Present`/`Absent`/`IsInstalled` return an explicit `no supported package backend for distro "X"` error instead of silently succeeding.
@@ -34,7 +34,7 @@ Package step for apply.
 - `present` runs `paru -S --needed --noconfirm <packages...>`.
 - `absent` runs `paru -R --noconfirm <packages...>`.
 - `IsInstalled` uses `pacman -Q <pkg>` for idempotency checks.
-- The packages step calls `backend.Absent(ctx, plan.Packages.Remove)` before `backend.Present(ctx, plan.Packages.Install)` so explicit exceptions are actually uninstalled.
+- The packages step calls `backend.Absent(ctx, plan.Packages.Remove)` before `backend.Present(ctx, plan.Packages.Install)` so explicit exceptions are actually uninstalled. Removal is best-effort: a failed remove logs a warning and the step proceeds (install failures still fail the step).
 - All `exec` calls go through a runner interface so tests fake them.
 - `Runner.Run(ctx, name, args...)` is context-aware: `ExecRunner` uses `exec.CommandContext`, so Ctrl-C (context cancellation) kills the in-flight `paru`/`apt-get`/`dnf` child process instead of leaving it running.
 - `Backend` methods (`Present`/`Absent`/`IsInstalled`) take `ctx` and forward it to the runner; the apply `Step.Run(ctx)` is the source of that context.

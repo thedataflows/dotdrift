@@ -2,6 +2,7 @@
 
 ## 2026-08-02
 
+* **Fixed (onboard default mode, docker-e2e-found)**: the kong flag `--mode` defaulted to `symlink-each`, overriding `internal/onboard`'s `symlink` default — real mise rejects `symlink-each` for file sources, so `dotdrift onboard <file>` failed in docker-e2e with `mode symlink-each requires the source to be a directory`. The CLI default is now `symlink`, matching contract.md invariant 5 and the internal default. New test: `TestOnboard_modeFlag_defaultIsSymlink`.
 * **Fixed (packages step, remove failure tolerance)**: a failing package removal (e.g. `paru -R` exiting 1 because some packages are already missing) no longer fails the whole apply — the packages step logs a zerolog warning carrying the remove error and proceeds to install. Removal is best-effort cleanup; install failures still fail the step. `TestPackagesStep_removeErrorFails` replaced by `TestPackagesStep_removeErrorWarnsAndProceeds` (asserts nil error, install still called, warning logged); `docs/tasks/t4-packages.md` updated.
 
 ## 2026-07-29

@@ -20,6 +20,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - `TestOnboard_noEnableFlagNeeded` — created module is selected by presence on next `apply`.
 - `TestOnboard_orderCopyThenEnsureThenMiseApply` — records the mise call sequence and asserts copy → ensure mise → dotfiles apply order.
 - `TestOnboard_defaultModeSymlink` — default mode is `symlink`.
+- `TestOnboard_modeFlag_defaultIsSymlink` — the CLI flag default is `symlink` too (was `symlink-each`, which real mise rejects for file sources).
 - `TestOnboard_conflictKeepsModule` — if target exists, keep module files and fail the command.
 - `TestOnboard_forceReplacesExistingFile` / `TestOnboard_forceReplacesExistingDir` — with `--force`, a conflicting destination is removed and re-copied from the live path (file refresh; dir add/modify/delete refresh).
 - `TestOnboard_dryRun_noSideEffects` — `--dry-run` writes nothing and invokes nothing.

@@ -159,6 +159,18 @@ func TestOnboard_modeFlag_acceptsDocumentedModes(t *testing.T) {
 	}
 }
 
+// No --mode flag: the CLI default must be symlink (contract.md invariant 5),
+// not symlink-each — real mise rejects symlink-each for file sources, which
+// broke docker-e2e onboarding of a live file.
+func TestOnboard_modeFlag_defaultIsSymlink(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", filepath.Join(t.TempDir(), "x")})
+	require.NoError(t, err)
+	require.Equal(t, "symlink", cli.Onboard.Mode, "default dotfile mode is symlink (contract.md invariant 5)")
+}
+
 func TestOnboard_modeFlowsToModuleTOML(t *testing.T) {
 	for _, mode := range []string{"template", "symlink-each"} {
 		t.Run(mode, func(t *testing.T) {

@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-08-03
+
+* **Added (plan `--deps` / `--deps-depth N`)**: `dotdrift plan --deps` renders a dependency tree for every package in `packages.install`, in both text and `--json` output; `--deps-depth N` (default 1, requires `--deps`, must be >= 1) recurses deeper. New `Backend.DirectDeps(ctx, pkg)` with three implementations in `internal/packages/deps.go`: `paru -Si` (covers AUR, version specs stripped), `apt-cache depends` (PreDepends kept, `|Depends:` alternatives and `<virtual>` targets skipped), `dnf repoquery --requires --resolve --qf '%{name}\n'` (self dropped; argv unverified against a live dnf). `DepsTree` is a memoized DFS — one query per unique package, a path set terminates real pacman cycles (harfbuzz ↔ freetype2), and a failed query marks the node `Unknown` (`- pkg (deps unknown)` in text, `"unknown": true` in JSON) with a zerolog warn-and-proceed so a listing never fails on one package. Two flags rather than one optional-value flag because kong would eat the positional `modules` arg in `--deps 2` space form. Text rendering keeps the `  - pkg` lines byte-identical when `--deps` is off; JSON omits the `packages.deps` key entirely without `--deps`. Deps of the `remove` list are intentionally not shown. Task doc: `docs/tasks/t-plan-deps.md`.
+
 ## 2026-08-02
 
 * **Changed (modules output)**: `dotdrift modules` drops the redundant second column — it printed `selected <id> <app>`, but `app` defaults to the id (`discover.go`), so nearly every line repeated itself. Selected lines are now `selected <id>` with tags only when informative: `[system]` for system scope (matching the plan output convention) and `(app: <app>)` when an explicit `app` differs from the id. Skipped lines are unchanged (`skipped  <id> <reason>` — the reason column earns its place). New fixture `testdata/profiles/appname`; tests updated in `cmd/modules_test.go` (`TestCLI_modules_appAndScopeTags`).

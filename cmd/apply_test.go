@@ -43,6 +43,8 @@ func (b *recordingBackend) Absent(_ context.Context, pkgs []string) error {
 
 func (b *recordingBackend) IsInstalled(context.Context, string) (bool, error) { return false, nil }
 
+func (b *recordingBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
+
 // fakeMise returns a mise bootstrapper that never touches the OS: the binary
 // is always found and reports the minimum required version.
 func fakeMise(events *[]string) *mise.Mise {

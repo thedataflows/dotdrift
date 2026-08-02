@@ -122,7 +122,7 @@ func (c *ApplyCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
-	if err := printPlan(out, plan, p, f); err != nil {
+	if err := printPlan(out, plan, p, f, nil); err != nil {
 		return err
 	}
 

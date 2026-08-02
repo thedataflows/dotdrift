@@ -1,6 +1,7 @@
 package dotdrift
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/smb"
@@ -20,14 +22,31 @@ import (
 // PlanCmd prints the resolved plan without side effects.
 type PlanCmd struct {
 	Profile string       `help:"Path to profile directory" type:"existingdir" default:"."`
-	JSON    bool         `help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
-	Modules []string     `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
-	Facts   *facts.Facts `kong:"-"`
-	Out     io.Writer    `kong:"-"`
+	JSON      bool         `help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
+	Deps      bool         `help:"Show dependency tree for packages in the install list"`
+	DepsDepth int          `default:"1" help:"Dependency recursion depth (requires --deps)"`
+	Modules   []string     `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
+	Facts     *facts.Facts `kong:"-"`
+	Out       io.Writer    `kong:"-"`
 }
 
 // Run loads the profile and prints the resolved plan.
 func (c *PlanCmd) Run() error {
+	// Programmatic construction leaves DepsDepth at its zero value (kong's
+	// default only applies to CLI parsing), so 0 without --deps means unset.
+	if c.Deps && c.DepsDepth < 1 {
+		return fmt.Errorf("--deps-depth must be >= 1")
+	}
+	// kong cannot distinguish "flag absent" from the default 1, so
+	// `--deps-depth 1` alone is a harmless no-op; any other explicit value
+	// without --deps is a user error and fails loudly.
+	if !c.Deps && c.DepsDepth != 0 && c.DepsDepth != 1 {
+		return fmt.Errorf("--deps-depth requires --deps")
+	}
+	if c.DepsDepth == 0 {
+		c.DepsDepth = 1
+	}
+
 	f := c.Facts
 	if f == nil {
 		var err error
@@ -55,10 +74,15 @@ func (c *PlanCmd) Run() error {
 		out = os.Stdout
 	}
 
-	if c.JSON {
-		return printPlanJSON(out, plan, p, f)
+	var deps []packages.PackageDeps
+	if c.Deps {
+		deps = packages.DepsTree(context.Background(), packagesFor(f.Backend), plan.Packages.Install, c.DepsDepth)
 	}
-	return printPlan(out, plan, p, f)
+
+	if c.JSON {
+		return printPlanJSON(out, plan, p, f, deps)
+	}
+	return printPlan(out, plan, p, f, deps)
 }
 
 type planJSONDotfile struct {
@@ -99,12 +123,19 @@ type planJSONSmb struct {
 	Shares map[string]planJSONShare `json:"shares"`
 }
 
+type planJSONDep struct {
+	Name    string        `json:"name"`
+	Deps    []planJSONDep `json:"deps,omitempty"`
+	Unknown bool          `json:"unknown,omitempty"`
+}
+
 type planJSONDoc struct {
 	Fingerprint string   `json:"fingerprint"`
 	Modules     []string `json:"modules"`
 	Packages    struct {
-		Install []string `json:"install"`
-		Remove  []string `json:"remove"`
+		Install []string      `json:"install"`
+		Remove  []string      `json:"remove"`
+		Deps    []planJSONDep `json:"deps,omitempty"`
 	} `json:"packages"`
 	Tools    map[string]string `json:"tools"`
 	Dotfiles []planJSONDotfile `json:"dotfiles"`
@@ -118,7 +149,7 @@ type planJSONDoc struct {
 
 // printPlanJSON renders the plan as one JSON object. The no-modules warning is
 // intentionally omitted so stdout stays parseable by machine consumers.
-func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts) error {
+func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts, deps []packages.PackageDeps) error {
 	doc := planJSONDoc{
 		Fingerprint: resolve.Fingerprint(p, f),
 		Modules:     make([]string, 0, len(p.Selected)),
@@ -131,6 +162,7 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 	sort.Strings(doc.Modules)
 	doc.Packages.Install = plan.Packages.Install
 	doc.Packages.Remove = plan.Packages.Remove
+	doc.Packages.Deps = toPlanJSONDeps(deps)
 	doc.Hooks.Pre = append([]string{}, plan.Hooks.Pre...)
 	doc.Hooks.Post = append([]string{}, plan.Hooks.Post...)
 	for _, e := range plan.Dotfiles.Entries {
@@ -184,14 +216,31 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 	return enc.Encode(doc)
 }
 
-func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts) error {
+func toPlanJSONDeps(nodes []packages.PackageDeps) []planJSONDep {
+	if nodes == nil {
+		return nil
+	}
+	out := make([]planJSONDep, 0, len(nodes))
+	for _, n := range nodes {
+		out = append(out, planJSONDep{Name: n.Name, Unknown: n.Unknown, Deps: toPlanJSONDeps(n.Deps)})
+	}
+	return out
+}
+
+func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts, deps []packages.PackageDeps) error {
 	if len(p.Selected) == 0 {
 		fmt.Fprintln(out, "warning: no modules selected")
 	}
 	fmt.Fprintf(out, "fingerprint:\n%s", resolve.Fingerprint(p, f))
 	fmt.Fprintln(out, "packages:")
-	for _, pkg := range plan.Packages.Install {
-		fmt.Fprintf(out, "  - %s\n", pkg)
+	if deps != nil {
+		for _, node := range deps {
+			printDepTree(out, node, "  ")
+		}
+	} else {
+		for _, pkg := range plan.Packages.Install {
+			fmt.Fprintf(out, "  - %s\n", pkg)
+		}
 	}
 	fmt.Fprintln(out, "remove:")
 	for _, pkg := range plan.Packages.Remove {
@@ -263,6 +312,24 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 		}
 	}
 	return nil
+}
+
+// printDepTree renders one dependency node at indent: `- name` (marked
+// `(deps unknown)` when the query failed), then a `deps:` block one level
+// deeper when children exist.
+func printDepTree(out io.Writer, node packages.PackageDeps, indent string) {
+	if node.Unknown {
+		fmt.Fprintf(out, "%s- %s (deps unknown)\n", indent, node.Name)
+	} else {
+		fmt.Fprintf(out, "%s- %s\n", indent, node.Name)
+	}
+	if len(node.Deps) > 0 {
+		child := indent + "  "
+		fmt.Fprintf(out, "%sdeps:\n", child)
+		for _, d := range node.Deps {
+			printDepTree(out, d, child)
+		}
+	}
 }
 
 func sortedKeys(m map[string]string) []string {

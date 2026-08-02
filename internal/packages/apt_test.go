@@ -84,6 +84,7 @@ type recordingRunner struct {
 	name  string
 	args  []string
 	calls []recordedCall
+	out   string
 	err   error
 }
 
@@ -92,5 +93,5 @@ func (r *recordingRunner) Run(ctx context.Context, name string, args ...string) 
 	r.name = name
 	r.args = args
 	r.calls = append(r.calls, recordedCall{Name: name, Args: args})
-	return "", r.err
+	return r.out, r.err
 }

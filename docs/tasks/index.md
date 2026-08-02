@@ -19,3 +19,4 @@ Each task: write failing tests first, then implement.
 * [T-generate](t-generate.md)
 * [T-module-filter](t-module-filter.md)
 * [T-verbose-output](t-verbose-output.md)
+* [T-plan-deps](t-plan-deps.md)

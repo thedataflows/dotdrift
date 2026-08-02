@@ -26,6 +26,8 @@ type Backend interface {
 	Absent(ctx context.Context, pkgs []string) error
 	// IsInstalled reports whether a package is already installed.
 	IsInstalled(ctx context.Context, pkg string) (bool, error)
+	// DirectDeps returns the names of pkg's direct runtime dependencies.
+	DirectDeps(ctx context.Context, pkg string) ([]string, error)
 }
 
 // Runner runs a command and returns stdout; cancelling ctx kills the child process.
@@ -249,3 +251,5 @@ func (n *noop) Absent(context.Context, []string) error  { return n.err() }
 func (n *noop) IsInstalled(context.Context, string) (bool, error) {
 	return false, n.err()
 }
+
+func (n *noop) DirectDeps(context.Context, string) ([]string, error) { return nil, n.err() }

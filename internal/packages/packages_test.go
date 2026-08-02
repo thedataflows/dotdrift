@@ -182,6 +182,8 @@ func (f *fakeBackend) IsInstalled(ctx context.Context, pkg string) (bool, error)
 	return false, nil
 }
 
+func (f *fakeBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
+
 func TestPackagesStep_callsAbsentAndPresent(t *testing.T) {
 	b := &fakeBackend{}
 	plan := &resolve.Plan{

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -34,7 +35,14 @@ func (c *ModulesCmd) Run() error {
 		out = os.Stdout
 	}
 	for _, m := range p.Selected {
-		fmt.Fprintf(out, "selected %s %s\n", m.ID, m.App)
+		var tags strings.Builder
+		if m.Config.Scope == profile.ScopeSystem {
+			tags.WriteString(" [system]")
+		}
+		if m.App != m.ID {
+			fmt.Fprintf(&tags, " (app: %s)", m.App)
+		}
+		fmt.Fprintf(out, "selected %s%s\n", m.ID, tags.String())
 	}
 	for _, s := range p.Skipped {
 		fmt.Fprintf(out, "skipped  %s %s\n", s.Module.ID, s.Reason)

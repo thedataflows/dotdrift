@@ -18,8 +18,31 @@ func TestCLI_modules_listsStatus(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	out := buf.String()
-	require.Contains(t, out, "selected b b")
+	require.Contains(t, out, "selected b\n", "app column is omitted when app == id")
 	require.Contains(t, out, "skipped  a disabled")
+}
+
+// A module with an explicit app different from its id keeps the app
+// visible, tagged; system-scope modules carry the [system] tag.
+func TestCLI_modules_appAndScopeTags(t *testing.T) {
+	var buf bytes.Buffer
+	c := &cmd.ModulesCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "appname"),
+		Out:     &buf,
+	}
+	require.NoError(t, c.Run())
+	require.Contains(t, buf.String(), "selected foo (app: FooApp)\n")
+
+	buf.Reset()
+	c = &cmd.ModulesCmd{
+		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
+		Out:     &buf,
+	}
+	require.NoError(t, c.Run())
+	out := buf.String()
+	require.Contains(t, out, "selected demo [system]\n")
+	require.Contains(t, out, "selected shell\n", "user-scope modules render without a scope tag")
+	require.NotContains(t, out, "selected shell [system]")
 }
 
 // A positional module filter limits the listing: the listed module stays
@@ -34,7 +57,7 @@ func TestCLI_modules_filterKeepsListed(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	out := buf.String()
-	require.Contains(t, out, "selected b b")
+	require.Contains(t, out, "selected b\n")
 	require.Contains(t, out, "skipped  a disabled")
 	require.NotContains(t, out, "module filter", "a was already disabled; the filter adds no skip")
 }
@@ -51,7 +74,7 @@ func TestCLI_modules_filterExcludesSelected(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	out := buf.String()
-	require.Contains(t, out, "selected shell shell")
+	require.Contains(t, out, "selected shell\n")
 	require.Contains(t, out, "skipped  demo module filter")
 }
 

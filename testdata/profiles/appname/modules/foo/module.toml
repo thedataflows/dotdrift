@@ -1,0 +1,5 @@
+id = "foo"
+app = "FooApp"
+
+[packages]
+present = ["ripgrep"]

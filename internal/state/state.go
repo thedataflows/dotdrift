@@ -21,7 +21,11 @@ const (
 
 // State holds the resume cursor and last error.
 type State struct {
-	Selection string          `json:"selection"`
+	Selection string `json:"selection"`
+	// PlanHash is a content hash of the resolved plan; a change since the last
+	// apply resets resume state (selection alone covers which modules ran, not
+	// what they resolved to).
+	PlanHash  string          `json:"planHash"`
 	Completed map[string]bool `json:"completed"`
 	Current   string          `json:"current"`
 	Status    string          `json:"status"`

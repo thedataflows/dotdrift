@@ -156,6 +156,15 @@ func fingerprintFor(t *testing.T, profileDir string, f *facts.Facts) string {
 	return resolve.Fingerprint(p, f)
 }
 
+func planHashFor(t *testing.T, profileDir string, f *facts.Facts) string {
+	t.Helper()
+	p, err := profile.Load(profileDir, f)
+	require.NoError(t, err)
+	plan, err := resolve.Resolve(p, f)
+	require.NoError(t, err)
+	return resolve.PlanHash(plan)
+}
+
 func resolveFixture(t *testing.T) string {
 	t.Helper()
 	return filepath.Join("..", "testdata", "profiles", "resolve")
@@ -274,8 +283,8 @@ func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
 	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
 	require.NoError(t, cmd.Run())
 
-	require.Contains(t, logBuf.String(), "selection changed")
-	require.Contains(t, logBuf.String(), "reset")
+	require.Contains(t, logBuf.String(), "changed")
+	require.Contains(t, logBuf.String(), "resume state was reset")
 	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep",
 		"packages step must re-run after the selection reset cleared completed steps")
 
@@ -285,6 +294,39 @@ func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
 	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
 		require.True(t, s.IsCompleted(step), "step %s not completed", step)
 	}
+}
+
+// When the selection is unchanged but the resolved plan content differs
+// (e.g. a module's dotfiles were edited since the last failed apply), apply
+// resets resume state so previously-completed steps re-run instead of being
+// skipped — the bug that left edited dotfiles unapplied.
+func TestApply_planContentChangeResetsState(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	// Same selection as the current profile, but a stale plan hash and a
+	// completed packages step that must NOT survive the content change.
+	stale := state.New()
+	stale.Selection = fingerprintFor(t, resolveFixture(t), f)
+	stale.PlanHash = "stale-plan-hash"
+	stale.Completed["packages"] = true
+	stale.Current = "packages"
+	stale.Status = state.StatusFailed
+	stale.Error = "boom"
+	require.NoError(t, state.NewFileStore(statePath).Save(stale))
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
+	require.NoError(t, cmd.Run())
+
+	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep",
+		"steps must re-run after the plan-content reset")
+
+	s := loadStateFile(t, statePath)
+	require.Equal(t, state.StatusComplete, s.Status)
+	require.Equal(t, planHashFor(t, resolveFixture(t), f), s.PlanHash)
+	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
 }
 
 // Apply prints the effective resolved plan (same rendering as `dotdrift plan`)

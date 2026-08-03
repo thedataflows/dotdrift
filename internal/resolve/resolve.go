@@ -2,6 +2,9 @@
 package resolve
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -236,6 +239,27 @@ func Fingerprint(p *profile.Profile, f *facts.Facts) string {
 	fmt.Fprintf(&b, "backend=%s\n", f.Backend)
 
 	return b.String()
+}
+
+// PlanHash returns a stable short hash over the resolved plan's content
+// (packages, tools, dotfiles, hooks, mounts, smb). dotdrift persists it and,
+// on the next apply, resets resume state when it differs — so editing a
+// module's dotfiles/packages/hooks after a failed apply re-runs the affected
+// steps instead of skipping them as "already complete". The selection
+// fingerprint covers WHICH modules ran; PlanHash covers WHAT they resolved to.
+// json.Marshal is deterministic for the Plan value graph (maps encode with
+// sorted keys); a marshal error (none expected for the data-only Plan types)
+// falls back to "" so invalidation is never falsely triggered by a hash fault.
+func PlanHash(plan *Plan) string {
+	if plan == nil {
+		return ""
+	}
+	b, err := json.Marshal(plan)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])[:16]
 }
 
 func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {

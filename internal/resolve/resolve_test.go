@@ -237,7 +237,7 @@ func TestResolveDotfileMode_unknownModeErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "hardlink", "error should name the offending mode")
 }
 
-// mise ignores entries with an empty mode ("unknown mode '', ignoring
+// mise ignores entries with an empty mode ("unknown mode ”, ignoring
 // entry", exit 0), so an omitted mode is the same silent-breakage class as
 // an unknown one and must fail loudly at resolve time.
 func TestResolveDotfileMode_emptyModeErrors(t *testing.T) {
@@ -357,4 +357,55 @@ func TestResolve_emptyUsernameErrors(t *testing.T) {
 	_, err := loadAndResolve(t, root, f)
 	require.Error(t, err, "empty username with selected modules must be an explicit error")
 	require.Contains(t, err.Error(), "username")
+}
+
+// PlanHash is stable for an identical plan value.
+func TestPlanHash_deterministic(t *testing.T) {
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{Install: []string{"ripgrep", "fd"}, Remove: []string{"nano"}},
+		Tools:    resolve.ToolsStep{Versions: map[string]string{"node": "22"}},
+		Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
+			{Target: "~/.bashrc", Source: "/s/.bashrc", Mode: "symlink", Scope: "user"},
+		}},
+		Hooks: resolve.HooksStep{Pre: []string{"echo pre"}, Post: []string{"echo post"}},
+	}
+	require.Equal(t, resolve.PlanHash(plan), resolve.PlanHash(plan))
+}
+
+// A nil plan hashes to the empty string (apply treats "" as "no prior hash").
+func TestPlanHash_nilEmpty(t *testing.T) {
+	require.Empty(t, resolve.PlanHash(nil))
+}
+
+// Any content change that should re-run a step must change the hash.
+func TestPlanHash_changesWithContent(t *testing.T) {
+	base := &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
+		{Target: "~/.bashrc", Source: "/s/.bashrc", Mode: "symlink"},
+	}}}
+	h0 := resolve.PlanHash(base)
+	require.NotEmpty(t, h0)
+
+	changedTarget := *base
+	changedTarget.Dotfiles.Entries[0].Target = "~/.zshrc"
+	require.NotEqual(t, h0, resolve.PlanHash(&changedTarget), "dotfile target change must change hash")
+
+	changedPkgs := *base
+	changedPkgs.Packages.Install = []string{"jq"}
+	require.NotEqual(t, h0, resolve.PlanHash(&changedPkgs), "package change must change hash")
+
+	changedHooks := *base
+	changedHooks.Hooks.Post = []string{"echo done"}
+	require.NotEqual(t, h0, resolve.PlanHash(&changedHooks), "hook change must change hash")
+}
+
+// Two independent resolves of the same profile produce the same hash — the
+// guard against nil-vs-empty-map nondeterminism that would cause spurious
+// resume resets between runs.
+func TestPlanHash_stableAcrossResolves(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"}
+	p1, err := loadAndResolve(t, fixture(t, "resolve"), f)
+	require.NoError(t, err)
+	p2, err := loadAndResolve(t, fixture(t, "resolve"), f)
+	require.NoError(t, err)
+	require.Equal(t, resolve.PlanHash(p1), resolve.PlanHash(p2))
 }

@@ -116,12 +116,19 @@ func (c *ApplyCmd) Run() error {
 	}
 
 	fingerprint := resolve.Fingerprint(p, f)
-	if s.Selection != fingerprint {
-		if s.Selection != "" {
-			log.Warn().Msg("facts or module selection changed since last apply; resume state was reset")
+	planHash := resolve.PlanHash(plan)
+	// Reset resume state when either the selection (which modules) or the
+	// resolved plan content (what they resolved to) changed since the last
+	// apply. Without the plan hash, editing a module's dotfiles/hooks after a
+	// failed apply would leave completed steps skipped on resume — the edited
+	// content never applied.
+	if s.Selection != fingerprint || s.PlanHash != planHash {
+		if s.Selection != "" || s.PlanHash != "" {
+			log.Warn().Msg("module selection or resolved plan changed since last apply; resume state was reset")
 		}
 		s.ResetForSelection()
 		s.Selection = fingerprint
+		s.PlanHash = planHash
 	}
 
 	out := c.Out

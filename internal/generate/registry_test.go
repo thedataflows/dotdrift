@@ -50,8 +50,8 @@ func TestRegistry_embeddedLoads(t *testing.T) {
 		{"btrfs", "volume", "", nil, ""},
 		{"exfat", "volume", "", nil, ""},
 		{"vfat", "volume", "", nil, ""},
-		{"ntfs3", "volume", "ntfs", []string{"ntfsprogs-plus"}, "kernel >= 7.1"},
-		{"ntfs-3g", "volume", "ntfs", []string{"ntfs-3g"}, "kernel < 7.1"},
+		{"ntfs3", "volume", "ntfs", []string{"ntfsprogs-plus"}, "kernel >= 7.2"},
+		{"ntfs-3g", "volume", "ntfs", []string{"ntfs-3g"}, "kernel < 7.2"},
 		{"nfs", "network", "", []string{"nfs-utils", "nfsidmap"}, ""},
 		{"cifs", "network", "", []string{"cifs-utils"}, ""},
 	}
@@ -206,12 +206,17 @@ func TestRecommend_kernelSeamInjected(t *testing.T) {
 	stubKernelRelease(t, "6.12.68-1-lts")
 	e, err := reg.Recommend("ntfs")
 	require.NoError(t, err)
-	require.Equal(t, "ntfs-3g", e.Type, "kernel < 7.1 selects ntfs-3g")
+	require.Equal(t, "ntfs-3g", e.Type, "kernel < 7.2 selects ntfs-3g")
 
-	stubKernelRelease(t, "7.1.2-arch1-1")
+	stubKernelRelease(t, "7.1.5-1-cachyos")
 	e, err = reg.Recommend("ntfs")
 	require.NoError(t, err)
-	require.Equal(t, "ntfs3", e.Type, "kernel >= 7.1 selects ntfs3")
+	require.Equal(t, "ntfs-3g", e.Type, "kernel 7.1 is still below the 7.2 cutoff → ntfs-3g")
+
+	stubKernelRelease(t, "7.2.0-arch1-1")
+	e, err = reg.Recommend("ntfs")
+	require.NoError(t, err)
+	require.Equal(t, "ntfs3", e.Type, "kernel >= 7.2 selects ntfs3")
 }
 
 func TestRecommend_unconstrainedEntryAlwaysEligible(t *testing.T) {
@@ -259,7 +264,7 @@ family = "ntfs"
 options = ["auto"]
 recommended_if = "kernel ~ 7.1"
 `)
-		stubKernelRelease(t, "7.1.0")
+		stubKernelRelease(t, "7.2.0")
 		reg, err := Load()
 		require.NoError(t, err)
 

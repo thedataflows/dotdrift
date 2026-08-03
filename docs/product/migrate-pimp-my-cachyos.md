@@ -106,9 +106,10 @@ existing only under `hosts/<hostname>/modules/` is selected like a base
 module; no base stub needed). From `mounts.cri-pc.yaml`:
 
 ```bash
-# win_c: legacy "ntfs" splits by kernel — ntfs3 (kernel >= 7.1) or
-# ntfs-3g (kernel < 7.1). Pick per host; the wizard preselects the
-# kernel-recommended one. The --type selects the option preset and
+# win_c: the wizard preselects dotdrift's kernel-recommended ntfs
+# driver — ntfs3 on kernel >= 7.2, ntfs-3g below (the legacy script
+# split the same family at 7.1). Pick per host.
+# The --type selects the option preset and
 # packages (ntfs3 → ntfsprogs-plus + removes ntfs-3g; ntfs-3g → ntfs-3g),
 # but the rendered .mount unit always announces the generic Type=ntfs
 # (matching the legacy bare-ntfs unit) — the kernel/mount helper picks
@@ -173,8 +174,8 @@ On apply, placement and activation stay separate
 1. **packages** — the backend installs the union: registry packages per
    mount type (`nfs-utils`, `nfsidmap`, `ntfsprogs-plus`, …) plus
    `samba` and `avahi`. Removals carry over too: an `ntfs3` mount also
-   records `packages.absent = ["ntfs-3g"]`, mirroring the legacy script's
-   kernel >= 7.1 cleanup (skipped when the module also uses `ntfs-3g`).
+   records `packages.absent = ["ntfs-3g"]`, mirroring the legacy
+   script's cleanup (skipped when the module also uses `ntfs-3g`).
 2. **dotfiles-system** — mise copies the generated units to
    `/usr/local/lib/systemd/system/` and `smb.conf` + `shares.conf` into
    `/etc/samba/` (`smb.conf` is seeded once in the module and then

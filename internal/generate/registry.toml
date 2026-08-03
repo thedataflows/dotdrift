@@ -39,7 +39,7 @@ options = ["auto", "rw", "uid", "gid", "dmask=027", "fmask=027", "noatime"]
 kind = "volume"
 family = "ntfs"
 options = ["auto", "rw", "uid", "gid", "dmask=027", "fmask=027", "dev", "exec", "noatime", "iocharset=utf8", "windows_names", "suid", "discard"]
-recommended_if = "kernel >= 7.1"
+recommended_if = "kernel >= 7.2"
 packages = ["ntfsprogs-plus"]
 absent = ["ntfs-3g"]
 
@@ -47,7 +47,7 @@ absent = ["ntfs-3g"]
 kind = "volume"
 family = "ntfs"
 options = ["auto", "rw", "uid", "gid", "dmask=027", "fmask=027", "dev", "exec", "noatime", "iocharset=utf8", "windows_names", "big_writes", "suid"]
-recommended_if = "kernel < 7.1"
+recommended_if = "kernel < 7.2"
 packages = ["ntfs-3g"]
 
 [filesystems.nfs]

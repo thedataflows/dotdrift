@@ -48,7 +48,7 @@ type Entry struct {
 	// Packages are the distro packages the filesystem type needs.
 	Packages []string `toml:"packages"`
 	// Absent lists distro packages to remove when the type is used (e.g.
-	// the ntfs3 preset removes ntfs-3g on kernel >= 7.1, mirroring the
+	// the ntfs3 preset removes ntfs-3g on kernel >= 7.2, mirroring the
 	// legacy script's cleanup).
 	Absent []string `toml:"absent"`
 }

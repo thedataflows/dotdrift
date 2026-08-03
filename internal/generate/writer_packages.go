@@ -6,7 +6,7 @@ import (
 )
 
 // unionAbsent merges registry-required package removals (e.g. the ntfs3
-// preset's ntfs-3g removal, mirroring the legacy script's kernel >= 7.1
+// preset's ntfs-3g removal, mirroring the legacy script's kernel >= 7.2
 // cleanup) into packages.absent. A removal candidate already in the
 // unioned present list is skipped: packages are union-only, so a module
 // that ever required the package keeps it installed (removing a mount

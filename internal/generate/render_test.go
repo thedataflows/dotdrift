@@ -80,8 +80,8 @@ func TestRender_volumeMountNoTimer_golden(t *testing.T) {
 	require.NotContains(t, got, "After=")
 }
 
-// Given an ntfs-family mount (ntfs3 on kernel >= 7.1, ntfs-3g on
-// kernel < 7.1) and its registry preset, When the mount unit is
+// Given an ntfs-family mount (ntfs3 on kernel >= 7.2, ntfs-3g on
+// kernel < 7.2) and its registry preset, When the mount unit is
 // rendered, Then Type= names the generic family "ntfs": the driver is
 // chosen by the kernel/mount helper at mount time, not pinned in the
 // unit. The preset-specific options still apply, and the driver-

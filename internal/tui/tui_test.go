@@ -57,6 +57,7 @@ func TestWizard_kernelRecommendedTypeIsDefault(t *testing.T) {
 		want   string
 	}{
 		{"7.2.1-arch1-1", "ntfs3"},
+		{"7.1.5-1-cachyos", "ntfs-3g"},
 		{"6.9.3", "ntfs-3g"},
 	} {
 		t.Run(tc.kernel, func(t *testing.T) {

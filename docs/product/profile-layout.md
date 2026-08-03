@@ -130,8 +130,8 @@ public = false
   iteration is ignored). A malformed
   constraint is a load-time error naming the module; an empty kernel fact
   (detection failed) never matches a non-empty constraint. Use it for
-  kernel-gated packages, e.g. one module with `kernel = "< 7.1"` installing
-  `ntfs-3g` and another with `kernel = ">= 7.1"` installing `ntfsprogs-plus`.
+  kernel-gated packages, e.g. one module with `kernel = "< 7.2"` installing
+  `ntfs-3g` and another with `kernel = ">= 7.2"` installing `ntfsprogs-plus`.
 - `scope` is module-level: `"user"` (the default when omitted) or `"system"`.
   It decides how the module's dotfiles are applied — user-scope entries are
   applied as the invoking user, system-scope entries are applied with root

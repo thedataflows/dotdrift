@@ -103,7 +103,7 @@ byte-equivalent to the CLI.
   <version>` with zero-padded numeric segment compare.
   Entries also carry `packages`
   (required) and `absent` (removals — ntfs3 removes ntfs-3g, mirroring
-  the legacy script's kernel >= 7.1 cleanup); the writer unions both
+  the legacy script's cleanup); the writer unions both
   into the module's `[packages]`, skipping an absent candidate that is
   present in the unioned present list (`unionAbsent`). The registry is a
   generate-time concern only — resolve never validates mount types

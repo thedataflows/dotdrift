@@ -16,4 +16,4 @@ use, plus emergent features and chores. Planned work lives in
 
 | Issue | Title | Status | Priority |
 |---|---|---|---|
-| _none yet_ | | | |
+| [0001](0001-cross-module-dotfile-target-conflict.md) | Cross-module dotfile target conflict emits unparseable mise.toml | done | high |

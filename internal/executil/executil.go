@@ -4,6 +4,7 @@ package executil
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"unicode"
@@ -20,7 +21,7 @@ func needsQuoting(arg string) bool {
 
 // ShellJoin renders argv as a shell-style command line: elements are joined
 // with single spaces; any element containing whitespace or a single quote is
-// single-quoted (each ' escaped as '\''), bash set -x style. Simple elements
+// single-quoted (each ' escaped as '\”), bash set -x style. Simple elements
 // pass through unquoted. Empty argv joins to the empty string.
 func ShellJoin(argv []string) string {
 	quoted := make([]string, len(argv))
@@ -51,4 +52,19 @@ func (l *LockedWriter) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.W.Write(p)
+}
+
+// IsStdinTerminal reports whether stdin is connected to a terminal. dotdrift
+// uses it to decide whether a generated mise hook task may opt into
+// interactive mode (interactive = true): when stdin is a TTY, an interactive
+// command inside a hook (e.g. sudo) gets a controlling terminal so it can
+// disable echo, instead of reading the password with echo on. Stdlib-only
+// char-device check (golang.org/x/term is not vendored). A variable so tests
+// and callers can substitute it.
+var IsStdinTerminal = func() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }

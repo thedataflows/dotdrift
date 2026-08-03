@@ -198,6 +198,35 @@ func TestApply_happyPath(t *testing.T) {
 	}
 }
 
+// When dotdrift's stdin is a terminal, the generated hook tasks are marked
+// interactive so a hook running an interactive command (e.g. sudo) reaches a
+// controlling terminal and can disable echo; when stdin is not a terminal the
+// key is omitted so mise runs normally.
+func TestApply_hookTaskInteractiveReflectsStdinTTY(t *testing.T) {
+	orig := stdinIsTerminal
+	t.Cleanup(func() { stdinIsTerminal = orig })
+
+	run := func(t *testing.T, tty bool) string {
+		t.Helper()
+		dir := t.TempDir()
+		statePath := filepath.Join(dir, "state.json")
+		f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+		stubApplyDeps(t, f)
+		stdinIsTerminal = func() bool { return tty }
+		require.NoError(t, (&ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
+		cfg, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
+		require.NoError(t, err)
+		return string(cfg)
+	}
+
+	t.Run("tty marks tasks interactive", func(t *testing.T) {
+		require.Contains(t, run(t, true), "interactive = true")
+	})
+	t.Run("no tty omits the key", func(t *testing.T) {
+		require.NotContains(t, run(t, false), "interactive")
+	})
+}
+
 // The tools/dotfiles steps each get their own config (in their own
 // directory) so rewriting them cannot clobber the shared full config: the
 // [tasks] hook definitions must survive the whole pipeline, or hooks-post
@@ -471,7 +500,8 @@ func TestApply_smbStepConditional(t *testing.T) {
 
 // Without mounts/smb aggregates no mounts/smb step is constructed: the
 // recorded steps are exactly today's set (S3 byte-equal guard).
-func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {	dir := t.TempDir()
+func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {
+	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	events, _ := stubApplyDeps(t, f)

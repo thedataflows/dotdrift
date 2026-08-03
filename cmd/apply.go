@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -35,6 +36,11 @@ var (
 	newMountsRunner = func() mounts.Runner { return &mounts.ExecRunner{} }
 	// newSmbRunner builds the smb step runner; swapped out by tests.
 	newSmbRunner = func() smb.Runner { return &smb.ExecRunner{} }
+	// stdinIsTerminal reports whether dotdrift's stdin is a TTY, deciding
+	// whether generated hook tasks opt into mise interactive mode so an
+	// interactive hook command (e.g. sudo) reaches a controlling terminal.
+	// Swapped out by tests.
+	stdinIsTerminal = executil.IsStdinTerminal
 )
 
 // verboseRunner is the narrow seam concrete runners implement to receive the
@@ -149,7 +155,7 @@ func (c *ApplyCmd) Run() error {
 	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		return fmt.Errorf("create mise config dir: %w", err)
 	}
-	if err := os.WriteFile(configPath, []byte(mise.GenerateApplyConfig(plan, profileRoot, f)), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(mise.GenerateApplyConfig(plan, profileRoot, f, stdinIsTerminal())), 0o644); err != nil {
 		return fmt.Errorf("write mise config: %w", err)
 	}
 

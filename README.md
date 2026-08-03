@@ -92,6 +92,7 @@ post = ["systemctl --user daemon-reload"]
 
 - **When they run** — `pre` runs as the `hooks-pre` step, **before** packages are installed; `post` runs as `hooks-post`, **after** dotfiles.
 - **How they run** — commands execute as [mise tasks](https://mise.jdx.dev) from the profile root, with `DOTDRIFT_PROFILE`, `DOTDRIFT_HOSTNAME`, `DOTDRIFT_USERNAME`, `DOTDRIFT_OS`, and `DOTDRIFT_BACKEND` in the environment.
+- **Interactive commands** — when `dotdrift apply` has a terminal on stdin, hook tasks are generated with [`interactive = true`](https://mise.jdx.dev/tasks/task-configuration.html#interactive), so an interactive command in a hook (e.g. `sudo`) connects to the terminal and can disable echo on its password prompt instead of echoing it. With no terminal (piped/CI), hooks run normally.
 - **How they merge** — unlike other sections, hooks are **appended** across layers (base → host → user) and modules, in selection order.
 - **Failure and resume** — a failing hook fails its step, and resume re-runs it. Write `post` hooks to be idempotent.
 - **Visibility** — hooks are listed in `dotdrift plan`. Skip them with `dotdrift apply --no-hooks` or `DOTDRIFT_NO_HOOKS=1`.

@@ -20,9 +20,10 @@ var testFacts = &facts.Facts{
 }
 
 type hookTask struct {
-	Run []string          `toml:"run"`
-	Dir string            `toml:"dir"`
-	Env map[string]string `toml:"env"`
+	Run         []string          `toml:"run"`
+	Dir         string            `toml:"dir"`
+	Env         map[string]string `toml:"env"`
+	Interactive bool              `toml:"interactive"`
 }
 
 func decodeHookTasks(t *testing.T, cfg string) map[string]hookTask {
@@ -43,7 +44,7 @@ func TestGenerateHookTasks_preAndPost(t *testing.T) {
 		Pre:  []string{"echo base-pre", "echo host-pre"},
 		Post: []string{"echo base-post"},
 	}
-	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
+	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts, false)
 
 	require.Contains(t, out, `[tasks."hooks:pre"]`)
 	require.Contains(t, out, `[tasks."hooks:post"]`)
@@ -70,12 +71,12 @@ func TestGenerateHookTasks_preAndPost(t *testing.T) {
 
 // No hook commands → no [tasks] section at all.
 func TestGenerateHookTasks_empty(t *testing.T) {
-	require.Empty(t, mise.GenerateHookTasks(resolve.HooksStep{}, "/profiles/main", testFacts))
+	require.Empty(t, mise.GenerateHookTasks(resolve.HooksStep{}, "/profiles/main", testFacts, false))
 }
 
 // Only the non-empty side is emitted.
 func TestGenerateHookTasks_preOnly(t *testing.T) {
-	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []string{"echo hi"}}, "/profiles/main", testFacts)
+	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []string{"echo hi"}}, "/profiles/main", testFacts, false)
 	tasks := decodeHookTasks(t, out)
 	require.Contains(t, tasks, "hooks:pre")
 	require.NotContains(t, tasks, "hooks:post")
@@ -84,9 +85,38 @@ func TestGenerateHookTasks_preOnly(t *testing.T) {
 // Shell metacharacters in commands must survive the TOML round-trip.
 func TestGenerateHookTasks_escapesCommands(t *testing.T) {
 	hooks := resolve.HooksStep{Pre: []string{`echo "a b" && sed -i 's\x\y\g' f`}}
-	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
+	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts, false)
 	tasks := decodeHookTasks(t, out)
 	require.Equal(t, hooks.Pre, tasks["hooks:pre"].Run)
+}
+
+// interactive=true marks each hook task interactive so mise connects it to the
+// terminal — a hook running sudo can then disable echo instead of echoing the
+// password.
+func TestGenerateHookTasks_interactiveTrue(t *testing.T) {
+	hooks := resolve.HooksStep{Pre: []string{"echo pre"}, Post: []string{"echo post"}}
+	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts, true)
+
+	require.Contains(t, out, "interactive = true")
+	tasks := decodeHookTasks(t, out)
+	require.True(t, tasks["hooks:pre"].Interactive, "hooks:pre must be interactive")
+	require.True(t, tasks["hooks:post"].Interactive, "hooks:post must be interactive")
+}
+
+// When not interactive the key is omitted entirely (mise defaults to false);
+// the task stays byte-identical to the pre-feature output.
+func TestGenerateHookTasks_notInteractiveOmitsKey(t *testing.T) {
+	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []string{"echo pre"}}, "/profiles/main", testFacts, false)
+	require.NotContains(t, out, "interactive")
+	require.False(t, decodeHookTasks(t, out)["hooks:pre"].Interactive)
+}
+
+// The interactive flag flows through the full apply config, not just the
+// standalone task generator.
+func TestGenerateApplyConfig_interactiveFlowsThrough(t *testing.T) {
+	plan := &resolve.Plan{Hooks: resolve.HooksStep{Pre: []string{"echo pre"}}}
+	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts, true)
+	require.Contains(t, out, "interactive = true")
 }
 
 // The apply-time config composes tools, dotfiles, and hook tasks.
@@ -98,7 +128,7 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 		}},
 		Hooks: resolve.HooksStep{Pre: []string{"echo pre"}, Post: []string{"echo post"}},
 	}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts, false)
 
 	require.Contains(t, out, "[tools]")
 	require.Contains(t, out, "[dotfiles]")
@@ -113,7 +143,7 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 // A plan without hooks keeps the apply config task-free.
 func TestGenerateApplyConfig_noHooks(t *testing.T) {
 	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts, false)
 	require.Contains(t, out, "[tools]")
 	require.NotContains(t, out, "[tasks]")
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +32,7 @@ func TestShellJoin_tabTriggersQuoting(t *testing.T) {
 		executil.ShellJoin([]string{"sh", "-c", "echo hi\tthere"}))
 }
 
-// An embedded single quote is escaped '\'' style, even without whitespace.
+// An embedded single quote is escaped '\” style, even without whitespace.
 func TestShellJoin_singleQuoteEscaped(t *testing.T) {
 	require.Equal(t, `echo 'it'\''s'`,
 		executil.ShellJoin([]string{"echo", "it's"}))
@@ -89,4 +90,24 @@ func TestLockedWriter_concurrentStreamsDeliverAllBytes(t *testing.T) {
 		require.Contains(t, buf.String(), fmt.Sprintf("err-%d\n", i))
 	}
 	require.Equal(t, 2*lines, strings.Count(buf.String(), "\n"), "no write may be lost or duplicated")
+}
+
+// A char device (here /dev/null) reads as a terminal.
+func TestIsStdinTerminal_charDeviceIsTrue(t *testing.T) {
+	orig := os.Stdin
+	devnull, err := os.Open(os.DevNull)
+	require.NoError(t, err)
+	os.Stdin = devnull
+	t.Cleanup(func() { _ = devnull.Close(); os.Stdin = orig })
+	require.True(t, executil.IsStdinTerminal())
+}
+
+// A regular file is not a terminal — the check is the ModeCharDevice bit.
+func TestIsStdinTerminal_regularFileIsFalse(t *testing.T) {
+	orig := os.Stdin
+	f, err := os.CreateTemp(t.TempDir(), "stdin")
+	require.NoError(t, err)
+	os.Stdin = f
+	t.Cleanup(func() { _ = f.Close(); os.Stdin = orig })
+	require.False(t, executil.IsStdinTerminal())
 }

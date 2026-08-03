@@ -98,15 +98,10 @@ func privArgv(euid int, name string, args ...string) []string {
 	return append([]string{"sudo", "-E"}, argv...)
 }
 
-// isTTY reports whether stdin is a terminal. Stdlib-only char-device check
-// (golang.org/x/term is not vendored). A variable so tests can substitute it.
-var isTTY = func() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
-}
+// isTTY reports whether stdin is a terminal. Delegates to the shared
+// executil.IsStdinTerminal (the char-device check lives there once); kept as
+// a package var so tests can substitute it via stubSeams.
+var isTTY = executil.IsStdinTerminal
 
 // Step is the apply pipeline step for Samba server activation, consuming the
 // resolved smb aggregate. Out receives intentional user-facing messages (the

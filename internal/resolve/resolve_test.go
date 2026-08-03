@@ -409,3 +409,24 @@ func TestPlanHash_stableAcrossResolves(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, resolve.PlanHash(p1), resolve.PlanHash(p2))
 }
+
+// Editing a dotfile source file in place (same path, new content) must change
+// the hash — the plan struct carries only the source PATH, so without folding
+// in file bytes an in-place edit would leave resume state pointing at the old
+// content and the dotfiles step would be skipped.
+func TestPlanHash_changesWithSourceContent(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "f")
+	require.NoError(t, os.WriteFile(src, []byte("v1\n"), 0o644))
+	plan := &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
+		{Target: "~/f", Source: src, Mode: "copy"},
+	}}}
+	h1 := resolve.PlanHash(plan)
+	require.NotEmpty(t, h1)
+
+	require.NoError(t, os.WriteFile(src, []byte("v2\n"), 0o644))
+	require.NotEqual(t, h1, resolve.PlanHash(plan), "editing source content must change the hash")
+
+	// Same content re-hashes stably (no spurious reset on a clean re-apply).
+	require.Equal(t, resolve.PlanHash(plan), resolve.PlanHash(plan))
+}

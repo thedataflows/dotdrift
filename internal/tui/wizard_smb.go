@@ -68,7 +68,7 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 				// CLI parity: a shareless smb module is not writable — fall
 				// through to the share prompt instead of dead-ending at the
 				// write confirm.
-				fmt.Fprintln(os.Stderr, "at least one share is required")
+				warnf(os.Stderr, "at least one share is required")
 			}
 		}
 		share, err := promptShare()
@@ -92,7 +92,7 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 		return friendlyAbort(err)
 	}
 	if !write {
-		fmt.Fprintln(os.Stderr, "discarded; nothing written")
+		infof(os.Stderr, "discarded; nothing written")
 		return nil
 	}
 
@@ -172,18 +172,21 @@ func promptShare() (ShareChoice, error) {
 
 // confirmShare renders a share review and asks whether to keep it.
 func confirmShare(c ShareChoice) (bool, error) {
-	var b strings.Builder
-	fmt.Fprintf(&b, "name:     %s\n", c.Name)
-	fmt.Fprintf(&b, "path:     %s\n", c.Path)
-	if c.Comment != "" {
-		fmt.Fprintf(&b, "comment:  %s\n", c.Comment)
+	pairs := []KV{
+		{Key: "name", Value: c.Name},
+		{Key: "path", Value: c.Path},
 	}
-	fmt.Fprintf(&b, "writable: %t\n", c.Writable)
-	fmt.Fprintf(&b, "public:   %t\n", c.Public)
+	if c.Comment != "" {
+		pairs = append(pairs, KV{Key: "comment", Value: c.Comment})
+	}
+	pairs = append(pairs,
+		KV{Key: "writable", Value: fmt.Sprintf("%t", c.Writable)},
+		KV{Key: "public", Value: fmt.Sprintf("%t", c.Public)},
+	)
 
 	keep := true
 	if err := huh.NewForm(huh.NewGroup(
-		huh.NewNote().Title("Review share").Description(b.String()),
+		huh.NewNote().Title("Review share").Description(renderKV(pairs)),
 		huh.NewConfirm().Title("Keep this share?").Value(&keep),
 	)).Run(); err != nil {
 		return false, err
@@ -193,20 +196,21 @@ func confirmShare(c ShareChoice) (bool, error) {
 
 // confirmSmbSpec renders the final review and the write confirmation.
 func confirmSmbSpec(sel generate.Selection, server SmbServerChoice, wizard *SmbWizard) (bool, error) {
-	var b strings.Builder
-	fmt.Fprintf(&b, "module:  %s (layer %s)\n", sel.ModuleID, sel.Layer)
-	fmt.Fprintf(&b, "group:   %s\n", server.Group)
-	fmt.Fprintf(&b, "users:   %s\n", strings.Join(server.Users, ", "))
 	avahi := "yes"
 	if server.Avahi != nil && !*server.Avahi {
 		avahi = "no"
 	}
-	fmt.Fprintf(&b, "avahi:   %s\n", avahi)
-	fmt.Fprintf(&b, "shares:  %d configured\n", len(wizard.shares))
+	pairs := []KV{
+		{Key: "module", Value: fmt.Sprintf("%s (layer %s)", sel.ModuleID, sel.Layer)},
+		{Key: "group", Value: server.Group},
+		{Key: "users", Value: strings.Join(server.Users, ", ")},
+		{Key: "avahi", Value: avahi},
+		{Key: "shares", Value: fmt.Sprintf("%d configured", len(wizard.shares))},
+	}
 
 	write := true
 	if err := huh.NewForm(huh.NewGroup(
-		huh.NewNote().Title("Review smb module").Description(b.String()),
+		huh.NewNote().Title("Review smb module").Description(renderKV(pairs)),
 		huh.NewConfirm().
 			Title("Write the module?").
 			Description("All shares are written in one pass; declining discards every choice.").

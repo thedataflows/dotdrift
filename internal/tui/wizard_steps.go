@@ -185,24 +185,25 @@ func promptOptionsScheduleState(reg *generate.Registry, choice MountChoice) (Mou
 // confirmMount renders the review screen and asks whether to keep the
 // mount.
 func confirmMount(c MountChoice) (bool, error) {
-	var b strings.Builder
-	fmt.Fprintf(&b, "name:        %s\n", c.Name)
-	fmt.Fprintf(&b, "source:      `%s`\n", c.Source)
-	fmt.Fprintf(&b, "destination: %s\n", c.Destination)
-	fmt.Fprintf(&b, "type:        %s\n", c.Type)
+	pairs := []KV{
+		{Key: "name", Value: c.Name},
+		{Key: "source", Value: c.Source},
+		{Key: "destination", Value: c.Destination},
+		{Key: "type", Value: c.Type},
+	}
 	if len(c.Options) > 0 {
-		fmt.Fprintf(&b, "options:     `%s`\n", strings.Join(c.Options, ","))
+		pairs = append(pairs, KV{Key: "options", Value: strings.Join(c.Options, ",")})
 	} else {
-		b.WriteString("options:     (registry preset)\n")
+		pairs = append(pairs, KV{Key: "options", Value: "(registry preset)", Muted: true})
 	}
 	if c.StartAt != "" {
-		fmt.Fprintf(&b, "schedule:    `%s`\n", c.StartAt)
+		pairs = append(pairs, KV{Key: "schedule", Value: c.StartAt})
 	}
-	fmt.Fprintf(&b, "state:       %s\n", defaultState(c.State))
+	pairs = append(pairs, KV{Key: "state", Value: defaultState(c.State)})
 
 	keep := true
 	if err := huh.NewForm(huh.NewGroup(
-		huh.NewNote().Title("Review mount").Description(b.String()),
+		huh.NewNote().Title("Review mount").Description(renderKV(pairs)),
 		huh.NewConfirm().Title("Keep this mount?").Value(&keep),
 	)).Run(); err != nil {
 		return false, err

@@ -35,7 +35,7 @@ func nonEmpty(what string) func(string) error {
 // friendlyAbort maps a user abort to a clean, silent exit.
 func friendlyAbort(err error) error {
 	if errors.Is(err, huh.ErrUserAborted) {
-		fmt.Fprintln(os.Stderr, "aborted; nothing written")
+		infof(os.Stderr, "aborted; nothing written")
 		return nil
 	}
 	return err

@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"slices"
 
@@ -80,7 +79,7 @@ func runMountsFlow(ctx context.Context, p MountsParams) error {
 	}
 
 	if len(wizard.Mounts()) == 0 {
-		fmt.Fprintln(os.Stderr, "no mounts configured; nothing written")
+		warnf(os.Stderr, "no mounts configured; nothing written")
 		return nil
 	}
 	uid, gid, _, err := InvokingUser()
@@ -125,7 +124,7 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 	}
 	vols, err := generate.Volumes(ctx, reg, sources)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "detecting volumes failed: %v\n", err)
+		errorf(os.Stderr, "detecting volumes failed: %v", err)
 		fallback, cerr := confirm("Fall back to a manual source input?", true)
 		if cerr != nil {
 			return nil, cerr
@@ -136,7 +135,7 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 		return promptManualVolume(reg, defaults)
 	}
 	if volumePathAction(nil, len(vols), false) == volumeManual {
-		fmt.Fprintln(os.Stderr, "no volumes detected; falling back to a manual source input")
+		warnf(os.Stderr, "no volumes detected; falling back to a manual source input")
 		return promptManualVolume(reg, defaults)
 	}
 

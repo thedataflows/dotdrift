@@ -137,6 +137,7 @@ public = false
     `symlink-each` requires the source to be a directory; each file inside it
     is symlinked individually into the target directory.
 - Higher layers (user > host > module) override lower layers for the same dotfile target.
+- Two selected modules claiming the same dotfile target is a resolve-time error naming the target and every claiming module (it would otherwise produce a duplicate-key `mise.toml` that mise refuses to parse).
 - `hooks.pre` / `hooks.post` are arrays of shell commands run as mise tasks during
   `dotdrift apply` (`hooks-pre` before packages, `hooks-post` after dotfiles).
   Unlike every other section, hooks merge by **append** across layers — base,

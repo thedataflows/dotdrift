@@ -21,6 +21,7 @@ are selected**, not the invoking user's.
 | Kind | Resolution |
 |------|------------|
 | Dotfiles target path | User entry wins; lower layers dropped for that target |
+| Dotfiles target path across modules | **Error at resolve time** — two selected modules claiming the same target fail naming the target and both modules (would emit a duplicate-key `mise.toml`) |
 | File tree same relative path | User > host > module |
 | Packages present/absent | Higher layer wins; absent can cancel present |
 | Tools map keys | Higher layer wins |

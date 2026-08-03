@@ -1,7 +1,7 @@
 # Local Agent Instructions
 
 Before following any other rules in this file, load and apply the global
-`AGENTS.md` at `/home/cri/.agents/AGENTS.md`.
+`AGENTS.md` at `~/.agents/AGENTS.md`.
 
 On top of the global rules:
 

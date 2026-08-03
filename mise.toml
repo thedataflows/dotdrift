@@ -10,3 +10,4 @@ go = '1.26'
 run = [
     "goreleaser build --clean --snapshot --single-target"
 ]
+

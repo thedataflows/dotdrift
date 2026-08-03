@@ -28,3 +28,7 @@ Progressive disclosure for agents implementing [dotdrift](product/contract.md).
 # Tasks
 
 * [Tasks](tasks/) - TDD task specs
+
+# Issues
+
+* [Issues](issues/) - Discovered work (bugs found via dogfooding/e2e, emergent features, chores); distinct from [milestones](milestones/) and [tasks](tasks/) which cover planned work

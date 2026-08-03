@@ -38,7 +38,7 @@ func RenderMountUnit(name string, spec profile.MountSpec, preset Entry, uid, gid
 	b.WriteString("\n[Mount]\n")
 	fmt.Fprintf(&b, "What=%s\n", spec.Source)
 	fmt.Fprintf(&b, "Where=%s\n", spec.Destination)
-	fmt.Fprintf(&b, "Type=%s\n", spec.Type)
+	fmt.Fprintf(&b, "Type=%s\n", unitType(spec, preset))
 	fmt.Fprintf(&b, "Options=%s\n", resolveOptions(spec, preset, uid, gid))
 	b.WriteString("\n[Install]\nWantedBy=multi-user.target\n")
 	return b.String()
@@ -119,6 +119,19 @@ func RenderSharesConf(smb profile.SmbSpec) string {
 		fmt.Fprintf(&b, "writable = %s\n", yesNo(share.Writable))
 	}
 	return b.String()
+}
+
+// unitType is the Type= the .mount unit announces. A preset that
+// declares a Family names the generic filesystem (e.g. "ntfs" for the
+// ntfs3/ntfs-3g drivers): the driver is selected by the kernel/mount
+// helper at mount time, so the unit must not pin a driver. The
+// driver-specific spec.Type still drives registry lookup and package
+// selection at the writer layer.
+func unitType(spec profile.MountSpec, preset Entry) string {
+	if preset.Family != "" {
+		return preset.Family
+	}
+	return spec.Type
 }
 
 // resolveOptions picks the effective mount-option list — the spec's own

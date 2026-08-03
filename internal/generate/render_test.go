@@ -80,6 +80,32 @@ func TestRender_volumeMountNoTimer_golden(t *testing.T) {
 	require.NotContains(t, got, "After=")
 }
 
+// Given an ntfs-family mount (ntfs3 on kernel >= 7.1, ntfs-3g on
+// kernel < 7.1) and its registry preset, When the mount unit is
+// rendered, Then Type= names the generic family "ntfs": the driver is
+// chosen by the kernel/mount helper at mount time, not pinned in the
+// unit. The preset-specific options still apply, and the driver-
+// specific type still drives package selection at the writer layer.
+func TestRender_ntfsFamilyRendersGenericType(t *testing.T) {
+	for _, typ := range []string{"ntfs3", "ntfs-3g"} {
+		t.Run(typ, func(t *testing.T) {
+			preset := mustEntry(t, typ)
+			spec := profile.MountSpec{
+				Source:      "UUID=01D97D07D7C008F0",
+				Destination: "/mnt/win/c",
+				Type:        typ,
+			}
+
+			got := RenderMountUnit("win_c", spec, preset, 1000, 1000)
+
+			require.Contains(t, got, "Type=ntfs\n",
+				"ntfs-family mounts announce the generic ntfs type")
+			require.NotContains(t, got, "Type=ntfs3\n")
+			require.NotContains(t, got, "Type=ntfs-3g\n")
+		})
+	}
+}
+
 // Given a mount spec without options and a preset carrying bare uid/gid
 // tokens, When the mount unit is rendered, Then the preset options are
 // used with the tokens expanded to the numeric ids.

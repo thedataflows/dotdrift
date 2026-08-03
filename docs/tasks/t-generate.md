@@ -96,9 +96,12 @@ byte-equivalent to the CLI.
 
 - `internal/generate/registry.go` + embedded `registry.toml`: preset
   options verbatim from the reference script with bare `uid`/`gid`
-  substitution tokens; `family` groups alternatives (ntfs3/ntfs-3g);
-  `recommended_if` supports only `kernel <op> <version>` with
-  zero-padded numeric segment compare. Entries also carry `packages`
+  substitution tokens; `family` groups alternatives (ntfs3/ntfs-3g) and,
+  when non-empty, is also the Type= the rendered .mount unit announces
+  (ntfs3/ntfs-3g → `Type=ntfs`, since the kernel/mount helper selects the
+  driver at mount time); `recommended_if` supports only `kernel <op>
+  <version>` with zero-padded numeric segment compare.
+  Entries also carry `packages`
   (required) and `absent` (removals — ntfs3 removes ntfs-3g, mirroring
   the legacy script's kernel >= 7.1 cleanup); the writer unions both
   into the module's `[packages]`, skipping an absent candidate that is

@@ -8,7 +8,11 @@
 # Schema per [filesystems.<type>] entry:
 #   kind           "volume" | "network"                    (required)
 #   family         groups alternatives (e.g. "ntfs" for ntfs3/ntfs-3g);
-#                  empty means the type is its own family   (optional)
+#                  the family is also what the rendered .mount unit's
+#                  Type= announces (ntfs3/ntfs-3g both mount as "ntfs" —
+#                  the kernel/mount helper picks the driver, so the unit
+#                  names the generic type); empty means the type is its
+#                  own family                              (optional)
 #   options        mount-option preset                     (required)
 #   after          systemd unit dependencies               (optional)
 #   recommended_if only "kernel <op> <version>"            (optional)

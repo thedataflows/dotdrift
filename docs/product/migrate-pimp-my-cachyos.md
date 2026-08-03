@@ -108,11 +108,15 @@ module; no base stub needed). From `mounts.cri-pc.yaml`:
 ```bash
 # win_c: legacy "ntfs" splits by kernel — ntfs3 (kernel >= 7.1) or
 # ntfs-3g (kernel < 7.1). Pick per host; the wizard preselects the
-# kernel-recommended one. Note: the legacy kernel >= 7.1 path kept the
-# bare "ntfs" type with its own preset (umask=027,nocase,preallocated_size=
-# 131072); dotdrift's registry has no bare "ntfs" entry, so that exact
-# preset is not carried over — ntfs3's preset matches the reference's
-# ntfs3 case verbatim. The share:false key is dropped (see step 3).
+# kernel-recommended one. The --type selects the option preset and
+# packages (ntfs3 → ntfsprogs-plus + removes ntfs-3g; ntfs-3g → ntfs-3g),
+# but the rendered .mount unit always announces the generic Type=ntfs
+# (matching the legacy bare-ntfs unit) — the kernel/mount helper picks
+# the driver at mount time. Note: the legacy kernel >= 7.1 path kept a
+# distinct bare-"ntfs" preset (umask=027,nocase,preallocated_size=131072);
+# dotdrift's registry has no bare "ntfs" entry, so that exact preset is
+# not carried over — ntfs3's preset matches the reference's ntfs3 case
+# verbatim. The share:false key is dropped (see step 3).
 dotdrift generate mounts --layer host --hostname cri-pc --module win-c --name win_c \
   --source UUID=01D97D07D7C008F0 --destination /mnt/win/c --type ntfs3
 

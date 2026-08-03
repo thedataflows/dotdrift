@@ -32,7 +32,10 @@ type Entry struct {
 	// Kind is KindVolume or KindNetwork.
 	Kind string `toml:"kind"`
 	// Family groups alternative drivers (e.g. "ntfs" for ntfs3/ntfs-3g);
-	// empty means the type is its own family.
+	// empty means the type is its own family. When non-empty it is also
+	// the Type= the rendered .mount unit announces — the kernel/mount
+	// helper selects the driver at mount time, so the unit names the
+	// generic type instead of pinning a driver.
 	Family string `toml:"family"`
 	// Options is the mount-option preset. The bare tokens "uid" and "gid"
 	// are placeholders substituted at render time.

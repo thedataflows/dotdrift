@@ -1,9 +1,7 @@
 package generate
 
 import (
-	"fmt"
-	"os/exec"
-	"strings"
+	"github.com/thedataflows/dotdrift/internal/facts"
 )
 
 // Registry conventions shared by the generate package.
@@ -25,12 +23,7 @@ const (
 	KindNetwork = "network"
 )
 
-// KernelRelease returns the running kernel release (`uname -r`). It is a
-// package-level var so tests can stub the lookup.
-var KernelRelease = func() (string, error) {
-	out, err := exec.Command("uname", "-r").Output()
-	if err != nil {
-		return "", fmt.Errorf("query kernel release: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
+// KernelRelease returns the running kernel release (`uname -r`). It aliases
+// facts.KernelRelease (the one implementation); kept as a package-level var
+// so existing tests can stub the lookup.
+var KernelRelease = facts.KernelRelease

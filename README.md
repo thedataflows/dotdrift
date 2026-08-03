@@ -140,7 +140,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | Command | Purpose |
 |---------|---------|
 | `dotdrift init [path&#124;git-url]` | Create a new profile (git-initialized) or clone a profile repo. |
-| `dotdrift detect` | Print host/user/os/distro/gpu/backend facts. |
+| `dotdrift detect` | Print host/user/os/kernel/distro/gpu/backend facts. |
 | `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules). |
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
 | `dotdrift apply [--yes] [--no-hooks] [--verbose] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules). |

@@ -137,6 +137,10 @@ func TestSelectionFingerprint_stable(t *testing.T) {
 	require.NoError(t, err)
 	fp3 := resolve.Fingerprint(p2, f2)
 	require.NotEqual(t, fp1, fp3, "different selection should produce different fingerprint")
+
+	f3 := &facts.Facts{Hostname: "myhost", Kernel: "7.2.0"}
+	fp4 := resolve.Fingerprint(p1, f3)
+	require.NotEqual(t, fp1, fp4, "kernel change should produce different fingerprint")
 }
 
 func TestResolve_emptyProfile(t *testing.T) {

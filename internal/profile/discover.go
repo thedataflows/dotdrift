@@ -83,6 +83,9 @@ func loadModule(path, dirName string) (*Module, error) {
 	if cfg.ID == "" {
 		cfg.ID = dirName
 	}
+	if err := validateWhenKernel(cfg.ID, cfg.When.Kernel); err != nil {
+		return nil, err
+	}
 	if cfg.App == "" {
 		cfg.App = cfg.ID
 	}

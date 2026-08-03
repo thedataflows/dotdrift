@@ -235,6 +235,7 @@ func Fingerprint(p *profile.Profile, f *facts.Facts) string {
 	fmt.Fprintf(&b, "hostname=%s\n", f.Hostname)
 	fmt.Fprintf(&b, "username=%s\n", f.Username)
 	fmt.Fprintf(&b, "os=%s\n", f.OS)
+	fmt.Fprintf(&b, "kernel=%s\n", f.Kernel)
 	fmt.Fprintf(&b, "gpu=%s\n", f.GPU)
 	fmt.Fprintf(&b, "backend=%s\n", f.Backend)
 

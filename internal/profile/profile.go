@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/facts"
@@ -53,13 +54,18 @@ func (c ModuleConfig) ScopeOrDefault() string {
 	return c.Scope
 }
 
-// When filters a module by host, user, os, or gpu.
+// When filters a module by host, user, os, gpu, or kernel.
 // Empty fields are ignored; non-empty fields must all match.
+// Kernel holds one "<op> <version>" constraint ("<", "<=", ">", ">=",
+// "==", "!=") compared numerically per dotted segment against the running
+// kernel release; an empty kernel fact never matches a non-empty
+// constraint.
 type When struct {
-	Hosts []string `toml:"hosts"`
-	Users []string `toml:"users"`
-	OS    []string `toml:"os"`
-	GPU   string   `toml:"gpu"`
+	Hosts  []string `toml:"hosts"`
+	Users  []string `toml:"users"`
+	OS     []string `toml:"os"`
+	GPU    string   `toml:"gpu"`
+	Kernel string   `toml:"kernel"`
 }
 
 // Packages declares packages a module needs or forbids.
@@ -136,7 +142,27 @@ func LoadModuleConfig(dir string) (*ModuleConfig, error) {
 	if _, err := toml.DecodeFile(modToml, &cfg); err != nil {
 		return nil, fmt.Errorf("decode %s: %w", modToml, err)
 	}
+	id := cfg.ID
+	if id == "" {
+		id = filepath.Base(dir)
+	}
+	if err := validateWhenKernel(id, cfg.When.Kernel); err != nil {
+		return nil, err
+	}
 	return &cfg, nil
+}
+
+// validateWhenKernel rejects a malformed when.kernel constraint at load
+// time, naming the module — a typo must fail loudly, never silently skip
+// the module.
+func validateWhenKernel(id, expr string) error {
+	if expr == "" {
+		return nil
+	}
+	if err := facts.CheckKernelConstraint(expr); err != nil {
+		return fmt.Errorf("module %s: %w", id, err)
+	}
+	return nil
 }
 
 // ModuleDir returns the path to a module directory under the given profile root.
@@ -256,6 +282,18 @@ func (w When) matches(f *facts.Facts) (string, bool) {
 	}
 	if w.GPU != "" && w.GPU != f.GPU {
 		return "when filter", true
+	}
+	if w.Kernel != "" {
+		// Validated at load (LoadModuleConfig), so the expression is
+		// well-formed here; a compare error means an unparseable running
+		// release, which never matches.
+		fields := strings.Fields(w.Kernel)
+		if len(fields) != 2 {
+			return "when filter", true
+		}
+		if ok, err := facts.CompareKernel(f.Kernel, fields[0], fields[1]); err != nil || !ok {
+			return "when filter", true
+		}
 	}
 	return "", false
 }

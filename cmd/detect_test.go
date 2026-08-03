@@ -44,6 +44,7 @@ func TestCLI_detect_output(t *testing.T) {
 	require.Contains(t, out, "host:")
 	require.Contains(t, out, "user:")
 	require.Contains(t, out, "os: linux")
+	require.Contains(t, out, "kernel:")
 	require.Contains(t, out, "distro: cachyos")
 	require.Contains(t, out, "gpu: nvidia")
 	require.Contains(t, out, "backend: paru")

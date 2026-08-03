@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/detect"
+	"github.com/thedataflows/dotdrift/internal/facts"
 )
 
 type fakeReader struct {
@@ -25,6 +26,30 @@ func fixture(t *testing.T, name string) string {
 	data, err := os.ReadFile(filepath.Join("..", "..", "testdata", "detect", name))
 	require.NoError(t, err)
 	return string(data)
+}
+
+// stubKernelRelease swaps the facts.KernelRelease seam for the test duration.
+func stubKernelRelease(t *testing.T, release string, err error) {
+	t.Helper()
+	prev := facts.KernelRelease
+	facts.KernelRelease = func() (string, error) { return release, err }
+	t.Cleanup(func() { facts.KernelRelease = prev })
+}
+
+func TestDetectKernel_populated(t *testing.T) {
+	stubKernelRelease(t, "7.2.0-arch1-1", nil)
+
+	f, err := detect.DetectWith(nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "7.2.0-arch1-1", f.Kernel)
+}
+
+func TestDetectKernel_failureTolerated(t *testing.T) {
+	stubKernelRelease(t, "", errors.New("uname boom"))
+
+	f, err := detect.DetectWith(nil, nil)
+	require.NoError(t, err, "kernel detection failure must not fail detect")
+	require.Empty(t, f.Kernel)
 }
 
 func TestDetectOS_osReleaseFixture(t *testing.T) {

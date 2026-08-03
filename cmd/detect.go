@@ -43,6 +43,9 @@ func (c *DetectCmd) Run() error {
 		_, err = fmt.Fprintf(out, "os: %s\n", f.OS)
 	}
 	if err == nil {
+		_, err = fmt.Fprintf(out, "kernel: %s\n", f.Kernel)
+	}
+	if err == nil {
 		_, err = fmt.Fprintf(out, "distro: %s\n", f.Distro)
 	}
 	if err == nil {

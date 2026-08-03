@@ -8,12 +8,11 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/thedataflows/dotdrift/internal/facts"
 )
 
 //go:embed registry.toml
@@ -176,88 +175,19 @@ func parseRegistry(data []byte, source string) (map[string]Entry, error) {
 	return entries, nil
 }
 
-var versionPattern = regexp.MustCompile(`^\d+(\.\d+)*`)
-
 // evalRecommended evaluates one recommended_if expression. Only
 // "kernel <op> <version>" is supported, with <op> one of < <= > >= == !=.
-// Version comparison is numeric per dotted segment (7.10 > 7.1), with
-// missing segments treated as zero.
+// The comparison itself is facts.CompareKernel (numeric per dotted
+// segment, 7.10 > 7.1, missing segments treated as zero).
 func evalRecommended(expr, release string) (bool, error) {
 	fields := strings.Fields(expr)
 	if len(fields) != 3 || fields[0] != "kernel" {
 		return false, fmt.Errorf("unsupported recommended_if %q: only \"kernel <op> <version>\" is supported", expr)
 	}
-	want, err := parseVersion(fields[2])
+	ok, err := facts.CompareKernel(release, fields[1], fields[2])
 	if err != nil {
 		return false, fmt.Errorf("invalid recommended_if %q: %w", expr, err)
 	}
-	got, err := parseRelease(release)
-	if err != nil {
-		return false, err
-	}
-	cmp := compareVersions(got, want)
-	switch fields[1] {
-	case "<":
-		return cmp < 0, nil
-	case "<=":
-		return cmp <= 0, nil
-	case ">":
-		return cmp > 0, nil
-	case ">=":
-		return cmp >= 0, nil
-	case "==":
-		return cmp == 0, nil
-	case "!=":
-		return cmp != 0, nil
-	default:
-		return false, fmt.Errorf("unsupported operator in recommended_if %q: %q", expr, fields[1])
-	}
+	return ok, nil
 }
 
-// parseVersion parses a strict dotted-numeric version ("7.1", "6.12.3").
-func parseVersion(s string) ([]int, error) {
-	if !versionPattern.MatchString(s) || versionPattern.FindString(s) != s {
-		return nil, fmt.Errorf("invalid version %q: want dotted numerics", s)
-	}
-	return splitSegments(s), nil
-}
-
-// parseRelease extracts the leading dotted-numeric prefix of a kernel
-// release ("6.12.1-arch1-1" -> 6.12.1).
-func parseRelease(release string) ([]int, error) {
-	m := versionPattern.FindString(strings.TrimSpace(release))
-	if m == "" {
-		return nil, fmt.Errorf("unparseable kernel release %q", release)
-	}
-	return splitSegments(m), nil
-}
-
-func splitSegments(s string) []int {
-	parts := strings.Split(s, ".")
-	segs := make([]int, len(parts))
-	for i, p := range parts {
-		segs[i], _ = strconv.Atoi(p) // pattern guarantees digits
-	}
-	return segs
-}
-
-// compareVersions compares segment-wise, padding the shorter side with
-// zeros; it returns -1, 0, or +1.
-func compareVersions(a, b []int) int {
-	for i := range max(len(a), len(b)) {
-		x, y := 0, 0
-		if i < len(a) {
-			x = a[i]
-		}
-		if i < len(b) {
-			y = b[i]
-		}
-		if x != y {
-			if x < y {
-				return -1
-			}
-			return 1
-		}
-	}
-	return 0
-}

@@ -227,6 +227,45 @@ func TestSelection_whenFilter(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, selectedIDs(p), "always")
 	})
+
+	t.Run("kernel match", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{Kernel: "7.2.0-arch1-1"})
+		require.NoError(t, err)
+		require.Contains(t, selectedIDs(p), "kernelonly")
+	})
+
+	t.Run("kernel mismatch", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{Kernel: "6.12.1"})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "kernelonly")
+	})
+
+	t.Run("kernel empty fact", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "kernelonly")
+	})
+
+	t.Run("kernel unparseable release", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{Kernel: "not-a-version"})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "kernelonly")
+	})
+}
+
+func TestLoadModuleTOML_whenKernel(t *testing.T) {
+	p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{Kernel: "7.2.0"})
+	require.NoError(t, err)
+	m := findModule(t, p, "kernelonly")
+	require.Equal(t, ">= 7.1", m.Config.When.Kernel)
+}
+
+func TestLoad_malformedWhenKernel(t *testing.T) {
+	_, err := profile.Load(fixture(t, "badkernel"), &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "bad", "error must name the module")
+	require.Contains(t, err.Error(), "~ 7.1", "error must carry the expression")
+	t.Logf("error: %v", err)
 }
 
 func selectedIDs(p *profile.Profile) []string {

@@ -61,6 +61,12 @@ func DetectWith(osReader OSReleaseReader, gpuReader GPUReader) (*facts.Facts, er
 
 	f.OS = strings.ToLower(runtime.GOOS)
 
+	// Kernel detection is best-effort (like hostname/GPU): an empty fact
+	// simply never matches a when.kernel filter.
+	if release, err := facts.KernelRelease(); err == nil {
+		f.Kernel = release
+	}
+
 	if osReader != nil {
 		content, err := osReader.Read()
 		if err != nil {

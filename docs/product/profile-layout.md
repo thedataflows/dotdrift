@@ -80,6 +80,7 @@ hosts = ["myhost"]
 users = ["cri"]
 os = ["arch", "cachyos"]
 gpu = "nvidia"
+kernel = ">= 7.1"
 
 [packages]
 present = ["neovim", "ripgrep"]
@@ -120,6 +121,15 @@ public = false
 ```
 
 - `when` filters are ANDed. An empty list means "any". `gpu` empty means any.
+  `kernel` is one `"<op> <version>"` constraint (`<`, `<=`, `>`, `>=`, `==`,
+  `!=`), compared numerically per dotted segment against the running kernel
+  release (`7.10 > 7.1`, missing segments are zero, distro suffixes like
+  `-arch1-1` are ignored) — the same comparison as the generate registry's
+  `recommended_if`, minus the redundant `kernel` keyword. A malformed
+  constraint is a load-time error naming the module; an empty kernel fact
+  (detection failed) never matches a non-empty constraint. Use it for
+  kernel-gated packages, e.g. one module with `kernel = "< 7.1"` installing
+  `ntfs-3g` and another with `kernel = ">= 7.1"` installing `ntfsprogs-plus`.
 - `scope` is module-level: `"user"` (the default when omitted) or `"system"`.
   It decides how the module's dotfiles are applied — user-scope entries are
   applied as the invoking user, system-scope entries are applied with root

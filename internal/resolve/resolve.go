@@ -191,6 +191,10 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		return nil, err
 	}
 
+	if err := checkDotfileConflicts(plan.Dotfiles.Entries); err != nil {
+		return nil, err
+	}
+
 	for pkg := range pkgSet {
 		plan.Packages.Install = append(plan.Packages.Install, pkg)
 	}
@@ -354,6 +358,31 @@ func resolveSource(winner dotfileWinner, moduleID string, base, host, user layer
 		}
 	}
 	return "", fmt.Errorf("module %s: dotfile source %q not found in any layer", moduleID, rel)
+}
+
+// checkDotfileConflicts rejects a dotfile target claimed by more than one
+// module. Two modules writing the same target would emit a duplicate-key
+// mise.toml that mise refuses to parse; failing here names both modules and
+// the target instead of letting mise surface an opaque parse error.
+func checkDotfileConflicts(entries []DotfileEntry) error {
+	claimants := make(map[string][]string)
+	for _, e := range entries {
+		claimants[e.Target] = append(claimants[e.Target], e.Module)
+	}
+	var conflicts []string
+	for target, mods := range claimants {
+		if len(mods) < 2 {
+			continue
+		}
+		sort.Strings(mods)
+		conflicts = append(conflicts, fmt.Sprintf("%q claimed by modules [%s]",
+			target, strings.Join(mods, ", ")))
+	}
+	if len(conflicts) == 0 {
+		return nil
+	}
+	sort.Strings(conflicts)
+	return fmt.Errorf("dotfile target conflict across modules: %s", strings.Join(conflicts, "; "))
 }
 
 // checkPackageConflicts rejects packages that are present in at least one

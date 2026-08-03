@@ -313,6 +313,32 @@ func TestResolve_crossModulePackageConflict(t *testing.T) {
 	require.Contains(t, err.Error(), "modb", "error should name the absent module")
 }
 
+// Two modules claiming the same dotfile target would emit a duplicate-key
+// mise.toml that mise rejects with a parse error (dogfooded against a real
+// profile: mediamtx + systemd both targeted ~/.config/systemd). Resolve must
+// fail loudly naming the target and every module claiming it, symmetric with
+// cross-module package conflicts (contract invariant #16).
+func TestResolve_crossModuleDotfileTargetConflict(t *testing.T) {
+	root := t.TempDir()
+	dirA := writeModule(t, root, "moda", `
+[dotfiles]
+"~/.config/systemd" = { source = "systemd", mode = "copy" }
+`)
+	require.NoError(t, os.WriteFile(filepath.Join(dirA, "systemd"), []byte("a"), 0o644))
+	dirB := writeModule(t, root, "modb", `
+[dotfiles]
+"~/.config/systemd" = { source = "systemd", mode = "symlink-each" }
+`)
+	require.NoError(t, os.MkdirAll(filepath.Join(dirB, "systemd"), 0o755))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "two modules writing the same dotfile target must be a resolve-time error")
+	require.Contains(t, err.Error(), "~/.config/systemd", "error should name the conflicting target")
+	require.Contains(t, err.Error(), "moda", "error should name every claiming module")
+	require.Contains(t, err.Error(), "modb", "error should name every claiming module")
+}
+
 func TestResolve_emptyHostnameErrors(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mod", "")

@@ -20,6 +20,11 @@ var KernelRelease = func() (string, error) {
 
 var versionPattern = regexp.MustCompile(`^\d+(\.\d+)*`)
 
+// rcSuffix matches a pre-release marker directly after the numeric prefix
+// ("-rc5", "-rc-5"); distro build suffixes ("-arch1-1", "-1-lts") are not
+// pre-releases and stay ignored.
+var rcSuffix = regexp.MustCompile(`(?i)^-rc[.-]?\d+`)
+
 // CheckKernelConstraint validates one "<op> <version>" kernel constraint
 // expression (the when.kernel grammar), with <op> one of < <= > >= == !=.
 // Empty or malformed expressions are rejected loudly; callers treating an
@@ -98,13 +103,22 @@ func parseVersion(s string) ([]int, error) {
 }
 
 // parseRelease extracts the leading dotted-numeric prefix of a kernel
-// release ("6.12.1-arch1-1" -> 6.12.1).
+// release ("6.12.1-arch1-1" -> 6.12.1). An "-rcN" suffix marks a
+// pre-release of that prefix ("7.1-rc5" is before 7.1 but after 7.0):
+// it appends a negative sentinel segment, which compareVersions orders
+// below the zero padding of the plain release. The rc iteration itself
+// is ignored — constraints gate on releases, not rc numbers.
 func parseRelease(release string) ([]int, error) {
-	m := versionPattern.FindString(strings.TrimSpace(release))
+	s := strings.TrimSpace(release)
+	m := versionPattern.FindString(s)
 	if m == "" {
 		return nil, fmt.Errorf("unparseable kernel release %q", release)
 	}
-	return splitSegments(m), nil
+	segs := splitSegments(m)
+	if rcSuffix.MatchString(s[len(m):]) {
+		segs = append(segs, -1)
+	}
+	return segs, nil
 }
 
 func splitSegments(s string) []int {

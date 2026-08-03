@@ -125,7 +125,9 @@ public = false
   `!=`), compared numerically per dotted segment against the running kernel
   release (`7.10 > 7.1`, missing segments are zero, distro suffixes like
   `-arch1-1` are ignored) — the same comparison as the generate registry's
-  `recommended_if`, minus the redundant `kernel` keyword. A malformed
+  `recommended_if`, minus the redundant `kernel` keyword. An `-rcN` suffix
+  marks a pre-release: `7.1-rc5` sorts after `7.0` but before `7.1` (the rc
+  iteration is ignored). A malformed
   constraint is a load-time error naming the module; an empty kernel fact
   (detection failed) never matches a non-empty constraint. Use it for
   kernel-gated packages, e.g. one module with `kernel = "< 7.1"` installing

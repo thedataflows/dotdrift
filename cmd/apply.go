@@ -14,6 +14,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
+	"github.com/thedataflows/dotdrift/internal/paru"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/smb"
@@ -66,6 +67,49 @@ func setVerboseRunner(v bool, rs ...any) {
 // entries / mount entries / smb modules, so a completed apply may
 // legitimately show fewer completed steps than the denominator.
 var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "mounts", "smb", "hooks-post"}
+
+// packagesStep is the apply pipeline step for packages. It delegates install
+// to mise bootstrap (which converges [bootstrap.packages] via the paru plugin
+// or built-in managers) while keeping removal inline — mise's package-plugin
+// v1 does not support uninstall (packages.absent handling, issue 0002).
+type packagesStep struct {
+	runner     mise.Runner
+	backend    packages.Backend // for Absent only
+	plan       *resolve.Plan
+	backendStr string // detected backend for prefix translation
+	configPath string // bootstrap mise.toml path
+	pluginPath string // paru plugin dir; empty = no plugin
+}
+
+var _ apply.Step = (*packagesStep)(nil)
+
+func (s *packagesStep) Name() string { return "packages" }
+
+func (s *packagesStep) Run(ctx context.Context) error {
+	// Removal is best-effort (warn, don't fail) — same contract as before.
+	if len(s.plan.Packages.Remove) > 0 {
+		if err := s.backend.Absent(ctx, s.plan.Packages.Remove); err != nil {
+			log.Warn().Err(err).Msg("remove packages failed; continuing")
+		}
+	}
+	if len(s.plan.Packages.Install) == 0 {
+		return nil
+	}
+	// Write the paru plugin for Arch backends.
+	if s.pluginPath != "" {
+		if err := paru.WritePlugin(s.pluginPath); err != nil {
+			return fmt.Errorf("write paru plugin: %w", err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(s.configPath), 0o755); err != nil {
+		return fmt.Errorf("create packages config dir: %w", err)
+	}
+	content := mise.GenerateBootstrapConfig(s.plan.Packages.Install, s.backendStr, s.pluginPath)
+	if err := os.WriteFile(s.configPath, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("write packages config: %w", err)
+	}
+	return s.runner.Bootstrap(ctx, s.configPath, true, "plugins", "packages")
+}
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
@@ -175,6 +219,19 @@ func (c *ApplyCmd) Run() error {
 	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
 	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
 	dotfilesSystemConfigPath := filepath.Join(configDir, "dotfiles-system", "mise.toml")
+	packagesConfigPath := filepath.Join(configDir, "packages", "mise.toml")
+
+	// Compute the paru plugin path for Arch backends (mise's pacman built-in
+	// has no AUR support; the dotdrift paru plugin covers it, issue 0003).
+	var pluginPath string
+	if f.Backend == "paru" {
+		xdgData := os.Getenv("XDG_DATA_HOME")
+		if xdgData == "" {
+			home, _ := os.UserHomeDir()
+			xdgData = filepath.Join(home, ".local", "share")
+		}
+		pluginPath = mise.PluginDir(xdgData, "paru")
+	}
 
 	// Hooks steps are skipped at construction when their command list is
 	// empty or when the user opted out via --no-hooks / DOTDRIFT_NO_HOOKS=1
@@ -208,7 +265,7 @@ func (c *ApplyCmd) Run() error {
 		})
 	}
 	steps = append(steps,
-		packages.NewStep(backend, plan),
+		&packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: packagesConfigPath, pluginPath: pluginPath},
 		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: toolsConfigPath},
 		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
 	)

@@ -579,7 +579,7 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 // Bootstrap invokes `mise bootstrap --yes` against the config. It runs the
 // full declarative convergence (packages, files, services, etc.) in one call.
 // dotdrift's resume orchestrator may instead drive `--only`/`--skip` slices.
-func (e *ExecMise) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+func (e *ExecMise) Bootstrap(ctx context.Context, configPath string, yes bool, only ...string) error {
 	path, err := e.mise.EnsureContext(ctx)
 	if err != nil {
 		return err
@@ -588,14 +588,16 @@ func (e *ExecMise) Bootstrap(ctx context.Context, configPath string, yes bool) e
 	if yes {
 		args = append(args, "--yes")
 	}
+	for _, phase := range only {
+		args = append(args, "--only", phase)
+	}
 	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, args...)
 	return err
 }
 
-// Runner abstracts mise operations used by apply steps.
 type Runner interface {
 	EnsureAndInstall(ctx context.Context, configPath string) error
-	Bootstrap(ctx context.Context, configPath string, yes bool) error
+	Bootstrap(ctx context.Context, configPath string, yes bool, only ...string) error
 	DotfilesApply(ctx context.Context, configPath string, yes, force bool) error
 }
 
@@ -620,7 +622,7 @@ func (f *FakeRunner) DotfilesApply(ctx context.Context, configPath string, yes, 
 	return f.Err
 }
 
-func (f *FakeRunner) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+func (f *FakeRunner) Bootstrap(ctx context.Context, configPath string, yes bool, only ...string) error {
 	f.BootstrapCalled = true
 	f.Yes = yes
 	return f.Err

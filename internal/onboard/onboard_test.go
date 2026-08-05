@@ -379,7 +379,7 @@ func (r *recordingRunner) DotfilesApply(ctx context.Context, configPath string, 
 	return nil
 }
 
-func (r *recordingRunner) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+func (r *recordingRunner) Bootstrap(ctx context.Context, configPath string, yes bool, only ...string) error {
 	r.calls = append(r.calls, "bootstrap")
 	return nil
 }
@@ -420,7 +420,7 @@ func (v *validatingRunner) DotfilesApply(ctx context.Context, configPath string,
 	return nil
 }
 
-func (v *validatingRunner) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+func (v *validatingRunner) Bootstrap(ctx context.Context, configPath string, yes bool, only ...string) error {
 	return nil
 }
 

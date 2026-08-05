@@ -188,12 +188,12 @@ func TestApply_happyPath(t *testing.T) {
 		"mise:ensure",
 		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks:pre",
 		"packages:absent",
-		"packages:present",
+		"mise:run bootstrap",
 		"mise:run install",
 		"mise:run dotfiles apply",
 		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks:post",
 	)
-	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep")
+	requireOrder(t, *events, "mise:run bootstrap")
 	require.Contains(t, *events, "packages:absent emacs,nano")
 	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
 
@@ -285,8 +285,7 @@ func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
 
 	require.Contains(t, logBuf.String(), "changed")
 	require.Contains(t, logBuf.String(), "resume state was reset")
-	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep",
-		"packages step must re-run after the selection reset cleared completed steps")
+	requireOrder(t, *events, "mise:run bootstrap") // packages re-ran after reset
 
 	s := loadStateFile(t, statePath)
 	require.Equal(t, state.StatusComplete, s.Status)
@@ -320,8 +319,7 @@ func TestApply_planContentChangeResetsState(t *testing.T) {
 	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
 	require.NoError(t, cmd.Run())
 
-	require.Contains(t, *events, "packages:present eza,fd,neovim,ripgrep",
-		"steps must re-run after the plan-content reset")
+	requireOrder(t, *events, "mise:run bootstrap") // steps re-ran after plan-content reset
 
 	s := loadStateFile(t, statePath)
 	require.Equal(t, state.StatusComplete, s.Status)
@@ -365,8 +363,24 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, backend := stubApplyDeps(t, f)
-	backend.presentErr = errors.New("paru boom")
+	events, _ := stubApplyDeps(t, f)
+	// Inject a bootstrap failure (packages install now goes through mise
+	// bootstrap, not the backend's Present).
+	defaultMise = func() *mise.Mise {
+		m := fakeMise(events)
+		m.Run = func(_ string, args ...string) (string, error) {
+			for _, a := range args {
+				if a == "bootstrap" {
+					return "", errors.New("bootstrap boom")
+				}
+				if a == "--version" {
+					return mise.MinMiseVersion + "\n", nil
+				}
+			}
+			return "", nil
+		}
+		return m
+	}
 
 	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
 	err := cmd.Run()

@@ -1,7 +1,6 @@
 package packages_test
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"os/exec"
@@ -9,11 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 
 	"github.com/thedataflows/dotdrift/internal/packages"
-	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 // execExitErr returns a real *exec.ExitError with the given exit code by
@@ -183,69 +180,3 @@ func (f *fakeBackend) IsInstalled(ctx context.Context, pkg string) (bool, error)
 }
 
 func (f *fakeBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
-
-func TestPackagesStep_callsAbsentAndPresent(t *testing.T) {
-	b := &fakeBackend{}
-	plan := &resolve.Plan{
-		Packages: resolve.PackagesStep{
-			Install: []string{"neovim"},
-			Remove:  []string{"nano"},
-		},
-	}
-
-	step := packages.NewStep(b, plan)
-	require.NoError(t, step.Run(context.Background()))
-	require.Len(t, b.absentCalls, 1, "absent should be called")
-	require.Equal(t, []string{"nano"}, b.absentCalls[0])
-	require.Len(t, b.presentCalls, 1, "present should be called")
-	require.Equal(t, []string{"neovim"}, b.presentCalls[0])
-}
-
-func TestPackagesStep_propagatesContext(t *testing.T) {
-	b := &fakeBackend{}
-	plan := &resolve.Plan{
-		Packages: resolve.PackagesStep{
-			Install: []string{"neovim"},
-		},
-	}
-
-	type ctxKey struct{}
-	ctx := context.WithValue(context.Background(), ctxKey{}, "step-ctx")
-	step := packages.NewStep(b, plan)
-	require.NoError(t, step.Run(ctx))
-	require.Equal(t, "step-ctx", b.ctx.Value(ctxKey{}), "step must pass its ctx through to the backend")
-}
-
-// A failed remove (e.g. paru exits 1 on already-missing packages) must warn
-// and proceed to install, not fail the whole apply.
-func TestPackagesStep_removeErrorWarnsAndProceeds(t *testing.T) {
-	var buf bytes.Buffer
-	orig := log.Logger
-	log.Logger = log.Output(&buf)
-	t.Cleanup(func() { log.Logger = orig })
-
-	b := &fakeBackend{absentErr: errors.New("remove failed")}
-	plan := &resolve.Plan{
-		Packages: resolve.PackagesStep{
-			Install: []string{"neovim"},
-			Remove:  []string{"nano"},
-		},
-	}
-
-	step := packages.NewStep(b, plan)
-	require.NoError(t, step.Run(context.Background()))
-	require.Len(t, b.presentCalls, 1, "install must still run after a failed remove")
-	require.Contains(t, buf.String(), "remove failed", "warning must carry the remove error")
-}
-
-func TestPackagesStep_noPackagesNoBackendCalls(t *testing.T) {
-	b := &fakeBackend{}
-	plan := &resolve.Plan{
-		Packages: resolve.PackagesStep{},
-	}
-
-	step := packages.NewStep(b, plan)
-	require.NoError(t, step.Run(context.Background()))
-	require.Empty(t, b.presentCalls)
-	require.Empty(t, b.absentCalls)
-}

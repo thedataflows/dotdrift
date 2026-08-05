@@ -13,7 +13,6 @@ import (
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
-	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/paru"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -34,8 +33,6 @@ var (
 	defaultMise = mise.DefaultMise
 	// packagesFor selects the distro package backend; swapped out by tests.
 	packagesFor = packages.For
-	// newMountsRunner builds the mounts step runner; swapped out by tests.
-	newMountsRunner = func() mounts.Runner { return &mounts.ExecRunner{} }
 	// newSmbRunner builds the smb step runner; swapped out by tests.
 	newSmbRunner = func() smb.Runner { return &smb.ExecRunner{} }
 	// stdinIsTerminal reports whether dotdrift's stdin is a TTY, deciding

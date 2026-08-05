@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
-	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -67,16 +66,6 @@ func fakeMise(events *[]string) *mise.Mise {
 	}
 }
 
-// recordingMountsRunner is a mounts.Runner fake that records every argv.
-type recordingMountsRunner struct {
-	events *[]string
-}
-
-func (r *recordingMountsRunner) Run(_ context.Context, argv []string) error {
-	*r.events = append(*r.events, "mounts:run "+strings.Join(argv, " "))
-	return nil
-}
-
 // recordingSmbRunner is a smb.Runner fake that records every command and
 // reports success with empty output (so pdbedit -L lists no accounts).
 type recordingSmbRunner struct {
@@ -103,10 +92,10 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	backend := &recordingBackend{events: events}
 
 	origDetect, origLoad, origResolve, origMise, origFor := detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor
-	origMountsRunner, origSmbRunner := newMountsRunner, newSmbRunner
+	origSmbRunner := newSmbRunner
 	t.Cleanup(func() {
 		detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor = origDetect, origLoad, origResolve, origMise, origFor
-		newMountsRunner, newSmbRunner = origMountsRunner, origSmbRunner
+		newSmbRunner = origSmbRunner
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
@@ -120,7 +109,6 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	}
 	defaultMise = func() *mise.Mise { return fakeMise(events) }
 	packagesFor = func(string) packages.Backend { return backend }
-	newMountsRunner = func() mounts.Runner { return &recordingMountsRunner{events: events} }
 	newSmbRunner = func() smb.Runner { return &recordingSmbRunner{events: events} }
 	return events, backend
 }
@@ -631,15 +619,6 @@ type verboseRecordingBackend struct {
 
 func (b *verboseRecordingBackend) SetVerbose(v bool) { b.verbose = v }
 
-// verboseMountsRunner records SetVerbose calls while satisfying
-// mounts.Runner through the embedded recording fake.
-type verboseMountsRunner struct {
-	*recordingMountsRunner
-	verbose bool
-}
-
-func (r *verboseMountsRunner) SetVerbose(v bool) { r.verbose = v }
-
 // verboseSmbRunner records SetVerbose calls while satisfying smb.Runner
 // through the embedded recording fake.
 type verboseSmbRunner struct {
@@ -651,29 +630,26 @@ func (r *verboseSmbRunner) SetVerbose(v bool) { r.verbose = v }
 
 // stubVerboseDeps swaps the runner-construction seams for verbose-recording
 // fakes and returns them plus the captured mise, so tests can assert where
-// --verbose landed. The mounts fixture is required (it builds the mounts and
-// smb steps).
-func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, mr *verboseMountsRunner, sr *verboseSmbRunner) {
+// --verbose landed.
+func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, sr *verboseSmbRunner) {
 	t.Helper()
 	events := &[]string{}
 	backend = &verboseRecordingBackend{recordingBackend: &recordingBackend{events: events}}
-	mr = &verboseMountsRunner{recordingMountsRunner: &recordingMountsRunner{events: events}}
 	sr = &verboseSmbRunner{recordingSmbRunner: &recordingSmbRunner{events: events}}
 
 	var captured *mise.Mise
 	origDetect, origMise, origFor := detectFacts, defaultMise, packagesFor
-	origMountsRunner, origSmbRunner := newMountsRunner, newSmbRunner
+	origSmbRunner := newSmbRunner
 	t.Cleanup(func() {
 		detectFacts, defaultMise, packagesFor = origDetect, origMise, origFor
-		newMountsRunner, newSmbRunner = origMountsRunner, origSmbRunner
+		newSmbRunner = origSmbRunner
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
 	defaultMise = func() *mise.Mise { captured = fakeMise(events); return captured }
 	packagesFor = func(string) packages.Backend { return backend }
-	newMountsRunner = func() mounts.Runner { return mr }
 	newSmbRunner = func() smb.Runner { return sr }
-	return &captured, backend, mr, sr
+	return &captured, backend, sr
 }
 
 // --verbose threads through the existing construction seams: the mise
@@ -683,7 +659,7 @@ func TestApply_verbosePropagatesToRunners(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	capturedMise, backend, _, sr := stubVerboseDeps(t, f)
+	capturedMise, backend, sr := stubVerboseDeps(t, f)
 
 	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Verbose: true}
 	require.NoError(t, cmd.Run())
@@ -699,7 +675,7 @@ func TestApply_nonVerboseLeavesRunnersQuiet(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	capturedMise, backend, _, sr := stubVerboseDeps(t, f)
+	capturedMise, backend, sr := stubVerboseDeps(t, f)
 
 	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())

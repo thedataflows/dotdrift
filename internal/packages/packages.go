@@ -10,12 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
-	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/executil"
-	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 // Backend performs package operations.
@@ -168,42 +164,6 @@ func uniqueSorted(in []string) []string {
 	}
 	sort.Strings(out)
 	return out
-}
-
-// Step is the apply pipeline step for packages.
-type Step struct {
-	backend Backend
-	plan    *resolve.Plan
-}
-
-var _ apply.Step = (*Step)(nil)
-
-// NewStep creates a package step bound to a plan and backend.
-func NewStep(backend Backend, plan *resolve.Plan) *Step {
-	return &Step{backend: backend, plan: plan}
-}
-
-// Name returns the step name.
-func (s *Step) Name() string { return "packages" }
-
-// Run applies the package backend, removing absent packages first, then installing present ones.
-// A failed remove (e.g. packages already missing) only warns — removal is
-// best-effort cleanup and must not block the rest of the apply.
-func (s *Step) Run(ctx context.Context) error {
-	if s.plan == nil {
-		return fmt.Errorf("plan is nil")
-	}
-	if len(s.plan.Packages.Remove) > 0 {
-		if err := s.backend.Absent(ctx, s.plan.Packages.Remove); err != nil {
-			log.Warn().Err(err).Msg("remove packages failed; continuing")
-		}
-	}
-	if len(s.plan.Packages.Install) > 0 {
-		if err := s.backend.Present(ctx, s.plan.Packages.Install); err != nil {
-			return fmt.Errorf("install packages: %w", err)
-		}
-	}
-	return nil
 }
 
 // AutoBackend resolves the backend string from the runtime environment.

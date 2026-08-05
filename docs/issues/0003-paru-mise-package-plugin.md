@@ -67,24 +67,24 @@ pacman instead. dotdrift registers the plugin in the generated `mise.toml`
 (`[bootstrap.plugins]` pointing at the local plugin path) on first Arch
 apply, or via `mise plugin install package:paru <local-path>`.
 
-### The sudo tension (primary risk)
+### Privilege: not a contract issue
 
-The plugin hard contract states: *"Package plugins must never invoke `sudo`
-in any hook. mise never elevates for them."* But `paru -S` self-elevates —
-it calls `sudo pacman -U` internally to install. The plugin (via dotdrift)
-runs `paru`, and paru calls sudo. Whether mise tolerates a plugin whose
-wrapped command self-elevates is **unverified against v2026.8.2**.
+The plugin hard contract — *"package plugins must never invoke `sudo` in any
+hook; mise never elevates for them"* — constrains the **plugin's own code**
+and mise's elevation, not the wrapped tool. paru is a user-space AUR helper
+that self-elevates: it calls `sudo pacman -U` internally. The plugin (via
+`dotdrift paru`) runs `paru`; the plugin's code path contains no `sudo` and
+asks mise for none. This is architecturally identical to how built-in
+managers work when mise elevates them — except paru owns its own elevation.
+No contract violation.
 
-This must be empirically validated before deleting `internal/packages`. The
-validation: declare the plugin, run `mise bootstrap packages apply` with an
-AUR package on a real Arch host, and confirm paru's sudo prompt reaches the
-TTY and the install succeeds (or fails with a specific mise error).
-
-**Fallback if mise blocks it:** dotdrift runs `paru -S --needed` for Arch
-packages as a `[bootstrap.hooks.pre-packages]` task (dotdrift owns elevation
-directly, mise never sees a plugin), and Arch packages are omitted from
-`[bootstrap.packages]`. This loses mise's install-status tracking for Arch
-but preserves AUR. `internal/packages`' paru slice (~100 LOC) is retained.
+The only practical concern is **TTY availability**: paru's password prompt
+needs a controlling terminal. Verify that mise spawns package-plugin
+subprocesses with stdin connected to a TTY (or that `sudo`'s timestamp cache
+is warm) when `mise bootstrap packages apply` runs interactively. If mise
+does not provide a TTY, the fallback is a `[bootstrap.hooks.pre-packages]`
+task where dotdrift owns the paru invocation and TTY directly, at the cost of
+losing mise's install-status tracking for Arch packages.
 
 ## Acceptance Criteria
 
@@ -94,10 +94,11 @@ but preserves AUR. `internal/packages`' paru slice (~100 LOC) is retained.
       `--dry-run` and `--update`.
 - [ ] The Lua shim plugin delegates to the subcommand and returns the vfox
       response shape (`{name, state, version?}` per package).
-- [ ] **Sudo validation:** on a real Arch/CachyOS host with mise v2026.8.2,
+- [ ] **TTY validation:** on a real Arch/CachyOS host with mise v2026.8.2,
       `mise bootstrap packages apply` with a `paru:<aur-pkg>` entry installs
-      the AUR package (paru's sudo prompt reaches the TTY) — OR the fallback
-      (`pre-packages` hook path) is implemented and documented.
+      the AUR package — paru's password prompt reaches the TTY (or sudo's
+      timestamp cache is warm). If mise does not provide a TTY, the
+      `pre-packages` hook fallback is implemented and documented.
 - [ ] dotdrift registers the plugin (local path in `[bootstrap.plugins]` or
       `mise plugin install package:paru`) and emits `paru:<pkg>` keys for
       bare Arch package names.
@@ -122,5 +123,7 @@ separately); the e2e CachyOS image already ships paru from the CachyOS binary
 repo.
 
 `PackageInstalled` must be "side-effect free, fast, non-interactive, and never
-elevate" — `pacman -Q` satisfies all four (read-only query, no sudo). Only
-`PackageInstall` (via `paru -S`) triggers the sudo tension.
+elevate" — `pacman -Q` satisfies all four (read-only query, no sudo).
+`PackageInstall` runs `paru -S`, which self-elevates internally; that is
+paru's own behavior, not the plugin invoking sudo (see "Privilege: not a
+contract issue" above).

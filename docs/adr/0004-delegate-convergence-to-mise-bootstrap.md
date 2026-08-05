@@ -62,12 +62,14 @@ The tensions surfaced by the delegation are resolved as follows (tracked in [iss
    plugins (see the package-plugin-development spec) with batch
    `PackageInstalled`/`PackageInstall` hooks; dotdrift exposes a
    `dotdrift paru` subcommand the Lua shim delegates to, keeping all paru
-   invocation logic in Go (reusing the existing argv builder). **Open risk:**
-   the plugin hard contract says "package plugins must never invoke `sudo` in
-   any hook" — but paru self-elevates (it calls `sudo pacman` internally).
-   Whether mise tolerates a plugin whose wrapped command self-elevates is
-   unverified against v2026.8.2; if it blocks, the fallback is a
-   dotdrift-native paru path outside the plugin model for AUR packages only.
+   invocation logic in Go (reusing the existing argv builder). The plugin
+   hard contract forbids invoking `sudo` in a hook and says mise never
+   elevates for plugins — but that constrains the *plugin code* and mise's
+   own elevation, not the wrapped tool: paru is a user-space binary that
+   self-elevates (calls `sudo pacman` internally), so the plugin's code path
+   contains no `sudo` and asks mise for none. The residual concern is merely
+   whether mise gives the plugin subprocess a TTY so paru's interactive
+   password prompt works — verify on a real Arch host.
 2. **Resume semantics — kept.** dotdrift's resume layer (contract invariants
    2, 10, 11) survives as a thin orchestrator over `mise bootstrap --only`/
    `--skip <phases>`. mise bootstrap is convergent but has no cross-run cursor
@@ -92,6 +94,7 @@ When this changes: if mise grows a structured module-overlay / selection model
 equivalent to dotdrift's layered `module.toml` (presence=managed, `when`
 filters, `disable` union, per-section merge), the case for dotdrift as a
 separate binary weakens — revisit whether dotdrift collapses to a mise plugin
-or a thin profile compiler. If the paru plugin's self-elevation is blocked by
-mise (tension 1), `internal/packages`' paru slice is retained outside the
-plugin model and this ADR's deletion estimate narrows by ~100 LOC.
+or a thin profile compiler. If mise cannot give the paru plugin subprocess a
+TTY for paru's interactive prompt (tension 1), `internal/packages`' paru
+slice (~100 LOC) is retained outside the plugin model and this ADR's deletion
+estimate narrows accordingly.

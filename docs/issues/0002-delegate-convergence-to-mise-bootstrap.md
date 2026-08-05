@@ -60,9 +60,9 @@ schema):**
 1. **AUR / `paru`** — dotdrift ships a mise package plugin (tracked in
    [issue 0003](0003-paru-mise-package-plugin.md)). Bare Arch packages resolve
    to `paru:<pkg>` and install via `paru -S` (pacman + AUR), not the plain
-   `pacman:` built-in. **Open risk:** the plugin contract forbids `sudo` in
-   any hook, but paru self-elevates — unverified against v2026.8.2; fallback
-   is a dotdrift-native paru path for AUR packages.
+   `pacman:` built-in. paru's self-elevation is its own behavior (the plugin
+   code invokes no `sudo`); the only open check is TTY availability for paru's
+   interactive prompt under mise.
 2. **Resume semantics — kept.** dotdrift's resume layer stays as a thin
    orchestrator over `mise bootstrap --only/--skip`; not dropped.
 3. **Verbosity — kept.** `-v` wraps the `mise bootstrap` invocation at the
@@ -82,7 +82,7 @@ schema):**
 - [ ] `[packages]` translates to `[bootstrap.packages]`: bare names get the
       detected-manager prefix (Arch → `paru`, Debian → `apt`, Fedora → `dnf`);
       explicit prefixes pass through unchanged. `internal/packages` deleted
-      (or the paru slice retained if the plugin sudo-risk materializes).
+      (or the paru slice retained if TTY availability blocks the plugin).
 - [ ] System-scope dotfiles translate to `[bootstrap.files]`; the
       `sudo -E mise dotfiles apply` path and `DotfilesSystemStep` deleted.
 - [ ] Mounts activation translates to `[bootstrap.directories]` +

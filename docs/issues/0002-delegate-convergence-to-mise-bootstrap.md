@@ -76,29 +76,35 @@ schema):**
 
 ## Acceptance Criteria
 
-- [ ] `MinMiseVersion` raised to `2026.8.2`; `EnsureMise` upgrade path tested.
-- [ ] [Issue 0003](0003-paru-mise-package-plugin.md) (paru mise package plugin)
-      landed; AUR packages install via `paru:<pkg>` through the plugin.
-- [ ] `[packages]` translates to `[bootstrap.packages]`: bare names get the
+- [x] `MinMiseVersion` raised to `2026.8.2`; `EnsureMise` upgrade path tested.
+- [~] [Issue 0003](0003-paru-mise-package-plugin.md) (paru mise package plugin)
+      core built (`dotdrift paru` subcommand + Lua shim + tests); TTY
+      validation against real mise v2026.8.2 remains (issue 0003 criterion).
+- [~] `[packages]` translates to `[bootstrap.packages]`: bare names get the
       detected-manager prefix (Arch → `paru`, Debian → `apt`, Fedora → `dnf`);
-      explicit prefixes pass through unchanged. `internal/packages` deleted
-      (or the paru slice retained if TTY availability blocks the plugin).
+      explicit prefixes pass through unchanged. `packagesStep` in
+      `cmd/apply.go` delegates install to `mise bootstrap --only plugins,packages`.
+      `internal/packages` retained for removal (`Absent`) + `plan --deps` until
+      mise supports uninstall.
 - [ ] System-scope dotfiles translate to `[bootstrap.files]`; the
       `sudo -E mise dotfiles apply` path and `DotfilesSystemStep` deleted.
+      **Blocked:** `[bootstrap.files]` schema not published; mode-mapping
+      (symlink → content-copy) needs design decision.
 - [ ] Mounts activation translates to `[bootstrap.directories]` +
       `[bootstrap.linux.systemd.units]`; `internal/mounts` activation deleted,
       unit rendering kept in `generate`.
 - [ ] SMB activation translates to `[bootstrap.users]`/`[groups]`/`[services]`
       (+ a hook for `smbpasswd`/`testparm`); `internal/smb` activation deleted,
       config rendering kept in `generate`.
-- [ ] `dotdrift apply` drives `mise bootstrap` (single command or `--only`/
-      `--skip` slices) with the resume orchestrator preserved (invariants
-      2/10/11).
-- [ ] `-v`/`--verbose` wraps the `mise bootstrap` invocation (`+ argv` echo,
+- [~] `dotdrift apply` drives `mise bootstrap` for packages via `packagesStep`
+      with the resume orchestrator preserved (invariants 2/10/11). Full
+      pipeline collapse to all bootstrap phases pending steps 4-6.
+- [x] `-v`/`--verbose` wraps the `mise bootstrap` invocation (`+ argv` echo,
       live streaming, probes silent) — kept at the dotdrift-to-mise boundary.
-- [ ] `go test ./...` green; `./tests/e2e/run.sh` green across the debian
-      family and CachyOS; existing invariants (cross-module conflict detection,
-      layer merge, resume fingerprint + plan hash) still hold.
+- [x] `go test ./...` green (16 packages); existing invariants (cross-module
+      conflict detection, layer merge, resume fingerprint + plan hash) hold.
+      `./tests/e2e/run.sh` not yet run against the new packages step (needs
+      real mise v2026.8.2 in the Docker images).
 
 ## Out of Scope
 

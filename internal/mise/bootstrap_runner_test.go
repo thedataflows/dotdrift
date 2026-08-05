@@ -64,9 +64,9 @@ func TestPluginDir_underXDGDataHome(t *testing.T) {
 
 func TestGenerateBootstrapConfig_packagesAndPlugins(t *testing.T) {
 	got := mise.GenerateBootstrapConfig(
-		[]string{"neovim"},        // install
-		"paru",                     // backend
-		"/path/to/plugin",         // plugin path
+		[]string{"neovim"}, // install
+		"paru",             // backend
+		"/path/to/plugin",  // plugin path
 	)
 	require.Contains(t, got, "[bootstrap.packages]")
 	require.Contains(t, got, `"paru:neovim" = "latest"`)

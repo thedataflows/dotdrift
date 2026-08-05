@@ -602,12 +602,12 @@ type Runner interface {
 }
 
 type FakeRunner struct {
-	InstallCalled  bool
-	DotfilesCalled bool
+	InstallCalled   bool
+	DotfilesCalled  bool
 	BootstrapCalled bool
-	Yes            bool
-	Force          bool
-	Err            error
+	Yes             bool
+	Force           bool
+	Err             error
 }
 
 func (f *FakeRunner) EnsureAndInstall(ctx context.Context, configPath string) error {

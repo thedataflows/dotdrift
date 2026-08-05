@@ -60,7 +60,7 @@ func WritePlugin(dir string) error {
 		return fmt.Errorf("create plugin hooks dir: %w", err)
 	}
 	files := map[string]string{
-		"mise.plugin.toml":           misePluginToml,
+		"mise.plugin.toml":            misePluginToml,
 		"hooks/package_installed.lua": packageInstalledLua,
 		"hooks/package_install.lua":   packageInstallLua,
 	}

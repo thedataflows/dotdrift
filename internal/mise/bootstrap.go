@@ -41,7 +41,6 @@ func GenerateBootstrapPackages(install []string, backend string) string {
 	return b.String()
 }
 
-
 // PluginDir returns the path where dotdrift writes a named mise package
 // plugin (e.g. "paru") under the XDG data home.
 func PluginDir(xdgDataHome, name string) string {

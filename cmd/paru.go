@@ -31,9 +31,9 @@ func (c *ParuInstalledCmd) Run() error {
 
 // ParuInstallCmd installs packages via paru -S --needed --noconfirm.
 type ParuInstallCmd struct {
-	Names   []string `arg:"" optional:"" help:"Package names to install"`
-	DryRun  bool     `name:"dry-run" help:"Print what would happen without running"`
-	Update  bool     `help:"Refresh package manager metadata first"`
+	Names  []string `arg:"" optional:"" help:"Package names to install"`
+	DryRun bool     `name:"dry-run" help:"Print what would happen without running"`
+	Update bool     `help:"Refresh package manager metadata first"`
 }
 
 func (c *ParuInstallCmd) Run() error {

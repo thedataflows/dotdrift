@@ -21,6 +21,7 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string,
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
 // Runner executes one command and returns its stdout (trimmed) on success or
 // the combined output on failure.
 type Runner interface {
@@ -32,9 +33,9 @@ type ExecRunner struct{}
 
 // State is one element of the installed-status response.
 type State struct {
-	Name    string
+	Name      string
 	Installed bool
-	Version  string
+	Version   string
 }
 
 // PackageStatus checks each package via `pacman -Q <name>`. The query is

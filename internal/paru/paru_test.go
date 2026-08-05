@@ -52,7 +52,7 @@ func TestPackageStatus_missing(t *testing.T) {
 func TestPackageStatus_mixedBatch(t *testing.T) {
 	r := &fakeRunner{
 		outputs: map[string]string{
-			"pacman -Q curl":   "curl\t8.0.1-1",
+			"pacman -Q curl":    "curl\t8.0.1-1",
 			"pacman -Q ripgrep": "ripgrep\t14.0.3-1",
 		},
 		errs: map[string]error{

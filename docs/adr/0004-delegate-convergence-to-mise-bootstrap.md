@@ -52,24 +52,46 @@ selection changed. dotdrift keeps its resume layer
 orchestrator that decides "what changed?" then drives `mise bootstrap
 --only/--skip <phases>` slices. dotdrift stays the brain; mise is the hands.
 
-Two open questions gate the migration and are tracked in
-[issue 0002](../issues/0002-delegate-convergence-to-mise-bootstrap.md):
+The tensions surfaced by the delegation are resolved as follows (tracked in [issue 0002](../issues/0002-delegate-convergence-to-mise-bootstrap.md) for the delegation and [issue 0003](../issues/0003-paru-mise-package-plugin.md) for the paru provider):
 
-1. **AUR / `paru`.** dotdrift's Arch backend is `paru -S` (pacman + AUR);
-   mise's `pacman:` built-in-manager is plain pacman with no AUR. The
-   migration doc itself references the AUR package `ntfsprogs-plus`. This must
-   be resolved (keep a thin paru path, require an AUR-capable mise plugin, or
-   accept AUR-only modules stay dotdrift-native) before `internal/packages`
-   can be deleted.
-2. **Verbose UX.** dotdrift's `-v` does `set -x`-style `+ argv` echo to stderr
-   with probes always silent; mise offers `MISE_LOG_LEVEL`/`MISE_DEBUG`.
-   Decide whether to keep dotdrift's echo wrapper or accept mise's native
-   logging.
+1. **AUR / `paru` — dotdrift ships a mise package plugin.** mise's
+   `pacman:` built-in-manager is plain pacman (no AUR). dotdrift provides a
+   `paru` package-manager plugin so bare package names on Arch resolve to
+   `paru:<pkg>` and install through `paru -S` (pacman + AUR), preserving AUR
+   support (`ntfsprogs-plus`, etc.). mise package plugins are Lua-based vfox
+   plugins (see the package-plugin-development spec) with batch
+   `PackageInstalled`/`PackageInstall` hooks; dotdrift exposes a
+   `dotdrift paru` subcommand the Lua shim delegates to, keeping all paru
+   invocation logic in Go (reusing the existing argv builder). **Open risk:**
+   the plugin hard contract says "package plugins must never invoke `sudo` in
+   any hook" — but paru self-elevates (it calls `sudo pacman` internally).
+   Whether mise tolerates a plugin whose wrapped command self-elevates is
+   unverified against v2026.8.2; if it blocks, the fallback is a
+   dotdrift-native paru path outside the plugin model for AUR packages only.
+2. **Resume semantics — kept.** dotdrift's resume layer (contract invariants
+   2, 10, 11) survives as a thin orchestrator over `mise bootstrap --only`/
+   `--skip <phases>`. mise bootstrap is convergent but has no cross-run cursor
+   tied to selection fingerprint + plan content hash; dotdrift decides "what
+   changed?" then drives the right phase slices.
+3. **Verbosity — kept.** dotdrift's `-v` (`+ argv` echo to stderr, live
+   streaming, probes always silent) wraps the `mise bootstrap` invocation at
+   the dotdrift to mise boundary. Plugin-internal output is mise's concern.
+4. **Package prefixes — bare by default, explicit overrides.** Bare names in
+   `module.toml` assume the detected platform manager (Arch goes to the `paru`
+   plugin; Debian to `apt`; Fedora to `dnf`); the resolver adds the `manager:`
+   prefix during translation. An explicit prefix (`pacman:foo`, `apt:bar`)
+   passes through to the named built-in or plugin manager unchanged.
+5. **Schema lag — accepted.** The new `[bootstrap.*]` sections ship in
+   v2026.8.2 but lag in the published JSON schema; editor validation catches
+   up. Non-blocking.
+6. **Trust + state-dir — unchanged.** Emitting a full `[bootstrap.*]` config
+   under `$XDG_STATE_HOME/dotdrift/...` keeps the existing
+   `MISE_TRUSTED_CONFIG_PATHS` dance; no new problem.
 
 When this changes: if mise grows a structured module-overlay / selection model
 equivalent to dotdrift's layered `module.toml` (presence=managed, `when`
 filters, `disable` union, per-section merge), the case for dotdrift as a
-separate binary weakens — at that point revisit whether dotdrift collapses to
-a mise plugin or a thin profile compiler. Conversely, if the AUR question
-cannot be solved inside mise, `internal/packages` (or a paru slice of it) is
-retained and this ADR's deletion estimate narrows.
+separate binary weakens — revisit whether dotdrift collapses to a mise plugin
+or a thin profile compiler. If the paru plugin's self-elevation is blocked by
+mise (tension 1), `internal/packages`' paru slice is retained outside the
+plugin model and this ADR's deletion estimate narrows by ~100 LOC.

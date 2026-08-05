@@ -55,25 +55,34 @@ schema):**
 `internal/generate`, `internal/tui`, `internal/onboard`, `internal/state`,
 `internal/detect`/`facts`, and the ensure + translator half of `internal/mise`.
 
-**Two blockers before `internal/packages` can be deleted:**
+**Resolved decisions (ADR-0004):**
 
-1. **AUR / `paru`.** dotdrift's Arch backend is `paru -S` (pacman + AUR);
-   mise's `pacman:` built-in-manager is plain pacman. The migration doc
-   references the AUR package `ntfsprogs-plus`. Resolve how AUR packages
-   install under mise before deleting the backend.
-2. **Resume semantics.** mise bootstrap is convergent but has no cross-run
-   cursor tied to selection fingerprint + plan content hash (contract
-   invariants 2, 10). Keep dotdrift's resume layer as a thin orchestrator
-   driving `mise bootstrap --only/--skip <phases>`; do not drop it.
+1. **AUR / `paru`** — dotdrift ships a mise package plugin (tracked in
+   [issue 0003](0003-paru-mise-package-plugin.md)). Bare Arch packages resolve
+   to `paru:<pkg>` and install via `paru -S` (pacman + AUR), not the plain
+   `pacman:` built-in. **Open risk:** the plugin contract forbids `sudo` in
+   any hook, but paru self-elevates — unverified against v2026.8.2; fallback
+   is a dotdrift-native paru path for AUR packages.
+2. **Resume semantics — kept.** dotdrift's resume layer stays as a thin
+   orchestrator over `mise bootstrap --only/--skip`; not dropped.
+3. **Verbosity — kept.** `-v` wraps the `mise bootstrap` invocation at the
+   dotdrift to mise boundary.
+4. **Package prefixes — bare by default.** Bare names assume the detected
+   platform manager (Arch → `paru` plugin; Debian → `apt`; Fedora → `dnf`);
+   the resolver adds the `manager:` prefix. An explicit prefix passes through
+   to the named built-in or plugin unchanged.
+5. **Schema lag — accepted** (non-blocking).
+6. **Trust + state-dir — unchanged.**
 
 ## Acceptance Criteria
 
 - [ ] `MinMiseVersion` raised to `2026.8.2`; `EnsureMise` upgrade path tested.
-- [ ] AUR/paru decision documented (ADR amendment or inline): keep a paru
-      slice, require a mise plugin, or accept AUR modules stay dotdrift-native.
-- [ ] `[packages]` translates to `[bootstrap.packages]` (`manager:pkg` keys
-      resolved from detected backend); `internal/packages` deleted (or the paru
-      slice retained per the AUR decision).
+- [ ] [Issue 0003](0003-paru-mise-package-plugin.md) (paru mise package plugin)
+      landed; AUR packages install via `paru:<pkg>` through the plugin.
+- [ ] `[packages]` translates to `[bootstrap.packages]`: bare names get the
+      detected-manager prefix (Arch → `paru`, Debian → `apt`, Fedora → `dnf`);
+      explicit prefixes pass through unchanged. `internal/packages` deleted
+      (or the paru slice retained if the plugin sudo-risk materializes).
 - [ ] System-scope dotfiles translate to `[bootstrap.files]`; the
       `sudo -E mise dotfiles apply` path and `DotfilesSystemStep` deleted.
 - [ ] Mounts activation translates to `[bootstrap.directories]` +
@@ -83,9 +92,10 @@ schema):**
       (+ a hook for `smbpasswd`/`testparm`); `internal/smb` activation deleted,
       config rendering kept in `generate`.
 - [ ] `dotdrift apply` drives `mise bootstrap` (single command or `--only`/
-      `--skip` slices) with the resume orchestrator preserved.
-- [ ] Verbose UX decision documented: keep dotdrift's `+ argv` echo wrapper or
-      accept mise's `MISE_LOG_LEVEL`/`MISE_DEBUG`.
+      `--skip` slices) with the resume orchestrator preserved (invariants
+      2/10/11).
+- [ ] `-v`/`--verbose` wraps the `mise bootstrap` invocation (`+ argv` echo,
+      live streaming, probes silent) — kept at the dotdrift-to-mise boundary.
 - [ ] `go test ./...` green; `./tests/e2e/run.sh` green across the debian
       family and CachyOS; existing invariants (cross-module conflict detection,
       layer merge, resume fingerprint + plan hash) still hold.
@@ -103,9 +113,9 @@ schema):**
 ## Notes
 
 Phased rollout (no big-bang), lowest-risk-first:
-
 1. Bump `MinMiseVersion` → `2026.8.2`.
-2. Resolve AUR/paru.
+2. Implement [issue 0003](0003-paru-mise-package-plugin.md) (paru mise plugin);
+   validate the sudo tension against real mise v2026.8.2.
 3. `[packages]` → `[bootstrap.packages]` (biggest LOC win, lowest risk).
 4. System dotfiles → `[bootstrap.files]`.
 5. Mounts/smb activation → bootstrap services/users/groups; shift `generate`
@@ -117,6 +127,8 @@ sections ship in the v2026.8.2 release and CLI docs but are **not yet in the
 published JSON schema** (`mise.jdx.dev/schema/mise.json` lags); editor
 validation will catch up. Non-blocking.
 
-mise's `[bootstrap.packages]` requires explicit `manager:pkg` keys; dotdrift
-uses bare names + detected backend, so the manager prefix moves into the
-resolver as part of the translation.
+mise's `[bootstrap.packages]` requires explicit `manager:pkg` keys. dotdrift
+keeps bare names in `module.toml` and adds the prefix during translation: bare
+→ detected platform manager (Arch → `paru` via [issue 0003](0003-paru-mise-package-plugin.md),
+Debian → `apt`, Fedora → `dnf`); an explicit prefix (`pacman:foo`) passes
+through to the named built-in or plugin unchanged.

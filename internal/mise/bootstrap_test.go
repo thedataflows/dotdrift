@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BurntSushi/toml"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/mise"
 )
@@ -57,4 +58,29 @@ func TestGenerateBootstrapPackages_prefixedPassesThrough(t *testing.T) {
 	got := mise.GenerateBootstrapPackages([]string{"pacman:foo", "neovim"}, "paru")
 	require.Contains(t, got, `"pacman:foo" = "latest"`)
 	require.Contains(t, got, `"paru:neovim" = "latest"`)
+}
+
+// TestGenerateBootstrapConfig_validTOML verifies the generated config parses
+// as valid TOML — escaping/quoting issues would make mise reject it.
+func TestGenerateBootstrapConfig_validTOML(t *testing.T) {
+	content := mise.GenerateBootstrapConfig(
+		[]string{"neovim", "ripgrep", "pacman:base-devel"},
+		"paru",
+		"/home/user/.local/share/dotdrift/mise-plugins/paru",
+	)
+	require.NotEmpty(t, content)
+
+	var parsed map[string]any
+	err := toml.Unmarshal([]byte(content), &parsed)
+	require.NoError(t, err, "generated config must be valid TOML:\n%s", content)
+
+	pkgs, ok := parsed["bootstrap"].(map[string]any)
+	require.True(t, ok, "expected [bootstrap] section")
+	packages, ok := pkgs["packages"].(map[string]any)
+	require.True(t, ok, "expected [bootstrap.packages]")
+	require.Contains(t, packages, "paru:neovim")
+	require.Contains(t, packages, "pacman:base-devel")
+	plugins, ok := pkgs["plugins"].(map[string]any)
+	require.True(t, ok, "expected [bootstrap.plugins]")
+	require.Contains(t, plugins, "paru")
 }

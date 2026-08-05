@@ -11,6 +11,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/mounts"
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -109,6 +110,140 @@ func (s *packagesStep) Run(ctx context.Context) error {
 		return fmt.Errorf("write packages config: %w", err)
 	}
 	return s.runner.Bootstrap(ctx, s.configPath, true, "plugins", "packages")
+}
+
+// systemFilesStep replaces DotfilesSystemStep: it emits [bootstrap.files] from
+// system-scope dotfile entries and [bootstrap.directories] from mount
+// destinations, then converges via `mise bootstrap --only files`. The hidden
+// sudo helpers in mise bootstrap are strictly safer than the old
+// `sudo -E mise dotfiles apply` path (never leak content in argv/logs).
+type systemFilesStep struct {
+	runner     mise.Runner
+	entries    []resolve.DotfileEntry
+	sourceRoot string
+	homeDir    string
+	dirs       []string // mount destinations for [bootstrap.directories]
+	configPath string
+}
+
+var _ apply.Step = (*systemFilesStep)(nil)
+
+func (s *systemFilesStep) Name() string { return "dotfiles-system" }
+
+func (s *systemFilesStep) Run(ctx context.Context) error {
+	files, err := mise.ResolveBootstrapFiles(s.entries, s.sourceRoot, s.homeDir)
+	if err != nil {
+		return err
+	}
+	content := mise.GenerateBootstrapFiles(files)
+	if d := mise.GenerateBootstrapDirectories(s.dirs); d != "" {
+		content += "\n" + d
+	}
+	if content == "" {
+		return nil
+	}
+	if err := writeBootstrapConfig(s.configPath, content); err != nil {
+		return err
+	}
+	return s.runner.Bootstrap(ctx, s.configPath, true, "files")
+}
+
+// mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for
+// each mount unit (+ timer if startat) and converges via
+// `mise bootstrap --only services`. Directory creation moved to systemFilesStep.
+type mountsServicesStep struct {
+	runner     mise.Runner
+	entries    []resolve.MountEntry
+	configPath string
+}
+
+var _ apply.Step = (*mountsServicesStep)(nil)
+
+func (s *mountsServicesStep) Name() string { return "mounts" }
+
+func (s *mountsServicesStep) Run(ctx context.Context) error {
+	if len(s.entries) == 0 {
+		return nil
+	}
+	var svcs []mise.BootstrapService
+	for _, e := range s.entries {
+		escaped := generate.EscapePath(e.Spec.Destination)
+		enabled := e.Spec.State != "disabled"
+		svcs = append(svcs, mise.BootstrapService{
+			Name: escaped + ".mount", Enabled: enabled, Running: enabled,
+		})
+		if e.Spec.StartAt != "" {
+			svcs = append(svcs, mise.BootstrapService{
+				Name: escaped + ".timer", Enabled: enabled, Running: enabled,
+			})
+		}
+	}
+	content := mise.GenerateBootstrapServices(svcs)
+	if err := writeBootstrapConfig(s.configPath, content); err != nil {
+		return err
+	}
+	return s.runner.Bootstrap(ctx, s.configPath, true, "services")
+}
+
+// smbBootstrapStep replaces smb.Step: it emits [bootstrap.groups]/[users]/
+// [services] for the declarative parts and converges via
+// `mise bootstrap --only accounts,services`. The interactive smbpasswd/testparm
+// logic stays as a post-action via the existing smb.Runner.
+type smbBootstrapStep struct {
+	runner     mise.Runner
+	modules    []resolve.SmbModuleSpec
+	configPath string
+	smbRunner  smb.Runner // for smbpasswd/testparm post-actions
+	out        io.Writer
+}
+
+var _ apply.Step = (*smbBootstrapStep)(nil)
+
+func (s *smbBootstrapStep) Name() string { return "smb" }
+
+func (s *smbBootstrapStep) Run(ctx context.Context) error {
+	if len(s.modules) == 0 {
+		return nil
+	}
+	// Aggregate group/users/services across modules.
+	group := "smb"
+	var users []string
+	var svcs []mise.BootstrapService
+	avahiOn := false
+	for _, m := range s.modules {
+		if m.Spec.Group != "" {
+			group = m.Spec.Group
+		}
+		if len(m.Spec.Users) > 0 {
+			users = m.Spec.Users
+		}
+		if m.Spec.Avahi == nil || *m.Spec.Avahi {
+			avahiOn = true
+		}
+	}
+	svcs = append(svcs, mise.BootstrapService{Name: "smb", Enabled: true, Running: true})
+	if avahiOn {
+		svcs = append(svcs, mise.BootstrapService{Name: "avahi-daemon", Enabled: true, Running: true})
+	}
+
+	content := mise.GenerateBootstrapAccounts(group, users) + "\n" + mise.GenerateBootstrapServices(svcs)
+	if err := writeBootstrapConfig(s.configPath, content); err != nil {
+		return err
+	}
+	if err := s.runner.Bootstrap(ctx, s.configPath, true, "accounts", "services"); err != nil {
+		return err
+	}
+	// Post-actions: testparm validation + interactive smbpasswd (kept inline;
+	// mise has no declarative equivalent for these).
+	return smb.PostBootstrap(ctx, s.smbRunner, s.modules, s.out)
+}
+
+// writeBootstrapConfig writes content to configPath, creating parent dirs.
+func writeBootstrapConfig(configPath, content string) error {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		return fmt.Errorf("create config dir: %w", err)
+	}
+	return os.WriteFile(configPath, []byte(content), 0o644)
 }
 
 // ApplyCmd runs the full pipeline and always resumes.
@@ -218,8 +353,10 @@ func (c *ApplyCmd) Run() error {
 	// with no tasks.
 	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
 	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
-	dotfilesSystemConfigPath := filepath.Join(configDir, "dotfiles-system", "mise.toml")
 	packagesConfigPath := filepath.Join(configDir, "packages", "mise.toml")
+	systemConfigPath := filepath.Join(configDir, "system", "mise.toml")
+	mountsConfigPath := filepath.Join(configDir, "mounts", "mise.toml")
+	smbConfigPath := filepath.Join(configDir, "smb", "mise.toml")
 
 	// Compute the paru plugin path for Arch backends (mise's pacman built-in
 	// has no AUR support; the dotdrift paru plugin covers it, issue 0003).
@@ -269,24 +406,34 @@ func (c *ApplyCmd) Run() error {
 		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: toolsConfigPath},
 		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
 	)
-	if len(systemEntries) > 0 {
-		steps = append(steps, &mise.DotfilesSystemStep{
-			Exec: runner, Entries: systemEntries, ConfigPath: dotfilesSystemConfigPath, Yes: c.Yes,
+	// System files + mount directories → mise bootstrap --only files.
+	// Runs when there are system-scope dotfiles OR mount destinations (mkdir).
+	if len(systemEntries) > 0 || len(plan.Mounts.Entries) > 0 {
+		var mountDests []string
+		for _, e := range plan.Mounts.Entries {
+			mountDests = append(mountDests, e.Spec.Destination)
+		}
+		homeDir, _ := os.UserHomeDir()
+		steps = append(steps, &systemFilesStep{
+			runner: runner, entries: systemEntries, sourceRoot: profileRoot,
+			homeDir: homeDir, dirs: mountDests, configPath: systemConfigPath,
 		})
 	}
-	// Mounts and smb activate what mise already placed (unit files, smb.conf):
-	// they never write config files, so they run after every dotfiles step
-	// and before the post hooks (a post-hook may depend on an active mount or
-	// a running smb service). Both are conditional on a non-empty aggregate.
+	// Mount unit services → mise bootstrap --only services.
 	if len(plan.Mounts.Entries) > 0 {
-		mr := newMountsRunner()
-		setVerboseRunner(c.Verbose, mr)
-		steps = append(steps, &mounts.Step{Runner: mr, Plan: plan.Mounts})
+		steps = append(steps, &mountsServicesStep{
+			runner: runner, entries: plan.Mounts.Entries, configPath: mountsConfigPath,
+		})
 	}
+	// SMB accounts + services → mise bootstrap --only accounts,services,
+	// then interactive smbpasswd/testparm post-actions.
 	if len(plan.Smb.Modules) > 0 {
 		sr := newSmbRunner()
 		setVerboseRunner(c.Verbose, sr)
-		steps = append(steps, &smb.Step{Runner: sr, Plan: plan.Smb, Out: out})
+		steps = append(steps, &smbBootstrapStep{
+			runner: runner, modules: plan.Smb.Modules, configPath: smbConfigPath,
+			smbRunner: sr, out: out,
+		})
 	}
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{

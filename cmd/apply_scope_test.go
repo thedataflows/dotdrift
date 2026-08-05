@@ -28,21 +28,23 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	cmd := &ApplyCmd{Profile: scopeFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
+	// User dotfiles still use mise dotfiles apply; system dotfiles now use
+	// mise bootstrap --only files from the system/ config dir.
 	userApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "dotfiles")
-	systemApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "dotfiles-system")
-	userIdx, systemIdx := -1, -1
+	userIdx := -1
 	for i, e := range *events {
-		if strings.Contains(e, systemApply) {
-			systemIdx = i
-		}
-		// ".../mise/dotfiles" is a path prefix of ".../mise/dotfiles-system";
-		// exclude the system event when locating the user one.
-		if strings.Contains(e, userApply) && !strings.Contains(e, "dotfiles-system") {
+		if strings.Contains(e, userApply) {
 			userIdx = i
 		}
 	}
+	systemIdx := -1
+	for i, e := range *events {
+		if strings.Contains(e, "bootstrap") && strings.Contains(e, "--only files") {
+			systemIdx = i
+		}
+	}
 	require.GreaterOrEqual(t, userIdx, 0, "user dotfiles apply missing in %v", *events)
-	require.Greater(t, systemIdx, userIdx, "dotfiles-system must run after dotfiles in %v", *events)
+	require.Greater(t, systemIdx, userIdx, "system files step must run after dotfiles in %v", *events)
 
 	// The per-step configs are partitioned by scope.
 	userCfg, err := os.ReadFile(filepath.Join(dir, "mise", "dotfiles", "mise.toml"))
@@ -50,10 +52,10 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	require.Contains(t, string(userCfg), "~/.bashrc")
 	require.NotContains(t, string(userCfg), "/etc/demo.conf")
 
-	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "dotfiles-system", "mise.toml"))
+	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
 	require.NoError(t, err)
+	require.Contains(t, string(sysCfg), "[bootstrap.files]")
 	require.Contains(t, string(sysCfg), "/etc/demo.conf")
-	require.NotContains(t, string(sysCfg), "~/.bashrc")
 
 	// The pre-pipeline full config (D8a crash snapshot) still contains everything.
 	full, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))

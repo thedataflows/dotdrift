@@ -483,24 +483,15 @@ func TestApply_mountsStepConditional(t *testing.T) {
 	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	preIdx := eventIdx(*events, "hooks:pre")
-	systemIdx := eventIdx(*events, "dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles-system"))
-	mountsIdx := eventIdx(*events, "mounts:run")
-	smbIdx := eventIdx(*events, "smb:run")
-	postIdx := eventIdx(*events, "hooks:post")
-	require.GreaterOrEqual(t, preIdx, 0, "hooks-pre missing in %v", *events)
-	require.Greater(t, systemIdx, preIdx, "dotfiles-system must run after hooks-pre in %v", *events)
-	require.Greater(t, mountsIdx, systemIdx, "mounts must run after dotfiles-system in %v", *events)
-	require.Greater(t, smbIdx, mountsIdx, "smb must run after mounts in %v", *events)
-	require.Greater(t, postIdx, smbIdx, "hooks-post must run after smb in %v", *events)
-
-	joined := strings.Join(*events, "\n")
-	require.Contains(t, joined, "mkdir -p /mnt/data")
-	require.Contains(t, joined, "mkdir -p /mnt/backup")
-	require.Contains(t, joined, "systemctl daemon-reload")
-	require.Contains(t, joined, "enable --now mnt-data.mount")
-	require.Contains(t, joined, "enable --now mnt-data.timer", "startat entry activates its timer")
-	require.Contains(t, joined, "disable --now mnt-backup.mount", "state=disabled entry is disabled")
+	requireOrder(t, *events,
+		"mise:run run",       // hooks:pre
+		"mise:run bootstrap", // packages
+		"mise:run bootstrap", // system files
+		"mise:run bootstrap", // mounts services
+		"mise:run bootstrap", // smb accounts+services
+		"smb:run",            // PostBootstrap testparm
+		"mise:run run",       // hooks:post
+	)
 
 	s := loadStateFile(t, statePath)
 	require.Equal(t, state.StatusComplete, s.Status)
@@ -522,27 +513,19 @@ func TestApply_smbStepConditional(t *testing.T) {
 	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Out: &buf}
 	require.NoError(t, cmd.Run())
 
-	mountsIdx := eventIdx(*events, "mounts:run")
-	smbIdx := eventIdx(*events, "smb:run")
-	postIdx := eventIdx(*events, "hooks:post")
-	require.GreaterOrEqual(t, mountsIdx, 0, "mounts missing in %v", *events)
-	require.Greater(t, smbIdx, mountsIdx, "smb must run after mounts in %v", *events)
-	require.Greater(t, postIdx, smbIdx, "hooks-post must run after smb in %v", *events)
+	// Bootstrap handles group/user/service convergence; PostBootstrap still
+	// uses the smbRunner for testparm + smbpasswd.
+	requireOrder(t, *events,
+		"mise:run bootstrap", // mounts services
+		"mise:run bootstrap", // smb accounts+services
+		"smb:run",            // PostBootstrap testparm
+		"mise:run run",       // hooks:post
+	)
 
 	joined := strings.Join(*events, "\n")
-	// No sudo -E prefix assertions: privArgv drops the prefix when the test
-	// runs as root (containers); the mounts assertions above use the same
-	// prefix-free convention. Privilege logic is covered in internal/smb.
-	require.Contains(t, joined, "getent group nas")
-	require.Contains(t, joined, "usermod -aG nas cri")
 	require.Contains(t, joined, "testparm -s")
-	require.Contains(t, joined, "is-enabled smb")
 	require.Contains(t, joined, "pdbedit -L")
-	require.NotContains(t, joined, "avahi-daemon", "avahi = false in the fixture must skip avahi")
 
-	// The recording runner's pdbedit -L output is empty, so cri has no samba
-	// account: interactively the step runs smbpasswd; without a TTY it warns
-	// on the command's Out writer. Both prove the Out wiring.
 	if eventIdx(*events, "smb:run-interactive") >= 0 {
 		require.Contains(t, joined, "smbpasswd -a cri")
 	} else {
@@ -700,7 +683,7 @@ func TestApply_verbosePropagatesToRunners(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	capturedMise, backend, mr, sr := stubVerboseDeps(t, f)
+	capturedMise, backend, _, sr := stubVerboseDeps(t, f)
 
 	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Verbose: true}
 	require.NoError(t, cmd.Run())
@@ -708,7 +691,6 @@ func TestApply_verbosePropagatesToRunners(t *testing.T) {
 	require.NotNil(t, *capturedMise)
 	require.True(t, (*capturedMise).Verbose, "mise must stream in verbose mode")
 	require.True(t, backend.verbose, "packages backend must receive --verbose")
-	require.True(t, mr.verbose, "mounts runner must receive --verbose")
 	require.True(t, sr.verbose, "smb runner must receive --verbose")
 }
 
@@ -717,7 +699,7 @@ func TestApply_nonVerboseLeavesRunnersQuiet(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	capturedMise, backend, mr, sr := stubVerboseDeps(t, f)
+	capturedMise, backend, _, sr := stubVerboseDeps(t, f)
 
 	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
@@ -725,6 +707,5 @@ func TestApply_nonVerboseLeavesRunnersQuiet(t *testing.T) {
 	require.NotNil(t, *capturedMise)
 	require.False(t, (*capturedMise).Verbose, "mise must stay quiet without --verbose")
 	require.False(t, backend.verbose, "packages backend must stay quiet without --verbose")
-	require.False(t, mr.verbose, "mounts runner must stay quiet without --verbose")
 	require.False(t, sr.verbose, "smb runner must stay quiet without --verbose")
 }

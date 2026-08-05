@@ -242,6 +242,53 @@ func (s *Step) ensurePassword(ctx context.Context, user string) error {
 	return nil
 }
 
+// PostBootstrap runs the post-mise-bootstrap actions that can't be expressed
+// declaratively: the testparm validation gate and interactive smbpasswd for
+// each declared user missing from pdbedit -L. Group/user/service convergence
+// is handled by mise bootstrap ([bootstrap.groups/users/services]); this
+// function only does the interactive/validator parts.
+func PostBootstrap(ctx context.Context, runner Runner, modules []resolve.SmbModuleSpec, out io.Writer) error {
+	if runner == nil {
+		return fmt.Errorf("no runner configured")
+	}
+	// testparm validation gate — stop before anything else if the config is broken.
+	argv := privArgv(geteuid(), "testparm", "-s")
+	testparmOut, err := runner.Run(ctx, argv[0], argv[1:]...)
+	if err != nil {
+		return fmt.Errorf("testparm validation failed: %w\n%s", err, strings.TrimSpace(testparmOut))
+	}
+	// smbpasswd for each declared user missing from pdbedit -L.
+	for _, m := range modules {
+		for _, user := range m.Spec.Users {
+			if err := postBootstrapPassword(ctx, runner, user, out); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func postBootstrapPassword(ctx context.Context, runner Runner, user string, out io.Writer) error {
+	argv := privArgv(geteuid(), "pdbedit", "-L")
+	pdbeditOut, err := runner.Run(ctx, argv[0], argv[1:]...)
+	if err == nil && hasSambaAccount(pdbeditOut, user) {
+		return nil
+	}
+	if !isTTY() {
+		w := out
+		if w == nil {
+			w = os.Stdout
+		}
+		fmt.Fprintf(w, "samba password missing for %s; run: sudo smbpasswd -a %s\n", user, user)
+		return nil
+	}
+	argv = privArgv(geteuid(), "smbpasswd", "-a", user)
+	if err := runner.RunInteractive(ctx, argv[0], argv[1:]...); err != nil {
+		return fmt.Errorf("smbpasswd -a %s: %w", user, err)
+	}
+	return nil
+}
+
 // hasSambaAccount reports whether pdbedit -L output lists the user (lines
 // look like "alice:1000:Alice ...").
 func hasSambaAccount(pdbeditOut, user string) bool {

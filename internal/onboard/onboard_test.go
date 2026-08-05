@@ -379,6 +379,11 @@ func (r *recordingRunner) DotfilesApply(ctx context.Context, configPath string, 
 	return nil
 }
 
+func (r *recordingRunner) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+	r.calls = append(r.calls, "bootstrap")
+	return nil
+}
+
 var sourceRe = regexp.MustCompile(`source = "([^"]+)"`)
 
 // validatingRunner mimics the real ExecMise invocation (mise runs with
@@ -412,6 +417,10 @@ func (v *validatingRunner) DotfilesApply(ctx context.Context, configPath string,
 		require.True(v.t, filepath.IsAbs(src), "source %q must be absolute (mise resolves it against %s)", src, cwd)
 		require.FileExists(v.t, src)
 	}
+	return nil
+}
+
+func (v *validatingRunner) Bootstrap(ctx context.Context, configPath string, yes bool) error {
 	return nil
 }
 

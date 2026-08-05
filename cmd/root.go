@@ -52,6 +52,7 @@ type CLI struct {
 	Status   StatusCmd   `cmd:"" help:"Show status"`
 	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module"`
 	Generate GenerateCmd `cmd:"" help:"Generate mounts/smb modules"`
+	Paru     ParuCmd     `cmd:"" help:"paru mise plugin backend (internal)"`
 	Version  VersionCmd  `cmd:"" help:"Show version information"`
 
 	args []string // original args, used to detect --help before side effects

@@ -38,7 +38,7 @@ go install github.com/thedataflows/dotdrift@latest
 
 ### Runtime dependency
 
-`dotdrift` requires [mise](https://mise.jdx.dev) on `PATH`. When missing or too old, it installs a user-local copy via <https://mise.run>.
+`dotdrift` requires [mise](https://mise.jdx.dev) ≥ 2026.8.2 on `PATH` (needed for `mise bootstrap` declarative convergence). When missing or too old, it installs a user-local copy via <https://mise.run>.
 
 ## Quick start
 

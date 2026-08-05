@@ -22,7 +22,7 @@ import (
 )
 
 // MinMiseVersion is the hardcoded minimum mise version required by dotdrift.
-const MinMiseVersion = "2025.1.0"
+const MinMiseVersion = "2026.8.2"
 
 // InstallerURL is the official mise installer.
 const InstallerURL = "https://mise.run"
@@ -576,16 +576,33 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 	return err
 }
 
+// Bootstrap invokes `mise bootstrap --yes` against the config. It runs the
+// full declarative convergence (packages, files, services, etc.) in one call.
+// dotdrift's resume orchestrator may instead drive `--only`/`--skip` slices.
+func (e *ExecMise) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+	path, err := e.mise.EnsureContext(ctx)
+	if err != nil {
+		return err
+	}
+	args := []string{"bootstrap", "--cd", filepath.Dir(configPath)}
+	if yes {
+		args = append(args, "--yes")
+	}
+	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, args...)
+	return err
+}
+
 // Runner abstracts mise operations used by apply steps.
 type Runner interface {
 	EnsureAndInstall(ctx context.Context, configPath string) error
+	Bootstrap(ctx context.Context, configPath string, yes bool) error
 	DotfilesApply(ctx context.Context, configPath string, yes, force bool) error
 }
 
-// FakeRunner records mise invocations for tests.
 type FakeRunner struct {
 	InstallCalled  bool
 	DotfilesCalled bool
+	BootstrapCalled bool
 	Yes            bool
 	Force          bool
 	Err            error
@@ -600,6 +617,12 @@ func (f *FakeRunner) DotfilesApply(ctx context.Context, configPath string, yes, 
 	f.DotfilesCalled = true
 	f.Yes = yes
 	f.Force = force
+	return f.Err
+}
+
+func (f *FakeRunner) Bootstrap(ctx context.Context, configPath string, yes bool) error {
+	f.BootstrapCalled = true
+	f.Yes = yes
 	return f.Err
 }
 

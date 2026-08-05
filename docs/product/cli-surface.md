@@ -19,6 +19,7 @@ timestamp: 2026-07-28T00:00:00Z
 | `dotdrift onboard [-v|--verbose] <path>...` | Create/update module; mise apply immediately. `-v` / `--verbose` (also `DD_VERBOSE=1`) streams the mise install/dotfiles output live, echoing each command line `set -x`-style (`+ <argv>`) to stderr before it runs |
 | `dotdrift generate mounts` | Generate a mounts module: systemd `.mount` units (plus `.service`/`.timer` for `--startat`), `module.toml` with `scope = "system"`, `[mounts]`, packages, and dotfile entries targeting `/usr/local/lib/systemd/system`. Idempotent: same invocation → byte-identical tree; stale generated units are garbage-collected |
 | `dotdrift generate smb` | Generate an smb module: `shares.conf`, a one-time `smb.conf` seed (then user-owned), `module.toml` with `scope = "system"`, `[smb]`, packages (`samba`, plus `avahi` unless disabled), and dotfile entries targeting `/etc/samba` |
+| `dotdrift paru installed\|install` | Internal: mise package-plugin backend for the `paru` manager (pacman + AUR). `installed <names>` checks `pacman -Q` and emits a tab-separated status protocol; `install [--dry-run] [--update] <names>` runs `paru -S --needed --noconfirm`. Invoked by the Lua plugin shim, not by end users |
 
 # Module filter
 

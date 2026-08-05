@@ -12,7 +12,7 @@ Before any operation that invokes mise (`apply` tools/dotfiles steps, `onboard` 
 
 # Hardcoded minimum version
 
-- `const MinMiseVersion = "2025.1.0"` in `internal/mise`.
+- `const MinMiseVersion = "2026.8.2"` in `internal/mise`.
 - Mise uses calendar versions like `2026.6.6`. Compare by splitting on `.` and comparing each numeric component left-to-right.
 - A version with a non-numeric suffix on a segment (e.g. `2025.1.0-rc1`, `2025.1.0-dev.1`, `2025.1.0+build.5`) is a pre-release and compares **below** the plain release. Unparseable versions (`""`, `abc`, …) are explicit errors, never a silent less-than.
 - `mise --version` output is scanned for the first token that starts with a digit, so a leading program-name token does not break parsing.

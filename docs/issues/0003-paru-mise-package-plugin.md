@@ -9,7 +9,7 @@ timestamp: 2026-08-05T00:00:00Z
 # ISSUE 0003: paru mise package plugin
 
 - **Type**: feature
-- **Status**: open
+- **Status**: in-progress
 - **Priority**: high
 - **Labels**: [mise, packages, arch, plugin]
 - **Assignee**: none

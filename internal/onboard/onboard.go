@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
@@ -24,7 +23,7 @@ type Options struct {
 	Paths       []string
 	App         string
 	Mode        string
-	Packages    []string
+	Packages    []PackageEntry
 	Tools       []string
 	Host        bool
 	DryRun      bool
@@ -39,23 +38,33 @@ type Onboard struct {
 	Mise mise.Runner
 }
 
-// dotfileEntry matches the TOML shape for a single dotfile.
-type dotfileEntry struct {
-	Source string `toml:"source"`
-	Mode   string `toml:"mode"`
+// PackageEntry is one declared distro package. Description, when set, is
+// rendered as a trailing "# <desc>" comment next to the package in
+// module.toml — it is cosmetic only; resolve reads back just the bare
+// names (the TOML parser ignores comments), so descriptions do not enter
+// the data model.
+type PackageEntry struct {
+	Name        string
+	Description string
 }
 
-// moduleConfig is the TOML shape written to module.toml.
+// dotfileEntry is one managed path rendered as an inline TOML table.
+type dotfileEntry struct {
+	Source string
+	Mode   string
+}
+
+// moduleConfig is the shape written to module.toml. It is rendered by
+// hand (encodeModuleTOML) rather than a TOML encoder so dotfiles become
+// inline tables and packages can carry description comments.
 type moduleConfig struct {
-	ID       string                  `toml:"id,omitempty"`
-	App      string                  `toml:"app,omitempty"`
-	Packages packagesConfig          `toml:"packages,omitempty"`
-	Tools    map[string]string       `toml:"tools,omitempty"`
-	Dotfiles map[string]dotfileEntry `toml:"dotfiles,omitempty"`
+	Packages packagesConfig
+	Tools    map[string]string
+	Dotfiles map[string]dotfileEntry
 }
 
 type packagesConfig struct {
-	Present []string `toml:"present,omitempty"`
+	Present []PackageEntry
 }
 
 // Run copies the live paths into the module, writes module.toml, and applies.
@@ -127,8 +136,6 @@ func (o *Onboard) Run(opts Options) error {
 	}
 
 	cfg := moduleConfig{
-		ID:       app,
-		App:      app,
 		Packages: packagesConfig{Present: opts.Packages},
 		Tools:    toolsMap(opts.Tools),
 		Dotfiles: entries,
@@ -283,12 +290,106 @@ func writeModuleTOML(moduleDir string, cfg moduleConfig) error {
 	if err := os.MkdirAll(moduleDir, 0o755); err != nil {
 		return fmt.Errorf("create module dir: %w", err)
 	}
-	data, err := toml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("encode module.toml: %w", err)
-	}
 	path := filepath.Join(moduleDir, "module.toml")
-	return os.WriteFile(path, data, 0o644)
+	return os.WriteFile(path, []byte(encodeModuleTOML(cfg)), 0o644)
+}
+
+// encodeModuleTOML renders the module config as TOML by hand. BurntSushi
+// cannot emit inline tables (it expands every map/struct into a sub-table),
+// so this produces the lighter style hand-authored modules use — dotfiles
+// as "target" = { source = ..., mode = ... } and packages as an array whose
+// entries may carry a trailing "# description" comment. Map keys are sorted
+// for deterministic output.
+func encodeModuleTOML(cfg moduleConfig) string {
+	var b strings.Builder
+	if len(cfg.Packages.Present) > 0 {
+		b.WriteString("[packages]\npresent = [\n")
+		for _, p := range cfg.Packages.Present {
+			if p.Description != "" {
+				b.WriteString("  " + tomlBasicString(p.Name) + ", # " + p.Description + "\n")
+			} else {
+				b.WriteString("  " + tomlBasicString(p.Name) + ",\n")
+			}
+		}
+		b.WriteString("]\n\n")
+	}
+	if len(cfg.Tools) > 0 {
+		b.WriteString("[tools]\n")
+		keys := make([]string, 0, len(cfg.Tools))
+		for k := range cfg.Tools {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			b.WriteString(tomlKey(k) + " = " + tomlBasicString(cfg.Tools[k]) + "\n")
+		}
+		b.WriteString("\n")
+	}
+	if len(cfg.Dotfiles) > 0 {
+		b.WriteString("[dotfiles]\n")
+		keys := make([]string, 0, len(cfg.Dotfiles))
+		for k := range cfg.Dotfiles {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			e := cfg.Dotfiles[k]
+			b.WriteString(tomlBasicString(k) + " = { source = " + tomlBasicString(e.Source) + ", mode = " + tomlBasicString(e.Mode) + " }\n")
+		}
+	}
+	return b.String()
+}
+
+// tomlBasicString renders s as a TOML basic string with the minimal
+// escaping the TOML spec requires (control chars, quote, backslash).
+func tomlBasicString(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '"':
+			b.WriteString(`\"`)
+		case '\\':
+			b.WriteString(`\\`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			if r < 0x20 {
+				fmt.Fprintf(&b, `\u%04x`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// tomlKey renders a key bare when it matches the simple-key charset
+// ([A-Za-z0-9_-]+), quoted otherwise.
+func tomlKey(k string) string {
+	if isBareKey(k) {
+		return k
+	}
+	return tomlBasicString(k)
+}
+
+func isBareKey(k string) bool {
+	if k == "" {
+		return false
+	}
+	for _, r := range k {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_' || r == '-':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // writeMiseConfig generates the onboard mise config under the profile's XDG
@@ -346,3 +447,43 @@ func toolsMap(tools []string) map[string]string {
 	return out
 }
 
+// ParsePackages parses --packages values into entries. kong splits the flag
+// value on commas (its default), so each element is already one entry by
+// the time it reaches here; an entry is either a bare package name
+// ("ripgrep", "aur/foo") or name="description". Because kong splits on
+// commas unconditionally, a description must not itself contain a comma —
+// use a comma-free wording. (Hand-authored module.toml files are not so
+// constrained, since their descriptions sit inside the quoted array entry.)
+func ParsePackages(values []string) ([]PackageEntry, error) {
+	var out []PackageEntry
+	for _, v := range values {
+		entry, ok, err := parsePackageEntry(v)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, entry)
+		}
+	}
+	return out, nil
+}
+
+func parsePackageEntry(s string) (PackageEntry, bool, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return PackageEntry{}, false, nil
+	}
+	name, rest, hasDesc := strings.Cut(s, "=")
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return PackageEntry{}, false, fmt.Errorf("empty package name in %q", s)
+	}
+	if !hasDesc {
+		return PackageEntry{Name: name}, true, nil
+	}
+	desc := strings.TrimSpace(rest)
+	if len(desc) >= 2 && desc[0] == '"' && desc[len(desc)-1] == '"' {
+		desc = desc[1 : len(desc)-1]
+	}
+	return PackageEntry{Name: name, Description: desc}, true, nil
+}

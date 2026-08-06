@@ -198,3 +198,33 @@ func TestOnboard_modeFlowsToModuleTOML(t *testing.T) {
 		})
 	}
 }
+
+// --packages values flow through kong (comma split), ParsePackages, and the
+// emitter into a module.toml whose present array carries a trailing
+// "# description" comment — the style hand-authored modules use.
+func TestOnboard_packagesDescriptionEndToEnd(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	profDir := t.TempDir()
+	live := filepath.Join(t.TempDir(), "live.conf")
+	require.NoError(t, os.WriteFile(live, []byte("x=1\n"), 0o644))
+
+	orig := detectFacts
+	detectFacts = func() (*facts.Facts, error) { return &facts.Facts{Hostname: "testhost"}, nil }
+	t.Cleanup(func() { detectFacts = orig })
+
+	cmd := &OnboardCmd{
+		Paths:   []string{live},
+		Profile: profDir,
+		App:     "myapp",
+		// kong would split 'bat,fd="Find files"' into these two tokens.
+		Packages: []string{"bat", `fd="Find files"`},
+		Mise:     &mise.FakeRunner{},
+	}
+	require.NoError(t, cmd.Run())
+
+	data, err := os.ReadFile(filepath.Join(profDir, "modules", "myapp", "module.toml"))
+	require.NoError(t, err)
+	body := string(data)
+	require.Contains(t, body, "  \"bat\",\n")
+	require.Contains(t, body, "  \"fd\", # Find files\n")
+}

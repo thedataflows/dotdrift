@@ -28,6 +28,18 @@ func TestKong_applyPositionalModules(t *testing.T) {
 	require.Equal(t, []string{"vim,git", "extra"}, cli.Apply.Modules)
 }
 
+// "dotdrift add" is an alias for "dotdrift onboard": it parses onto the
+// same OnboardCmd and carries the same flags.
+func TestKong_addAliasRoutesToOnboard(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"add", "/tmp/x", "--app", "foo"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"/tmp/x"}, cli.Onboard.Paths)
+	require.Equal(t, "foo", cli.Onboard.App)
+}
+
 // --verbose parses on apply and onboard (and only there).
 func TestKong_verboseFlagParses(t *testing.T) {
 	var cli CLI

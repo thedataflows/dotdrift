@@ -117,7 +117,7 @@ func TestOnboard_writesToml(t *testing.T) {
 		Paths:       []string{src},
 		App:         "bash",
 		Mode:        "copy",
-		Packages:    []string{"bash"},
+		Packages:    []onboard.PackageEntry{{Name: "bash"}},
 		Tools:       []string{"node=20"},
 		Home:        home,
 	})
@@ -126,11 +126,75 @@ func TestOnboard_writesToml(t *testing.T) {
 	modToml := filepath.Join(profile, "modules", "bash", "module.toml")
 	content, err := readFile(modToml)
 	require.NoError(t, err)
-	require.Contains(t, content, `id = "bash"`)
-	require.Contains(t, content, `app = "bash"`)
-	require.Contains(t, content, `mode = "copy"`)
-	require.Contains(t, content, `"bash"`)
+	// id/app are not written: the module directory name already carries the
+	// identity (profile.Load falls back to it), so declaring them is
+	// redundant — hand-authored modules omit them and work fine.
+	require.NotContains(t, content, `id = "bash"`)
+	require.NotContains(t, content, `app = "bash"`)
+	// Dotfiles render as inline tables, matching hand-authored modules.
+	require.Contains(t, content, `"~/.bashrc" = { source = "home/.bashrc", mode = "copy" }`)
+	// Packages (array) and tools (map).
+	require.Contains(t, content, `"bash",`)
 	require.Contains(t, content, `node = "20"`)
+}
+
+// Package entries may carry an inline description (name="desc") that
+// renders as a trailing "# desc" comment next to the package, matching
+// hand-authored modules like:  "bat", # Cat clone with syntax highlighting
+func TestOnboard_packageDescriptionComments(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	src := filepath.Join(home, ".bashrc")
+	require.NoError(t, writeFile(src, "x"))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	err := o.Run(onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{src},
+		App:         "bash",
+		Home:        home,
+		Packages: []onboard.PackageEntry{
+			{Name: "bash"},
+			{Name: "ripgrep", Description: "Search tool"},
+		},
+	})
+	require.NoError(t, err)
+
+	content, err := readFile(filepath.Join(profile, "modules", "bash", "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, content, "  \"bash\",\n")
+	require.Contains(t, content, "  \"ripgrep\", # Search tool\n")
+}
+
+func TestParsePackages(t *testing.T) {
+	cases := []struct {
+		name   string
+		values []string
+		want   []onboard.PackageEntry
+	}{
+		// kong splits "a,b" into ["a","b"] before ParsePackages sees it, so
+		// each value here is already a single entry.
+		{"two names", []string{"ripgrep", "bat"}, []onboard.PackageEntry{{Name: "ripgrep"}, {Name: "bat"}}},
+		{"with description", []string{`bat="Cat clone"`}, []onboard.PackageEntry{{Name: "bat", Description: "Cat clone"}}},
+		{"mixed", []string{"bat", `fd="Find files"`}, []onboard.PackageEntry{{Name: "bat"}, {Name: "fd", Description: "Find files"}}},
+		{"aur prefix", []string{"aur/lmstudio-bin"}, []onboard.PackageEntry{{Name: "aur/lmstudio-bin"}}},
+		// A trailing comma in the flag surfaces as an empty entry; it is dropped.
+		{"empty entries dropped", []string{"a", "", "b"}, []onboard.PackageEntry{{Name: "a"}, {Name: "b"}}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := onboard.ParsePackages(tc.values)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, got)
+		})
+	}
+}
+
+func TestParsePackages_errorsOnEmptyName(t *testing.T) {
+	_, err := onboard.ParsePackages([]string{"=bad"})
+	require.Error(t, err)
 }
 
 func TestOnboard_noEnableFlagNeeded(t *testing.T) {

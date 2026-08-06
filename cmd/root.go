@@ -50,7 +50,7 @@ type CLI struct {
 	Plan     PlanCmd     `cmd:"" help:"Print the effective plan"`
 	Apply    ApplyCmd    `cmd:"" help:"Apply the profile"`
 	Status   StatusCmd   `cmd:"" help:"Show status"`
-	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module"`
+	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module" aliases:"add"`
 	Generate GenerateCmd `cmd:"" help:"Generate mounts/smb modules"`
 	Paru     ParuCmd     `cmd:"" help:"paru mise plugin backend (internal)"`
 	Version  VersionCmd  `cmd:"" help:"Show version information"`
@@ -175,8 +175,5 @@ func Run(version string, args []string) error {
 		return nil
 	}
 
-	if err := kctx.Run(); err != nil {
-		return &ExitError{Code: 1, Err: err}
-	}
-	return nil
+	return kctx.Run()
 }

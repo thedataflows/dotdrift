@@ -319,38 +319,10 @@ func TestOnboard_dotfilesApplyForced(t *testing.T) {
 	require.True(t, fr.Force, "onboard's dotfiles apply must pass force (it owns the content it just copied)")
 }
 
-func TestOnboard_conflictKeepsModule(t *testing.T) {
-	home := t.TempDir()
-	profile := t.TempDir()
-	isolateState(t)
-
-	src := filepath.Join(home, ".bashrc")
-	require.NoError(t, writeFile(src, "bashrc"))
-
-	fr := &mise.FakeRunner{}
-	o := &onboard.Onboard{Mise: fr}
-	err := o.Run(onboard.Options{
-		ProfileRoot: profile,
-		Paths:       []string{src},
-		App:         "bash",
-		Home:        home,
-	})
-	require.NoError(t, err)
-
-	// Onboard the same path again should fail with conflict, but leave module.
-	err = o.Run(onboard.Options{
-		ProfileRoot: profile,
-		Paths:       []string{src},
-		App:         "bash",
-		Home:        home,
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "conflict")
-	require.Contains(t, err.Error(), "already exists in module (remove it or onboard into a different module id)")
-	require.FileExists(t, filepath.Join(profile, "modules", "bash", "module.toml"))
-}
-
-func TestOnboard_forceReplacesExistingFile(t *testing.T) {
+// Re-onboarding the same path refreshes the module's copy from the live
+// file instead of erroring — onboard snapshots live state, so updating is
+// the default (there is no --force / conflict anymore).
+func TestOnboard_updatesExistingFile(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
 	isolateState(t)
@@ -358,36 +330,24 @@ func TestOnboard_forceReplacesExistingFile(t *testing.T) {
 	src := filepath.Join(home, ".bashrc")
 	require.NoError(t, writeFile(src, "v1"))
 
-	fr := &mise.FakeRunner{}
-	o := &onboard.Onboard{Mise: fr}
-	opts := onboard.Options{
-		ProfileRoot: profile,
-		Paths:       []string{src},
-		App:         "bash",
-		Home:        home,
-	}
-	require.NoError(t, o.Run(opts))
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{src}, App: "bash", Home: home,
+	}))
 
-	// Live file changed since the first onboard.
 	require.NoError(t, writeFile(src, "v2"))
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{src}, App: "bash", Home: home,
+	}), "re-onboarding an existing path must update, not fail")
 
-	// Without force the second onboard still conflicts.
-	err := o.Run(opts)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "conflict")
-
-	// With force the module copy is refreshed from the live file.
-	forced := opts
-	forced.Force = true
-	require.NoError(t, o.Run(forced))
-
-	copied := filepath.Join(profile, "modules", "bash", "home", ".bashrc")
-	content, err := readFile(copied)
+	got, err := readFile(filepath.Join(profile, "modules", "bash", "home", ".bashrc"))
 	require.NoError(t, err)
-	require.Equal(t, "v2", content)
+	require.Equal(t, "v2", got)
 }
 
-func TestOnboard_forceReplacesExistingDir(t *testing.T) {
+// Re-onboarding a directory refreshes its tree wholesale: removed files
+// disappear, modified files update, new files appear.
+func TestOnboard_updatesExistingDir(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
 	isolateState(t)
@@ -396,24 +356,17 @@ func TestOnboard_forceReplacesExistingDir(t *testing.T) {
 	require.NoError(t, writeFile(filepath.Join(dir, "old.conf"), "old"))
 	require.NoError(t, writeFile(filepath.Join(dir, "keep.conf"), "v1"))
 
-	fr := &mise.FakeRunner{}
-	o := &onboard.Onboard{Mise: fr}
-	opts := onboard.Options{
-		ProfileRoot: profile,
-		Paths:       []string{dir},
-		App:         "app",
-		Home:        home,
-	}
-	require.NoError(t, o.Run(opts))
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{dir}, App: "app", Home: home,
+	}))
 
-	// Live dir changed: one file removed, one modified, one added.
 	require.NoError(t, os.Remove(filepath.Join(dir, "old.conf")))
 	require.NoError(t, writeFile(filepath.Join(dir, "keep.conf"), "v2"))
 	require.NoError(t, writeFile(filepath.Join(dir, "new.conf"), "new"))
-
-	forced := opts
-	forced.Force = true
-	require.NoError(t, o.Run(forced))
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{dir}, App: "app", Home: home,
+	}))
 
 	base := filepath.Join(profile, "modules", "app", "home", ".config", "app")
 	require.NoFileExists(t, filepath.Join(base, "old.conf"))
@@ -421,6 +374,80 @@ func TestOnboard_forceReplacesExistingDir(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "v2", kept)
 	require.FileExists(t, filepath.Join(base, "new.conf"))
+}
+
+// Re-onboarding a NEW path into an existing module merges into module.toml
+// instead of overwriting it: the first path's entry and its packages survive.
+func TestOnboard_mergeKeepsExistingEntries(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	require.NoError(t, writeFile(filepath.Join(home, ".bashrc"), "a"))
+	require.NoError(t, writeFile(filepath.Join(home, ".vimrc"), "b"))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{"~/.bashrc"},
+		Packages: []onboard.PackageEntry{{Name: "bash"}}, App: "mix", Home: home,
+	}))
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{"~/.vimrc"}, App: "mix", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(profile, "modules", "mix", "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, content, `"~/.bashrc"`)
+	require.Contains(t, content, `"~/.vimrc"`)
+	require.Contains(t, content, `"bash"`)
+}
+
+// Re-onboarding preserves sections onboard does not manage (scope, hooks):
+// they pass through verbatim while [dotfiles] is merged.
+func TestOnboard_mergePreservesOtherSections(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+	require.NoError(t, writeFile(filepath.Join(home, ".bashrc"), "a"))
+
+	modDir := filepath.Join(profile, "modules", "mix")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, writeFile(filepath.Join(modDir, "module.toml"),
+		`scope = "system"`+"\n\n[hooks]\npre = [\"echo hi\"]\n"))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{"~/.bashrc"}, App: "mix", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(modDir, "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, content, `scope = "system"`)
+	require.Contains(t, content, `pre = ["echo hi"]`)
+	require.Contains(t, content, `"~/.bashrc"`)
+}
+
+// Adding a path without re-declaring packages keeps existing package
+// description comments: the [packages] section is left untouched.
+func TestOnboard_mergePreservesPackageDescriptions(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+	require.NoError(t, writeFile(filepath.Join(home, ".bashrc"), "a"))
+	require.NoError(t, writeFile(filepath.Join(home, ".vimrc"), "b"))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{"~/.bashrc"},
+		Packages: []onboard.PackageEntry{{Name: "bat", Description: "Cat clone"}}, App: "mix", Home: home,
+	}))
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{"~/.vimrc"}, App: "mix", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(profile, "modules", "mix", "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, content, `"bat", # Cat clone`)
 }
 
 func TestOnboard_dryRun_noSideEffects(t *testing.T) {

@@ -18,7 +18,6 @@ type OnboardCmd struct {
 	Tools    []string `help:"Mise tools to declare"`
 	Host     bool     `help:"Host overlay only"`
 	DryRun   bool     `help:"Preview only"`
-	Force    bool     `help:"Replace existing module content on conflict"`
 	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
 	Verbose  bool     `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
 	// Mise injects a runner for tests; nil uses the real mise bootstrap.
@@ -52,7 +51,6 @@ func (c *OnboardCmd) Run() error {
 		Tools:       c.Tools,
 		Host:        c.Host,
 		DryRun:      c.DryRun,
-		Force:       c.Force,
 		Yes:         c.Yes,
 		Hostname:    f.Hostname,
 	})

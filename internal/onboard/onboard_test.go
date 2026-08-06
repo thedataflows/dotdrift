@@ -61,6 +61,33 @@ func TestPathMap_homeAndSystem(t *testing.T) {
 	require.Contains(t, content, fmt.Sprintf(`"system/%s"`, strings.TrimPrefix(sys, "/")))
 }
 
+// A bare relative path (no ~/) is home-relative, matching the ~/.config/...
+// convention hand-authored modules use: ".bashrc" means "~/.bashrc". The
+// materialized module.toml must carry the "~/..." target and "home/..."
+// source, never the absolute home path.
+func TestOnboard_relativePathIsHomeRelative(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	require.NoError(t, writeFile(filepath.Join(home, ".bashrc"), "bashrc"))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	err := o.Run(onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{".bashrc"},
+		App:         "bash",
+		Home:        home,
+	})
+	require.NoError(t, err)
+
+	content, err := readFile(filepath.Join(profile, "modules", "bash", "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, content, `"~/.bashrc"`)
+	require.Contains(t, content, `"home/.bashrc"`)
+	require.NotContains(t, content, home, "module.toml must not embed the absolute home path")
+}
+
 func TestInferApp_configDir(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()

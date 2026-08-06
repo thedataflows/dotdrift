@@ -168,11 +168,22 @@ func (o *Onboard) Run(opts Options) error {
 	return nil
 }
 
+// expandPath resolves an onboard path to an absolute filesystem path. "~"
+// and "~/..." are home-relative, and so is any bare relative path: ".bashrc"
+// means the same as "~/.bashrc" (matching the convention hand-authored
+// modules use), which keeps the materialized module.toml source relative
+// (home/...) instead of leaking an absolute CWD path under system/.
 func expandPath(p, home string) string {
-	if strings.HasPrefix(p, "~/") {
+	switch {
+	case p == "~":
+		return home
+	case strings.HasPrefix(p, "~/"):
 		return filepath.Join(home, p[2:])
+	case filepath.IsAbs(p):
+		return p
+	default:
+		return filepath.Join(home, p)
 	}
-	return p
 }
 
 func inferApp(paths []string, home string) string {

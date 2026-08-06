@@ -1,7 +1,6 @@
-package dotdrift_test
+package cmd_test
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,24 +125,4 @@ func gitExec(t *testing.T, dir string, args ...string) {
 	c.Env = append(os.Environ(), "GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com")
 	out, err := c.CombinedOutput()
 	require.NoError(t, err, string(out))
-}
-
-func TestExitCodes_usage(t *testing.T) {
-	err := cmd.Run("dev", []string{"--invalid-flag"})
-	require.Error(t, err)
-	var exitErr *cmd.ExitError
-	require.True(t, errors.As(err, &exitErr))
-	require.Equal(t, 2, exitErr.Code)
-}
-
-func TestExitCodes_runtime(t *testing.T) {
-	dir := t.TempDir()
-	err := cmd.Run("dev", []string{"init", dir})
-	require.NoError(t, err)
-
-	err = cmd.Run("dev", []string{"init", dir})
-	require.Error(t, err)
-	var exitErr *cmd.ExitError
-	require.True(t, errors.As(err, &exitErr))
-	require.Equal(t, 1, exitErr.Code)
 }

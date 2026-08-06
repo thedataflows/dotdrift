@@ -1,4 +1,4 @@
-package dotdrift
+package cmd
 
 import (
 	"errors"

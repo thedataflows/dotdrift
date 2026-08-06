@@ -1,5 +1,4 @@
-// Package dotdrift implements the dotdrift CLI.
-package dotdrift
+package cmd
 
 import (
 	"fmt"
@@ -17,30 +16,24 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ExitError carries a process exit code for a CLI failure.
-// Usage/parse errors use code 2; runtime errors use code 1.
-type ExitError struct {
-	Code int
-	Err  error
-}
-
-func (e *ExitError) Error() string { return e.Err.Error() }
-func (e *ExitError) Unwrap() error { return e.Err }
-
-const appName = "dotdrift"
+const (
+	appName      = "dotdrift"
+	appDesc      = "DotDrift is a CLI tool for managing Linux configuration"
+	appEnvPrefix = "DD"
+)
 
 // CurrentLogFormat records the active log format set at runtime.
 var CurrentLogFormat string
 
 // RootFlags holds global CLI flags.
 type RootFlags struct {
-	LogLevel          string `help:"Log level (trace,debug,info,warn,error)" enum:"trace,debug,info,warn,error" default:"info" env:"LOG_LEVEL"`
-	LogFormat         string `help:"Log format (console,json)" enum:"console,json" default:"console" env:"LOG_FORMAT"`
-	Profiling         bool   `help:"Enable pprof profiling server" default:"false"`
-	ProfilingListenOn string `help:"Listen address for pprof profiling server" default:"127.0.0.1:6060"`
+	LogLevel      string `help:"Log level (trace,debug,info,warn,error)" enum:"trace,debug,info,warn,error" default:"info" env:"LOG_LEVEL"`
+	LogFormat     string `help:"Log format (console,json)" enum:"console,json" default:"console" env:"LOG_FORMAT"`
+	PProf         bool   `help:"Enable pprof profiling server" default:"false"`
+	PProfListenOn string `help:"Listen address for pprof profiling server" default:"127.0.0.1:6060"`
 }
 
-// CLI represents the main CLI structure.
+// root CLI structure.
 type CLI struct {
 	RootFlags `kong:"embed"`
 
@@ -60,7 +53,7 @@ type CLI struct {
 
 // AfterApply is called after Kong parses the CLI but before the command runs.
 func (cli *CLI) AfterApply(kctx *kong.Context) error {
-	if kctx.Command() == "version" || slices.Contains(cli.args, "--help") || slices.Contains(cli.args, "-h") {
+	if kctx.Command() == "version" || slices.Contains(kctx.Args, "--help") || slices.Contains(kctx.Args, "-h") {
 		return nil
 	}
 	if err := setGlobalLoggerLogLevel(cli.LogLevel); err != nil {
@@ -69,12 +62,12 @@ func (cli *CLI) AfterApply(kctx *kong.Context) error {
 	if err := setGlobalLoggerLogFormat(cli.LogFormat); err != nil {
 		return fmt.Errorf("set log format: %w", err)
 	}
-	if cli.Profiling {
-		log.Info().Str("listen", cli.ProfilingListenOn).Msg("Starting pprof profiling server")
+	if cli.PProf {
+		log.Info().Str("listen", cli.PProfListenOn).Msg("Starting pprof profiling server")
 		runtime.SetBlockProfileRate(1)
 		go func() {
-			if err := http.ListenAndServe(cli.ProfilingListenOn, nil); err != nil {
-				log.Error().Err(err).Str("listen", cli.ProfilingListenOn).Msg("pprof profiling server stopped")
+			if err := http.ListenAndServe(cli.PProfListenOn, nil); err != nil {
+				log.Error().Err(err).Str("listen", cli.PProfListenOn).Msg("pprof profiling server stopped")
 			}
 		}()
 	}
@@ -104,31 +97,8 @@ func setGlobalLoggerLogFormat(format string) error {
 	return nil
 }
 
-// dotenvFiles are tried in order; godotenv never overrides an existing var.
-var dotenvFiles = []string{".env", ".local.env", ".dev.env"}
-
-// loadDotenvFiles auto-loads .env files from the current directory. Set
-// DOTDRIFT_NO_ENV=1 to skip loading entirely (e.g. in sandboxed or CI runs
-// where a stray .env must not leak into the process environment).
 func loadDotenvFiles() {
-	if os.Getenv("DOTDRIFT_NO_ENV") == "1" {
-		log.Debug().Msg("skipping .env auto-load (DOTDRIFT_NO_ENV=1)")
-		return
-	}
-	var present []string
-	for _, f := range dotenvFiles {
-		if info, err := os.Stat(f); err == nil && !info.IsDir() {
-			present = append(present, f)
-		}
-	}
-	if len(present) == 0 {
-		return
-	}
-	if err := godotenv.Load(present...); err != nil {
-		log.Debug().Err(err).Strs("files", present).Msg("failed to load .env files")
-		return
-	}
-	log.Debug().Strs("files", present).Msg("loaded .env files")
+	_ = godotenv.Load(".env", ".local.env", ".dev.env")
 }
 
 // Run executes the CLI with the given version.
@@ -139,41 +109,35 @@ func Run(version string, args []string) error {
 	parser, err := kong.New(
 		&cli,
 		kong.Name(appName),
-		kong.Description("DotDrift is a CLI tool for managing Linux configuration"),
+		kong.Description(appDesc),
 		kong.UsageOnError(),
-		kong.DefaultEnvars("DD"),
+		kong.DefaultEnvars(appEnvPrefix),
 		kong.Exit(func(code int) {
 			if testing.Testing() {
 				return
-			}
-			if code == 1 {
-				code = 2
 			}
 			os.Exit(code)
 		}),
 	)
 	if err != nil {
-		return &ExitError{Code: 2, Err: fmt.Errorf("create CLI parser: %w", err)}
+		return fmt.Errorf("create CLI parser: %w", err)
 	}
 
 	cli.args = args
 	kctx, err := parser.Parse(args)
-	if err != nil {
-		if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
-			return nil
-		}
-		return &ExitError{Code: 2, Err: err}
-	}
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		return nil
 	}
-
-	if kctx.Command() == "version" {
-		if err := kctx.Run(version); err != nil {
-			return &ExitError{Code: 1, Err: err}
-		}
-		return nil
+	if err != nil {
+		parser.FatalIfErrorf(err)
 	}
 
-	return kctx.Run()
+	// Check if this is the version command - handle it specially without logging/config
+	if kctx.Command() == "version" {
+		return kctx.Run(version)
+	}
+
+	log.Logger.Info().Str("app", kctx.Model.Name).Str("version", version).Msg("Starting application")
+
+	return kctx.Run(kctx, &cli)
 }

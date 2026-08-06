@@ -1,8 +1,6 @@
 package main
 
 import (
-	"errors"
-	"fmt"
 	"os"
 
 	cmd "github.com/thedataflows/dotdrift/cmd"
@@ -14,11 +12,6 @@ var version = "dev"
 
 func main() {
 	if err := cmd.Run(version, os.Args[1:]); err != nil {
-		var exitErr *cmd.ExitError
-		if errors.As(err, &exitErr) {
-			fmt.Fprintln(os.Stderr, exitErr.Error())
-			os.Exit(exitErr.Code)
-		}
 		log.Fatal().Err(err).Msg("Failed to run application")
 	}
 }

@@ -456,8 +456,7 @@ func TestEnsureMise_logsUserUpgradeMessage(t *testing.T) {
 	require.Contains(t, buf.String(), "upgrading user install")
 }
 
-func TestEnsureMise_logsSystemTooOldMessage(t *testing.T) {
-	buf := captureZerolog(t)
+func TestEnsureMise_systemTooOldError(t *testing.T) {
 	m := &mise.Mise{
 		LookPath: func(name string) (string, error) {
 			return "/usr/bin/mise", nil
@@ -470,8 +469,8 @@ func TestEnsureMise_logsSystemTooOldMessage(t *testing.T) {
 
 	_, err := m.Ensure()
 	require.Error(t, err)
-	require.Contains(t, buf.String(), "system install")
-	require.Contains(t, buf.String(), "package manager")
+	require.Contains(t, err.Error(), "system install")
+	require.Contains(t, err.Error(), "package manager")
 }
 
 func TestEnsureContext_cancelPropagates(t *testing.T) {

@@ -318,7 +318,6 @@ func (m *Mise) ensure(ctx context.Context) (string, error) {
 
 	switch kind {
 	case InstallKindSystemWide:
-		log.Warn().Msgf("mise %s < required %s; system install at %s — upgrade with your package manager", version, MinMiseVersion, path)
 		return "", fmt.Errorf("mise %s at %s is older than required %s; system install — upgrade with your package manager", version, path, MinMiseVersion)
 	case InstallKindUnknown:
 		return "", fmt.Errorf("mise %s at %s is older than required %s; ambiguous install — upgrade with your package manager or reinstall via %s", version, path, MinMiseVersion, InstallerURL)

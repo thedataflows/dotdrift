@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -677,39 +678,36 @@ func GenerateConfig(plan *resolve.Plan) string {
 	return out
 }
 
-// GenerateHookTasks emits a [tasks] section with one mise task per non-empty
-// hook list ("hooks:pre" and/or "hooks:post"). Each task runs its commands in
-// order from dir (the absolute profile root) with the DOTDRIFT_* facts
-// environment. When interactive is true each task is marked
+// GenerateHookTasks emits one mise task per hook command, named
+// <phase>-<index> ("hooks-pre-0", "hooks-pre-1", "hooks-post-0", ...). One
+// task per command lets HooksStep run and tolerate them individually while
+// preserving order (an optional hook that fails does not skip later ones).
+// Each task runs from dir (the absolute profile root) with the DOTDRIFT_*
+// facts environment. When interactive is true each task is marked
 // `interactive = true` so mise connects it to the terminal's stdin/stdout/
 // stderr — a hook running an interactive command (e.g. sudo) can then reach a
 // controlling terminal and disable echo instead of echoing the password.
 // Returns "" when both lists are empty.
 func GenerateHookTasks(hooks resolve.HooksStep, profileRoot string, f *facts.Facts, interactive bool) string {
 	var b strings.Builder
-	writeHookTask(&b, "hooks:pre", hooks.Pre, profileRoot, f, interactive)
-	writeHookTask(&b, "hooks:post", hooks.Post, profileRoot, f, interactive)
+	writeHookTask(&b, "hooks-pre", hooks.Pre, profileRoot, f, interactive)
+	writeHookTask(&b, "hooks-post", hooks.Post, profileRoot, f, interactive)
 	return b.String()
 }
 
-func writeHookTask(b *strings.Builder, name string, commands []string, profileRoot string, f *facts.Facts, interactive bool) {
-	if len(commands) == 0 {
-		return
-	}
-	if b.Len() > 0 {
-		b.WriteString("\n")
-	}
-	fmt.Fprintf(b, "[tasks.%q]\n", name)
-	b.WriteString("run = [\n")
-	for _, c := range commands {
-		fmt.Fprintf(b, "  \"%s\",\n", tomlEscape(c))
-	}
-	b.WriteString("]\n")
-	fmt.Fprintf(b, "dir = \"%s\"\n", tomlEscape(profileRoot))
-	fmt.Fprintf(b, "env = { DOTDRIFT_PROFILE = \"%s\", DOTDRIFT_HOSTNAME = \"%s\", DOTDRIFT_USERNAME = \"%s\", DOTDRIFT_OS = \"%s\", DOTDRIFT_BACKEND = \"%s\" }\n",
-		tomlEscape(profileRoot), tomlEscape(f.Hostname), tomlEscape(f.Username), tomlEscape(f.OS), tomlEscape(f.Backend))
-	if interactive {
-		b.WriteString("interactive = true\n")
+func writeHookTask(b *strings.Builder, prefix string, commands []profile.HookCommand, profileRoot string, f *facts.Facts, interactive bool) {
+	for i, c := range commands {
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(b, "[tasks.%q]\n", fmt.Sprintf("%s-%d", prefix, i))
+		fmt.Fprintf(b, "run = [\"%s\"]\n", tomlEscape(c.Command))
+		fmt.Fprintf(b, "dir = \"%s\"\n", tomlEscape(profileRoot))
+		fmt.Fprintf(b, "env = { DOTDRIFT_PROFILE = \"%s\", DOTDRIFT_HOSTNAME = \"%s\", DOTDRIFT_USERNAME = \"%s\", DOTDRIFT_OS = \"%s\", DOTDRIFT_BACKEND = \"%s\" }\n",
+			tomlEscape(profileRoot), tomlEscape(f.Hostname), tomlEscape(f.Username), tomlEscape(f.OS), tomlEscape(f.Backend))
+		if interactive {
+			b.WriteString("interactive = true\n")
+		}
 	}
 }
 

@@ -3,6 +3,7 @@ package cmd_test
 import (
 	"bytes"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,6 +12,11 @@ import (
 	cmd "github.com/thedataflows/dotdrift/cmd"
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
+
+type planJSONHook struct {
+	Command  string `json:"command"`
+	Optional bool   `json:"optional"`
+}
 
 type planJSON struct {
 	Fingerprint string   `json:"fingerprint"`
@@ -29,8 +35,8 @@ type planJSON struct {
 		Scope  string `json:"scope"`
 	} `json:"dotfiles"`
 	Hooks struct {
-		Pre  []string `json:"pre"`
-		Post []string `json:"post"`
+		Pre  []planJSONHook `json:"pre"`
+		Post []planJSONHook `json:"post"`
 	} `json:"hooks"`
 	Mounts []struct {
 		Module      string   `json:"module"`
@@ -180,8 +186,8 @@ func TestCLI_plan_jsonOutput(t *testing.T) {
 	require.Equal(t, "symlink-each", fish.Mode)
 	require.Equal(t, "host", fish.Layer)
 
-	require.Equal(t, []string{"echo base-pre", "echo host-pre", "echo user-pre"}, got.Hooks.Pre)
-	require.Equal(t, []string{"echo base-post", "echo host-post", "echo user-post"}, got.Hooks.Post)
+	require.Equal(t, []planJSONHook{{Command: "echo base-pre"}, {Command: "echo host-pre"}, {Command: "echo user-pre"}}, got.Hooks.Pre)
+	require.Equal(t, []planJSONHook{{Command: "echo base-post"}, {Command: "echo host-post"}, {Command: "echo user-post"}}, got.Hooks.Post)
 }
 
 // System-scope entries are marked in the text plan (`module: <id> [system]`);
@@ -379,7 +385,7 @@ func TestCLI_plan_jsonMountsSmb(t *testing.T) {
 	// Existing keys are untouched.
 	require.Equal(t, []string{"nas"}, got.Modules)
 	require.Equal(t, []string{"cifs-utils"}, got.Packages.Install)
-	require.Equal(t, []string{"echo nas-pre"}, got.Hooks.Pre)
+	require.Equal(t, []planJSONHook{{Command: "echo nas-pre"}}, got.Hooks.Pre)
 }
 
 // A positional module filter limits the plan: the --json modules array
@@ -407,4 +413,38 @@ func TestCLI_plan_filterLimitsScope(t *testing.T) {
 	require.Len(t, got.Dotfiles, 1)
 	require.Equal(t, "~/.bashrc", got.Dotfiles[0].Target)
 	require.Equal(t, "shell", got.Dotfiles[0].Module)
+}
+
+// Optional hooks are marked in both renderings: `(optional)` in text, and an
+// `"optional": true` field in JSON. Required hooks carry no marker.
+func TestCLI_plan_optionalHookMarker(t *testing.T) {
+	root := t.TempDir()
+	modDir := filepath.Join(root, "modules", "shell")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+[[hooks.pre]]
+command = "echo required"
+[[hooks.pre]]
+command = "echo flaky"
+optional = true
+`), 0o644))
+	facts := &facts.Facts{Hostname: "h", Username: "u", OS: "linux"}
+
+	// Text rendering.
+	var buf bytes.Buffer
+	require.NoError(t, (&cmd.PlanCmd{Profile: root, Facts: facts, Out: &buf}).Run())
+	out := buf.String()
+	require.Contains(t, out, "- echo required\n", "required hook has no marker")
+	require.Contains(t, out, "- echo flaky (optional)\n", "optional hook is marked")
+
+	// JSON rendering.
+	buf.Reset()
+	require.NoError(t, (&cmd.PlanCmd{Profile: root, Facts: facts, Out: &buf, JSON: true}).Run())
+	var got planJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got.Hooks.Pre, 2)
+	require.Equal(t, "echo required", got.Hooks.Pre[0].Command)
+	require.False(t, got.Hooks.Pre[0].Optional)
+	require.Equal(t, "echo flaky", got.Hooks.Pre[1].Command)
+	require.True(t, got.Hooks.Pre[1].Optional, "optional flag must reach JSON output")
 }

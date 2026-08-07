@@ -371,7 +371,7 @@ func TestPlanHash_deterministic(t *testing.T) {
 		Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
 			{Target: "~/.bashrc", Source: "/s/.bashrc", Mode: "symlink", Scope: "user"},
 		}},
-		Hooks: resolve.HooksStep{Pre: []string{"echo pre"}, Post: []string{"echo post"}},
+		Hooks: resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo pre"}}, Post: []profile.HookCommand{{Command: "echo post"}}},
 	}
 	require.Equal(t, resolve.PlanHash(plan), resolve.PlanHash(plan))
 }
@@ -398,7 +398,7 @@ func TestPlanHash_changesWithContent(t *testing.T) {
 	require.NotEqual(t, h0, resolve.PlanHash(&changedPkgs), "package change must change hash")
 
 	changedHooks := *base
-	changedHooks.Hooks.Post = []string{"echo done"}
+	changedHooks.Hooks.Post = []profile.HookCommand{{Command: "echo done"}}
 	require.NotEqual(t, h0, resolve.PlanHash(&changedHooks), "hook change must change hash")
 }
 
@@ -433,4 +433,48 @@ func TestPlanHash_changesWithSourceContent(t *testing.T) {
 
 	// Same content re-hashes stably (no spurious reset on a clean re-apply).
 	require.Equal(t, resolve.PlanHash(plan), resolve.PlanHash(plan))
+}
+
+// A module's structured optional hooks resolve into plan.Hooks with the
+// Optional flag intact — resolve must carry it, not collapse to bare strings.
+func TestResolve_hookOptionalFlowsThrough(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "shell", `
+[hooks]
+[[hooks.pre]]
+command = "echo required"
+[[hooks.pre]]
+command = "echo flaky"
+optional = true
+`)
+	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "myhost", Username: "cri"})
+	require.NoError(t, err)
+	require.Equal(t, []profile.HookCommand{
+		{Command: "echo required"},
+		{Command: "echo flaky", Optional: true},
+	}, plan.Hooks.Pre)
+}
+
+// Hooks merge across layers base → user in order, each keeping its own
+// Optional flag (an optional base hook stays optional after a user overlay).
+func TestResolve_hookOptionalMergesAcrossLayers(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "shell", `
+[[hooks.pre]]
+command = "echo base-opt"
+optional = true
+`)
+	userDir := filepath.Join(root, "users", "cri", "modules", "shell")
+	require.NoError(t, os.MkdirAll(userDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(userDir, "module.toml"), []byte(`
+[[hooks.pre]]
+command = "echo user-req"
+`), 0o644))
+
+	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "myhost", Username: "cri"})
+	require.NoError(t, err)
+	require.Equal(t, []profile.HookCommand{
+		{Command: "echo base-opt", Optional: true},
+		{Command: "echo user-req"},
+	}, plan.Hooks.Pre)
 }

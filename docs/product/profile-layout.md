@@ -99,6 +99,12 @@ python = "3.12"
 pre = ["echo about to apply"]
 post = ["echo apply finished"]
 
+# The table-array spelling opts a single hook out of fail-fast: a non-zero
+# exit is logged at warn and apply continues instead of aborting the step.
+[[hooks.pre]]
+command = "echo warm best-effort cache"
+optional = true
+
 [mounts.data]
 source = "UUID=abcd-1234"
 destination = "/mnt/data"
@@ -154,7 +160,14 @@ public = false
   `dotdrift apply` (`hooks-pre` before packages, `hooks-post` after dotfiles).
   Unlike every other section, hooks merge by **append** across layers — base,
   then host, then user — and aggregate across modules in selection order;
-  nothing is deduplicated or overridden.
+  nothing is deduplicated or overridden. Each command runs as its own mise
+  task in order; a non-zero exit fails the step and resume re-runs it. The
+  table-array spelling `[[hooks.pre]] command = "..." optional = true` marks a
+  single hook non-fatal — its failure is logged at warn and the remaining
+  hooks still run, so a flaky/best-effort hook cannot abort the apply. The
+  plain string-array spelling (`pre = ["..."]`) is equivalent to all-required
+  and stays supported. `dotdrift plan` marks optional hooks (`(optional)` in
+  text, `"optional": true` in JSON).
 - `mounts` declares filesystem attachments as keyed tables `[mounts.<name>]`
   (ADR-0002). Mounts and smb require `scope = "system"` — their artifacts
   land in root-owned paths, so a user-scope module declaring either is a

@@ -56,8 +56,8 @@ type DotfileEntry struct {
 // selected modules. Hooks are ordered sequences: per module the layers
 // append base → host → user, and modules aggregate in selection order.
 type HooksStep struct {
-	Pre  []string
-	Post []string
+	Pre  []profile.HookCommand
+	Post []profile.HookCommand
 }
 
 type layerConfig struct {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
 // The shared resolve fixture declares [hooks] in all three layers of the
@@ -17,10 +18,16 @@ func TestMergeHooks_layerAppendOrder(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.Equal(t, []string{"echo base-pre", "echo host-pre", "echo user-pre"}, plan.Hooks.Pre,
-		"pre hooks must append base → host → user")
-	require.Equal(t, []string{"echo base-post", "echo host-post", "echo user-post"}, plan.Hooks.Post,
-		"post hooks must append base → host → user")
+	require.Equal(t, []profile.HookCommand{
+		{Command: "echo base-pre"},
+		{Command: "echo host-pre"},
+		{Command: "echo user-pre"},
+	}, plan.Hooks.Pre, "pre hooks must append base → host → user")
+	require.Equal(t, []profile.HookCommand{
+		{Command: "echo base-post"},
+		{Command: "echo host-post"},
+		{Command: "echo user-post"},
+	}, plan.Hooks.Post, "post hooks must append base → host → user")
 }
 
 // Hooks from several selected modules aggregate in selection order (modules
@@ -33,9 +40,12 @@ func TestMergeHooks_multiModuleSelectionOrder(t *testing.T) {
 	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
 	require.NoError(t, err)
 
-	require.Equal(t, []string{"a-pre", "b-pre-1", "b-pre-2"}, plan.Hooks.Pre,
-		"pre hooks must aggregate in module selection order")
-	require.Equal(t, []string{"a-post"}, plan.Hooks.Post,
+	require.Equal(t, []profile.HookCommand{
+		{Command: "a-pre"},
+		{Command: "b-pre-1"},
+		{Command: "b-pre-2"},
+	}, plan.Hooks.Pre, "pre hooks must aggregate in module selection order")
+	require.Equal(t, []profile.HookCommand{{Command: "a-post"}}, plan.Hooks.Post,
 		"post hooks must only contain modules that declare them")
 }
 
@@ -59,6 +69,6 @@ func TestMergeHooks_preOnly(t *testing.T) {
 	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
 	require.NoError(t, err)
 
-	require.Equal(t, []string{"only-pre"}, plan.Hooks.Pre)
+	require.Equal(t, []profile.HookCommand{{Command: "only-pre"}}, plan.Hooks.Pre)
 	require.Empty(t, plan.Hooks.Post)
 }

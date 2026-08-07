@@ -32,12 +32,12 @@ const (
 
 // ModuleConfig is the base module.toml configuration.
 type ModuleConfig struct {
-	ID       string             `toml:"id"`
-	App      string             `toml:"app"`
-	Scope    string             `toml:"scope"`
-	When     When               `toml:"when"`
-	Packages Packages           `toml:"packages"`
-	Tools    map[string]string  `toml:"tools"`
+	ID       string               `toml:"id"`
+	App      string               `toml:"app"`
+	Scope    string               `toml:"scope"`
+	When     When                 `toml:"when"`
+	Packages Packages             `toml:"packages"`
+	Tools    map[string]string    `toml:"tools"`
 	Dotfiles map[string]Dotfile   `toml:"dotfiles"`
 	Hooks    Hooks                `toml:"hooks"`
 	Mounts   map[string]MountSpec `toml:"mounts"`
@@ -78,8 +78,44 @@ type Packages struct {
 // packages/tools/dotfiles, hooks are ordered sequences: layers merge by
 // appending base → host → user (see internal/resolve).
 type Hooks struct {
-	Pre  []string `toml:"pre"`
-	Post []string `toml:"post"`
+	Pre  []HookCommand `toml:"pre"`
+	Post []HookCommand `toml:"post"`
+}
+
+// HookCommand is a single pre/post hook shell command. It runs from the
+// profile root with the DOTDRIFT_* facts in the environment. Optional = true
+// makes a non-zero exit non-fatal: the failure is logged at warn and the
+// apply step continues, so a flaky/best-effort hook cannot abort the run.
+//
+// Two TOML spellings decode into the same value: the legacy string array
+// (`pre = ["echo hi"]`, all required) and the structured table array
+// (`[[hooks.pre]] command = "..." optional = true`). UnmarshalText makes the
+// string form work without a custom Hooks decoder.
+type HookCommand struct {
+	Command  string `toml:"command"`
+	Optional bool   `toml:"optional"`
+}
+
+// UnmarshalTOML accepts both spellings. The legacy form feeds each array
+// element as a string; the structured form feeds a map with command/optional.
+func (h *HookCommand) UnmarshalTOML(v any) error {
+	switch val := v.(type) {
+	case string:
+		h.Command = val
+	case map[string]any:
+		if cmd, ok := val["command"].(string); ok {
+			h.Command = cmd
+		}
+		if opt, ok := val["optional"].(bool); ok {
+			h.Optional = opt
+		}
+	default:
+		return fmt.Errorf("hook entry must be a command string or a table with command/optional")
+	}
+	if h.Command == "" {
+		return fmt.Errorf("hook entry missing command")
+	}
+	return nil
 }
 
 // Dotfile describes a single managed path.

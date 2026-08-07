@@ -6,7 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -108,14 +110,20 @@ func (s *DotfilesSystemStep) Run(ctx context.Context) error {
 	return nil
 }
 
-// HooksStep runs one pre/post hook command list as a mise task from the// generated apply config. cmd/apply.go only constructs HooksSteps for
-// non-empty command lists; Run also no-ops on an empty list as a second line
-// of defense.
+// HooksStep runs each pre/post hook command as its own mise task from the
+// generated apply config. Per-command execution preserves hook order while
+// allowing individual hooks to opt out of fail-fast: a command marked
+// Optional that exits non-zero is logged at warn and the next command runs.
+// cmd/apply.go only constructs HooksSteps for non-empty command lists; Run
+// also no-ops on an empty list as a second line of defense.
+//
+// Each command maps to a mise task named <Task>-<index> (e.g. hooks-pre-0),
+// which GenerateHookTasks emits in lockstep with this loop.
 type HooksStep struct {
 	Exec       *ExecMise
-	Commands   []string
+	Commands   []profile.HookCommand
 	ConfigPath string
-	Task       string // mise task name, e.g. "hooks:pre"
+	Task       string // mise task-name prefix, e.g. "hooks-pre"; per-command tasks are <Task>-<i>
 	StepName   string // pipeline step name, e.g. "hooks-pre"
 }
 
@@ -130,8 +138,15 @@ func (s *HooksStep) Run(ctx context.Context) error {
 	if s.Exec == nil {
 		return fmt.Errorf("no mise exec configured")
 	}
-	if err := s.Exec.RunTask(ctx, s.ConfigPath, s.Task); err != nil {
-		return fmt.Errorf("mise task %s: %w", s.Task, err)
+	for i, c := range s.Commands {
+		task := fmt.Sprintf("%s-%d", s.Task, i)
+		if err := s.Exec.RunTask(ctx, s.ConfigPath, task); err != nil {
+			if c.Optional {
+				log.Warn().Err(err).Str("command", c.Command).Msg("optional hook failed; continuing")
+				continue
+			}
+			return fmt.Errorf("hook %q: %w", c.Command, err)
+		}
 	}
 	return nil
 }

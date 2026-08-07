@@ -261,7 +261,7 @@ post = ["echo done"]
 	require.Equal(t, []string{"nano"}, cfg.Packages.Absent)
 	require.Contains(t, cfg.Packages.Present, "curl")
 	require.Equal(t, map[string]string{"go": "1.26"}, cfg.Tools)
-	require.Equal(t, profile.Hooks{Pre: []string{"echo hi"}, Post: []string{"echo done"}}, cfg.Hooks)
+	require.Equal(t, profile.Hooks{Pre: []profile.HookCommand{{Command: "echo hi"}}, Post: []profile.HookCommand{{Command: "echo done"}}}, cfg.Hooks)
 	require.Equal(t, profile.Dotfile{Source: "mediarc", Mode: "symlink"}, cfg.Dotfiles["~/.mediarc"],
 		"unrelated dotfile target must survive")
 }

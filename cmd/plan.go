@@ -21,7 +21,7 @@ import (
 
 // PlanCmd prints the resolved plan without side effects.
 type PlanCmd struct {
-	Profile string       `help:"Path to profile directory" type:"existingdir" default:"."`
+	Profile   string       `help:"Path to profile directory" type:"existingdir" default:"."`
 	JSON      bool         `help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
 	Deps      bool         `help:"Show dependency tree for packages in the install list"`
 	DepsDepth int          `default:"1" help:"Dependency recursion depth (requires --deps)"`
@@ -129,6 +129,11 @@ type planJSONDep struct {
 	Unknown bool          `json:"unknown,omitempty"`
 }
 
+type planJSONHook struct {
+	Command  string `json:"command"`
+	Optional bool   `json:"optional,omitempty"`
+}
+
 type planJSONDoc struct {
 	Fingerprint string   `json:"fingerprint"`
 	Modules     []string `json:"modules"`
@@ -140,8 +145,8 @@ type planJSONDoc struct {
 	Tools    map[string]string `json:"tools"`
 	Dotfiles []planJSONDotfile `json:"dotfiles"`
 	Hooks    struct {
-		Pre  []string `json:"pre"`
-		Post []string `json:"post"`
+		Pre  []planJSONHook `json:"pre"`
+		Post []planJSONHook `json:"post"`
 	} `json:"hooks"`
 	Mounts []planJSONMount `json:"mounts"`
 	Smb    []planJSONSmb   `json:"smb"`
@@ -163,8 +168,8 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 	doc.Packages.Install = plan.Packages.Install
 	doc.Packages.Remove = plan.Packages.Remove
 	doc.Packages.Deps = toPlanJSONDeps(deps)
-	doc.Hooks.Pre = append([]string{}, plan.Hooks.Pre...)
-	doc.Hooks.Post = append([]string{}, plan.Hooks.Post...)
+	doc.Hooks.Pre = toPlanJSONHooks(plan.Hooks.Pre)
+	doc.Hooks.Post = toPlanJSONHooks(plan.Hooks.Post)
 	for _, e := range plan.Dotfiles.Entries {
 		doc.Dotfiles = append(doc.Dotfiles, planJSONDotfile{
 			Target: e.Target,
@@ -227,6 +232,28 @@ func toPlanJSONDeps(nodes []packages.PackageDeps) []planJSONDep {
 	return out
 }
 
+// toPlanJSONHooks maps resolved hook commands to their JSON form, preserving
+// the Optional flag so consumers can see which hooks are best-effort.
+func toPlanJSONHooks(hooks []profile.HookCommand) []planJSONHook {
+	if hooks == nil {
+		return nil
+	}
+	out := make([]planJSONHook, 0, len(hooks))
+	for _, h := range hooks {
+		out = append(out, planJSONHook{Command: h.Command, Optional: h.Optional})
+	}
+	return out
+}
+
+// optionalMarker renders the text-plan suffix for a hook: " (optional)" when
+// the hook is best-effort, "" when required.
+func optionalMarker(optional bool) string {
+	if optional {
+		return " (optional)"
+	}
+	return ""
+}
+
 func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts, deps []packages.PackageDeps) error {
 	if len(p.Selected) == 0 {
 		fmt.Fprintln(out, "warning: no modules selected")
@@ -267,11 +294,11 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 	fmt.Fprintln(out, "hooks:")
 	fmt.Fprintln(out, "  pre:")
 	for _, c := range plan.Hooks.Pre {
-		fmt.Fprintf(out, "    - %s\n", c)
+		fmt.Fprintf(out, "    - %s%s\n", c.Command, optionalMarker(c.Optional))
 	}
 	fmt.Fprintln(out, "  post:")
 	for _, c := range plan.Hooks.Post {
-		fmt.Fprintf(out, "    - %s\n", c)
+		fmt.Fprintf(out, "    - %s%s\n", c.Command, optionalMarker(c.Optional))
 	}
 	// Mounts and smb sections render last and are omitted entirely when the
 	// profile declares neither, keeping output for other profiles stable.

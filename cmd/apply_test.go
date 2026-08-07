@@ -174,12 +174,12 @@ func TestApply_happyPath(t *testing.T) {
 		"load",
 		"resolve",
 		"mise:ensure",
-		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks:pre",
+		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks-pre-0",
 		"packages:absent",
 		"mise:run bootstrap",
 		"mise:run install",
 		"mise:run dotfiles apply",
-		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks:post",
+		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks-post-0",
 	)
 	requireOrder(t, *events, "mise:run bootstrap")
 	require.Contains(t, *events, "packages:absent emacs,nano")
@@ -239,7 +239,7 @@ func TestApply_stepsDoNotClobberSharedMiseConfig(t *testing.T) {
 
 	shared, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(shared), `[tasks."hooks:post"]`, "shared config must keep hook tasks after the pipeline")
+	require.Contains(t, string(shared), `[tasks."hooks-post-0"]`, "shared config must keep hook tasks after the pipeline")
 	require.Contains(t, string(shared), "[dotfiles]")
 
 	dotfiles, err := os.ReadFile(filepath.Join(dir, "mise", "dotfiles", "mise.toml"))
@@ -391,8 +391,8 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	require.Contains(t, cfg, `node = "22"`)
 	require.Contains(t, cfg, "[dotfiles]")
 	require.Contains(t, cfg, "~/.bashrc")
-	require.Contains(t, cfg, `[tasks."hooks:pre"]`)
-	require.Contains(t, cfg, `[tasks."hooks:post"]`)
+	require.Contains(t, cfg, `[tasks."hooks-pre-0"]`)
+	require.Contains(t, cfg, `[tasks."hooks-post-0"]`)
 
 	for _, e := range *events {
 		require.NotContains(t, e, "mise:run install", "tools step must not run after the packages failure")

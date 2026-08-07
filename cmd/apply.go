@@ -395,7 +395,7 @@ func (c *ApplyCmd) Run() error {
 	if !hooksDisabled && len(plan.Hooks.Pre) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: configPath,
-			Task: "hooks:pre", StepName: "hooks-pre",
+			Task: "hooks-pre", StepName: "hooks-pre",
 		})
 	}
 	steps = append(steps,
@@ -435,7 +435,7 @@ func (c *ApplyCmd) Run() error {
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: configPath,
-			Task: "hooks:post", StepName: "hooks-post",
+			Task: "hooks-post", StepName: "hooks-post",
 		})
 	}
 

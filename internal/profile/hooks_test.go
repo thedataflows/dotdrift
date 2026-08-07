@@ -43,3 +43,23 @@ optional = true
 		{Command: "echo flaky", Optional: true},
 	}, s.Hooks.Pre)
 }
+
+// The compact, inline spelling — an inline table inside the string array — is
+// the recommended way to flag a single hook optional while keeping the array
+// form and the hook's position (interleaving). Same UnmarshalTOML path as the
+// table-array form, so it works with no extra decoding machinery.
+func TestHooks_inlineTableOptional(t *testing.T) {
+	var s struct {
+		Hooks Hooks `toml:"hooks"`
+	}
+	_, err := toml.Decode(`
+[hooks]
+pre = ["echo setup", { command = "echo flaky", optional = true }, "echo cleanup"]
+`, &s)
+	require.NoError(t, err)
+	require.Equal(t, []HookCommand{
+		{Command: "echo setup"},
+		{Command: "echo flaky", Optional: true},
+		{Command: "echo cleanup"},
+	}, s.Hooks.Pre)
+}

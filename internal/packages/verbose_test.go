@@ -3,10 +3,12 @@ package packages_test
 import (
 	"bytes"
 	"context"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/packages"
 )
 
@@ -170,4 +172,24 @@ func TestBackend_setVerbose(t *testing.T) {
 		require.True(t, paru.Runner == packages.Runner(fake),
 			"SetVerbose must not replace an injected fake runner")
 	})
+}
+
+// Interactive (terminal) streaming is NOT gated on Verbose: when both writers
+// are terminals RunStream streams the child's own colored output live without
+// the "+ argv" trace (that stays a Verbose affordance), so package-manager
+// output reaches the terminal directly instead of being captured.
+func TestExecRunner_RunStream_interactiveStreamsWhenTerminal(t *testing.T) {
+	orig := executil.IsTerminal
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	t.Cleanup(func() { executil.IsTerminal = orig })
+
+	var out, errW bytes.Buffer
+	r := packages.ExecRunner{Verbose: false, Out: &out, Err: &errW}
+
+	got, err := r.RunStream(context.Background(), "sh", "-c", "echo out-line; echo err-line >&2")
+	require.NoError(t, err)
+	require.Empty(t, got, "streaming returns no captured output")
+	require.Contains(t, out.String(), "out-line")
+	require.Contains(t, errW.String(), "err-line")
+	require.NotContains(t, errW.String(), "+ ", "the set -x echo is a Verbose affordance, not the interactive default")
 }

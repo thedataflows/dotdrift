@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
 func TestDefaultRunContext_errorIncludesOutput(t *testing.T) {
@@ -373,4 +375,24 @@ func TestMise_versionProbeNeverEchoedWhenVerbose(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, errW.String(), "+ ", "probes must never be echoed")
 	require.NotContains(t, out.String(), "+ ", "probes must never be echoed")
+}
+
+// Interactive (terminal) streaming is NOT gated on --verbose: when both
+// writers are terminals an apply streams the child's own colored output live
+// (the child sees a terminal), without the "+ argv" trace — that stays a
+// --verbose affordance. Tool output thus reaches the terminal directly instead
+// of being captured into error/log lines.
+func TestExecMise_interactiveStreamsWhenTerminal(t *testing.T) {
+	orig := executil.IsTerminal
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	t.Cleanup(func() { executil.IsTerminal = orig })
+
+	var out, errW bytes.Buffer
+	em := verboseExecMise(t, echoMiseScript(t), false, &out, &errW) // Verbose off
+	_, cfg := generatedConfig(t)
+
+	require.NoError(t, em.DotfilesApply(context.Background(), cfg, true, false))
+	require.Contains(t, out.String(), "out-dotfiles", "interactive apply must stream the child's own stdout")
+	require.Contains(t, errW.String(), "err-dotfiles", "interactive apply must stream the child's own stderr")
+	require.NotContains(t, errW.String(), "+ ", "the set -x echo is a --verbose affordance, not the interactive default")
 }

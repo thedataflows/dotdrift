@@ -51,15 +51,13 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string,
 }
 
 // RunStream runs like Run but streams the child's stdout/stderr live to
-// Out/Err when Verbose is set, echoing the command line set -x-style
-// ("+ argv") to Err immediately before execution, and returning no captured
-// output (the terminal already shows it). With Verbose unset it is
-// byte-identical to Run.
+// Out/Err when Verbose is set OR both destinations are terminals (interactive
+// apply), wiring the child's fds straight to them so it keeps its own color
+// output. Under Verbose the command line is echoed set -x-style ("+ argv") to
+// Err before execution; the interactive default omits that trace. Streaming
+// returns no captured output (the terminal already shows it); a non-verbose,
+// piped run captures via Run instead.
 func (e ExecRunner) RunStream(ctx context.Context, name string, args ...string) (string, error) {
-	if !e.Verbose {
-		return e.Run(ctx, name, args...)
-	}
-	cmd := exec.CommandContext(ctx, name, args...)
 	out, errW := e.Out, e.Err
 	if out == nil {
 		out = os.Stdout
@@ -67,7 +65,13 @@ func (e ExecRunner) RunStream(ctx context.Context, name string, args ...string) 
 	if errW == nil {
 		errW = os.Stderr
 	}
-	executil.EchoCommand(errW, append([]string{name}, args...))
+	if !executil.StreamLive(e.Verbose, out, errW) {
+		return e.Run(ctx, name, args...)
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	if e.Verbose {
+		executil.EchoCommand(errW, append([]string{name}, args...))
+	}
 	cmd.Stdout = out
 	cmd.Stderr = errW
 	return "", cmd.Run()

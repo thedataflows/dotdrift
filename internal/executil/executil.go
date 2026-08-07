@@ -68,3 +68,30 @@ var IsStdinTerminal = func() bool {
 	}
 	return fi.Mode()&os.ModeCharDevice != 0
 }
+
+// IsTerminal reports whether w is a terminal (char device), generalizing
+// IsStdinTerminal to any writer. A non-*os.File (capture buffer) or a regular
+// file never qualifies. A variable so tests and callers can substitute it.
+var IsTerminal = func(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok || f == nil {
+		return false
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// StreamLive reports whether a child's stdout/stderr should stream live to
+// out/err instead of being captured. Streaming connects the child's fds
+// directly to out/err, so when they are terminals the child keeps its own
+// color output — and its output stays off error/log lines instead of being
+// jammed into an error value. It streams under verbose (the set -x trace) or
+// whenever both destinations are terminals (an interactive apply); a
+// non-verbose, piped run still captures so a failure carries self-contained
+// diagnostics.
+func StreamLive(verbose bool, out, err io.Writer) bool {
+	return verbose || (IsTerminal(out) && IsTerminal(err))
+}

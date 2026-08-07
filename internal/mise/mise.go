@@ -64,12 +64,13 @@ type Mise struct {
 	// environment on the real exec path; fakes (Run/RunContext) bypass it.
 	Env []string
 
-	// Verbose streams operation subprocesses (install/dotfiles/tasks) live
-	// to Out/Err instead of capturing and discarding their output, echoing
-	// each command line set -x-style ("+ argv") to Err before it runs. Only
-	// the ExecMise operation calls stream: version probes and the mise.run
-	// bootstrap always stay captured and unechoed (their output is parsed
-	// or one-time).
+	// Verbose streams operation subprocesses (install/dotfiles/tasks) live to
+	// Out/Err and echoes each command line set -x-style ("+ argv") to Err
+	// before it runs. Interactive applies (both Out and Err are terminals)
+	// also stream — to keep the child's own color output — but omit the
+	// "+ argv" trace, which stays a Verbose affordance; a non-verbose, piped
+	// run captures instead (see runOp). Version probes always stay captured
+	// unechoed (their output is parsed).
 	Verbose bool
 
 	// Out/Err are the Verbose streaming destinations; nil defaults to
@@ -174,15 +175,20 @@ func (m *Mise) writers() (io.Writer, io.Writer) {
 	return out, errW
 }
 
-// runOp executes one operation command (install/dotfiles/task). In Verbose
-// mode on the real exec path the child's stdout/stderr stream live to the
-// configured writers, the command line is echoed set -x-style ("+ argv") to
-// Err immediately before execution, and a failure returns the bare error
-// (the output is already on the terminal, so nothing is appended). Fakes
-// bypass streaming (they own their output); non-verbose is byte-identical
-// to runWithEnv. Probes never come through here.
+// runOp executes one operation command (install/dotfiles/task). On the real
+// exec path the child's stdout/stderr stream live to the configured writers
+// whenever --verbose is set OR both destinations are terminals (an interactive
+// apply), wiring the child's fds straight to them so it keeps its own color
+// output and its output stays off error/log lines instead of being captured.
+// Under --verbose the command line is also echoed set -x-style ("+ argv") to
+// Err before execution; the interactive default omits that trace. A streaming
+// failure returns the bare error (the output is already on the terminal, so
+// nothing is appended). Fakes bypass streaming (they own their output); a
+// non-verbose, piped run still captures via runWithEnv so a failure carries
+// self-contained diagnostics. Probes never come through here.
 func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
-	if !m.Verbose || m.RunContext != nil || m.Run != nil {
+	out, errW := m.writers()
+	if (m.RunContext != nil || m.Run != nil) || !executil.StreamLive(m.Verbose, out, errW) {
 		return m.runWithEnv(ctx, extraEnv, name, args...)
 	}
 	env := make([]string, 0, len(m.Env)+len(extraEnv))
@@ -192,8 +198,9 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
-	out, errW := m.writers()
-	executil.EchoCommand(errW, append([]string{name}, args...))
+	if m.Verbose {
+		executil.EchoCommand(errW, append([]string{name}, args...))
+	}
 	cmd.Stdout, cmd.Stderr = out, errW
 	return "", cmd.Run()
 }

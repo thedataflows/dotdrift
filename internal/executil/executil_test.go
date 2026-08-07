@@ -111,3 +111,39 @@ func TestIsStdinTerminal_regularFileIsFalse(t *testing.T) {
 	t.Cleanup(func() { _ = f.Close(); os.Stdin = orig })
 	require.False(t, executil.IsStdinTerminal())
 }
+
+// IsTerminal is false for non-file writers (a capture buffer never counts as
+// interactive), and for a regular file — only a char device (terminal) qualifies.
+func TestIsTerminal_nonFileAndRegularFileAreFalse(t *testing.T) {
+	require.False(t, executil.IsTerminal(&bytes.Buffer{}))
+	f, err := os.CreateTemp("", "executil-*")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = f.Close(); _ = os.Remove(f.Name()) })
+	require.False(t, executil.IsTerminal(f))
+}
+
+// StreamLive decides whether a child streams live or is captured: verbose
+// streams unconditionally (the set -x trace); otherwise both destinations must
+// be terminals (an interactive apply); a piped, non-verbose run captures so a
+// failure carries self-contained diagnostics.
+func TestStreamLive_table(t *testing.T) {
+	orig := executil.IsTerminal
+	t.Cleanup(func() { executil.IsTerminal = orig })
+	cases := []struct {
+		name    string
+		verbose bool
+		term    bool
+		want    bool
+	}{
+		{"verbose streams off-terminal", true, false, true},
+		{"interactive terminal streams", false, true, true},
+		{"piped non-verbose captures", false, false, false},
+		{"verbose terminal streams", true, true, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			executil.IsTerminal = func(io.Writer) bool { return tc.term }
+			require.Equal(t, tc.want, executil.StreamLive(tc.verbose, &bytes.Buffer{}, &bytes.Buffer{}))
+		})
+	}
+}

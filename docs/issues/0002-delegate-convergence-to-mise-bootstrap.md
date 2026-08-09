@@ -61,8 +61,8 @@ schema):**
    [issue 0003](0003-paru-mise-package-plugin.md)). Bare Arch packages resolve
    to `paru:<pkg>` and install via `paru -S` (pacman + AUR), not the plain
    `pacman:` built-in. paru's self-elevation is its own behavior (the plugin
-   code invokes no `sudo`); the only open check is TTY availability for paru's
-   interactive prompt under mise.
+   code invokes no `sudo`); TTY availability for paru's interactive prompt is
+   verified under mise v2026.8.3 (issue 0003 done).
 2. **Resume semantics — kept.** dotdrift's resume layer stays as a thin
    orchestrator over `mise bootstrap --only/--skip`; not dropped.
 3. **Verbosity — kept.** `-v` wraps the `mise bootstrap` invocation at the
@@ -77,15 +77,17 @@ schema):**
 ## Acceptance Criteria
 
 - [x] `MinMiseVersion` raised to `2026.8.2`; `EnsureMise` upgrade path tested.
-- [~] [Issue 0003](0003-paru-mise-package-plugin.md) (paru mise package plugin)
-      core built (`dotdrift paru` subcommand + Lua shim + tests); TTY
-      validation against real mise v2026.8.2 remains (issue 0003 criterion).
+- [x] [Issue 0003](0003-paru-mise-package-plugin.md) (paru mise package plugin)
+      done: `dotdrift paru` subcommand + Lua shim, `metadata.lua` `PLUGIN=`
+      assignment, hash-gated copy into mise's registry, TTY verified on
+      CachyOS/mise v2026.8.3.
 - [~] `[packages]` translates to `[bootstrap.packages]`: bare names get the
       detected-manager prefix (Arch → `paru`, Debian → `apt`, Fedora → `dnf`);
-      explicit prefixes pass through unchanged. `packagesStep` in
-      `cmd/apply.go` delegates install to `mise bootstrap --only plugins,packages`.
-      `internal/packages` retained for removal (`Absent`) + `plan --deps` until
-      mise supports uninstall.
+      `aur/X` → `paru:X`; explicit prefixes pass through. `packagesStep` copies
+      the plugin via `paru.EnsureInstalled` (hash-gated) and delegates install
+      to `mise bootstrap --only packages` (no `plugins` phase, no
+      `[bootstrap.plugins]` declaration). `internal/packages` retained for
+      removal (`Absent`) + `plan --deps` until mise supports uninstall.
 - [ ] System-scope dotfiles translate to `[bootstrap.files]`; the
       `sudo -E mise dotfiles apply` path and `DotfilesSystemStep` deleted.
       **Blocked:** `[bootstrap.files]` schema not published; mode-mapping

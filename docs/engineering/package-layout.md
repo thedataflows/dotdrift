@@ -22,6 +22,7 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   ├── state/                # Resume-only state persistence
 │   ├── apply/                # Pipeline orchestration
 │   ├── packages/             # Package backend interface + paru/pacman, apt, dnf
+│   ├── paru/                  # Embedded mise paru package plugin (go:embed) + lifecycle + `dotdrift paru` subcommand
 │   ├── mise/                 # Bootstrap, tools, dotfiles via mise
 │   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts

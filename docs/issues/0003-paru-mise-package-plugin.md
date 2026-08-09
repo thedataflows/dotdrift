@@ -9,20 +9,22 @@ timestamp: 2026-08-05T00:00:00Z
 # ISSUE 0003: paru mise package plugin
 
 - **Type**: feature
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: high
 - **Labels**: [mise, packages, arch, plugin]
 - **Assignee**: none
 - **Related**: [ADR-0004](../adr/0004-delegate-convergence-to-mise-bootstrap.md), [issue 0002](0002-delegate-convergence-to-mise-bootstrap.md), [mise package plugin spec](https://mise.jdx.dev/package-plugin-development.html)
-- **Related code**: [`internal/packages/`](../../internal/packages/), [`internal/mise/`](../../internal/mise/)
-- **Closing commits**: none
+- **Related code**: [`internal/paru/`](../../internal/paru/) (plugin embed + lifecycle), [`internal/mise/`](../../internal/mise/), [`internal/packages/`](../../internal/packages/)
+- **Closing commits**: bb1f6b6, f69e17e, b35eafe, 8a76c67
 
 ## Summary
 
 dotdrift provides a mise package-manager plugin named `paru` so that Arch
 packages (including AUR) install via `paru -S` instead of mise's plain
-`pacman:` built-in. This unblocks deleting `internal/packages` (issue 0002,
-tension 1) by preserving AUR support inside the mise convergence model.
+`pacman:` built-in. This preserves AUR support inside the mise convergence
+model — a prerequisite for eventually trimming `internal/packages` (issue 0002,
+tension 1), which is retained today only for removal (`Absent`) and
+`plan --deps`.
 
 ## Details
 
@@ -31,41 +33,53 @@ AUR. dotdrift's Arch backend is `paru -S` (pacman + AUR), and the migration
 doc references AUR packages (`ntfsprogs-plus`). mise package plugins
 ([spec](https://mise.jdx.dev/package-plugin-development.html)) are the
 extension point: a Lua-based vfox plugin with batch
-`PackageInstalled`/`PackageInstall` hooks, declared in `[bootstrap.plugins]`
-and keyed as `paru:<pkg>` in `[bootstrap.packages]`.
+`PackageInstalled`/`PackageInstall` hooks; dotdrift copies the plugin into
+mise's registry as a normal installed plugin and keys packages as
+`paru:<pkg>` in `[bootstrap.packages]`.
 
 ### Design
 
-Two parts: a thin Lua shim plugin (protocol adapter) and a `dotdrift paru`
-subcommand (all logic in Go).
+Two parts: an embedded Lua shim plugin (protocol adapter, sourced from real
+files under `internal/paru/miseplugin/` via `go:embed`) and a `dotdrift paru`
+subcommand (all paru invocation logic in Go).
 
-**Lua plugin** (dotdrift writes it to `$XDG_DATA_HOME/dotdrift/mise-plugins/paru/`):
+**Lua plugin** — copied into mise's registry at
+`$XDG_DATA_HOME/mise/plugins/paru/` (the same on-disk shape as any other mise
+plugin, not a symlink into a dotdrift-specific path):
 
 ```
 paru/
-├── metadata.lua
-├── mise.plugin.toml      # [package-manager] requires = ["paru"], os = ["linux"]
+├── metadata.lua            # assigns global PLUGIN = { name = "paru", … } (vfox convention)
+├── mise.plugin.toml        # [package-manager] requires = ["paru"], os = ["linux"]
 └── hooks/
     ├── package_installed.lua   # ctx → dotdrift paru installed → {name,state,version}[]
     └── package_install.lua     # ctx → dotdrift paru install [--dry-run] [--update]
 ```
 
-Each hook serializes the vfox `ctx.packages` batch to JSON, calls
-`dotdrift paru <sub>`, and parses the JSON return into the vfox response
-table. The Lua is a stable ~15-line shim; no paru logic lives in Lua.
+`metadata.lua` must assign the global `PLUGIN` (not `return` a table): mise's
+loader runs `require "metadata"; return PLUGIN`, so a `return`-style file
+leaves `PLUGIN` nil and the hooks never attach. Each hook calls
+`dotdrift paru <sub>` and parses the line-based status protocol into the vfox
+response table; no paru logic lives in Lua.
 
-**`dotdrift paru` subcommand** (Go, reuses `internal/packages` argv builder):
+**`dotdrift paru` subcommand** (Go):
 
 | Subcommand | Behavior |
 |---|---|
-| `dotdrift paru installed` | Reads the package batch (JSON on stdin); checks each via `pacman -Q <name>`; emits `[{name, state: "installed"\|"missing", version?}]` JSON. Side-effect free, never elevates. |
-| `dotdrift paru install` | Reads the batch; runs `paru -S --needed --noconfirm <names>`. Honors `--dry-run` (print, don't run) and `--update` (paru refreshes metadata itself). |
+| `dotdrift paru installed` | Checks each name via `pacman -Q`; emits `name<TAB>state<TAB>version` lines. Side-effect free, never elevates. |
+| `dotdrift paru install` | Runs `paru -S --needed --noconfirm <names>`. Honors `--dry-run` (print, don't run) and `--update`. |
 
 **Resolver integration** (issue 0002): bare Arch package names translate to
-`paru:<pkg>` keys; an explicit `pacman:<pkg>` prefix uses mise's built-in
-pacman instead. dotdrift registers the plugin in the generated `mise.toml`
-(`[bootstrap.plugins]` pointing at the local plugin path) on first Arch
-apply, or via `mise plugin install package:paru <local-path>`.
+`paru:<pkg>` keys; the `aur/<pkg>` marker is stripped to `paru:<pkg>`; an
+explicit `manager:<pkg>` (colon) prefix passes through unchanged. On Arch, bare
+names default to `paru` — not mise's AUR-less `pacman:` built-in.
+
+**Lifecycle** (`paru.EnsureInstalled`, called on every Arch apply): dotdrift
+hashes the installed plugin and compares it to the embedded plugin's SHA-256,
+recopying the real directory only on mismatch, a missing plugin, or a stale
+symlink — no writes on the common up-to-date path. Because the plugin is a
+normal installed plugin in mise's registry, there is no `[bootstrap.plugins]`
+declaration and the apply runs only `mise bootstrap --only packages`.
 
 ### Privilege: not a contract issue
 
@@ -78,13 +92,13 @@ asks mise for none. This is architecturally identical to how built-in
 managers work when mise elevates them — except paru owns its own elevation.
 No contract violation.
 
-The only practical concern is **TTY availability**: paru's password prompt
-needs a controlling terminal. Verify that mise spawns package-plugin
-subprocesses with stdin connected to a TTY (or that `sudo`'s timestamp cache
-is warm) when `mise bootstrap packages apply` runs interactively. If mise
-does not provide a TTY, the fallback is a `[bootstrap.hooks.pre-packages]`
-task where dotdrift owns the paru invocation and TTY directly, at the cost of
-losing mise's install-status tracking for Arch packages.
+The only practical concern was **TTY availability**: paru's password prompt
+needs a controlling terminal. **Verified** on a real CachyOS host with mise
+v2026.8.3: `mise bootstrap packages apply` connects the plugin subprocess to a
+TTY under an interactive shell, so paru builds the package and `sudo pacman -U`
+prompts normally; the `pre-packages` hook fallback was not needed. (A non-TTY
+shell reproduces `sudo: a terminal is required` — the caller's environment, not
+a mise limitation.)
 
 ## Acceptance Criteria
 
@@ -109,12 +123,18 @@ losing mise's install-status tracking for Arch packages.
       a non-TTY shell reproduces `sudo: a terminal is required`, which is the
       caller's environment, not a mise limitation). The `pre-packages` hook
       fallback was therefore **not** needed.
-- [x] dotdrift registers the plugin (local path in `[bootstrap.plugins]`,
-      linked via `mise bootstrap --only plugins`) and emits `paru:<pkg>` keys
-      for bare Arch package names. The `aur/<pkg>` marker is stripped
-      (`aur/X` → `paru:X`) so `pacman -Q`/`paru -S` see the real package name.
+- [x] dotdrift maintains the plugin: `paru.EnsureInstalled` copies the embedded
+      plugin into mise's registry (`$XDG_DATA_HOME/mise/plugins/paru/`) as real
+      files (no symlink), recopying only on content-hash mismatch — no useless
+      writes on the common path. The plugin source is `go:embed`'d from
+      `internal/paru/miseplugin/`. It emits `paru:<pkg>` keys for bare Arch
+      names and strips the `aur/<pkg>` marker (`aur/X` → `paru:X`) so
+      `pacman -Q`/`paru -S` see the real package name.
 - [x] `go test ./...` green; tests cover the `dotdrift paru` subcommand argv,
-      the metadata.lua `PLUGIN =` assignment, and the `aur/` prefix stripping.
+      the metadata.lua `PLUGIN =` assignment, `aur/` prefix stripping, the
+      hash-gated copy (`copiesWhenMissing`/`noWriteWhenUpToDate`/
+      `recopiesOnContentDrift`/`replacesSymlinkWithCopy`), and the exact
+      embedded file set.
 
 ## Out of Scope
 

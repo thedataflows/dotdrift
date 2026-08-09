@@ -139,9 +139,16 @@ elevate" — `pacman -Q` satisfies all four (read-only query, no sudo).
 paru's own behavior, not the plugin invoking sudo (see "Privilege: not a
 contract issue" above).
 
-Two `mise bootstrap --only plugins` lines remain visible under `-v` on
-re-runs — `Plugin paru already installed` / `Use --force to install anyway`.
-These are benign idempotency chatter (the plugin symlink persists across
-applies, so the link step is a no-op); they are not contradictory and do not
-appear without `-v`. The packages phase independently confirms convergence
-(`mise paru: N package(s) already installed`).
+**Plugin lifecycle is dotdrift-owned (`paru.EnsureInstalled`).** On every Arch
+apply the packages step resets the plugin source dir and rewrites it (an exact
+mirror of the embedded plugin for the running dotdrift version — a file dropped
+by a newer dotdrift cannot linger), then ensures mise's plugin registry
+(`$XDG_DATA_HOME/mise/plugins/paru`) symlinks it — creating the link when
+missing and repairing it when dangling or mis-pointing (mise's own bootstrap
+linking skips an existing link, so dotdrift cannot rely on it). Because
+dotdrift links the plugin itself, the apply call runs only `mise bootstrap
+--only packages` (no `plugins` phase), so the former `Plugin paru already
+installed` / `Use --force` chatter no longer appears. The `[bootstrap.plugins]`
+declaration remains in the generated config as documentation and a fallback for
+a standalone `mise bootstrap`. A non-symlink entry at the link path (e.g. a
+git-cloned plugin) is left untouched — it is not dotdrift's to delete.

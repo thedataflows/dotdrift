@@ -88,6 +88,9 @@ func (r *recordingSmbRunner) RunInteractive(_ context.Context, name string, args
 // the wiring is exercised end-to-end against a fixture profile.
 func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) {
 	t.Helper()
+	// Contain plugin source/link writes (paru.EnsureInstalled) to temp — the
+	// packages step otherwise writes under the real $XDG_DATA_HOME.
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	events := &[]string{}
 	backend := &recordingBackend{events: events}
 
@@ -633,6 +636,7 @@ func (r *verboseSmbRunner) SetVerbose(v bool) { r.verbose = v }
 // --verbose landed.
 func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, sr *verboseSmbRunner) {
 	t.Helper()
+	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	events := &[]string{}
 	backend = &verboseRecordingBackend{recordingBackend: &recordingBackend{events: events}}
 	sr = &verboseSmbRunner{recordingSmbRunner: &recordingSmbRunner{events: events}}

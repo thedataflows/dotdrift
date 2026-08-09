@@ -85,3 +85,50 @@ func WritePlugin(dir string) error {
 	}
 	return nil
 }
+
+// EnsureInstalled makes the on-disk paru plugin an exact mirror of the embedded
+// plugin for the running dotdrift version and guarantees mise's plugin
+// registry symlinks it. Idempotent and self-repairing — call on every Arch
+// apply. dotdrift owns the plugin, so it does not rely on mise's passive
+// bootstrap linking (which prints "already installed" and skips a stale or
+// mis-pointing link):
+//   - the source dir is reset and rewritten, so a file dropped by a newer
+//     dotdrift cannot linger from an older one (exact mirror);
+//   - the mise registry symlink is created, or repaired when missing,
+//     dangling, or pointing at the wrong target. A non-symlink entry (e.g. a
+//     git-cloned plugin) is left in place — it is not dotdrift's to delete.
+func EnsureInstalled(sourceDir, misePluginsDir string) error {
+	if err := os.RemoveAll(sourceDir); err != nil {
+		return fmt.Errorf("reset paru plugin source: %w", err)
+	}
+	if err := WritePlugin(sourceDir); err != nil {
+		return err
+	}
+	return ensureSymlink(filepath.Join(misePluginsDir, filepath.Base(sourceDir)), sourceDir)
+}
+
+// ensureSymlink makes link a symlink to target. A correct link is left as-is;
+// a missing, dangling, or mis-pointing symlink is (re)created; a non-symlink
+// entry (real file/dir) is untouched (not dotdrift's to remove).
+func ensureSymlink(link, target string) error {
+	if fi, err := os.Lstat(link); err == nil {
+		if fi.Mode()&os.ModeSymlink == 0 {
+			return nil // real file/dir — leave it
+		}
+		if got, err := os.Readlink(link); err == nil && got == target {
+			return nil // already correct
+		}
+		if err := os.Remove(link); err != nil {
+			return fmt.Errorf("remove stale paru plugin link: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("stat paru plugin link: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		return fmt.Errorf("create mise plugins dir: %w", err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		return fmt.Errorf("link paru plugin into mise: %w", err)
+	}
+	return nil
+}

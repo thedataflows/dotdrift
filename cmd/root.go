@@ -137,7 +137,7 @@ func Run(version string, args []string) error {
 		return kctx.Run(version)
 	}
 
-	log.Logger.Info().Str("app", kctx.Model.Name).Str("version", version).Msg("Starting application")
+	log.Logger.Debug().Str("app", kctx.Model.Name).Str("version", version).Msg("Starting application")
 
 	return kctx.Run(kctx, &cli)
 }

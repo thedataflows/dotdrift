@@ -32,6 +32,27 @@ func TestPrefixedPackages_dnfBackend(t *testing.T) {
 	got := mise.PrefixedPackages([]string{"openssl-devel"}, "dnf")
 	require.Equal(t, []string{"dnf:openssl-devel"}, got)
 }
+// TestPrefixedPackages_aurMarkerMapsToParu covers dotdrift's AUR notation:
+// `aur/<pkg>` has no colon, so it is not an explicit manager prefix — it maps
+// to the paru plugin (the only AUR-capable manager) with the marker stripped,
+// so pacman -Q / paru -S receive the real package name. This is independent of
+// the detected backend: an AUR package needs paru regardless.
+func TestPrefixedPackages_aurMarkerMapsToParu(t *testing.T) {
+	got := mise.PrefixedPackages([]string{"aur/fresh-editor-bin"}, "paru")
+	require.Equal(t, []string{"paru:fresh-editor-bin"}, got)
+}
+
+func TestPrefixedPackages_aurMarkerStripsEvenOnNonArchBackend(t *testing.T) {
+	// aur/ is an explicit AUR signal: it forces paru even if the detected
+	// backend were something else (defensive — aur/ only appears in Arch modules).
+	got := mise.PrefixedPackages([]string{"aur/lmstudio-bin"}, "apt")
+	require.Equal(t, []string{"paru:lmstudio-bin"}, got)
+}
+
+func TestPrefixedPackages_mixedAurBareExplicit(t *testing.T) {
+	got := mise.PrefixedPackages([]string{"aur/fresh-editor-bin", "ripgrep", "pacman:base-devel"}, "paru")
+	require.Equal(t, []string{"paru:fresh-editor-bin", "paru:ripgrep", "pacman:base-devel"}, got)
+}
 
 func TestGenerateBootstrapPackages_emitsSection(t *testing.T) {
 	got := mise.GenerateBootstrapPackages([]string{"neovim", "ripgrep"}, "paru")

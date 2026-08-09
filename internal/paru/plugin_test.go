@@ -14,6 +14,7 @@ func TestWritePlugin_createsAllFiles(t *testing.T) {
 	require.NoError(t, paru.WritePlugin(dir))
 
 	for _, rel := range []string{
+		"metadata.lua",
 		"mise.plugin.toml",
 		"hooks/package_installed.lua",
 		"hooks/package_install.lua",
@@ -32,6 +33,20 @@ func TestWritePlugin_tomlRequiresParu(t *testing.T) {
 	require.Contains(t, string(content), `[package-manager]`)
 	require.Contains(t, string(content), `requires = ["paru"]`)
 	require.Contains(t, string(content), `os = ["linux"]`)
+}
+// TestWritePlugin_metadataLuaAssignsPluginGlobal guards the root cause of the
+// "declared in [bootstrap.plugins] but not installed" warnings: mise's vfox
+// loader runs `require "metadata"; return PLUGIN`, so metadata.lua must assign
+// the global PLUGIN (not `return` a table) and must carry the required `name`.
+func TestWritePlugin_metadataLuaAssignsPluginGlobal(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, paru.WritePlugin(dir))
+	content, err := os.ReadFile(filepath.Join(dir, "metadata.lua"))
+	require.NoError(t, err)
+	s := string(content)
+	require.Contains(t, s, "PLUGIN = {")
+	require.NotContains(t, s, "return {", "metadata.lua must assign PLUGIN, not return a table")
+	require.Contains(t, s, `name = "paru"`)
 }
 
 func TestWritePlugin_installedLuaDelegatesToDotdrift(t *testing.T) {

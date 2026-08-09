@@ -12,6 +12,18 @@ const misePluginToml = `[package-manager]
 requires = ["paru"]
 os = ["linux"]
 `
+// metadataLua assigns the global PLUGIN table that mise's vfox loader expects
+// (load_metadata runs `require "metadata"; return PLUGIN`). A metadata.lua that
+// only `return`s a table leaves PLUGIN nil, so the package hooks never attach
+// and mise reports the plugin "not installed" — the contradictory warnings.
+// `name` is required by mise's Metadata deserializer; description/version are
+// informational.
+const metadataLua = `PLUGIN = {
+  name = "paru",
+  description = "paru (pacman + AUR) package manager",
+  version = "1.0.0",
+}
+`
 
 // packageInstalledLua delegates to `dotdrift paru installed` and parses the
 // line-based status protocol into the vfox response table.
@@ -60,6 +72,7 @@ func WritePlugin(dir string) error {
 		return fmt.Errorf("create plugin hooks dir: %w", err)
 	}
 	files := map[string]string{
+		"metadata.lua":                metadataLua,
 		"mise.plugin.toml":            misePluginToml,
 		"hooks/package_installed.lua": packageInstalledLua,
 		"hooks/package_install.lua":   packageInstallLua,

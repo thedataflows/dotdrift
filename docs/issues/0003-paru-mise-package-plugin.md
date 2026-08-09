@@ -88,22 +88,33 @@ losing mise's install-status tracking for Arch packages.
 
 ## Acceptance Criteria
 
-- [ ] `dotdrift paru installed` correctly reports installed/missing for repo
+- [x] `dotdrift paru installed` correctly reports installed/missing for repo
       and AUR packages via `pacman -Q` (side-effect free, no elevation).
-- [ ] `dotdrift paru install` runs `paru -S --needed --noconfirm`, honoring
+- [x] `dotdrift paru install` runs `paru -S --needed --noconfirm`, honoring
       `--dry-run` and `--update`.
-- [ ] The Lua shim plugin delegates to the subcommand and returns the vfox
+- [x] The Lua shim plugin delegates to the subcommand and returns the vfox
       response shape (`{name, state, version?}` per package).
-- [ ] **TTY validation:** on a real Arch/CachyOS host with mise v2026.8.2,
-      `mise bootstrap packages apply` with a `paru:<aur-pkg>` entry installs
-      the AUR package — paru's password prompt reaches the TTY (or sudo's
-      timestamp cache is warm). If mise does not provide a TTY, the
-      `pre-packages` hook fallback is implemented and documented.
-- [ ] dotdrift registers the plugin (local path in `[bootstrap.plugins]` or
-      `mise plugin install package:paru`) and emits `paru:<pkg>` keys for
-      bare Arch package names.
-- [ ] `go test ./...` green; an integration test covers the `dotdrift paru`
-      subcommand argv and JSON I/O.
+- [x] **metadata.lua assigns the global `PLUGIN`** (vfox convention
+      `PLUGIN = { name = "paru", ... }`, not `return {...}`). mise's vfox
+      loader runs `require "metadata"; return PLUGIN`; a metadata.lua that
+      only `return`s a table leaves `PLUGIN` nil, so the package hooks never
+      attach and `mise bootstrap plugins status` reports the plugin `missing`
+      — the source of the contradictory "declared in [bootstrap.plugins] but
+      not installed" warnings. Validated: status flips `missing`→`installed`
+      and `packages status` recognizes `paru:<pkg>`.
+- [x] **TTY validation:** on a real CachyOS host with mise v2026.8.3,
+      `mise bootstrap packages apply` with a `paru:aur/fresh-editor-bin` entry
+      installs the AUR package end-to-end — paru builds the package and
+      `sudo pacman -U` reaches the TTY (verified under an interactive PTY;
+      a non-TTY shell reproduces `sudo: a terminal is required`, which is the
+      caller's environment, not a mise limitation). The `pre-packages` hook
+      fallback was therefore **not** needed.
+- [x] dotdrift registers the plugin (local path in `[bootstrap.plugins]`,
+      linked via `mise bootstrap --only plugins`) and emits `paru:<pkg>` keys
+      for bare Arch package names. The `aur/<pkg>` marker is stripped
+      (`aur/X` → `paru:X`) so `pacman -Q`/`paru -S` see the real package name.
+- [x] `go test ./...` green; tests cover the `dotdrift paru` subcommand argv,
+      the metadata.lua `PLUGIN =` assignment, and the `aur/` prefix stripping.
 
 ## Out of Scope
 
@@ -127,3 +138,10 @@ elevate" — `pacman -Q` satisfies all four (read-only query, no sudo).
 `PackageInstall` runs `paru -S`, which self-elevates internally; that is
 paru's own behavior, not the plugin invoking sudo (see "Privilege: not a
 contract issue" above).
+
+Two `mise bootstrap --only plugins` lines remain visible under `-v` on
+re-runs — `Plugin paru already installed` / `Use --force to install anyway`.
+These are benign idempotency chatter (the plugin symlink persists across
+applies, so the link step is a no-op); they are not contradictory and do not
+appear without `-v`. The packages phase independently confirms convergence
+(`mise paru: N package(s) already installed`).

@@ -12,16 +12,26 @@ import (
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
-// PrefixedPackages translates bare package names to manager:pkg keys.
-// Bare names (no colon) get the detected backend's manager prefix (paru, apt,
-// dnf); names already containing a ":" prefix pass through unchanged.
+// PrefixedPackages translates package specs into mise `manager:pkg` keys.
+//
+// Rules (issue 0003): an explicit `manager:pkg` spec (anything containing a
+// colon) passes through unchanged — mise's built-in managers (pacman, apt, dnf)
+// and other plugins are respected. An `aur/<pkg>` spec is dotdrift's AUR
+// marker; it always maps to the paru plugin (the only AUR-capable manager),
+// with the marker stripped so pacman -Q / paru -S see the real package name.
+// A bare name (no colon, no aur/) gets the detected backend's manager prefix
+// (paru on Arch, apt on Debian, dnf on Fedora). On Arch that means bare names
+// default to paru — not mise's built-in pacman, which has no AUR support.
 func PrefixedPackages(names []string, backend string) []string {
 	out := make([]string, len(names))
 	for i, n := range names {
-		if strings.Contains(n, ":") {
-			out[i] = n
-		} else {
-			out[i] = backend + ":" + n
+		switch {
+		case strings.Contains(n, ":"):
+			out[i] = n // explicit manager prefix — pass through
+		case strings.HasPrefix(n, "aur/"):
+			out[i] = "paru:" + strings.TrimPrefix(n, "aur/") // AUR marker → paru plugin
+		default:
+			out[i] = backend + ":" + n // bare name → detected backend
 		}
 	}
 	return out

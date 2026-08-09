@@ -71,13 +71,12 @@ var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "
 // or built-in managers) while keeping removal inline — mise's package-plugin
 // v1 does not support uninstall (packages.absent handling, issue 0002).
 type packagesStep struct {
-	runner     mise.Runner
-	backend    packages.Backend // for Absent only
-	plan       *resolve.Plan
-	backendStr string // detected backend for prefix translation
-	configPath string // bootstrap mise.toml path
-	pluginPath     string // paru plugin source dir; empty = no plugin
-	misePluginsDir string // mise plugin registry dir ($XDG_DATA_HOME/mise/plugins)
+	runner         mise.Runner
+	backend        packages.Backend // for Absent only
+	plan           *resolve.Plan
+	backendStr     string // detected backend for prefix translation
+	configPath     string // bootstrap mise.toml path
+	misePluginsDir string // mise plugin registry dir ($XDG_DATA_HOME/mise/plugins); empty = non-Arch
 }
 
 var _ apply.Step = (*packagesStep)(nil)
@@ -85,13 +84,15 @@ var _ apply.Step = (*packagesStep)(nil)
 func (s *packagesStep) Name() string { return "packages" }
 
 func (s *packagesStep) Run(ctx context.Context) error {
-	// Maintain the paru package plugin (Arch backends) on every apply: keep it
-	// an exact mirror of the embedded plugin for this dotdrift version and
-	// repair mise's registration symlink. Runs even when this plan has nothing
-	// to install, so a plugin left stale by an older dotdrift is converged.
-	if s.pluginPath != "" {
-		if err := paru.EnsureInstalled(s.pluginPath, s.misePluginsDir); err != nil {
+	// Maintain the paru package plugin (Arch backends): copy the embedded plugin
+	// into mise's registry as real files, but only when its content hash differs
+	// from what is installed (or it is missing/a stale symlink) — no writes on
+	// the common up-to-date path. Runs even with nothing to install.
+	if s.misePluginsDir != "" {
+		if updated, err := paru.EnsureInstalled(s.misePluginsDir, "paru"); err != nil {
 			return fmt.Errorf("maintain paru plugin: %w", err)
+		} else if updated {
+			log.Info().Msg("paru mise plugin installed/updated")
 		}
 	}
 	// Removal is best-effort (warn, don't fail) — same contract as before.
@@ -106,15 +107,13 @@ func (s *packagesStep) Run(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(s.configPath), 0o755); err != nil {
 		return fmt.Errorf("create packages config dir: %w", err)
 	}
-	content := mise.GenerateBootstrapConfig(s.plan.Packages.Install, s.backendStr, s.pluginPath)
+	content := mise.GenerateBootstrapPackages(s.plan.Packages.Install, s.backendStr)
 	if err := os.WriteFile(s.configPath, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("write packages config: %w", err)
 	}
-	// packages phase only: dotdrift links the paru plugin itself (EnsureInstalled
-	// above), so mise's plugins phase is redundant — running it would only print
-	// "Plugin paru already installed" noise. mise discovers the plugin via the
-	// registry symlink. The [bootstrap.plugins] declaration stays in the config
-	// as documentation + a fallback for a standalone `mise bootstrap`.
+	// dotdrift copies the paru plugin into mise's registry itself (EnsureInstalled
+	// above), so there is no [bootstrap.plugins] declaration and the plugins
+	// phase is not run — mise discovers it as a normal installed plugin.
 	return s.runner.Bootstrap(ctx, s.configPath, true, "packages")
 }
 
@@ -364,16 +363,16 @@ func (c *ApplyCmd) Run() error {
 	mountsConfigPath := filepath.Join(configDir, "mounts", "mise.toml")
 	smbConfigPath := filepath.Join(configDir, "smb", "mise.toml")
 
-	// Compute the paru plugin path for Arch backends (mise's pacman built-in
-	// has no AUR support; the dotdrift paru plugin covers it, issue 0003).
-	var pluginPath, misePluginsDir string
+	// Arch backends install through the dotdrift paru mise plugin (mise's pacman
+	// built-in has no AUR support, issue 0003). dotdrift copies it into mise's
+	// plugin registry (hash-gated) — real files, no symlink, no declaration.
+	var misePluginsDir string
 	if f.Backend == "paru" {
 		xdgData := os.Getenv("XDG_DATA_HOME")
 		if xdgData == "" {
 			home, _ := os.UserHomeDir()
 			xdgData = filepath.Join(home, ".local", "share")
 		}
-		pluginPath = mise.PluginDir(xdgData, "paru")
 		misePluginsDir = mise.MisePluginsDir(xdgData)
 	}
 
@@ -409,7 +408,7 @@ func (c *ApplyCmd) Run() error {
 		})
 	}
 	steps = append(steps,
-		&packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: packagesConfigPath, pluginPath: pluginPath, misePluginsDir: misePluginsDir},
+		&packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: packagesConfigPath, misePluginsDir: misePluginsDir},
 		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: toolsConfigPath},
 		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
 	)

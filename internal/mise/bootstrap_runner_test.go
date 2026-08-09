@@ -40,41 +40,9 @@ func TestFakeRunner_bootstrap(t *testing.T) {
 	require.True(t, f.BootstrapCalled)
 }
 
-// --- Bootstrap plugins config ---
-
-func TestGenerateBootstrapPlugins_emitsSection(t *testing.T) {
-	got := mise.GenerateBootstrapPlugins("/home/user/.local/share/dotdrift/mise-plugins/paru")
-	require.Contains(t, got, "[bootstrap.plugins]")
-	require.Contains(t, got, "paru")
-	require.Contains(t, got, "/home/user/.local/share/dotdrift/mise-plugins/paru")
-}
-
-func TestGenerateBootstrapPlugins_emptyWhenNoPath(t *testing.T) {
-	require.Empty(t, mise.GenerateBootstrapPlugins(""))
-}
-
-// --- Plugin directory ---
-
-func TestPluginDir_underXDGDataHome(t *testing.T) {
-	dir := mise.PluginDir("/custom/xdg", "paru")
-	require.Equal(t, filepath.Join("/custom/xdg", "dotdrift", "mise-plugins", "paru"), dir)
-}
+// --- Plugin registry ---
 
 func TestMisePluginsDir_underXDGDataHome(t *testing.T) {
 	dir := mise.MisePluginsDir("/custom/xdg")
 	require.Equal(t, filepath.Join("/custom/xdg", "mise", "plugins"), dir)
-}
-
-// --- Full bootstrap config emitter ---
-
-func TestGenerateBootstrapConfig_packagesAndPlugins(t *testing.T) {
-	got := mise.GenerateBootstrapConfig(
-		[]string{"neovim"}, // install
-		"paru",             // backend
-		"/path/to/plugin",  // plugin path
-	)
-	require.Contains(t, got, "[bootstrap.packages]")
-	require.Contains(t, got, `"paru:neovim" = "latest"`)
-	require.Contains(t, got, "[bootstrap.plugins]")
-	require.Contains(t, got, "paru")
 }

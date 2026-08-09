@@ -139,16 +139,16 @@ elevate" — `pacman -Q` satisfies all four (read-only query, no sudo).
 paru's own behavior, not the plugin invoking sudo (see "Privilege: not a
 contract issue" above).
 
-**Plugin lifecycle is dotdrift-owned (`paru.EnsureInstalled`).** On every Arch
-apply the packages step resets the plugin source dir and rewrites it (an exact
-mirror of the embedded plugin for the running dotdrift version — a file dropped
-by a newer dotdrift cannot linger), then ensures mise's plugin registry
-(`$XDG_DATA_HOME/mise/plugins/paru`) symlinks it — creating the link when
-missing and repairing it when dangling or mis-pointing (mise's own bootstrap
-linking skips an existing link, so dotdrift cannot rely on it). Because
-dotdrift links the plugin itself, the apply call runs only `mise bootstrap
---only packages` (no `plugins` phase), so the former `Plugin paru already
-installed` / `Use --force` chatter no longer appears. The `[bootstrap.plugins]`
-declaration remains in the generated config as documentation and a fallback for
-a standalone `mise bootstrap`. A non-symlink entry at the link path (e.g. a
-git-cloned plugin) is left untouched — it is not dotdrift's to delete.
+**Plugin lifecycle is dotdrift-owned and hash-gated (`paru.EnsureInstalled`).**
+The plugin lives in mise's registry as a real copied directory
+(`$XDG_DATA_HOME/mise/plugins/paru/`) — the same on-disk shape as any other
+mise plugin, no symlink into a dotdrift-specific path. On every Arch apply
+EnsureInstalled hashes the installed plugin (`metadata.lua`,
+`mise.plugin.toml`, `hooks/*` over fixed path:content pairs) and compares it to
+the embedded plugin's SHA-256; it recopies only on mismatch, a missing plugin,
+or when the target is a symlink (a stale shape from an older dotdrift). The
+common up-to-date path performs no writes — it just hashes and runs. Because
+the plugin is a normal installed plugin in mise's registry, there is no
+`[bootstrap.plugins]` declaration and the apply runs only
+`mise bootstrap --only packages` (no `plugins` phase), so the former
+`Plugin paru already installed` / `Use --force` chatter is gone.

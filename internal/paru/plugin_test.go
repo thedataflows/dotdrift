@@ -34,6 +34,7 @@ func TestWritePlugin_tomlRequiresParu(t *testing.T) {
 	require.Contains(t, string(content), `requires = ["paru"]`)
 	require.Contains(t, string(content), `os = ["linux"]`)
 }
+
 // TestWritePlugin_metadataLuaAssignsPluginGlobal guards the root cause of the
 // "declared in [bootstrap.plugins] but not installed" warnings: mise's vfox
 // loader runs `require "metadata"; return PLUGIN`, so metadata.lua must assign
@@ -78,75 +79,79 @@ func TestWritePlugin_idempotent(t *testing.T) {
 	require.Equal(t, first, second)
 }
 
-// TestEnsureInstalled_createsAndRepairsSymlink covers the registration
-// invariant dotdrift owns: the mise plugin registry must symlink the source,
-// and a stale/mis-pointing link is repaired on every apply (mise's own
-// bootstrap linking skips an existing link, so dotdrift cannot rely on it).
-func TestEnsureInstalled_createsAndRepairsSymlink(t *testing.T) {
-	root := t.TempDir()
-	source := filepath.Join(root, "dotdrift", "mise-plugins", "paru")
-	registry := filepath.Join(root, "mise", "plugins")
-	link := filepath.Join(registry, "paru")
+// TestEnsureInstalled_copiesWhenMissing: a missing plugin is copied into mise's
+// registry as real files (not a symlink) and reports that it wrote.
+func TestEnsureInstalled_copiesWhenMissing(t *testing.T) {
+	registry := t.TempDir()
+	target := filepath.Join(registry, "paru")
 
-	// missing → created, pointing at the source
-	require.NoError(t, paru.EnsureInstalled(source, registry))
-	got, err := os.Readlink(link)
+	updated, err := paru.EnsureInstalled(registry, "paru")
 	require.NoError(t, err)
-	require.Equal(t, source, got)
+	require.True(t, updated)
 
-	// mis-pointing → repaired back to the source
-	require.NoError(t, os.Remove(link))
-	require.NoError(t, os.Symlink("/nonexistent/wrong", link))
-	require.NoError(t, paru.EnsureInstalled(source, registry))
-	got, err = os.Readlink(link)
+	fi, err := os.Lstat(target)
 	require.NoError(t, err)
-	require.Equal(t, source, got)
-
-	// already correct → left untouched (still valid)
-	require.NoError(t, paru.EnsureInstalled(source, registry))
-	got, err = os.Readlink(link)
-	require.NoError(t, err)
-	require.Equal(t, source, got)
-}
-
-// TestEnsureInstalled_exactMirrorRemovesStaleFiles: the on-disk plugin must be
-// an exact mirror of the embedded one — a file an older dotdrift wrote but the
-// current one does not must not linger.
-func TestEnsureInstalled_exactMirrorRemovesStaleFiles(t *testing.T) {
-	root := t.TempDir()
-	source := filepath.Join(root, "dotdrift", "mise-plugins", "paru")
-	registry := filepath.Join(root, "mise", "plugins")
-
-	// simulate a leftover from an older dotdrift version
-	require.NoError(t, os.MkdirAll(filepath.Join(source, "hooks"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(source, "hooks", "package_upgrade.lua"), []byte("stale"), 0o644))
-
-	require.NoError(t, paru.EnsureInstalled(source, registry))
-
-	_, err := os.Stat(filepath.Join(source, "hooks", "package_upgrade.lua"))
-	require.True(t, os.IsNotExist(err), "stale file from an older dotdrift must be removed")
+	require.True(t, fi.IsDir(), "plugin must be a real directory, not a symlink")
+	require.Zero(t, fi.Mode()&os.ModeSymlink)
 	for _, rel := range []string{"metadata.lua", "mise.plugin.toml", "hooks/package_installed.lua", "hooks/package_install.lua"} {
-		_, err := os.Stat(filepath.Join(source, rel))
-		require.NoError(t, err, "expected current plugin file %s", rel)
+		_, err := os.Stat(filepath.Join(target, rel))
+		require.NoError(t, err, "expected %s", rel)
 	}
 }
 
-// TestEnsureInstalled_leavesNonSymlinkEntryAlone: a real directory at the link
-// path (e.g. a git-cloned plugin installed outside dotdrift) is not dotdrift's
-// to delete.
-func TestEnsureInstalled_leavesNonSymlinkEntryAlone(t *testing.T) {
-	root := t.TempDir()
-	source := filepath.Join(root, "dotdrift", "mise-plugins", "paru")
-	registry := filepath.Join(root, "mise", "plugins")
-	link := filepath.Join(registry, "paru")
+// TestEnsureInstalled_noWriteWhenUpToDate: when the installed plugin's hash
+// matches the embedded one, EnsureInstalled writes nothing and reports no
+// change — the common path (no useless writes on every apply).
+func TestEnsureInstalled_noWriteWhenUpToDate(t *testing.T) {
+	registry := t.TempDir()
+	target := filepath.Join(registry, "paru")
 
-	require.NoError(t, os.MkdirAll(link, 0o755)) // real dir, not a symlink
-	require.NoError(t, paru.EnsureInstalled(source, registry))
+	_, err := paru.EnsureInstalled(registry, "paru")
+	require.NoError(t, err)
+	before, err := os.Stat(filepath.Join(target, "metadata.lua"))
+	require.NoError(t, err)
 
-	fi, err := os.Lstat(link)
+	updated, err := paru.EnsureInstalled(registry, "paru")
 	require.NoError(t, err)
-	require.Zero(t, fi.Mode()&os.ModeSymlink, "non-symlink entry must be left in place")
-	// source is still written
-	_, err = os.Stat(filepath.Join(source, "metadata.lua"))
+	require.False(t, updated, "must not rewrite an up-to-date plugin")
+
+	after, err := os.Stat(filepath.Join(target, "metadata.lua"))
 	require.NoError(t, err)
+	require.Equal(t, before.Size(), after.Size())
+}
+
+// TestEnsureInstalled_recopiesOnContentDrift: a tampered file changes the
+// installed hash, so EnsureInstalled recopies and restores correct content.
+func TestEnsureInstalled_recopiesOnContentDrift(t *testing.T) {
+	registry := t.TempDir()
+	target := filepath.Join(registry, "paru")
+	_, err := paru.EnsureInstalled(registry, "paru")
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(target, "metadata.lua"), []byte("tampered"), 0o644))
+
+	updated, err := paru.EnsureInstalled(registry, "paru")
+	require.NoError(t, err)
+	require.True(t, updated, "content drift must trigger a recopy")
+
+	got, err := os.ReadFile(filepath.Join(target, "metadata.lua"))
+	require.NoError(t, err)
+	require.Contains(t, string(got), "PLUGIN = {")
+}
+
+// TestEnsureInstalled_replacesSymlinkWithCopy: a symlink at the target (stale
+// shape left by an older dotdrift) is replaced with a real directory copy.
+func TestEnsureInstalled_replacesSymlinkWithCopy(t *testing.T) {
+	registry := t.TempDir()
+	target := filepath.Join(registry, "paru")
+	require.NoError(t, os.Symlink(t.TempDir(), target))
+
+	updated, err := paru.EnsureInstalled(registry, "paru")
+	require.NoError(t, err)
+	require.True(t, updated)
+
+	fi, err := os.Lstat(target)
+	require.NoError(t, err)
+	require.True(t, fi.IsDir(), "symlink must be replaced with a real directory")
+	require.Zero(t, fi.Mode()&os.ModeSymlink)
 }

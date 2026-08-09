@@ -55,45 +55,12 @@ func GenerateBootstrapPackages(install []string, backend string) string {
 	return b.String()
 }
 
-// PluginDir returns the path where dotdrift writes a named mise package
-// plugin (e.g. "paru") under the XDG data home.
-func PluginDir(xdgDataHome, name string) string {
-	return strings.Join([]string{xdgDataHome, "dotdrift", "mise-plugins", name}, "/")
-}
-
 // MisePluginsDir returns mise's package-plugin registry directory
-// ($XDG_DATA_HOME/mise/plugins), where mise discovers installed plugins via a
-// per-plugin symlink. dotdrift links its embedded paru plugin here (see
-// paru.EnsureInstalled) so mise recognizes it without relying on mise's own
-// passive bootstrap linking.
+// ($XDG_DATA_HOME/mise/plugins), where mise discovers installed plugins.
+// dotdrift copies its embedded paru plugin here as real files (see
+// paru.EnsureInstalled), the same on-disk shape as any other mise plugin.
 func MisePluginsDir(xdgDataHome string) string {
 	return strings.Join([]string{xdgDataHome, "mise", "plugins"}, "/")
-}
-
-// GenerateBootstrapPlugins emits a [bootstrap.plugins] section registering
-// the paru package plugin at the given local path. Returns "" when pluginPath
-// is empty.
-func GenerateBootstrapPlugins(pluginPath string) string {
-	if pluginPath == "" {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString("[bootstrap.plugins]\n")
-	fmt.Fprintf(&b, "paru = %q\n", pluginPath)
-	return b.String()
-}
-
-// GenerateBootstrapConfig emits all bootstrap-related sections: packages and
-// the paru plugin registration. Returns "" when there is nothing to emit.
-func GenerateBootstrapConfig(install []string, backend, pluginPath string) string {
-	var out string
-	if pkgs := GenerateBootstrapPackages(install, backend); pkgs != "" {
-		out += pkgs + "\n"
-	}
-	if plugins := GenerateBootstrapPlugins(pluginPath); plugins != "" {
-		out += plugins + "\n"
-	}
-	return out
 }
 
 // --- System dotfiles → [bootstrap.files] ---

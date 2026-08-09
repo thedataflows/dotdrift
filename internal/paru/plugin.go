@@ -1,7 +1,10 @@
 package paru
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 )
@@ -12,6 +15,7 @@ const misePluginToml = `[package-manager]
 requires = ["paru"]
 os = ["linux"]
 `
+
 // metadataLua assigns the global PLUGIN table that mise's vfox loader expects
 // (load_metadata runs `require "metadata"; return PLUGIN`). A metadata.lua that
 // only `return`s a table leaves PLUGIN nil, so the package hooks never attach
@@ -86,49 +90,79 @@ func WritePlugin(dir string) error {
 	return nil
 }
 
-// EnsureInstalled makes the on-disk paru plugin an exact mirror of the embedded
-// plugin for the running dotdrift version and guarantees mise's plugin
-// registry symlinks it. Idempotent and self-repairing — call on every Arch
-// apply. dotdrift owns the plugin, so it does not rely on mise's passive
-// bootstrap linking (which prints "already installed" and skips a stale or
-// mis-pointing link):
-//   - the source dir is reset and rewritten, so a file dropped by a newer
-//     dotdrift cannot linger from an older one (exact mirror);
-//   - the mise registry symlink is created, or repaired when missing,
-//     dangling, or pointing at the wrong target. A non-symlink entry (e.g. a
-//     git-cloned plugin) is left in place — it is not dotdrift's to delete.
-func EnsureInstalled(sourceDir, misePluginsDir string) error {
-	if err := os.RemoveAll(sourceDir); err != nil {
-		return fmt.Errorf("reset paru plugin source: %w", err)
+// EnsureInstalled copies the embedded paru plugin into mise's plugin registry
+// (misePluginsDir/name) as real files — the same on-disk shape as any other
+// mise plugin, no symlink — but performs no writes on the common path. It
+// hashes the installed plugin and compares to the embedded plugin's hash,
+// recopying (remove + rewrite) only on mismatch, a missing plugin, or when the
+// target is a symlink (a stale shape left by an older dotdrift). Call on every
+// Arch apply; returns true when it wrote.
+func EnsureInstalled(misePluginsDir, name string) (bool, error) {
+	target := filepath.Join(misePluginsDir, name)
+	if pluginUpToDate(target) {
+		return false, nil
 	}
-	if err := WritePlugin(sourceDir); err != nil {
-		return err
+	if err := os.RemoveAll(target); err != nil {
+		return false, fmt.Errorf("reset paru plugin: %w", err)
 	}
-	return ensureSymlink(filepath.Join(misePluginsDir, filepath.Base(sourceDir)), sourceDir)
+	if err := os.MkdirAll(misePluginsDir, 0o755); err != nil {
+		return false, fmt.Errorf("create mise plugins dir: %w", err)
+	}
+	if err := WritePlugin(target); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-// ensureSymlink makes link a symlink to target. A correct link is left as-is;
-// a missing, dangling, or mis-pointing symlink is (re)created; a non-symlink
-// entry (real file/dir) is untouched (not dotdrift's to remove).
-func ensureSymlink(link, target string) error {
-	if fi, err := os.Lstat(link); err == nil {
-		if fi.Mode()&os.ModeSymlink == 0 {
-			return nil // real file/dir — leave it
-		}
-		if got, err := os.Readlink(link); err == nil && got == target {
-			return nil // already correct
-		}
-		if err := os.Remove(link); err != nil {
-			return fmt.Errorf("remove stale paru plugin link: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat paru plugin link: %w", err)
+// pluginUpToDate reports whether target is a real directory whose files hash
+// to the embedded plugin's hash. A missing target, a symlink, or any read/hash
+// error means not up to date (so EnsureInstalled recopies).
+func pluginUpToDate(target string) bool {
+	fi, err := os.Lstat(target)
+	if err != nil || !fi.IsDir() {
+		return false
 	}
-	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
-		return fmt.Errorf("create mise plugins dir: %w", err)
+	got, err := installedHash(target)
+	return err == nil && got == embeddedHash()
+}
+
+type pluginFile struct{ path, content string }
+
+func pluginFiles() []pluginFile {
+	return []pluginFile{
+		{"metadata.lua", metadataLua},
+		{"mise.plugin.toml", misePluginToml},
+		{"hooks/package_installed.lua", packageInstalledLua},
+		{"hooks/package_install.lua", packageInstallLua},
 	}
-	if err := os.Symlink(target, link); err != nil {
-		return fmt.Errorf("link paru plugin into mise: %w", err)
+}
+
+// embeddedHash is the SHA-256 of the embedded plugin's path:content pairs.
+func embeddedHash() string {
+	h := sha256.New()
+	for _, f := range pluginFiles() {
+		io.WriteString(h, f.path)
+		h.Write([]byte{0})
+		io.WriteString(h, f.content)
+		h.Write([]byte{0})
 	}
-	return nil
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// installedHash hashes the plugin files under dir over the same path:content
+// pairs as embeddedHash. A missing/unreadable file yields an error so the
+// caller treats the plugin as out of date.
+func installedHash(dir string) (string, error) {
+	h := sha256.New()
+	for _, f := range pluginFiles() {
+		b, err := os.ReadFile(filepath.Join(dir, f.path))
+		if err != nil {
+			return "", err
+		}
+		io.WriteString(h, f.path)
+		h.Write([]byte{0})
+		h.Write(b)
+		h.Write([]byte{0})
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }

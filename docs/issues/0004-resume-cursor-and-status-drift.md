@@ -1,13 +1,13 @@
 # ISSUE 0004: Resume-cursor-only state and status drift report
 
 - **Type**: feature
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [state, status]
 - **Assignee**: none
 - **Related**: [ADR-0004](../adr/0004-delegate-convergence-to-mise-bootstrap.md), [contract invariants 2, 4, 10, 11](../product/contract.md)
 - **Related code**: [`internal/state/`](../../internal/state/), [`internal/apply/`](../../internal/apply/), [`internal/drift/`](../../internal/drift/), [`cmd/`](../../cmd/)
-- **Closing commits**: none
+- **Closing commits**: ea2e1e3
 
 ## Summary
 

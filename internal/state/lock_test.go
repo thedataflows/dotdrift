@@ -15,15 +15,12 @@ func TestFileStore_saveLoadWithLock(t *testing.T) {
 	dir := t.TempDir()
 	fs := state.NewFileStore(filepath.Join(dir, "state.json"))
 
-	s := state.New()
-	s.Selection = "abc"
-	s.MarkComplete("packages")
+	s := &state.State{LastCompleted: "packages"}
 	require.NoError(t, fs.Save(s))
 
 	loaded, err := fs.Load()
 	require.NoError(t, err)
-	require.Equal(t, "abc", loaded.Selection)
-	require.True(t, loaded.IsCompleted("packages"))
+	require.Equal(t, "packages", loaded.LastCompleted)
 }
 
 func TestFileStore_concurrentSaveLoad(t *testing.T) {
@@ -36,8 +33,7 @@ func TestFileStore_concurrentSaveLoad(t *testing.T) {
 		go func(n int) {
 			defer wg.Done()
 			for j := 0; j < 20; j++ {
-				s := state.New()
-				s.Selection = fmt.Sprintf("worker-%d-%d", n, j)
+				s := &state.State{LastCompleted: fmt.Sprintf("worker-%d-%d", n, j)}
 				require.NoError(t, fs.Save(s))
 				_, err := fs.Load()
 				require.NoError(t, err)

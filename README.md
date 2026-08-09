@@ -131,7 +131,7 @@ Mounts and shares are declared as `[mounts.<name>]` and `[smb]` / `[smb.shares.<
 
 See `docs/product/cli-surface.md` for the full flag reference, and `docs/product/migrate-pimp-my-cachyos.md` for a worked migration. See `examples/simple/` for a minimal single-module profile, and `examples/profile/` for a multi-layer example with host and user overlays.
 
-> **Note:** `dotdrift apply` stores resume state and generated mise config under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`), so the profile directory is never polluted with runtime state. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
+> **Note:** `dotdrift apply` stores the resume cursor while applying (and generated mise config) under the XDG state directory (`$XDG_STATE_HOME/dotdrift/`, defaulting to `~/.local/state/dotdrift/`), so the profile directory is never polluted with runtime state. The cursor file is deleted on completion, so a successful apply leaves no state file. `dotdrift onboard` does the same (`.../profiles/<hash>/onboard/mise.toml`); pass `--yes` to answer mise prompts non-interactively.
 
 > **sudo warning:** `dotdrift` resolves the username from the OS account, not `$USER`. Running `sudo dotdrift apply` selects **root's** overlays and writes into root's `HOME`. To manage your own dotfiles, run `dotdrift` as your normal user; use `sudo` only if you intentionally maintain a `users/root/` overlay.
 
@@ -143,8 +143,8 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift detect` | Print host/user/os/kernel/distro/gpu/backend facts. |
 | `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules). |
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
-| `dotdrift apply [--yes] [--no-hooks] [--verbose] [modules...]` | Run the full pipeline and resume from state (optionally limited to the listed modules). |
-| `dotdrift status` | Show resume cursor, selection, and last error. |
+| `dotdrift apply [--yes] [--no-hooks] [--verbose] [modules...]` | Run the full pipeline and resume from the last successful step (the cursor file is deleted on completion; optionally limited to the listed modules). |
+| `dotdrift status` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Exits 0 even when drift is found. |
 | `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 
@@ -172,7 +172,7 @@ With no ids the behavior is unchanged.
 - **Unknown id** — a loud error naming the unknown ids and listing the valid module ids.
 - **Selected but skipped** — naming a module that exists but is not selected (disabled via `[modules] disable` or excluded by a `when` filter) is also an error, naming it and its skip reason. The filter never resurrects skipped modules.
 
-> **Resume caveat:** a filtered apply changes the selection fingerprint, so the resume state resets (with the standard warning) on the first scoped run. Alternating scoped and unscoped applies resets the cursor each time.
+> **Resume caveat:** the resume cursor is a bare step name. A filtered apply that resumes from another run's cursor cannot detect the scope change, so it may skip steps the filtered run would have executed — delete the state file (path shown by `dotdrift status`) to force a full run.
 
 ## Testing
 
@@ -195,8 +195,8 @@ Each container builds dotdrift from this repo, onboards a live file with a real 
 - a real package install (`apt` on the debian family, `pacman`/`paru` on CachyOS) of a leaf package (`jq`);
 - dotfile symlinking;
 - `pre`/`post` hooks executed as mise tasks;
-- resume no-op on a second apply;
-- complete state on disk; and
+- a second apply runs the full pipeline again;
+- no state file left on disk; and
 - no runtime pollution inside the profile.
 
 The CachyOS image is the first coverage of dotdrift's Arch backend (`paru -S` install + `pacman -Q` idempotency); it ships `paru` from the CachyOS binary repo, so no AUR build is needed. The suite runs on push to `main` via `.github/workflows/e2e.yml`; the offline `go test ./...` gate is unchanged.

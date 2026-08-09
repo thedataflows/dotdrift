@@ -14,38 +14,11 @@ func TestState_roundTrip(t *testing.T) {
 	dir := t.TempDir()
 	store := state.NewFileStore(filepath.Join(dir, "state.json"))
 
-	s := state.New()
-	s.Selection = "fp1"
-	s.Completed["packages"] = true
-	s.Current = "tools"
-	s.Status = state.StatusInProgress
-	s.Error = "none"
-
-	require.NoError(t, store.Save(s))
+	require.NoError(t, store.Save(&state.State{LastCompleted: "tools"}))
 
 	loaded, err := store.Load()
 	require.NoError(t, err)
-	require.Equal(t, s.Selection, loaded.Selection)
-	require.True(t, loaded.Completed["packages"])
-	require.Equal(t, s.Current, loaded.Current)
-	require.Equal(t, s.Status, loaded.Status)
-	require.Equal(t, s.Error, loaded.Error)
-}
-
-func TestState_resetForSelection(t *testing.T) {
-	s := state.New()
-	s.Selection = "fp1"
-	s.Completed["packages"] = true
-	s.Current = "tools"
-	s.Status = state.StatusFailed
-	s.Error = "boom"
-
-	s.ResetForSelection()
-	require.Empty(t, s.Completed)
-	require.Empty(t, s.Current)
-	require.Empty(t, s.Error)
-	require.Equal(t, state.StatusFresh, s.Status)
-	require.Equal(t, "fp1", s.Selection)
+	require.Equal(t, "tools", loaded.LastCompleted)
 }
 
 func TestState_loadMissingReturnsFresh(t *testing.T) {
@@ -55,9 +28,7 @@ func TestState_loadMissingReturnsFresh(t *testing.T) {
 	s, err := store.Load()
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	require.Empty(t, s.Selection)
-	require.Empty(t, s.Completed)
-	require.Equal(t, state.StatusFresh, s.Status)
+	require.Empty(t, s.LastCompleted)
 }
 
 func TestState_loadCorruptReturnsError(t *testing.T) {
@@ -72,22 +43,21 @@ func TestState_loadCorruptReturnsError(t *testing.T) {
 	require.Contains(t, err.Error(), path, "corrupt state error should name the state file")
 }
 
-func TestState_markCompleteAndFailed(t *testing.T) {
-	s := state.New()
-	require.False(t, s.IsCompleted("packages"))
+func TestState_removeDeletesFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	store := state.NewFileStore(path)
+	require.NoError(t, store.Save(&state.State{LastCompleted: "packages"}))
 
-	s.MarkComplete("packages")
-	require.True(t, s.IsCompleted("packages"))
-	require.Equal(t, state.StatusInProgress, s.Status)
-	require.Empty(t, s.Current)
+	require.NoError(t, store.Remove())
+	_, err := os.Stat(path)
+	require.True(t, os.IsNotExist(err), "state file must be removed after Remove")
+}
 
-	s.MarkFailed("tools", nil)
-	require.Equal(t, "tools", s.Current)
-	require.Equal(t, state.StatusFailed, s.Status)
-
-	s.MarkCompletePipeline()
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.Empty(t, s.Current)
+func TestState_removeMissingIsNil(t *testing.T) {
+	dir := t.TempDir()
+	store := state.NewFileStore(filepath.Join(dir, "never", "state.json"))
+	require.NoError(t, store.Remove(), "Remove on a never-saved path must not error")
 }
 
 func TestProfileStatePath(t *testing.T) {

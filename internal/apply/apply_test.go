@@ -26,63 +26,42 @@ func (s *fakeStep) Run(ctx context.Context) error {
 	return nil
 }
 
+func threeSteps(order *[]string) []apply.Step {
+	return []apply.Step{
+		&fakeStep{name: "packages", run: func() error { *order = append(*order, "packages"); return nil }},
+		&fakeStep{name: "tools", run: func() error { *order = append(*order, "tools"); return nil }},
+		&fakeStep{name: "dotfiles", run: func() error { *order = append(*order, "dotfiles"); return nil }},
+	}
+}
+
 func TestStepOrder_packagesToolsDotfiles(t *testing.T) {
 	var order []string
-	steps := []apply.Step{
-		&fakeStep{name: "packages", run: func() error { order = append(order, "packages"); return nil }},
-		&fakeStep{name: "tools", run: func() error { order = append(order, "tools"); return nil }},
-		&fakeStep{name: "dotfiles", run: func() error { order = append(order, "dotfiles"); return nil }},
-	}
-
 	var saved *state.State
-	pipeline := apply.NewPipeline(steps, func(s *state.State) error { saved = s; return nil })
+	pipeline := apply.NewPipeline(threeSteps(&order), func(s *state.State) error { saved = s; return nil })
 	pipeline.SetState(state.New())
 	require.NoError(t, pipeline.Run(context.Background()))
 	require.Equal(t, []string{"packages", "tools", "dotfiles"}, order)
-	require.Equal(t, state.StatusComplete, saved.Status)
+	require.Equal(t, "dotfiles", saved.LastCompleted)
 }
 
-func TestApply_continuesAfterFailure(t *testing.T) {
-	boom := errors.New("boom")
-	steps := []apply.Step{
-		&fakeStep{name: "packages"},
-		&fakeStep{name: "tools", run: func() error { return boom }},
-		&fakeStep{name: "dotfiles"},
-	}
-
-	s := state.New()
-	s.Completed["packages"] = true
-
-	pipeline := apply.NewPipeline(steps, func(*state.State) error { return nil })
-	pipeline.SetState(s)
-	err := pipeline.Run(context.Background())
-	require.Error(t, err)
-	require.ErrorIs(t, err, boom)
-
-	final := pipeline.State()
-	require.Equal(t, "tools", final.Current)
-	require.Equal(t, state.StatusFailed, final.Status)
-	require.True(t, final.IsCompleted("packages"))
-	require.False(t, final.IsCompleted("tools"))
-}
-
-func TestApply_successRerunsFullPipeline(t *testing.T) {
-	step := &fakeStep{name: "packages"}
-	pipeline := apply.NewPipeline([]apply.Step{step}, func(*state.State) error { return nil })
-
-	pipeline.SetState(state.New())
+func TestApply_resumesAfterCursor(t *testing.T) {
+	var order []string
+	pipeline := apply.NewPipeline(threeSteps(&order), func(*state.State) error { return nil })
+	pipeline.SetState(&state.State{LastCompleted: "packages"})
 	require.NoError(t, pipeline.Run(context.Background()))
-	require.Equal(t, 1, step.runs)
-	require.Equal(t, state.StatusComplete, pipeline.State().Status)
-
-	// After a successful run, a fresh pipeline should rerun the step.
-	pipeline2 := apply.NewPipeline([]apply.Step{step}, func(*state.State) error { return nil })
-	pipeline2.SetState(pipeline.State())
-	require.NoError(t, pipeline2.Run(context.Background()))
-	require.Equal(t, 2, step.runs)
+	// packages is skipped (it is the cursor); tools and dotfiles run.
+	require.Equal(t, []string{"tools", "dotfiles"}, order)
 }
 
-func TestApply_failurePersistsFailedState(t *testing.T) {
+func TestApply_unknownCursorRunsAllSteps(t *testing.T) {
+	var order []string
+	pipeline := apply.NewPipeline(threeSteps(&order), func(*state.State) error { return nil })
+	pipeline.SetState(&state.State{LastCompleted: "bogus"})
+	require.NoError(t, pipeline.Run(context.Background()))
+	require.Equal(t, []string{"packages", "tools", "dotfiles"}, order)
+}
+
+func TestApply_failureKeepsCursorOnDisk(t *testing.T) {
 	boom := errors.New("boom")
 	steps := []apply.Step{
 		&fakeStep{name: "packages"},
@@ -97,9 +76,14 @@ func TestApply_failurePersistsFailedState(t *testing.T) {
 
 	onDisk, err := store.Load()
 	require.NoError(t, err)
-	require.Equal(t, state.StatusFailed, onDisk.Status)
-	require.Equal(t, "tools", onDisk.Current)
-	require.Contains(t, onDisk.Error, "boom")
-	require.True(t, onDisk.IsCompleted("packages"))
-	require.False(t, onDisk.IsCompleted("tools"))
+	require.Equal(t, "packages", onDisk.LastCompleted, "cursor must name the last successful step")
+}
+
+func TestApply_stateAccessor(t *testing.T) {
+	var order []string
+	pipeline := apply.NewPipeline(threeSteps(&order), func(*state.State) error { return nil })
+	pipeline.SetState(state.New())
+	require.Empty(t, pipeline.State().LastCompleted)
+	require.NoError(t, pipeline.Run(context.Background()))
+	require.Equal(t, "dotfiles", pipeline.State().LastCompleted)
 }

@@ -1,4 +1,4 @@
-// Package state persists resume-only state for dotdrift apply.
+// Package state persists the apply resume cursor.
 package state
 
 import (
@@ -11,84 +11,16 @@ import (
 	"syscall"
 )
 
-// Status values for the apply pipeline.
-const (
-	StatusFresh      = "fresh"
-	StatusInProgress = "in-progress"
-	StatusComplete   = "complete"
-	StatusFailed     = "failed"
-)
-
-// State holds the resume cursor and last error.
+// State holds the apply resume cursor: the last successfully completed
+// pipeline step. The file is deleted when the pipeline completes, so a
+// missing file means "start from the beginning".
 type State struct {
-	Selection string `json:"selection"`
-	// PlanHash is a content hash of the resolved plan; a change since the last
-	// apply resets resume state (selection alone covers which modules ran, not
-	// what they resolved to).
-	PlanHash  string          `json:"planHash"`
-	Completed map[string]bool `json:"completed"`
-	Current   string          `json:"current"`
-	Status    string          `json:"status"`
-	Error     string          `json:"error"`
+	LastCompleted string `json:"lastCompleted,omitempty"`
 }
 
-// New returns a fresh state with initialized maps.
+// New returns a fresh state (no step completed yet).
 func New() *State {
-	return &State{
-		Completed: make(map[string]bool),
-		Status:    StatusFresh,
-	}
-}
-
-// IsCompleted reports whether a step has been completed.
-func (s *State) IsCompleted(step string) bool {
-	if s.Completed == nil {
-		return false
-	}
-	return s.Completed[step]
-}
-
-// MarkComplete records a step as completed and clears the current step/error.
-func (s *State) MarkComplete(step string) {
-	if s.Completed == nil {
-		s.Completed = make(map[string]bool)
-	}
-	s.Completed[step] = true
-	s.Current = ""
-	s.Error = ""
-	s.Status = StatusInProgress
-}
-
-// MarkFailed records a step as the current failed step and stores the error.
-func (s *State) MarkFailed(step string, err error) {
-	s.Current = step
-	s.Status = StatusFailed
-	if err != nil {
-		s.Error = err.Error()
-	} else {
-		s.Error = ""
-	}
-}
-
-// MarkCompletePipeline marks the pipeline as fully complete.
-func (s *State) MarkCompletePipeline() {
-	s.Current = ""
-	s.Error = ""
-	s.Status = StatusComplete
-}
-
-// ResetForSelection clears runtime progress when the selection fingerprint changes.
-func (s *State) ResetForSelection() {
-	s.Completed = make(map[string]bool)
-	s.Current = ""
-	s.Error = ""
-	s.Status = StatusFresh
-}
-
-// Store persists state.
-type Store interface {
-	Load() (*State, error)
-	Save(s *State) error
+	return &State{}
 }
 
 // FileStore saves state to a JSON file.
@@ -230,12 +162,6 @@ func (fs *FileStore) Load() (*State, error) {
 	if err := json.NewDecoder(f).Decode(&s); err != nil {
 		return nil, fmt.Errorf("decode state: %w (remove or move aside %s to start fresh)", err, fs.Path)
 	}
-	if s.Completed == nil {
-		s.Completed = make(map[string]bool)
-	}
-	if s.Status == "" {
-		s.Status = StatusFresh
-	}
 	return &s, nil
 }
 
@@ -274,6 +200,17 @@ func (fs *FileStore) Save(s *State) error {
 	if err := os.Rename(tmp.Name(), fs.Path); err != nil {
 		_ = os.Remove(tmp.Name())
 		return fmt.Errorf("rename state tmp: %w", err)
+	}
+	return nil
+}
+
+// Remove deletes the state file; a missing file is not an error.
+func (fs *FileStore) Remove() error {
+	if fs.Path == "" {
+		return errNoPath
+	}
+	if err := os.Remove(fs.Path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove state: %w", err)
 	}
 	return nil
 }

@@ -45,12 +45,14 @@ is irreducible and stays: `internal/resolve`, `internal/profile`,
 
 Resume is the one invariant mise does not provide. mise bootstrap is
 convergent (it skips anything already in its desired state), but it has no
-cross-run cursor tied to a selection fingerprint or a resolved-plan content
-hash — it cannot know that a module's content was edited or that host
-selection changed. dotdrift keeps its resume layer
-([contract](../product/contract.md) invariants 2, 10, 11) as a thin
-orchestrator that decides "what changed?" then drives `mise bootstrap
---only/--skip <phases>` slices. dotdrift stays the brain; mise is the hands.
+cross-run cursor — it cannot resume a multi-phase pipeline partway through.
+dotdrift keeps its resume layer ([contract](../product/contract.md)
+invariants 2, 11) as a thin orchestrator that records the last completed step
+and drives `mise bootstrap --only/--skip <phases>` slices. dotdrift stays the
+brain; mise is the hands. (Issue
+[0004](../issues/0004-resume-cursor-and-status-drift.md) simplified the cursor
+to a last-successful-step name, deleted on completion; the selection
+fingerprint and resolved-plan content hash were retired.)
 
 The tensions surfaced by the delegation are resolved as follows (tracked in [issue 0002](../issues/0002-delegate-convergence-to-mise-bootstrap.md) for the delegation and [issue 0003](../issues/0003-paru-mise-package-plugin.md) for the paru provider):
 
@@ -75,10 +77,11 @@ The tensions surfaced by the delegation are resolved as follows (tracked in [iss
    (hash-gated, real files, no symlink) and the apply runs only
    `mise bootstrap --only packages`.
 2. **Resume semantics — kept.** dotdrift's resume layer (contract invariants
-   2, 10, 11) survives as a thin orchestrator over `mise bootstrap --only`/
-   `--skip <phases>`. mise bootstrap is convergent but has no cross-run cursor
-   tied to selection fingerprint + plan content hash; dotdrift decides "what
-   changed?" then drives the right phase slices.
+   2, 11) survives as a thin orchestrator over `mise bootstrap --only`/
+   `--skip <phases>`. mise bootstrap is convergent but has no cross-run cursor;
+   dotdrift records the last completed pipeline step and drives the right
+   phase slices (issue 0004 simplified the cursor to a last-successful-step
+   name, deleted on completion).
 3. **Verbosity — kept.** dotdrift's `-v` (`+ argv` echo to stderr, live
    streaming, probes always silent) wraps the `mise bootstrap` invocation at
    the dotdrift to mise boundary. Plugin-internal output is mise's concern.

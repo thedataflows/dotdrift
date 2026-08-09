@@ -30,43 +30,43 @@ func NewPipeline(steps []Step, save func(*state.State) error) *Pipeline {
 	}
 }
 
-// SetState sets the initial state. It should be reset for selection changes before calling.
+// SetState sets the initial state (the loaded resume cursor).
 func (p *Pipeline) SetState(s *state.State) {
 	p.state = s
 }
 
-// Run executes the pipeline from the first incomplete step.
+// Run executes the pipeline, skipping steps through the persisted cursor.
+// A cursor naming a step absent from this run (stale or from a different
+// selection) is ignored: all steps run.
 func (p *Pipeline) Run(ctx context.Context) error {
-	if p.state.Status == state.StatusComplete {
-		// Always rerun full pipeline on success; preserve selection fingerprint.
-		selection := p.state.Selection
-		p.state = state.New()
-		p.state.Selection = selection
+	skipThrough := p.state.LastCompleted
+	if skipThrough != "" {
+		known := false
+		for _, st := range p.steps {
+			if st.Name() == skipThrough {
+				known = true
+				break
+			}
+		}
+		if !known {
+			skipThrough = ""
+		}
 	}
-	p.state.Status = state.StatusInProgress
 
 	for _, step := range p.steps {
-		if p.state.IsCompleted(step.Name()) {
+		if skipThrough != "" {
+			if step.Name() == skipThrough {
+				skipThrough = ""
+			}
 			continue
 		}
-		p.state.Current = step.Name()
-		if err := p.save(p.state); err != nil {
-			return fmt.Errorf("persist state before %s: %w", step.Name(), err)
-		}
 		if err := step.Run(ctx); err != nil {
-			p.state.MarkFailed(step.Name(), err)
-			_ = p.save(p.state)
 			return fmt.Errorf("step %s: %w", step.Name(), err)
 		}
-		p.state.MarkComplete(step.Name())
+		p.state.LastCompleted = step.Name()
 		if err := p.save(p.state); err != nil {
-			return fmt.Errorf("persist state after %s: %w", step.Name(), err)
+			return fmt.Errorf("persist cursor after %s: %w", step.Name(), err)
 		}
-	}
-
-	p.state.MarkCompletePipeline()
-	if err := p.save(p.state); err != nil {
-		return fmt.Errorf("persist final state: %w", err)
 	}
 	return nil
 }

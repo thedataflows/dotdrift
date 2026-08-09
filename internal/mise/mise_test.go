@@ -489,3 +489,35 @@ func TestEnsureContext_cancelPropagates(t *testing.T) {
 	_, err := m.EnsureContext(ctx)
 	require.ErrorIs(t, err, context.Canceled)
 }
+
+func TestExecMise_Current_returnsTrimmedVersion(t *testing.T) {
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/usr/bin/mise", nil },
+		Run: func(name string, args ...string) (string, error) {
+			require.Equal(t, []string{"current", "node"}, args)
+			return "22.1.0\n", nil
+		},
+	}
+	got, err := mise.NewExecMise(m).Current(context.Background(), "node")
+	require.NoError(t, err)
+	require.Equal(t, "22.1.0", got)
+}
+
+func TestExecMise_Current_lookPathFailurePropagates(t *testing.T) {
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "", errors.New("not on PATH") },
+	}
+	_, err := mise.NewExecMise(m).Current(context.Background(), "node")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not on PATH")
+}
+
+func TestExecMise_Current_runFailurePropagates(t *testing.T) {
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/usr/bin/mise", nil },
+		Run:      func(string, ...string) (string, error) { return "", errors.New("no such tool") },
+	}
+	_, err := mise.NewExecMise(m).Current(context.Background(), "node")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "no such tool")
+}

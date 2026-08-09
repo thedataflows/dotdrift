@@ -67,8 +67,10 @@ func MisePluginsDir(xdgDataHome string) string {
 
 // BootstrapFile is one concrete file target for [bootstrap.files].
 type BootstrapFile struct {
-	Target   string
-	Source   string
+	Target string
+	Source string
+	Mode   string // copy | symlink | symlink-each | template (informative; GenerateBootstrapFiles ignores it)
+
 	Template bool
 }
 
@@ -95,6 +97,7 @@ func ResolveBootstrapFiles(entries []resolve.DotfileEntry, sourceRoot, homeDir s
 				out = append(out, BootstrapFile{
 					Target: filepath.Join(target, f.Name()),
 					Source: filepath.Join(sourceAbs, f.Name()),
+					Mode:   "symlink",
 				})
 			}
 			continue
@@ -102,6 +105,7 @@ func ResolveBootstrapFiles(entries []resolve.DotfileEntry, sourceRoot, homeDir s
 		out = append(out, BootstrapFile{
 			Target:   target,
 			Source:   sourceAbs,
+			Mode:     e.Mode,
 			Template: e.Mode == "template",
 		})
 	}

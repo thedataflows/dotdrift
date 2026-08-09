@@ -1,0 +1,619 @@
+package drift_test
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/resolve"
+)
+
+// --- helpers ---
+
+// fakeProbes returns DefaultProbes with no-op IsInstalled/ToolCurrent so Check
+// never dereferences a nil; tests override the field under test.
+func fakeProbes() drift.Probes {
+	pr := drift.DefaultProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return false, errors.New("not wired") }
+	pr.ToolCurrent = func(context.Context, string) (string, error) { return "", errors.New("not wired") }
+	return pr
+}
+
+func section(findings []drift.Finding, sec string) []drift.Finding {
+	var out []drift.Finding
+	for _, f := range findings {
+		if f.Section == sec {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func findByItem(t *testing.T, findings []drift.Finding, item string) drift.Finding {
+	t.Helper()
+	for _, f := range findings {
+		if f.Item == item {
+			return f
+		}
+	}
+	t.Fatalf("no finding with item %q in %v", item, findings)
+	return drift.Finding{}
+}
+
+// runFake builds a Run probe keyed by "name args...".
+func runFake(responses map[string]string, errs map[string]error) func(context.Context, string, ...string) (string, error) {
+	return func(_ context.Context, name string, args ...string) (string, error) {
+		key := strings.Join(append([]string{name}, args...), " ")
+		if err, ok := errs[key]; ok {
+			return "", err
+		}
+		return responses[key], nil
+	}
+}
+
+func check(ctx context.Context, plan *resolve.Plan, pr drift.Probes) []drift.Finding {
+	return drift.Check(ctx, plan, "", pr)
+}
+
+// --- packages ---
+
+func TestCheck_packagesInstallMissing(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return false, nil }
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{Install: []string{"ripgrep"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "ripgrep")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Equal(t, "missing", f.Detail)
+}
+
+func TestCheck_packagesInstallPresent(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return true, nil }
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{Install: []string{"ripgrep"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "ripgrep")
+	require.Equal(t, drift.OK, f.Status)
+}
+
+func TestCheck_packagesRemoveStillInstalled(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return true, nil }
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{Remove: []string{"nano"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "nano")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Equal(t, "still installed", f.Detail)
+}
+
+func TestCheck_packagesRemoveAbsent(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return false, nil }
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{Remove: []string{"nano"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "nano")
+	require.Equal(t, drift.OK, f.Status)
+}
+
+func TestCheck_packagesProbeError(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return false, errors.New("dpkg query failed") }
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{Install: []string{"jq"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "jq")
+	require.Equal(t, drift.Unknown, f.Status)
+	require.Contains(t, f.Detail, "dpkg query failed")
+}
+
+// --- tools ---
+
+func TestCheck_toolsMatch(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) { return "22", nil }
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "node")
+	require.Equal(t, drift.OK, f.Status)
+}
+
+func TestCheck_toolsPrefixMatch(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) { return "22.1.0", nil }
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "node")
+	require.Equal(t, drift.OK, f.Status, "22.1.0 satisfies want 22 via prefix match")
+}
+
+func TestCheck_toolsMismatch(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) { return "20.0.0", nil }
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "node")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Equal(t, "installed 20.0.0, want 22", f.Detail)
+}
+
+func TestCheck_toolsMiseMissing(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) { return "", errors.New("mise: not found") }
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "node")
+	require.Equal(t, drift.Unknown, f.Status)
+	require.Contains(t, f.Detail, "mise not available")
+}
+
+func TestCheck_toolsSortedByName(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) { return "1", nil }
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"zls": "1", " node": "1", "aardvark": "1"}}}
+	// drop the stray-space entry to keep it simple
+	plan.Tools.Versions = map[string]string{"zls": "1", "node": "1", "aardvark": "1"}
+	fs := section(check(context.Background(), plan, pr), "tools")
+	var names []string
+	for _, f := range fs {
+		names = append(names, f.Item)
+	}
+	require.Equal(t, []string{"aardvark", "node", "zls"}, names, "tools must be sorted by name")
+}
+
+// --- dotfiles (real files on disk + DefaultProbes) ---
+
+func dotfilePlan(entries ...resolve.DotfileEntry) *resolve.Plan {
+	return &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: entries}}
+}
+
+func TestCheck_dotfilesSymlinkOK(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "bashrc")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	tgt := filepath.Join(t.TempDir(), ".bashrc")
+	require.NoError(t, os.Symlink(src, tgt))
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr)
+	require.Len(t, fs, 1)
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_dotfilesSymlinkWrongTarget(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "bashrc")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	other := filepath.Join(root, "other")
+	require.NoError(t, os.WriteFile(other, []byte("y"), 0o644))
+	tgt := filepath.Join(t.TempDir(), ".bashrc")
+	require.NoError(t, os.Symlink(other, tgt))
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Contains(t, fs[0].Detail, "points to")
+}
+
+func TestCheck_dotfilesSymlinkMissing(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "bashrc")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	tgt := filepath.Join(t.TempDir(), ".bashrc") // never created
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "missing", fs[0].Detail)
+}
+
+func TestCheck_dotfilesCopyEqual(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "foo")
+	require.NoError(t, os.WriteFile(src, []byte("same"), 0o644))
+	tgt := filepath.Join(t.TempDir(), "foo")
+	require.NoError(t, os.WriteFile(tgt, []byte("same"), 0o644))
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr)
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_dotfilesCopyDiffers(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "foo")
+	require.NoError(t, os.WriteFile(src, []byte("new"), 0o644))
+	tgt := filepath.Join(t.TempDir(), "foo")
+	require.NoError(t, os.WriteFile(tgt, []byte("old"), 0o644))
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "content differs", fs[0].Detail)
+}
+
+func TestCheck_dotfilesCopyMissingTarget(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "foo")
+	require.NoError(t, os.WriteFile(src, []byte("new"), 0o644))
+	tgt := filepath.Join(t.TempDir(), "foo") // absent
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "missing", fs[0].Detail)
+}
+
+func TestCheck_dotfilesTemplateExists(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "cfg")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	tgt := filepath.Join(t.TempDir(), "cfg")
+	require.NoError(t, os.WriteFile(tgt, []byte("rendered"), 0o644))
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "template"}), root, pr)
+	require.Equal(t, drift.OK, fs[0].Status, "template is existence-only; rendered content is not compared")
+}
+
+func TestCheck_dotfilesTemplateMissing(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "cfg")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	tgt := filepath.Join(t.TempDir(), "cfg") // absent
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "template"}), root, pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "missing", fs[0].Detail)
+}
+
+func TestCheck_dotfilesSymlinkEachPerChild(t *testing.T) {
+	root := t.TempDir()
+	srcDir := filepath.Join(root, "units")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "a.mount"), []byte("x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "b.timer"), []byte("x"), 0o644))
+	tgtDir := filepath.Join(t.TempDir(), "system")
+	require.NoError(t, os.MkdirAll(tgtDir, 0o755))
+	// Create real symlinks for both children.
+	require.NoError(t, os.Symlink(filepath.Join(srcDir, "a.mount"), filepath.Join(tgtDir, "a.mount")))
+	require.NoError(t, os.Symlink(filepath.Join(srcDir, "b.timer"), filepath.Join(tgtDir, "b.timer")))
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgtDir, Source: "units", Mode: "symlink-each"}), root, pr)
+	require.Len(t, fs, 2, "symlink-each expands to one finding per child")
+	for _, f := range fs {
+		require.Equal(t, drift.OK, f.Status)
+	}
+}
+
+func TestCheck_dotfilesExpansionError(t *testing.T) {
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	// symlink-each against a missing source dir → ResolveBootstrapFiles errors.
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: "/etc/x", Source: "nope", Mode: "symlink-each"}), t.TempDir(), pr)
+	require.Len(t, fs, 1)
+	require.Equal(t, drift.Unknown, fs[0].Status)
+}
+
+func mountPlan(spec profile.MountSpec) *resolve.Plan {
+	return &resolve.Plan{Mounts: resolve.MountsStep{Entries: []resolve.MountEntry{
+		{Name: "m", Spec: spec, Module: "mod"},
+	}}}
+}
+
+func mountProbes(t *testing.T, isEnabledOut, isActiveOut string, runErr error) drift.Probes {
+	t.Helper()
+	pr := fakeProbes()
+	pr.StatDir = func(string) (bool, error) { return true, nil }
+	unit := "mnt-data" // generate.EscapePath("/mnt/data")
+	pr.Run = func(_ context.Context, name string, args ...string) (string, error) {
+		key := strings.Join(append([]string{name}, args...), " ")
+		switch key {
+		case "systemctl is-enabled " + unit + ".mount":
+			if runErr != nil {
+				return "", runErr
+			}
+			return isEnabledOut, nil
+		case "systemctl is-active " + unit + ".mount":
+			return isActiveOut, nil
+		}
+		return "", errors.New("unexpected run: " + key)
+	}
+	return pr
+}
+
+func TestCheck_mountEnabledOK(t *testing.T) {
+	pr := mountProbes(t, "enabled", "active", nil)
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "enabled"}), pr)
+	require.Len(t, fs, 1)
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_mountNotEnabled(t *testing.T) {
+	pr := mountProbes(t, "disabled", "", nil)
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "enabled"}), pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "not enabled", fs[0].Detail)
+}
+
+func TestCheck_mountNotActive(t *testing.T) {
+	pr := mountProbes(t, "enabled", "inactive", nil)
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "enabled"}), pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "not active", fs[0].Detail)
+}
+
+func TestCheck_mountDisabledOK(t *testing.T) {
+	pr := mountProbes(t, "disabled", "", nil)
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "disabled"}), pr)
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_mountDisabledButEnabled(t *testing.T) {
+	pr := mountProbes(t, "enabled", "active", nil)
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "disabled"}), pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Contains(t, fs[0].Detail, "enabled but declared disabled")
+}
+
+func TestCheck_mountUnitNotFound(t *testing.T) {
+	pr := mountProbes(t, "", "", errors.New("exit 1"))
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "enabled"}), pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "unit not found", fs[0].Detail)
+}
+
+func TestCheck_mountDestinationMissing(t *testing.T) {
+	pr := fakeProbes()
+	pr.StatDir = func(string) (bool, error) { return false, nil }
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "enabled"}), pr)
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "destination missing", fs[0].Detail)
+}
+
+func TestCheck_mountUnexpectedIsEnabled(t *testing.T) {
+	pr := mountProbes(t, "masked", "", nil)
+	fs := check(context.Background(), mountPlan(profile.MountSpec{Destination: "/mnt/data", State: "enabled"}), pr)
+	require.Equal(t, drift.Unknown, fs[0].Status)
+	require.Contains(t, fs[0].Detail, "unexpected is-enabled output")
+}
+
+// --- smb ---
+
+func smbPlan(mod resolve.SmbModuleSpec) *resolve.Plan {
+	return &resolve.Plan{Smb: resolve.SmbStep{Modules: []resolve.SmbModuleSpec{mod}}}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+func TestCheck_smbGroupMissing(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(nil, map[string]error{"getent group smb": errors.New("no")})
+	fs := section(check(context.Background(), smbPlan(resolve.SmbModuleSpec{Spec: profile.SmbSpec{}}), pr), "smb")
+	// group missing + smb service (unit not found) + avahi service (unit not found)
+	grp := findByItem(t, fs, "smb")
+	// "smb" appears as both group finding and service finding; the group one is Drift.
+	foundDrift := false
+	for _, f := range fs {
+		if f.Item == "smb" && f.Status == drift.Drift && strings.Contains(f.Detail, "group smb missing") {
+			foundDrift = true
+		}
+	}
+	require.True(t, foundDrift, "group smb missing drift finding must be present in %v", fs)
+	_ = grp
+}
+
+func TestCheck_smbUserMissing(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(
+		map[string]string{"getent group smb": "smb"},
+		map[string]error{"id -Gn alice": errors.New("no such user")},
+	)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Users: []string{"alice"}}}
+	f := findByItem(t, check(context.Background(), smbPlan(mod), pr), "alice")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Contains(t, f.Detail, "user alice missing")
+}
+
+func TestCheck_smbUserNotInGroup(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(map[string]string{
+		"getent group smb": "smb",
+		"id -Gn alice":     "users wheel",
+	}, nil)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Users: []string{"alice"}}}
+	f := findByItem(t, check(context.Background(), smbPlan(mod), pr), "alice")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Contains(t, f.Detail, "not in group")
+}
+
+func TestCheck_smbUserInGroupOK(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(map[string]string{
+		"getent group smb": "smb",
+		"id -Gn alice":     "smb wheel",
+	}, nil)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Users: []string{"alice"}}}
+	f := findByItem(t, check(context.Background(), smbPlan(mod), pr), "alice")
+	require.Equal(t, drift.OK, f.Status)
+}
+
+func TestCheck_smbServiceNotActive(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(map[string]string{
+		"systemctl is-enabled smb":          "enabled",
+		"systemctl is-active smb":           "inactive",
+		"systemctl is-enabled avahi-daemon": "enabled",
+		"systemctl is-active avahi-daemon":  "active",
+	}, nil)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{}}
+	var svc drift.Finding
+	for _, f := range check(context.Background(), smbPlan(mod), pr) {
+		if f.Item == "smb" && f.Status == drift.Drift {
+			svc = f
+		}
+	}
+	require.Equal(t, drift.Drift, svc.Status)
+	require.Equal(t, "not active", svc.Detail)
+}
+
+func TestCheck_smbShareAbsent(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(map[string]string{
+		"getent group smb":                  "smb",
+		"systemctl is-enabled smb":          "enabled",
+		"systemctl is-active smb":           "active",
+		"systemctl is-enabled avahi-daemon": "enabled",
+		"systemctl is-active avahi-daemon":  "active",
+		"testparm -s":                       "[homes]\n",
+	}, nil)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Shares: map[string]profile.ShareSpec{"media": {Path: "/srv/media"}}}}
+	f := findByItem(t, check(context.Background(), smbPlan(mod), pr), "media")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Contains(t, f.Detail, "share media not in smb config")
+}
+
+func TestCheck_smbSharePresent(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(map[string]string{
+		"getent group smb":                  "smb",
+		"systemctl is-enabled smb":          "enabled",
+		"systemctl is-active smb":           "active",
+		"systemctl is-enabled avahi-daemon": "enabled",
+		"systemctl is-active avahi-daemon":  "active",
+		"testparm -s":                       "[global]\n[media]\npath=/srv/media\n",
+	}, nil)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Shares: map[string]profile.ShareSpec{"media": {Path: "/srv/media"}}}}
+	f := findByItem(t, check(context.Background(), smbPlan(mod), pr), "media")
+	require.Equal(t, drift.OK, f.Status)
+}
+
+func TestCheck_smbTestparmFailed(t *testing.T) {
+	pr := fakeProbes()
+	pr.Run = runFake(
+		map[string]string{
+			"getent group smb":                  "smb",
+			"systemctl is-enabled smb":          "enabled",
+			"systemctl is-active smb":           "active",
+			"systemctl is-enabled avahi-daemon": "enabled",
+			"systemctl is-active avahi-daemon":  "active",
+		},
+		map[string]error{"testparm -s": errors.New("boom")},
+	)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Shares: map[string]profile.ShareSpec{"media": {Path: "/srv/media"}}}}
+	f := findByItem(t, check(context.Background(), smbPlan(mod), pr), "media")
+	require.Equal(t, drift.Unknown, f.Status)
+	require.Equal(t, "testparm failed", f.Detail)
+}
+
+func TestCheck_smbAvahiOnlyWhenEnabled(t *testing.T) {
+	// avahi unset (nil) → avahi checked; a finding for avahi-daemon appears.
+	pr := fakeProbes()
+	pr.Run = runFake(map[string]string{
+		"getent group smb":                  "smb",
+		"systemctl is-enabled smb":          "enabled",
+		"systemctl is-active smb":           "active",
+		"systemctl is-enabled avahi-daemon": "enabled",
+		"systemctl is-active avahi-daemon":  "active",
+	}, nil)
+	mod := resolve.SmbModuleSpec{Spec: profile.SmbSpec{}} // Avahi nil
+	fs := check(context.Background(), smbPlan(mod), pr)
+	require.NotEmpty(t, findByItem(t, fs, "avahi-daemon").Item)
+
+	// avahi explicitly false → avahi NOT checked.
+	off := false
+	mod2 := resolve.SmbModuleSpec{Spec: profile.SmbSpec{Avahi: &off}}
+	pr2 := fakeProbes()
+	pr2.Run = pr.Run
+	fs2 := check(context.Background(), smbPlan(mod2), pr2)
+	for _, f := range fs2 {
+		require.NotEqual(t, "avahi-daemon", f.Item, "avahi-daemon must not be checked when avahi is false")
+	}
+}
+
+// --- ordering & omission ---
+
+func TestCheck_sectionOrder(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return true, nil }
+	pr.ToolCurrent = func(_ context.Context, _ string) (string, error) { return "1", nil }
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{Install: []string{"a"}},
+		Tools:    resolve.ToolsStep{Versions: map[string]string{"t": "1"}},
+	}
+	fs := check(context.Background(), plan, pr)
+	var secs []string
+	for _, f := range fs {
+		if len(secs) == 0 || secs[len(secs)-1] != f.Section {
+			secs = append(secs, f.Section)
+		}
+	}
+	require.Equal(t, []string{"packages", "tools"}, secs)
+}
+
+func TestCheck_zeroItemSectionsOmitted(t *testing.T) {
+	pr := fakeProbes()
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{Install: []string{"a"}}}
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return true, nil }
+	fs := check(context.Background(), plan, pr)
+	for _, f := range fs {
+		require.Equal(t, "packages", f.Section, "only packages section should produce findings")
+	}
+}
+
+func TestCheck_nilPlan(t *testing.T) {
+	require.Nil(t, drift.Check(context.Background(), nil, "", fakeProbes()))
+}
+
+// --- Render ---
+
+func TestRender_mixed(t *testing.T) {
+	findings := []drift.Finding{
+		{Section: "packages", Item: "ripgrep", Status: drift.Drift, Detail: "missing"},
+		{Section: "packages", Item: "jq", Status: drift.Unknown, Detail: "dpkg query failed"},
+		{Section: "tools", Item: "node", Status: drift.OK},
+		{Section: "tools", Item: "go", Status: drift.OK},
+	}
+	var buf bytes.Buffer
+	drift.Render(&buf, findings)
+	want := "packages:\n" +
+		"  drift: ripgrep — missing\n" +
+		"  unknown: jq — dpkg query failed\n" +
+		"tools:\n" +
+		"  ok: all 2 checks passed\n" +
+		"\n" +
+		"drift: 1 item, 1 unknown\n"
+	require.Equal(t, want, buf.String())
+}
+
+func TestRender_allOK(t *testing.T) {
+	var buf bytes.Buffer
+	drift.Render(&buf, []drift.Finding{
+		{Section: "packages", Item: "ripgrep", Status: drift.OK},
+	})
+	require.Equal(t, "packages:\n  ok: all 1 checks passed\n\nno drift\n", buf.String())
+}
+
+func TestRender_noFindings(t *testing.T) {
+	var buf bytes.Buffer
+	drift.Render(&buf, nil)
+	require.Equal(t, "no drift\n", buf.String())
+}
+
+func TestRender_pluralSummary(t *testing.T) {
+	var buf bytes.Buffer
+	drift.Render(&buf, []drift.Finding{
+		{Section: "packages", Item: "a", Status: drift.Drift, Detail: "missing"},
+		{Section: "packages", Item: "b", Status: drift.Drift, Detail: "missing"},
+	})
+	require.Contains(t, buf.String(), "drift: 2 items\n")
+}

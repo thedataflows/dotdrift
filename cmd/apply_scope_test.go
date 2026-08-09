@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
-	"github.com/thedataflows/dotdrift/internal/state"
 )
 
 func scopeFixture(t *testing.T) string {
@@ -63,10 +62,8 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	require.Contains(t, string(full), "/etc/demo.conf")
 	require.Contains(t, string(full), "~/.bashrc")
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.True(t, s.IsCompleted("dotfiles"), "user dotfiles step must complete")
-	require.True(t, s.IsCompleted("dotfiles-system"), "system dotfiles step must complete")
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // Without system-scope entries there is no dotfiles-system step: no
@@ -84,9 +81,8 @@ func TestApply_noSystemEntriesSkipsDotfilesSystem(t *testing.T) {
 		require.NotContains(t, e, "dotfiles-system", "no system step must run for a user-only plan")
 	}
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.False(t, s.IsCompleted("dotfiles-system"))
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 
 	_, err := os.Stat(filepath.Join(dir, "mise", "dotfiles-system"))
 	require.True(t, os.IsNotExist(err), "no dotfiles-system config dir must be created")

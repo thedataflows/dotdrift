@@ -63,6 +63,33 @@ func TestResolveBootstrapFiles_symlinkEachMissingDir(t *testing.T) {
 	require.Error(t, err)
 }
 
+// BootstrapFile.Mode records the source mode: the entry's own mode for
+// regular entries, "symlink" for each symlink-each child.
+func TestResolveBootstrapFiles_recordsMode(t *testing.T) {
+	root := t.TempDir()
+	// template entry carries its own mode
+	tmpl, err := mise.ResolveBootstrapFiles(
+		[]resolve.DotfileEntry{{Target: "/etc/cfg", Source: "cfg", Mode: "template"}}, root, "/h")
+	require.NoError(t, err)
+	require.Equal(t, "template", tmpl[0].Mode)
+
+	// copy entry carries its own mode
+	cp, err := mise.ResolveBootstrapFiles(
+		[]resolve.DotfileEntry{{Target: "/etc/foo", Source: "foo", Mode: "copy"}}, root, "/h")
+	require.NoError(t, err)
+	require.Equal(t, "copy", cp[0].Mode)
+
+	// symlink-each children are tagged "symlink"
+	srcDir := filepath.Join(root, "units")
+	require.NoError(t, os.MkdirAll(srcDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "a.mount"), []byte("x"), 0o644))
+	se, err := mise.ResolveBootstrapFiles(
+		[]resolve.DotfileEntry{{Target: "/etc/systemd/system", Source: "units", Mode: "symlink-each"}}, root, "/h")
+	require.NoError(t, err)
+	require.Len(t, se, 1)
+	require.Equal(t, "symlink", se[0].Mode)
+}
+
 // --- GenerateBootstrapFiles ---
 
 func TestGenerateBootstrapFiles_emitsSection(t *testing.T) {

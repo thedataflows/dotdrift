@@ -2,122 +2,146 @@ package cmd
 
 import (
 	"bytes"
+	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
-func TestStatus_showsState(t *testing.T) {
+// allInstalledBackend reports every package installed; used for clean-drift
+// status tests where only the packages section is exercised.
+type allInstalledBackend struct{}
+
+var _ packages.Backend = allInstalledBackend{}
+
+func (allInstalledBackend) Present(context.Context, []string) error              { return nil }
+func (allInstalledBackend) Absent(context.Context, []string) error               { return nil }
+func (allInstalledBackend) IsInstalled(context.Context, string) (bool, error)    { return true, nil }
+func (allInstalledBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
+
+// statusMinimalProfile writes a temp profile with one module that installs a
+// single package and declares no tools/dotfiles/mounts/smb, so drift can be
+// driven entirely through the packages backend.
+func statusMinimalProfile(t *testing.T) string {
+	t.Helper()
 	dir := t.TempDir()
-	statePath := filepath.Join(dir, "state.json")
-	store := state.NewFileStore(statePath)
-	s := state.New()
-	s.Selection = "abc123"
-	s.Status = state.StatusInProgress
-	s.Current = "packages"
-	s.Error = "network down"
-	require.NoError(t, store.Save(s))
+	modDir := filepath.Join(dir, "modules", "demo")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
+app = "demo"
+
+[packages]
+present = ["demo-pkg"]
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+	return dir
+}
+
+// stubStatusDeps swaps the detection/mise/package seams and returns the facts
+// to use. profile.Load and resolve.Resolve run for real against the profile.
+func stubStatusDeps(t *testing.T, f *facts.Facts, backend packages.Backend, miseFactory func() *mise.Mise) {
+	t.Helper()
+	origDetect, origMise, origFor := detectFacts, defaultMise, packagesFor
+	t.Cleanup(func() {
+		detectFacts, defaultMise, packagesFor = origDetect, origMise, origFor
+	})
+	detectFacts = func() (*facts.Facts, error) { return f, nil }
+	defaultMise = miseFactory
+	packagesFor = func(string) packages.Backend { return backend }
+}
+
+func fakeMiseNoOp() *mise.Mise {
+	return &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		Run:      func(string, ...string) (string, error) { return "", nil },
+	}
+}
+
+func TestStatus_cleanNoDrift(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
 
 	var buf bytes.Buffer
-	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
-	require.NoError(t, cmd.Run())
+	require.NoError(t, (&StatusCmd{Profile: profile, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
 
 	out := buf.String()
-	require.Contains(t, out, "profile: "+dir)
-	require.Contains(t, out, "state: "+statePath)
-	require.Contains(t, out, "selection: abc123")
-	require.Contains(t, out, "status: in-progress")
-	require.Contains(t, out, "current: packages")
-	require.Contains(t, out, "error: network down")
-	require.True(t, strings.HasPrefix(out, "profile:"))
+	t.Log(out)
+	require.Contains(t, out, "resume: clean — next apply starts from the beginning")
+	require.Contains(t, out, "ok: all 1 checks passed")
+	require.True(t, strings.HasSuffix(strings.TrimSpace(out), "no drift"), "final line must be 'no drift'")
+}
+
+func TestStatus_showsCursor(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, out: &buf}).Run())
+	require.Contains(t, buf.String(), `resume: last completed "packages" — next apply resumes after it`)
+}
+
+func TestStatus_reportsDrift(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	// recordingBackend.IsInstalled reports everything absent → drift.
+	stubStatusDeps(t, f, &recordingBackend{events: &[]string{}}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
+
+	var buf bytes.Buffer
+	err := (&StatusCmd{Profile: profile, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run()
+	require.NoError(t, err, "status must exit 0 even when drift is found")
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "drift: demo-pkg — missing")
+	require.Contains(t, out, "drift: 1 item")
+}
+
+func TestStatus_miseMissingToolsUnknown(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	// A mise whose LookPath fails → every tool reports unknown.
+	noMise := func() *mise.Mise {
+		return &mise.Mise{LookPath: func(string) (string, error) { return "", errors.New("no mise on PATH") }}
+	}
+	stubStatusDeps(t, f, allInstalledBackend{}, noMise)
+
+	// Profile with a tool declaration so the tools section is exercised.
+	dir := t.TempDir()
+	modDir := filepath.Join(dir, "modules", "demo")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
+app = "demo"
+
+[tools]
+node = "20"
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "unknown: node")
+	require.Contains(t, out, "unknown")
 }
 
 func TestStatus_defaultsToProfileStatePath(t *testing.T) {
-	dir := t.TempDir()
-	var buf bytes.Buffer
-	cmd := &StatusCmd{Profile: dir, out: &buf}
-	require.NoError(t, cmd.Run())
-	require.Contains(t, buf.String(), "state: "+state.ProfileStatePath(dir))
-}
-
-// Failed run with two completed steps: status reports progress against the
-// pipeline step list, the state file's mtime, and a resume hint.
-func TestStatus_showsProgressUpdatedAndNext(t *testing.T) {
-	dir := t.TempDir()
-	statePath := filepath.Join(dir, "state.json")
-	store := state.NewFileStore(statePath)
-	s := state.New()
-	s.Selection = "abc123"
-	s.Status = state.StatusFailed
-	s.Current = "dotfiles"
-	s.Error = "boom"
-	s.Completed["packages"] = true
-	s.Completed["tools"] = true
-	require.NoError(t, store.Save(s))
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
 
 	var buf bytes.Buffer
-	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
-	require.NoError(t, cmd.Run())
-
-	out := buf.String()
-	t.Log(out)
-	require.Contains(t, out, "progress: 2/8 steps")
-	require.Contains(t, out, "updated: ")
-	require.Contains(t, out, "next: dotdrift apply  (resumes at dotfiles)")
-}
-
-// Complete run: full progress, mtime, and no next-step hint.
-func TestStatus_completePrintsFullProgressWithoutNext(t *testing.T) {
-	dir := t.TempDir()
-	statePath := filepath.Join(dir, "state.json")
-	store := state.NewFileStore(statePath)
-	s := state.New()
-	s.Selection = "abc123"
-	s.Status = state.StatusComplete
-	for _, step := range pipelineStepNames {
-		s.Completed[step] = true
-	}
-	require.NoError(t, store.Save(s))
-
-	var buf bytes.Buffer
-	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
-	require.NoError(t, cmd.Run())
-
-	out := buf.String()
-	t.Log(out)
-	require.Contains(t, out, "progress: 8/8 steps")
-	require.Contains(t, out, "updated: ")
-	require.NotContains(t, out, "next:")
-}
-
-// The progress denominator is the static 8-step pipeline superset in
-// pipelineStepNames order. hooks-pre/hooks-post, dotfiles-system, mounts, and
-// smb are conditional — constructed only when the plan needs them — so a
-// completed apply can legitimately show fewer completed steps than 8/8.
-// Status never resolves the plan; it counts completed steps against the
-// static list (same convention as the pre-existing conditional steps).
-func TestStatus_denominatorEight(t *testing.T) {
-	require.Equal(t, []string{
-		"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "mounts", "smb", "hooks-post",
-	}, pipelineStepNames, "pipeline step order: mounts/smb after dotfiles-system, before hooks-post")
-
-	dir := t.TempDir()
-	statePath := filepath.Join(dir, "state.json")
-	store := state.NewFileStore(statePath)
-	s := state.New()
-	s.Selection = "abc123"
-	s.Status = state.StatusComplete
-	for _, step := range []string{"packages", "tools", "dotfiles"} {
-		s.Completed[step] = true
-	}
-	require.NoError(t, store.Save(s))
-
-	var buf bytes.Buffer
-	cmd := &StatusCmd{Profile: dir, State: statePath, out: &buf}
-	require.NoError(t, cmd.Run())
-	require.Contains(t, buf.String(), "progress: 3/8 steps",
-		"conditional steps absent from state must not inflate the count")
+	require.NoError(t, (&StatusCmd{Profile: profile, out: &buf}).Run())
+	require.Contains(t, buf.String(), "state: "+state.ProfileStatePath(profile))
 }

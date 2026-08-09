@@ -288,8 +288,8 @@ func (c *ApplyCmd) Run() error {
 	}
 	store := state.NewFileStore(statePath)
 	// Serialize concurrent applies: the sidecar lock is held from before Load
-	// until the pipeline's last save, so two applies can never interleave
-	// load→pipeline→save on the same state file.
+	// until the pipeline's final save/removal, so two applies can never
+	// interleave load→pipeline→save on the same state file.
 	if err := store.Lock(); err != nil {
 		return fmt.Errorf("lock state: %w", err)
 	}
@@ -297,22 +297,6 @@ func (c *ApplyCmd) Run() error {
 	s, err := store.Load()
 	if err != nil {
 		return fmt.Errorf("load state: %w", err)
-	}
-
-	fingerprint := resolve.Fingerprint(p, f)
-	planHash := resolve.PlanHash(plan)
-	// Reset resume state when either the selection (which modules) or the
-	// resolved plan content (what they resolved to) changed since the last
-	// apply. Without the plan hash, editing a module's dotfiles/hooks after a
-	// failed apply would leave completed steps skipped on resume — the edited
-	// content never applied.
-	if s.Selection != fingerprint || s.PlanHash != planHash {
-		if s.Selection != "" || s.PlanHash != "" {
-			log.Warn().Msg("module selection or resolved plan changed since last apply; resume state was reset")
-		}
-		s.ResetForSelection()
-		s.Selection = fingerprint
-		s.PlanHash = planHash
 	}
 
 	out := c.Out
@@ -452,6 +436,9 @@ func (c *ApplyCmd) Run() error {
 	pipeline.SetState(s)
 	if err := pipeline.Run(context.Background()); err != nil {
 		return fmt.Errorf("apply: %w", err)
+	}
+	if err := store.Remove(); err != nil {
+		return fmt.Errorf("remove state file: %w", err)
 	}
 	return nil
 }

@@ -2,9 +2,6 @@
 package resolve
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -240,47 +237,6 @@ func Fingerprint(p *profile.Profile, f *facts.Facts) string {
 	fmt.Fprintf(&b, "backend=%s\n", f.Backend)
 
 	return b.String()
-}
-
-// PlanHash returns a stable short hash over the resolved plan's content
-// (packages, tools, dotfiles, hooks, mounts, smb) AND the byte content of
-// every dotfile source file. dotdrift persists it and, on the next apply,
-// resets resume state when it differs — so editing a module's
-// dotfiles/packages/hooks after a failed apply re-runs the affected steps
-// instead of skipping them as "already complete". The selection fingerprint
-// covers WHICH modules ran; PlanHash covers WHAT they resolved to, including
-// in-place edits to a source file (same path, new content) that the plan
-// struct alone would miss. Determinism: json.Marshal sorts map keys, and
-// source contents are folded in entries sorted by (target, source). A
-// marshal error (none expected for the data-only Plan types) or an unreadable
-// source falls back to deterministic empty input, so a hash fault can only
-// cause a spurious reset, never a missed one.
-func PlanHash(plan *Plan) string {
-	if plan == nil {
-		return ""
-	}
-	structBytes, err := json.Marshal(plan)
-	if err != nil {
-		return ""
-	}
-	h := sha256.New()
-	h.Write(structBytes)
-	entries := append([]DotfileEntry(nil), plan.Dotfiles.Entries...)
-	sort.Slice(entries, func(i, j int) bool {
-		if entries[i].Target != entries[j].Target {
-			return entries[i].Target < entries[j].Target
-		}
-		return entries[i].Source < entries[j].Source
-	})
-	for _, e := range entries {
-		h.Write([]byte(e.Source))
-		h.Write([]byte{0})
-		if b, err := os.ReadFile(e.Source); err == nil {
-			h.Write(b)
-		}
-		h.Write([]byte{0})
-	}
-	return hex.EncodeToString(h.Sum(nil))[:16]
 }
 
 func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {

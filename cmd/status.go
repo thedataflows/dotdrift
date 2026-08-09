@@ -1,22 +1,28 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"time"
+	"path/filepath"
 
+	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
-// StatusCmd shows the resume cursor and last error.
+// StatusCmd reports drift between the resolved profile and the live system,
+// plus the apply resume cursor. Read-only; exits 0 even when drift is found.
 type StatusCmd struct {
 	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
 	State   string `help:"Path to state file" type:"path" default:""`
 	out     io.Writer
 }
 
-// Run loads state and prints the resume cursor.
+// Run loads state, resolves the plan, probes the live system for drift, and
+// prints the report. Only real errors (detect/load/resolve/corrupt state)
+// return non-nil; drift is reported, never an error.
 func (c *StatusCmd) Run() error {
 	statePath := c.State
 	if statePath == "" {
@@ -28,36 +34,36 @@ func (c *StatusCmd) Run() error {
 		return fmt.Errorf("load state: %w", err)
 	}
 
+	f, err := detectFacts()
+	if err != nil {
+		return fmt.Errorf("detect: %w", err)
+	}
+	p, err := profileLoad(c.Profile, f)
+	if err != nil {
+		return fmt.Errorf("load profile: %w", err)
+	}
+	plan, err := resolvePlan(p, f)
+	if err != nil {
+		return fmt.Errorf("resolve plan: %w", err)
+	}
+
+	pr := drift.DefaultProbes()
+	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
+	pr.ToolCurrent = mise.NewExecMise(defaultMise()).Current
+	profileRoot, _ := filepath.Abs(p.Root)
+	findings := drift.Check(context.Background(), plan, profileRoot, pr)
+
 	out := c.out
 	if out == nil {
 		out = os.Stdout
 	}
 	fmt.Fprintf(out, "profile: %s\n", c.Profile)
 	fmt.Fprintf(out, "state: %s\n", statePath)
-	fmt.Fprintf(out, "selection: %s\n", s.Selection)
-	fmt.Fprintf(out, "status: %s\n", s.Status)
-	if s.Current != "" {
-		fmt.Fprintf(out, "current: %s\n", s.Current)
+	if s.LastCompleted == "" {
+		fmt.Fprintln(out, "resume: clean — next apply starts from the beginning")
+	} else {
+		fmt.Fprintf(out, "resume: last completed %q — next apply resumes after it\n", s.LastCompleted)
 	}
-	if s.Error != "" {
-		fmt.Fprintf(out, "error: %s\n", s.Error)
-	}
-	if info, err := os.Stat(statePath); err == nil {
-		completed := 0
-		for _, step := range pipelineStepNames {
-			if s.IsCompleted(step) {
-				completed++
-			}
-		}
-		fmt.Fprintf(out, "progress: %d/%d steps\n", completed, len(pipelineStepNames))
-		fmt.Fprintf(out, "updated: %s\n", info.ModTime().UTC().Format(time.RFC3339))
-		if s.Status == state.StatusFailed || s.Status == state.StatusInProgress {
-			if s.Current != "" {
-				fmt.Fprintf(out, "next: dotdrift apply  (resumes at %s)\n", s.Current)
-			} else {
-				fmt.Fprintln(out, "next: dotdrift apply")
-			}
-		}
-	}
+	drift.Render(out, findings)
 	return nil
 }

@@ -6,11 +6,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
@@ -140,30 +138,14 @@ func loadStateFile(t *testing.T, path string) *state.State {
 	return s
 }
 
-func fingerprintFor(t *testing.T, profileDir string, f *facts.Facts) string {
-	t.Helper()
-	p, err := profile.Load(profileDir, f)
-	require.NoError(t, err)
-	return resolve.Fingerprint(p, f)
-}
-
-func planHashFor(t *testing.T, profileDir string, f *facts.Facts) string {
-	t.Helper()
-	p, err := profile.Load(profileDir, f)
-	require.NoError(t, err)
-	plan, err := resolve.Resolve(p, f)
-	require.NoError(t, err)
-	return resolve.PlanHash(plan)
-}
-
 func resolveFixture(t *testing.T) string {
 	t.Helper()
 	return filepath.Join("..", "testdata", "profiles", "resolve")
 }
 
 // Happy path: detect → load → resolve → ensure → hooks-pre →
-// packages/tools/dotfiles → hooks-post in order, ending in a complete state
-// with the current selection fingerprint.
+// packages/tools/dotfiles → hooks-post in order; a successful apply removes
+// the state file so the next run starts from the beginning.
 func TestApply_happyPath(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -188,14 +170,31 @@ func TestApply_happyPath(t *testing.T) {
 	require.Contains(t, *events, "packages:absent emacs,nano")
 	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.Empty(t, s.Current)
-	require.Empty(t, s.Error)
-	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
-		require.True(t, s.IsCompleted(step), "step %s not completed", step)
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
+}
+
+// A persisted cursor naming a completed step makes apply skip through it:
+// seeded {"lastCompleted":"tools"} skips hooks-pre/packages/tools (no install,
+// no packages:absent events), runs dotfiles, and removes the state file.
+func TestApply_resumeSkipsStepsThroughCursor(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "tools"}))
+
+	require.NoError(t, (&ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
+
+	for _, e := range *events {
+		require.NotContains(t, e, "mise:run install", "tools step must be skipped after a tools cursor")
+		require.NotContains(t, e, "packages:absent", "packages step must be skipped after a tools cursor")
 	}
+	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
+
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after the resumed apply completes")
 }
 
 // When dotdrift's stdin is a terminal, the generated hook tasks are marked
@@ -250,74 +249,6 @@ func TestApply_stepsDoNotClobberSharedMiseConfig(t *testing.T) {
 	require.Contains(t, string(dotfiles), "[dotfiles]")
 }
 
-// When the persisted selection fingerprint differs from the current one, apply
-// warns and resets the resume state, so previously completed steps re-run.
-func TestApply_selectionChangeResetsStateAndWarns(t *testing.T) {
-	dir := t.TempDir()
-	statePath := filepath.Join(dir, "state.json")
-	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
-
-	stale := state.New()
-	stale.Selection = "stale-fingerprint"
-	stale.Completed["packages"] = true
-	stale.Current = "packages"
-	stale.Status = state.StatusFailed
-	stale.Error = "boom"
-	require.NoError(t, state.NewFileStore(statePath).Save(stale))
-
-	var logBuf bytes.Buffer
-	origLogger := log.Logger
-	log.Logger = log.Output(&logBuf)
-	t.Cleanup(func() { log.Logger = origLogger })
-
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
-	require.NoError(t, cmd.Run())
-
-	require.Contains(t, logBuf.String(), "changed")
-	require.Contains(t, logBuf.String(), "resume state was reset")
-	requireOrder(t, *events, "mise:run bootstrap") // packages re-ran after reset
-
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-	for _, step := range []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"} {
-		require.True(t, s.IsCompleted(step), "step %s not completed", step)
-	}
-}
-
-// When the selection is unchanged but the resolved plan content differs
-// (e.g. a module's dotfiles were edited since the last failed apply), apply
-// resets resume state so previously-completed steps re-run instead of being
-// skipped — the bug that left edited dotfiles unapplied.
-func TestApply_planContentChangeResetsState(t *testing.T) {
-	dir := t.TempDir()
-	statePath := filepath.Join(dir, "state.json")
-	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
-
-	// Same selection as the current profile, but a stale plan hash and a
-	// completed packages step that must NOT survive the content change.
-	stale := state.New()
-	stale.Selection = fingerprintFor(t, resolveFixture(t), f)
-	stale.PlanHash = "stale-plan-hash"
-	stale.Completed["packages"] = true
-	stale.Current = "packages"
-	stale.Status = state.StatusFailed
-	stale.Error = "boom"
-	require.NoError(t, state.NewFileStore(statePath).Save(stale))
-
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
-	require.NoError(t, cmd.Run())
-
-	requireOrder(t, *events, "mise:run bootstrap") // steps re-ran after plan-content reset
-
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.Equal(t, planHashFor(t, resolveFixture(t), f), s.PlanHash)
-	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
-}
-
 // Apply prints the effective resolved plan (same rendering as `dotdrift plan`)
 // to its Out writer before the pipeline runs.
 func TestApply_printsPlan(t *testing.T) {
@@ -342,8 +273,8 @@ func TestApply_printsPlan(t *testing.T) {
 	require.Contains(t, out, "dotfiles:")
 	require.Contains(t, out, "~/.bashrc")
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // Decision D8a (keep + test): apply writes the FULL mise config (tools +
@@ -378,13 +309,10 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "packages")
 
+	// On failure the cursor stays at the last successful step (hooks-pre runs
+	// before packages); the file is NOT removed.
 	s := loadStateFile(t, statePath)
-	require.Equal(t, "packages", s.Current)
-	require.Equal(t, state.StatusFailed, s.Status)
-	require.Contains(t, s.Error, "boom")
-	require.False(t, s.IsCompleted("packages"))
-	require.True(t, s.IsCompleted("hooks-pre"), "hooks-pre runs before packages and must be complete")
-	require.Equal(t, fingerprintFor(t, resolveFixture(t), f), s.Selection)
+	require.Equal(t, "hooks-pre", s.LastCompleted, "cursor must name the last step that succeeded")
 
 	configPath := filepath.Join(dir, "mise", "mise.toml")
 	data, err := os.ReadFile(configPath)
@@ -417,13 +345,8 @@ func TestApply_noHooksFlag(t *testing.T) {
 		require.NotContains(t, e, "hooks:", "--no-hooks must not run any hook task")
 	}
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.False(t, s.IsCompleted("hooks-pre"))
-	require.False(t, s.IsCompleted("hooks-post"))
-	for _, step := range []string{"packages", "tools", "dotfiles"} {
-		require.True(t, s.IsCompleted(step), "step %s not completed", step)
-	}
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // DOTDRIFT_NO_HOOKS=1 suppresses hooks exactly like --no-hooks.
@@ -441,10 +364,8 @@ func TestApply_noHooksEnv(t *testing.T) {
 		require.NotContains(t, e, "hooks:", "DOTDRIFT_NO_HOOKS=1 must not run any hook task")
 	}
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.False(t, s.IsCompleted("hooks-pre"))
-	require.False(t, s.IsCompleted("hooks-post"))
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 func mountsFixture(t *testing.T) string {
@@ -484,11 +405,8 @@ func TestApply_mountsStepConditional(t *testing.T) {
 		"mise:run run",       // hooks:post
 	)
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	for _, step := range []string{"dotfiles-system", "mounts", "smb", "hooks-post"} {
-		require.True(t, s.IsCompleted(step), "step %s not completed", step)
-	}
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // A plan with smb modules gains an smb step that activates group/users,
@@ -523,9 +441,8 @@ func TestApply_smbStepConditional(t *testing.T) {
 		require.Contains(t, buf.String(), "samba password missing for cri; run: sudo smbpasswd -a cri")
 	}
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.True(t, s.IsCompleted("smb"))
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // Without mounts/smb aggregates no mounts/smb step is constructed: the
@@ -544,17 +461,8 @@ func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {
 		require.NotContains(t, e, "smb:run", "no smb step must run for a plan without smb")
 	}
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
-	require.False(t, s.IsCompleted("mounts"))
-	require.False(t, s.IsCompleted("smb"))
-	completed := make([]string, 0, len(s.Completed))
-	for step := range s.Completed {
-		completed = append(completed, step)
-	}
-	sort.Strings(completed)
-	require.Equal(t, []string{"dotfiles", "hooks-post", "hooks-pre", "packages", "tools"}, completed,
-		"completed steps must be exactly today's unconditional+hooks set")
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // A positional module filter limits the apply: resolvePlan observes a profile
@@ -593,8 +501,8 @@ func TestApply_moduleFilterLimitsSelection(t *testing.T) {
 	require.Equal(t, []string{"shell"}, selectedIDs)
 	require.Equal(t, "module filter", skippedReasons["demo"])
 
-	s := loadStateFile(t, statePath)
-	require.Equal(t, state.StatusComplete, s.Status)
+	_, statErr := os.Stat(statePath)
+	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
 // An unknown module id fails after profile load and before plan resolution:

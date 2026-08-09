@@ -19,8 +19,9 @@ Each top-level `internal/` directory is a deep module with a small public API an
 ├── internal/
 │   ├── profile/              # Load dotdrift.toml + modules; selection
 │   ├── resolve/              # Merge host/user layers into Plan
-│   ├── state/                # Resume-only state persistence
+│   ├── state/                # Resume cursor persistence
 │   ├── apply/                # Pipeline orchestration
+│   ├── drift/                # Plan-vs-system drift probes (status)
 │   ├── packages/             # Package backend interface + paru/pacman, apt, dnf
 │   ├── paru/                  # Embedded mise paru package plugin (go:embed) + lifecycle + `dotdrift paru` subcommand
 │   ├── mise/                 # Bootstrap, tools, dotfiles via mise

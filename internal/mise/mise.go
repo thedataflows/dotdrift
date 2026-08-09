@@ -602,6 +602,23 @@ func (e *ExecMise) Bootstrap(ctx context.Context, configPath string, yes bool, o
 	return err
 }
 
+// Current returns the active version of a tool per `mise current <tool>`.
+// Probe-only: resolves the binary via LookPath (never installs) and runs
+// through the probe runner (never streamed/echoed). Any failure is an
+// error; callers report the tool as unknown.
+func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
+	lookPath := e.mise.LookPath
+	if lookPath == nil {
+		lookPath = exec.LookPath
+	}
+	path, err := lookPath("mise")
+	if err != nil {
+		return "", err
+	}
+	out, err := e.mise.runner()(ctx, path, "current", tool)
+	return strings.TrimSpace(out), err
+}
+
 type Runner interface {
 	EnsureAndInstall(ctx context.Context, configPath string) error
 	Bootstrap(ctx context.Context, configPath string, yes bool, only ...string) error

@@ -77,15 +77,19 @@ grep -q "post-hook" /tmp/hooks.log || fail "post-hook missing from /tmp/hooks.lo
 # system-scope dotfile copied to /etc (covers the EUID==0 path: containers run as root, no sudo needed)
 grep -q "sysdemo = true" /etc/sysdemo.conf || fail "/etc/sysdemo.conf missing or wrong content (system scope)"
 
-# (d) state file reports the pipeline complete
-STATE=$(ls /root/.local/state/dotdrift/profiles/*/state.json 2> /dev/null) || fail "no state.json under /root/.local/state/dotdrift/profiles"
-[ -n "$STATE" ] || fail "no state.json under /root/.local/state/dotdrift/profiles"
-grep -Eq '"status": *"complete"' "$STATE" || fail "state file $STATE does not contain \"status\":\"complete\""
+# (d) a successful apply leaves no state file: the cursor is deleted on
+# completion, so the next apply starts from the beginning.
+if ls /root/.local/state/dotdrift/profiles/*/state.json >/dev/null 2>&1; then
+	fail "state.json must not exist under /root/.local/state/dotdrift/profiles after a successful apply"
+fi
 
-# (e) resume: second apply is a no-op and stays complete
-step "apply again (resume no-op)"
+# (e) resume: a second apply runs the full pipeline again (no cursor to skip)
+# and still leaves no state file on disk.
+step "apply again (full pipeline, no state file)"
 dotdrift apply --profile /profile --yes || fail "second apply exited non-zero"
-grep -Eq '"status": *"complete"' "$STATE" || fail "state no longer complete after second apply"
+if ls /root/.local/state/dotdrift/profiles/*/state.json >/dev/null 2>&1; then
+	fail "state.json must not exist under /root/.local/state/dotdrift/profiles after the second apply"
+fi
 
 # (f) onboard/apply produced no runtime files inside the profile
 if find /profile/modules -name .mise -print -quit | grep -q .; then

@@ -14,5 +14,5 @@ timestamp: 2026-07-14T00:00:00Z
 - [x] No `--enable` / `--resume` in CLI or docs
 - [x] Merge rules tested (user > host; disable union)
 - [x] Onboard: copy then mise; default symlink
-- [x] Apply always resumes; selection change resets
+- [x] Apply always resumes from the cursor; state file removed on completion
 - [x] README + example profile

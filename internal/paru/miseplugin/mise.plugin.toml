@@ -1,0 +1,3 @@
+[package-manager]
+requires = ["paru"]
+os = ["linux"]

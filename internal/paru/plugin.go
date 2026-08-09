@@ -2,92 +2,60 @@ package paru
 
 import (
 	"crypto/sha256"
+	"embed"
 	"encoding/hex"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 )
 
-// misePluginToml is the [package-manager] config that tells mise this is a
-// package plugin requiring the `paru` host binary on Linux.
-const misePluginToml = `[package-manager]
-requires = ["paru"]
-os = ["linux"]
-`
+// The paru mise package plugin is authored as real files under miseplugin/ —
+// the exact layout it has in mise's plugin registry (metadata.lua,
+// mise.plugin.toml, hooks/*) — and embedded at build time. This keeps the
+// Lua/TOML out of Go string constants: they are edited as the files they are,
+// and the file set (not a hand-maintained list) drives both WritePlugin and
+// the up-to-date hash.
+//
+//go:embed miseplugin
+var pluginFS embed.FS
 
-// metadataLua assigns the global PLUGIN table that mise's vfox loader expects
-// (load_metadata runs `require "metadata"; return PLUGIN`). A metadata.lua that
-// only `return`s a table leaves PLUGIN nil, so the package hooks never attach
-// and mise reports the plugin "not installed" — the contradictory warnings.
-// `name` is required by mise's Metadata deserializer; description/version are
-// informational.
-const metadataLua = `PLUGIN = {
-  name = "paru",
-  description = "paru (pacman + AUR) package manager",
-  version = "1.0.0",
-}
-`
+// pluginRoot is the embedded plugin subtree with the "miseplugin/" prefix
+// stripped, so its paths are "metadata.lua", "hooks/package_installed.lua", …
+var pluginRoot = func() fs.FS {
+	sub, err := fs.Sub(pluginFS, "miseplugin")
+	if err != nil {
+		panic(err) // unreachable: miseplugin/ is embedded above
+	}
+	return sub
+}()
 
-// packageInstalledLua delegates to `dotdrift paru installed` and parses the
-// line-based status protocol into the vfox response table.
-const packageInstalledLua = `function PLUGIN:PackageInstalled(ctx)
-  local names = {}
-  for _, pkg in ipairs(ctx.packages) do
-    table.insert(names, pkg.name)
-  end
-  local handle = io.popen("dotdrift paru installed " .. table.concat(names, " "))
-  local output = handle:read("*a")
-  handle:close()
-  local result = { packages = {} }
-  for line in output:gmatch("[^\n]+") do
-    local name, state, version = line:match("([^\t]+)\t([^\t]+)\t?([^\t]*)")
-    if name and state then
-      local entry = { name = name, state = state }
-      if version and version ~= "" then entry.version = version end
-      table.insert(result.packages, entry)
-    end
-  end
-  return result
-end
-`
-
-// packageInstallLua delegates to `dotdrift paru install` with dry-run/update
-// flags forwarded from the vfox ctx.
-const packageInstallLua = `function PLUGIN:PackageInstall(ctx)
-  local names = {}
-  for _, pkg in ipairs(ctx.packages) do
-    table.insert(names, pkg.name)
-  end
-  local flags = ""
-  if ctx.dry_run then flags = flags .. " --dry-run" end
-  if ctx.update then flags = flags .. " --update" end
-  os.execute("dotdrift paru install" .. flags .. " " .. table.concat(names, " "))
-  return {}
-end
-`
-
-// WritePlugin writes the mise package-plugin for the `paru` manager into dir.
-// Creates the directory and hooks/ subdirectory. Overwrites existing files
-// (the content is deterministic — same call, same bytes).
+// WritePlugin writes the embedded paru plugin into dir, preserving its layout.
+// Creates directories as needed; overwrites existing files (content is
+// deterministic — same embed, same bytes).
 func WritePlugin(dir string) error {
-	hooksDir := filepath.Join(dir, "hooks")
-	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
-		return fmt.Errorf("create plugin hooks dir: %w", err)
-	}
-	files := map[string]string{
-		"metadata.lua":                metadataLua,
-		"mise.plugin.toml":            misePluginToml,
-		"hooks/package_installed.lua": packageInstalledLua,
-		"hooks/package_install.lua":   packageInstallLua,
-	}
-	for rel, content := range files {
-		path := filepath.Join(dir, rel)
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("write %s: %w", rel, err)
+	return fs.WalkDir(pluginRoot, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
 		}
-	}
-	return nil
+		dest := filepath.Join(dir, path)
+		if d.IsDir() {
+			return os.MkdirAll(dest, 0o755)
+		}
+		content, err := fs.ReadFile(pluginRoot, path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(dest, content, 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		return nil
+	})
 }
 
 // EnsureInstalled copies the embedded paru plugin into mise's plugin registry
@@ -126,43 +94,69 @@ func pluginUpToDate(target string) bool {
 	return err == nil && got == embeddedHash()
 }
 
-type pluginFile struct{ path, content string }
+type pluginFile struct {
+	path    string
+	content []byte
+}
 
-func pluginFiles() []pluginFile {
-	return []pluginFile{
-		{"metadata.lua", metadataLua},
-		{"mise.plugin.toml", misePluginToml},
-		{"hooks/package_installed.lua", packageInstalledLua},
-		{"hooks/package_install.lua", packageInstallLua},
-	}
+// embeddedFiles lists the embedded plugin's files (path + bytes) in lexical
+// order — the single source of truth for what the plugin contains, driving
+// both the write and the hash.
+func embeddedFiles() ([]pluginFile, error) {
+	var files []pluginFile
+	err := fs.WalkDir(pluginRoot, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		b, err := fs.ReadFile(pluginRoot, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, pluginFile{path: path, content: b})
+		return nil
+	})
+	sort.Slice(files, func(i, j int) bool { return files[i].path < files[j].path })
+	return files, err
 }
 
 // embeddedHash is the SHA-256 of the embedded plugin's path:content pairs.
 func embeddedHash() string {
-	h := sha256.New()
-	for _, f := range pluginFiles() {
-		io.WriteString(h, f.path)
-		h.Write([]byte{0})
-		io.WriteString(h, f.content)
-		h.Write([]byte{0})
+	files, err := embeddedFiles()
+	if err != nil {
+		panic(err) // unreachable: the FS is embedded
 	}
-	return hex.EncodeToString(h.Sum(nil))
+	return hashFiles(files)
 }
 
-// installedHash hashes the plugin files under dir over the same path:content
-// pairs as embeddedHash. A missing/unreadable file yields an error so the
-// caller treats the plugin as out of date.
+// installedHash hashes the plugin files present under dir over the same
+// path:content pairs as embeddedHash. A missing/unreadable file yields an
+// error so the caller treats the plugin as out of date.
 func installedHash(dir string) (string, error) {
-	h := sha256.New()
-	for _, f := range pluginFiles() {
+	want, err := embeddedFiles()
+	if err != nil {
+		return "", err
+	}
+	files := make([]pluginFile, 0, len(want))
+	for _, f := range want {
 		b, err := os.ReadFile(filepath.Join(dir, f.path))
 		if err != nil {
 			return "", err
 		}
+		files = append(files, pluginFile{path: f.path, content: b})
+	}
+	return hashFiles(files), nil
+}
+
+func hashFiles(files []pluginFile) string {
+	h := sha256.New()
+	for _, f := range files {
 		io.WriteString(h, f.path)
 		h.Write([]byte{0})
-		h.Write(b)
+		h.Write(f.content)
 		h.Write([]byte{0})
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
+	return hex.EncodeToString(h.Sum(nil))
 }

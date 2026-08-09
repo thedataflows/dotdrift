@@ -1,6 +1,7 @@
 package paru_test
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -154,4 +155,32 @@ func TestEnsureInstalled_replacesSymlinkWithCopy(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, fi.IsDir(), "symlink must be replaced with a real directory")
 	require.Zero(t, fi.Mode()&os.ModeSymlink)
+}
+
+// TestWritePlugin_writesExactEmbeddedSet guards the go:embed source of truth:
+// the on-disk plugin must be exactly the embedded file set — no more (a stray
+// file dropped in miseplugin/ would silently ship) and no less.
+func TestWritePlugin_writesExactEmbeddedSet(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, paru.WritePlugin(dir))
+
+	var got []string
+	require.NoError(t, filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		require.NoError(t, err)
+		got = append(got, filepath.ToSlash(rel))
+		return nil
+	}))
+	require.ElementsMatch(t, []string{
+		"metadata.lua",
+		"mise.plugin.toml",
+		"hooks/package_installed.lua",
+		"hooks/package_install.lua",
+	}, got)
 }

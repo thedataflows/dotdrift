@@ -143,12 +143,14 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift detect` | Print host/user/os/kernel/distro/gpu/backend facts. |
 | `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules). |
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
-| `dotdrift apply [--yes] [--no-hooks] [--verbose] [modules...]` | Run the full pipeline and resume from the last successful step (the cursor file is deleted on completion; optionally limited to the listed modules). |
-| `dotdrift status [-v] [-j N]` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Probes run concurrently (`-j N` workers; default: CPUs); `-v` streams per-probe progress (`checking <section>: <item>`) to stderr. Exits 0 even when drift is found. |
+| `dotdrift apply [--yes] [--no-hooks] [--verbose] [--diff[=tool]] [modules...]` | Run the full pipeline and resume from the last successful step (the cursor file is deleted on completion; optionally limited to the listed modules). `--diff` shows colored unified diffs for differing `copy`-mode dotfiles before applying; bare = internal diff, `--diff=delta` uses the named tool with `<target> <source>` args. |
+| `dotdrift status [-v] [-j N] [--diff[=tool]] [modules...]` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Probes run concurrently (`-j N` workers; default: CPUs); `-v` streams per-probe progress to stderr; `--diff` shows colored unified diffs after the report. Exits 0 even when drift is found. |
 | `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 
-`-v` / `--verbose` (also `DD_VERBOSE=1`) streams package manager and mise output live on `apply` and `onboard`, echoing each command line `set -x`-style to stderr immediately before it runs — e.g. `+ paru -S --needed --noconfirm jq`; without it child-process output is captured and only surfaced in errors.
+-v / --verbose (also DD_VERBOSE=1) streams package manager and mise output live on apply and onboard, echoing each command line set -x-style to stderr immediately before it runs — e.g. + paru -S --needed --noconfirm jq; without it child-process output is captured and only surfaced in errors.
+
+--no-color (or the NO_COLOR environment variable, per no-color.org) disables ANSI colors in all dotdrift output and propagates NO_COLOR=1 to child processes (mise, paru). On a TTY, the status report colors findings by issue type (orange = missing, red = not-a-symlink/unknown, yellow = content/version diff, green = all-OK) and diffs are colored (green additions, red deletions); piped output is always plain.
 
 ```bash
 # Generate an NFS mount module with a nightly timer, then two samba shares
@@ -159,13 +161,13 @@ dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 
 ## Module filter
 
-`modules`, `plan`, and `apply` accept optional positional module ids that limit the command's scope to those modules. Ids are space- or comma-separated (both forms mix freely):
+`modules`, `plan`, `apply`, and `status` accept optional positional module ids that limit the command's scope to those modules. Ids are space- or comma-separated (both forms mix freely):
 
 ```bash
 dotdrift apply vim git      # only vim and git
 dotdrift apply vim,git      # same
 dotdrift plan shell --json  # plan for shell only
-```
+dotdrift status vim         # drift for vim only
 
 With no ids the behavior is unchanged.
 

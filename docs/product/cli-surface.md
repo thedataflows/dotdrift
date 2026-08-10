@@ -23,8 +23,8 @@ timestamp: 2026-07-28T00:00:00Z
 
 # Module filter
 
-`modules`, `plan`, and `apply` share an optional positional module filter
-(`dotdrift apply vim git` ≡ `dotdrift apply vim,git`; comma and space forms
+`modules`, `plan`, `apply`, and `status` share an optional positional module
+filter (`dotdrift apply vim git` ≡ `dotdrift apply vim,git`; comma and space
 mix, duplicates collapse, whitespace is trimmed). Semantics:
 
 - No ids → behavior is unchanged.
@@ -41,6 +41,15 @@ pipeline step). A filtered apply that resumes from another run's cursor cannot
 detect the scope change, so it may skip steps that the filtered run would have
 executed — delete the state file (path shown by `dotdrift status`) to force a
 full run.
+
+# Global flags
+
+| Flag | Default | Notes |
+|------|---------|-------|
+| `--no-color` | off | Disables ANSI colors in all dotdrift output and propagates `NO_COLOR=1` to child processes (mise, paru). The `NO_COLOR` environment variable (per [no-color.org](https://no-color.org)) has the same effect without the flag. On a TTY, the status report colors findings by issue type (orange = missing, red = not-a-symlink/unknown, yellow = content/version diff, green = all-OK) and `--diff` output is colored (green additions, red deletions, cyan hunk headers); piped or `--no-color` output is always plain. |
+| `--log-level LEVEL` | `info` | `trace,debug,info,warn,error` (env `DD_LOG_LEVEL`). |
+| `--log-format FORMAT` | `console` | `console,json` (env `DD_LOG_FORMAT`). |
+| `--pprof` | off | Enable pprof profiling server at `--pprof-listen-on` (default `127.0.0.1:6060`). |
 
 # Generate
 

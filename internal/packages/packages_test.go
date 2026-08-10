@@ -112,6 +112,40 @@ func TestPacman_isInstalledErrorPropagates(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestPacman_isInstalledStripsAurPrefix(t *testing.T) {
+	f := &fakeRunner{}
+	b := &packages.Paru{Runner: f}
+	ok, err := b.IsInstalled(context.Background(), "aur/lmstudio-bin")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, []string{"-Q", "lmstudio-bin"}, f.calls[0].args,
+		"aur/ marker must be stripped so pacman -Q sees the bare name")
+}
+
+func TestPacman_isInstalledStripsManagerPrefix(t *testing.T) {
+	f := &fakeRunner{}
+	b := &packages.Paru{Runner: f}
+	ok, err := b.IsInstalled(context.Background(), "paru:yay")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, []string{"-Q", "yay"}, f.calls[0].args,
+		"manager: prefix must be stripped so pacman -Q sees the bare name")
+}
+
+func TestParu_absentStripsAurPrefix(t *testing.T) {
+	f := &fakeRunner{}
+	b := &packages.Paru{Runner: f}
+	require.NoError(t, b.Absent(context.Background(), []string{"aur/foo", "bar"}))
+	require.Equal(t, []string{"-R", "--noconfirm", "bar", "foo"}, f.calls[0].args)
+}
+
+func TestParu_presentStripsAurPrefix(t *testing.T) {
+	f := &fakeRunner{}
+	b := &packages.Paru{Runner: f}
+	require.NoError(t, b.Present(context.Background(), []string{"aur/foo", "bar"}))
+	require.Equal(t, []string{"-S", "--needed", "--noconfirm", "bar", "foo"}, f.calls[0].args)
+}
+
 func TestFor_paruFamily(t *testing.T) {
 	for _, name := range []string{"paru", "arch", "cachyos", "manjaro"} {
 		b := packages.For(name)

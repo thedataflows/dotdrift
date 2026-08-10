@@ -114,7 +114,7 @@ func NewParu() *Paru {
 
 // Present installs packages idempotently.
 func (p *Paru) Present(ctx context.Context, pkgs []string) error {
-	pkgs = uniqueSorted(pkgs)
+	pkgs = uniqueSorted(pacmanNames(pkgs))
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -128,7 +128,7 @@ func (p *Paru) Present(ctx context.Context, pkgs []string) error {
 
 // Absent removes packages.
 func (p *Paru) Absent(ctx context.Context, pkgs []string) error {
-	pkgs = uniqueSorted(pkgs)
+	pkgs = uniqueSorted(pacmanNames(pkgs))
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -144,9 +144,10 @@ func (p *Paru) Absent(ctx context.Context, pkgs []string) error {
 // ExecRunner.
 func (p *Paru) SetVerbose(v bool) { setVerboseOn(&p.Runner, v) }
 
-// IsInstalled checks if a package is installed via pacman.
+// IsInstalled checks if a package is installed via pacman. The `aur/` AUR
+// marker and `manager:` colon prefix are stripped (see pacmanName).
 func (p *Paru) IsInstalled(ctx context.Context, pkg string) (bool, error) {
-	_, err := p.Runner.Run(ctx, "pacman", "-Q", pkg)
+	_, err := p.Runner.Run(ctx, "pacman", "-Q", pacmanName(pkg))
 	if err == nil {
 		return true, nil
 	}
@@ -167,6 +168,29 @@ func uniqueSorted(in []string) []string {
 		out = append(out, s)
 	}
 	sort.Strings(out)
+	return out
+}
+
+// pacmanName strips dotdrift's package notation to the bare name that pacman
+// and paru expect on the command line. The `aur/` AUR marker and the
+// `manager:pkg` colon prefix are dotdrift/mise conventions, not real package
+// names — `pacman -Q aur/foo` and `pacman -Q paru:foo` both fail. A bare name
+// (no `aur/`, no `:`) passes through unchanged.
+func pacmanName(pkg string) string {
+	if name, ok := strings.CutPrefix(pkg, "aur/"); ok {
+		return name
+	}
+	if _, name, ok := strings.Cut(pkg, ":"); ok {
+		return name
+	}
+	return pkg
+}
+
+func pacmanNames(pkgs []string) []string {
+	out := make([]string, len(pkgs))
+	for i, p := range pkgs {
+		out[i] = pacmanName(p)
+	}
 	return out
 }
 

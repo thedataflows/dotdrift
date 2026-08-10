@@ -65,7 +65,7 @@ func DepsTree(ctx context.Context, b Backend, pkgs []string, depth int) []Packag
 // (paru, not pacman: `paru -Si` also covers AUR packages, consistent with
 // Present using paru).
 func (p *Paru) DirectDeps(ctx context.Context, pkg string) ([]string, error) {
-	out, err := p.Runner.Run(ctx, "paru", "-Si", pkg)
+	out, err := p.Runner.Run(ctx, "paru", "-Si", pacmanName(pkg))
 	if err != nil {
 		return nil, err
 	}

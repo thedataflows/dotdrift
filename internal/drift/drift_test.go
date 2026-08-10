@@ -207,6 +207,22 @@ func TestCheck_dotfilesSymlinkMissing(t *testing.T) {
 	require.Equal(t, "missing", fs[0].Detail)
 }
 
+func TestCheck_dotfilesSymlinkRegularFile(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "gtkrc")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	tgt := filepath.Join(t.TempDir(), ".gtkrc-2.0")
+	require.NoError(t, os.WriteFile(tgt, []byte("managed by hand"), 0o644)) // regular file, not a symlink
+
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr, drift.CheckOptions{})
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "not a symlink", fs[0].Detail,
+		"a regular file at the target is drift but not 'missing'")
+}
+
 func TestCheck_dotfilesCopyEqual(t *testing.T) {
 	root := t.TempDir()
 	src := filepath.Join(root, "foo")

@@ -263,7 +263,10 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 	case "symlink", "symlink-each":
 		target, err := pr.Readlink(f.Target)
 		if err != nil {
-			return Finding{"dotfiles", f.Target, Drift, "missing"}
+			if os.IsNotExist(err) {
+				return Finding{"dotfiles", f.Target, Drift, "missing"}
+			}
+			return Finding{"dotfiles", f.Target, Drift, "not a symlink"}
 		}
 		if target == f.Source {
 			return Finding{"dotfiles", f.Target, OK, ""}

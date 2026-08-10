@@ -27,11 +27,19 @@ type Plan struct {
 type PackagesStep struct {
 	Install []string
 	Remove  []string
+	// PresentModules maps each install package to the module IDs that declare
+	// it present. Status attribution only; not convergence-relevant.
+	PresentModules map[string][]string
+	// AbsentModules maps each remove package to the module IDs that declare
+	// it absent.
+	AbsentModules map[string][]string
 }
 
 // ToolsStep lists required tool versions.
 type ToolsStep struct {
 	Versions map[string]string
+	// ToolModules maps each tool name to the module IDs that declare it.
+	ToolModules map[string][]string
 }
 
 // DotfilesStep lists managed dotfile entries.
@@ -97,6 +105,7 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 	pkgSet := make(map[string]struct{})
 	presentIn := make(map[string][]string)
 	absentIn := make(map[string][]string)
+	toolIn := make(map[string][]string)
 	for _, m := range p.Selected {
 		// Layer paths derive from the profile root and the module directory
 		// name, never from m.Path: for an overlay-only module (ADR-0001) the
@@ -149,6 +158,7 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 
 		for k, v := range mergeTools(base.cfg.Tools, host.cfg.Tools, user.cfg.Tools) {
 			plan.Tools.Versions[k] = v
+			toolIn[k] = append(toolIn[k], m.ID)
 		}
 
 		entries, err := mergeDotfiles(base, host, user, scope)
@@ -202,6 +212,11 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 	sortEntries(plan.Dotfiles.Entries)
 	sortMountEntries(plan.Mounts.Entries)
 	sortSmbModules(plan.Smb.Modules)
+
+	// Module attribution for status/drift display (not convergence-relevant).
+	plan.Packages.PresentModules = presentIn
+	plan.Packages.AbsentModules = absentIn
+	plan.Tools.ToolModules = toolIn
 
 	return plan, nil
 }

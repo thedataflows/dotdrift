@@ -104,7 +104,7 @@ func TestStatus_reportsDrift(t *testing.T) {
 	require.NoError(t, err, "status must exit 0 even when drift is found")
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "drift: demo-pkg — missing")
+	require.Contains(t, out, "demo: demo-pkg — missing")
 	require.Contains(t, out, "drift: 1 item")
 }
 
@@ -132,7 +132,7 @@ node = "20"
 	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "unknown: node")
+	require.Contains(t, out, "demo: node")
 	require.Contains(t, out, "unknown")
 }
 

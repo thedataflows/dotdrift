@@ -690,13 +690,24 @@ func TestRender_mixed(t *testing.T) {
 	var buf bytes.Buffer
 	drift.Render(&buf, findings)
 	want := "packages:\n" +
-		"  drift: ripgrep — missing\n" +
-		"  unknown: jq — dpkg query failed\n" +
+		"  ?: ripgrep — missing\n" +
+		"  ?: jq — dpkg query failed (?)\n" +
 		"tools:\n" +
 		"  ok: all 2 checks passed\n" +
 		"\n" +
 		"drift: 1 item, 1 unknown\n"
 	require.Equal(t, want, buf.String())
+}
+
+func TestRender_modulePrefix(t *testing.T) {
+	var buf bytes.Buffer
+	drift.Render(&buf, []drift.Finding{
+		{Section: "packages", Item: "neovim", Status: drift.Drift, Detail: "missing", Module: "editor"},
+		{Section: "packages", Item: "vim", Status: drift.Drift, Detail: "missing", Module: ""},
+	})
+	out := buf.String()
+	require.Contains(t, out, "editor: neovim — missing")
+	require.Contains(t, out, "?: vim — missing")
 }
 
 func TestRender_allOK(t *testing.T) {

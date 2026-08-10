@@ -49,6 +49,7 @@ type Finding struct {
 	Item    string // package name, tool name, target path, unit name, share name
 	Status  Status
 	Detail  string
+	Module  string // owning module ID (empty if unknown)
 }
 
 // Probes are the side-effect seams. DefaultProbes fills OS-backed defaults;
@@ -111,9 +112,11 @@ type CheckOptions struct {
 }
 
 // probeTask is one unit of concurrent work: a probe producing a single finding.
-// section/item identify the probe for verbose progress; run does the probe.
+// section/module/item identify the probe for verbose progress and report
+// attribution; run does the probe.
 type probeTask struct {
 	section string
+	module  string
 	item    string
 	run     func(ctx context.Context) Finding
 }
@@ -156,7 +159,9 @@ func Check(ctx context.Context, plan *resolve.Plan, profileRoot string, pr Probe
 				if vw != nil {
 					fmt.Fprintf(vw, "checking %s: %s\n", t.section, t.item)
 				}
-				results[i] = t.run(ctx)
+				f := t.run(ctx)
+				f.Module = t.module
+				results[i] = f
 			}
 		}()
 	}
@@ -173,16 +178,17 @@ func checkPackages(plan *resolve.Plan, pr Probes) []probeTask {
 	for _, pkg := range plan.Packages.Install {
 		tasks = append(tasks, probeTask{
 			section: "packages",
+			module:  strings.Join(plan.Packages.PresentModules[pkg], ","),
 			item:    pkg,
 			run: func(ctx context.Context) Finding {
 				installed, err := pr.IsInstalled(ctx, pkg)
 				switch {
 				case err != nil:
-					return Finding{"packages", pkg, Unknown, err.Error()}
+					return Finding{"packages", pkg, Unknown, err.Error(), ""}
 				case installed:
-					return Finding{"packages", pkg, OK, ""}
+					return Finding{"packages", pkg, OK, "", ""}
 				default:
-					return Finding{"packages", pkg, Drift, "missing"}
+					return Finding{"packages", pkg, Drift, "missing", ""}
 				}
 			},
 		})
@@ -190,16 +196,17 @@ func checkPackages(plan *resolve.Plan, pr Probes) []probeTask {
 	for _, pkg := range plan.Packages.Remove {
 		tasks = append(tasks, probeTask{
 			section: "packages",
+			module:  strings.Join(plan.Packages.AbsentModules[pkg], ","),
 			item:    pkg,
 			run: func(ctx context.Context) Finding {
 				installed, err := pr.IsInstalled(ctx, pkg)
 				switch {
 				case err != nil:
-					return Finding{"packages", pkg, Unknown, err.Error()}
+					return Finding{"packages", pkg, Unknown, err.Error(), ""}
 				case installed:
-					return Finding{"packages", pkg, Drift, "still installed"}
+					return Finding{"packages", pkg, Drift, "still installed", ""}
 				default:
-					return Finding{"packages", pkg, OK, ""}
+					return Finding{"packages", pkg, OK, "", ""}
 				}
 			},
 		})
@@ -213,16 +220,17 @@ func checkTools(plan *resolve.Plan, pr Probes) []probeTask {
 		want := plan.Tools.Versions[name]
 		tasks = append(tasks, probeTask{
 			section: "tools",
+			module:  strings.Join(plan.Tools.ToolModules[name], ","),
 			item:    name,
 			run: func(ctx context.Context) Finding {
 				got, err := pr.ToolCurrent(ctx, name)
 				if err != nil || got == "" {
-					return Finding{"tools", name, Unknown, "mise not available or tool not installed"}
+					return Finding{"tools", name, Unknown, "mise not available or tool not installed", ""}
 				}
 				if got == want || strings.HasPrefix(got, want+".") {
-					return Finding{"tools", name, OK, ""}
+					return Finding{"tools", name, OK, "", ""}
 				}
-				return Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want)}
+				return Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want), ""}
 			},
 		})
 	}
@@ -238,9 +246,10 @@ func checkDotfiles(plan *resolve.Plan, profileRoot string, pr Probes) []probeTas
 			errMsg := err.Error()
 			tasks = append(tasks, probeTask{
 				section: "dotfiles",
+				module:  e.Module,
 				item:    target,
 				run: func(ctx context.Context) Finding {
-					return Finding{"dotfiles", target, Unknown, errMsg}
+					return Finding{"dotfiles", target, Unknown, errMsg, ""}
 				},
 			})
 			continue
@@ -248,6 +257,7 @@ func checkDotfiles(plan *resolve.Plan, profileRoot string, pr Probes) []probeTas
 		for _, f := range files {
 			tasks = append(tasks, probeTask{
 				section: "dotfiles",
+				module:  e.Module,
 				item:    f.Target,
 				run: func(ctx context.Context) Finding {
 					return checkDotfileFile(f, pr)
@@ -264,40 +274,40 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 		target, err := pr.Readlink(f.Target)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return Finding{"dotfiles", f.Target, Drift, "missing"}
+				return Finding{"dotfiles", f.Target, Drift, "missing", ""}
 			}
-			return Finding{"dotfiles", f.Target, Drift, "not a symlink"}
+			return Finding{"dotfiles", f.Target, Drift, "not a symlink", ""}
 		}
 		if target == f.Source {
-			return Finding{"dotfiles", f.Target, OK, ""}
+			return Finding{"dotfiles", f.Target, OK, "", ""}
 		}
-		return Finding{"dotfiles", f.Target, Drift, fmt.Sprintf("points to %s", target)}
+		return Finding{"dotfiles", f.Target, Drift, fmt.Sprintf("points to %s", target), ""}
 	case "copy":
 		src, err := pr.ReadFile(f.Source)
 		if err != nil {
-			return Finding{"dotfiles", f.Target, Unknown, err.Error()}
+			return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
 		}
 		tgt, err := pr.ReadFile(f.Target)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return Finding{"dotfiles", f.Target, Drift, "missing"}
+				return Finding{"dotfiles", f.Target, Drift, "missing", ""}
 			}
-			return Finding{"dotfiles", f.Target, Unknown, err.Error()}
+			return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
 		}
 		if bytes.Equal(src, tgt) {
-			return Finding{"dotfiles", f.Target, OK, ""}
+			return Finding{"dotfiles", f.Target, OK, "", ""}
 		}
-		return Finding{"dotfiles", f.Target, Drift, "content differs"}
+		return Finding{"dotfiles", f.Target, Drift, "content differs", ""}
 	case "template":
 		if _, err := pr.ReadFile(f.Target); err != nil {
 			if os.IsNotExist(err) {
-				return Finding{"dotfiles", f.Target, Drift, "missing"}
+				return Finding{"dotfiles", f.Target, Drift, "missing", ""}
 			}
-			return Finding{"dotfiles", f.Target, Unknown, err.Error()}
+			return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
 		}
-		return Finding{"dotfiles", f.Target, OK, ""}
+		return Finding{"dotfiles", f.Target, OK, "", ""}
 	}
-	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode)}
+	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode), ""}
 }
 
 func checkMounts(plan *resolve.Plan, pr Probes) []probeTask {
@@ -305,6 +315,7 @@ func checkMounts(plan *resolve.Plan, pr Probes) []probeTask {
 	for _, e := range plan.Mounts.Entries {
 		tasks = append(tasks, probeTask{
 			section: "mounts",
+			module:  e.Module,
 			item:    e.Spec.Destination,
 			run: func(ctx context.Context) Finding {
 				return checkMount(ctx, e, pr)
@@ -320,32 +331,32 @@ func checkMount(ctx context.Context, e resolve.MountEntry, pr Probes) Finding {
 	unit := generate.EscapePath(e.Spec.Destination) + ".mount"
 
 	if ok, err := pr.StatDir(e.Spec.Destination); err != nil {
-		return Finding{section, item, Unknown, err.Error()}
+		return Finding{section, item, Unknown, err.Error(), ""}
 	} else if !ok {
-		return Finding{section, item, Drift, "destination missing"}
+		return Finding{section, item, Drift, "destination missing", ""}
 	}
 
 	enabled, st, detail := enabledState(ctx, pr, unit)
 	if st == Unknown {
-		return Finding{section, item, Unknown, detail}
+		return Finding{section, item, Unknown, detail, ""}
 	}
 	if st == Drift {
-		return Finding{section, item, Drift, detail}
+		return Finding{section, item, Drift, detail, ""}
 	}
 	if e.Spec.State == "disabled" {
 		if enabled {
-			return Finding{section, item, Drift, "enabled but declared disabled"}
+			return Finding{section, item, Drift, "enabled but declared disabled", ""}
 		}
-		return Finding{section, item, OK, ""}
+		return Finding{section, item, OK, "", ""}
 	}
 	if !enabled {
-		return Finding{section, item, Drift, "not enabled"}
+		return Finding{section, item, Drift, "not enabled", ""}
 	}
 	activeOut, err := pr.Run(ctx, "systemctl", "is-active", unit)
 	if err != nil || strings.TrimSpace(activeOut) != "active" {
-		return Finding{section, item, Drift, "not active"}
+		return Finding{section, item, Drift, "not active", ""}
 	}
-	return Finding{section, item, OK, ""}
+	return Finding{section, item, OK, "", ""}
 }
 
 // enabledState runs `systemctl is-enabled <unit>` and classifies the output.
@@ -387,34 +398,37 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 
 	tasks = append(tasks, probeTask{
 		section: section,
+		module:  mod.Module,
 		item:    group,
 		run: func(ctx context.Context) Finding {
 			if _, err := pr.Run(ctx, "getent", "group", group); err != nil {
-				return Finding{section, group, Drift, fmt.Sprintf("group %s missing", group)}
+				return Finding{section, group, Drift, fmt.Sprintf("group %s missing", group), ""}
 			}
-			return Finding{section, group, OK, ""}
+			return Finding{section, group, OK, "", ""}
 		},
 	})
 
 	for _, u := range mod.Spec.Users {
 		tasks = append(tasks, probeTask{
 			section: section,
+			module:  mod.Module,
 			item:    u,
 			run: func(ctx context.Context) Finding {
 				got, err := pr.Run(ctx, "id", "-Gn", u)
 				if err != nil {
-					return Finding{section, u, Drift, fmt.Sprintf("user %s missing", u)}
+					return Finding{section, u, Drift, fmt.Sprintf("user %s missing", u), ""}
 				}
 				if !containsField(got, group) {
-					return Finding{section, u, Drift, fmt.Sprintf("user %s not in group %s", u, group)}
+					return Finding{section, u, Drift, fmt.Sprintf("user %s not in group %s", u, group), ""}
 				}
-				return Finding{section, u, OK, ""}
+				return Finding{section, u, OK, "", ""}
 			},
 		})
 	}
 
 	tasks = append(tasks, probeTask{
 		section: section,
+		module:  mod.Module,
 		item:    "smb",
 		run: func(ctx context.Context) Finding {
 			return checkService(ctx, section, "smb", pr)
@@ -423,6 +437,7 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 	if mod.Spec.Avahi == nil || *mod.Spec.Avahi {
 		tasks = append(tasks, probeTask{
 			section: section,
+			module:  mod.Module,
 			item:    "avahi-daemon",
 			run: func(ctx context.Context) Finding {
 				return checkService(ctx, section, "avahi-daemon", pr)
@@ -443,16 +458,17 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 		for _, name := range names {
 			tasks = append(tasks, probeTask{
 				section: section,
+				module:  mod.Module,
 				item:    name,
 				run: func(ctx context.Context) Finding {
 					tp, err := pr.Run(ctx, "testparm", "-s")
 					switch {
 					case err != nil:
-						return Finding{section, name, Unknown, "testparm failed"}
+						return Finding{section, name, Unknown, "testparm failed", ""}
 					case strings.Contains(tp, "["+name+"]"):
-						return Finding{section, name, OK, ""}
+						return Finding{section, name, OK, "", ""}
 					default:
-						return Finding{section, name, Drift, fmt.Sprintf("share %s not in smb config", name)}
+						return Finding{section, name, Drift, fmt.Sprintf("share %s not in smb config", name), ""}
 					}
 				},
 			})
@@ -466,26 +482,30 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 func checkService(ctx context.Context, section, name string, pr Probes) Finding {
 	enabled, st, detail := enabledState(ctx, pr, name)
 	if st == Unknown {
-		return Finding{section, name, Unknown, detail}
+		return Finding{section, name, Unknown, detail, ""}
 	}
 	if st == Drift {
-		return Finding{section, name, Drift, detail}
+		return Finding{section, name, Drift, detail, ""}
 	}
 	if !enabled {
-		return Finding{section, name, Drift, "not enabled"}
+		return Finding{section, name, Drift, "not enabled", ""}
 	}
 	activeOut, err := pr.Run(ctx, "systemctl", "is-active", name)
 	if err != nil || strings.TrimSpace(activeOut) != "active" {
-		return Finding{section, name, Drift, "not active"}
+		return Finding{section, name, Drift, "not active", ""}
 	}
-	return Finding{section, name, OK, ""}
+	return Finding{section, name, OK, "", ""}
 }
 
 // Render writes the drift report. Sections appear in fixed order and only when
-// they have ≥1 finding; non-OK findings print as `  <status>: <item> — <detail>`;
-// a section whose findings are all OK prints `  ok: all N checks passed`. The
-// final line is `no drift` when nothing drifted, otherwise `drift: N item(s)`
-// (singular `item` at 1) with `, K unknown` appended when there are unknowns.
+// they have ≥1 finding. Non-OK findings print as `  <module>: <item> — <detail>`;
+// the owning module replaces the status prefix (drift is implied for listed
+// items; unknown items get a (?) suffix). A section whose findings are all OK
+// prints `  ok: all N checks passed`. On a TTY, finding lines are colored by
+// issue type: orange (missing/version drift), red (not-a-symlink/unknown),
+// yellow (content differs). The final line is `no drift` when nothing drifted,
+// otherwise `drift: N item(s)` with `, K unknown` appended when there are
+// unknowns.
 func Render(w io.Writer, findings []Finding) {
 	driftCount, unknownCount := 0, 0
 	for _, f := range findings {
@@ -496,6 +516,8 @@ func Render(w io.Writer, findings []Finding) {
 			unknownCount++
 		}
 	}
+
+	color := executil.IsTerminal(w)
 
 	wroteSection := false
 	for _, sec := range sectionOrder {
@@ -511,7 +533,7 @@ func Render(w io.Writer, findings []Finding) {
 				continue
 			}
 			allOK = false
-			fmt.Fprintf(w, "  %s: %s — %s\n", f.Status, f.Item, f.Detail)
+			renderFinding(w, f, color)
 		}
 		if allOK {
 			fmt.Fprintf(w, "  ok: all %d checks passed\n", len(secFindings))
@@ -534,6 +556,45 @@ func Render(w io.Writer, findings []Finding) {
 		summary += fmt.Sprintf(", %d unknown", unknownCount)
 	}
 	fmt.Fprintln(w, summary)
+}
+
+// ANSI color codes for TTY output; applied only when color is true.
+const (
+	ansiReset  = "\033[0m"
+	ansiRed    = "\033[31m"
+	ansiYellow = "\033[33m"
+	ansiOrange = "\033[38;5;208m"
+)
+
+// renderFinding writes one drift/unknown finding line. The owning module
+// replaces the redundant status prefix; unknown items get a (?) suffix.
+func renderFinding(w io.Writer, f Finding, color bool) {
+	mod := f.Module
+	if mod == "" {
+		mod = "?"
+	}
+	suffix := ""
+	if f.Status == Unknown {
+		suffix = " (?)"
+	}
+	line := fmt.Sprintf("  %s: %s — %s%s", mod, f.Item, f.Detail, suffix)
+	if color {
+		line = findingColor(f) + line + ansiReset
+	}
+	fmt.Fprintln(w, line)
+}
+
+// findingColor returns the ANSI color for a finding: red for not-a-symlink and
+// unknown (permissions/structural), yellow for content-differs, orange for
+// everything else (missing, version mismatch, not enabled, etc.).
+func findingColor(f Finding) string {
+	if f.Status == Unknown || strings.Contains(f.Detail, "not a symlink") {
+		return ansiRed
+	}
+	if f.Detail == "content differs" {
+		return ansiYellow
+	}
+	return ansiOrange
 }
 
 func findingsOfSection(findings []Finding, section string) []Finding {

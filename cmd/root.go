@@ -32,7 +32,7 @@ type RootFlags struct {
 	LogFormat     string `help:"Log format (console,json)" enum:"console,json" default:"console" env:"LOG_FORMAT"`
 	PProf         bool   `help:"Enable pprof profiling server" default:"false"`
 	PProfListenOn string `help:"Listen address for pprof profiling server" default:"127.0.0.1:6060"`
-	NoColor       bool   `help:"Disable colored output" default:"false"`
+	NoColor       bool   `help:"Disable colored output" default:"false" env:"NO_COLOR"`
 }
 
 // root CLI structure.

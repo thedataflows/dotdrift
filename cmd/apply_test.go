@@ -656,15 +656,17 @@ func TestApply_diffFlagExternalTool(t *testing.T) {
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	stubApplyDeps(t, f)
-	target := writeCopyProfile(t, dir, "old\n", "new\n")
+	writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo", Out: &buf}).Run())
-
-	// echo prints its args (the two file paths), proving the tool was invoked
+	// cat reads the combined diff from stdin and prints it, proving the tool
+	// was invoked with the diff content piped via stdin (single invocation).
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "cat", Out: &buf}).Run())
 	out := buf.String()
-	require.Contains(t, out, target)
-	require.Contains(t, out, filepath.Join(dir, "modules", "demo", "files", "config"))
+	require.Contains(t, out, "---")
+	require.Contains(t, out, "+++")
+	require.Contains(t, out, "-old")
+	require.Contains(t, out, "+new")
 }
 
 func TestApply_diffFlagExternalToolWithArgs(t *testing.T) {
@@ -675,11 +677,14 @@ func TestApply_diffFlagExternalToolWithArgs(t *testing.T) {
 	writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
-	// "echo --marker" → echo prints "--marker" then the two file paths,
-	// proving the tool spec was split into command + user args.
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo --marker", Out: &buf}).Run())
+	// "cat -n" numbers lines — proves the tool spec was split into
+	// command + user args, and the diff content was piped via stdin.
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "cat -n", Out: &buf}).Run())
 	out := buf.String()
-	require.Contains(t, out, "--marker")
+	require.Contains(t, out, "---")
+	require.Contains(t, out, "+++")
+	// cat -n prefixes lines with a number + tab
+	require.Regexp(t, `\s+1\t`, out)
 }
 
 func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {
@@ -692,5 +697,5 @@ func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {
 	var buf bytes.Buffer
 	err := (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "nonexistent-diff-tool-xyz", Out: &buf}).Run()
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "nonexistent-diff-tool-xyz")
+	require.Contains(t, err.Error(), "'nonexistent-diff-tool-xyz'")
 }

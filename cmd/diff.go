@@ -15,10 +15,12 @@ import (
 )
 
 // showDotfileDiffs prints unified diffs for copy-mode dotfiles whose content
-// differs between the profile source and the live target. Called when
-// --diff is set, after the report/plan and before the pipeline (apply) or
-// after the report (status). tool is "internal" for the built-in diff or a
-// command name for external. Returns an error if an external diff tool fails.
+// differs between the profile source and the live target. Called when --diff
+// is set, after the report/plan and before the pipeline (apply) or after the
+// report (status). tool is "internal" for the built-in diff or a command spec
+// for external. External tools are invoked once per differing file, receiving
+// the internal unified diff for that file via stdin. Returns an error if an
+// external diff tool fails.
 func showDotfileDiffs(plan *resolve.Plan, profileRoot string, tool string, out io.Writer) error {
 	home, _ := os.UserHomeDir()
 	color := executil.ColorEnabled(out)
@@ -42,12 +44,12 @@ func showDotfileDiffs(plan *resolve.Plan, profileRoot string, tool string, out i
 			if string(src) == string(tgt) {
 				continue
 			}
+			diffStr := drift.UnifiedDiff(f.Target, string(tgt), f.Source, string(src))
 			fmt.Fprintf(out, "\n[%s] %s\n", e.Module, f.Target)
 			if tool == "internal" {
-				diff := drift.UnifiedDiff(f.Target, string(tgt), f.Source, string(src))
-				fmt.Fprint(out, drift.ColorDiff(diff, color))
+				fmt.Fprint(out, drift.ColorDiff(diffStr, color))
 			} else {
-				if err := externalDiff(tool, f.Target, f.Source, out); err != nil {
+				if err := externalDiff(tool, diffStr, out); err != nil {
 					return err
 				}
 			}
@@ -56,46 +58,30 @@ func showDotfileDiffs(plan *resolve.Plan, profileRoot string, tool string, out i
 	return nil
 }
 
-// externalDiff runs a diff tool as a subprocess, streaming stdout to out.
-// The tool receives the target and source paths as arguments; "diff" gets
-// -u prepended for unified format. Only diff's exit code 1 (files differ) is
-// tolerated; any other failure — tool not found, crash, non-zero exit — is
-// returned as an error including captured stderr.
-// externalDiff runs a diff tool as a subprocess, streaming stdout to out.
-// The tool spec may include arguments (e.g. "delta --no-gitconfig"); it is
-// split on whitespace. The target and source paths are appended after any
-// user-supplied args; "diff" gets -u prepended for unified format. Only diff's
-// exit code 1 (files differ) is tolerated; any other failure — tool not found,
-// crash, non-zero exit — is returned as an error including captured stderr.
-func externalDiff(toolSpec, target, source string, out io.Writer) error {
+// externalDiff pipes a single file's unified diff through an external tool's
+// stdin. The tool spec may include arguments (e.g. "delta --no-gitconfig"); it
+// is split on whitespace. Any failure — tool not found, crash, non-zero exit —
+// is returned as an error including captured stderr. The full tool spec appears
+// in single quotes in the error.
+func externalDiff(toolSpec, diffContent string, out io.Writer) error {
 	parts := strings.Fields(toolSpec)
 	if len(parts) == 0 {
 		return fmt.Errorf("diff tool: empty command")
 	}
 	tool := parts[0]
-	userArgs := parts[1:]
-	isDiff := tool == "diff"
-	var args []string
-	if isDiff {
-		args = append(args, "-u")
-	}
-	args = append(args, userArgs...)
-	args = append(args, target, source)
+	args := parts[1:]
 	cmd := exec.Command(tool, args...)
+	cmd.Stdin = strings.NewReader(diffContent)
 	cmd.Stdout = out
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		// diff exits 1 when files differ — that's the normal case, not an error.
-		if exitErr, ok := err.(*exec.ExitError); ok && isDiff && exitErr.ExitCode() == 1 {
-			return nil
-		}
 		detail := strings.TrimSpace(stderr.String())
 		if detail != "" {
-			return fmt.Errorf("diff tool %s: %w: %s", tool, err, detail)
+			return fmt.Errorf("diff tool '%s': %w: %s", toolSpec, err, detail)
 		}
-		return fmt.Errorf("diff tool %s: %w", tool, err)
+		return fmt.Errorf("diff tool '%s': %w", toolSpec, err)
 	}
 	return nil
 }

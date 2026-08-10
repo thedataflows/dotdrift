@@ -61,12 +61,25 @@ func showDotfileDiffs(plan *resolve.Plan, profileRoot string, tool string, out i
 // -u prepended for unified format. Only diff's exit code 1 (files differ) is
 // tolerated; any other failure — tool not found, crash, non-zero exit — is
 // returned as an error including captured stderr.
-func externalDiff(tool, target, source string, out io.Writer) error {
-	args := []string{}
+// externalDiff runs a diff tool as a subprocess, streaming stdout to out.
+// The tool spec may include arguments (e.g. "delta --no-gitconfig"); it is
+// split on whitespace. The target and source paths are appended after any
+// user-supplied args; "diff" gets -u prepended for unified format. Only diff's
+// exit code 1 (files differ) is tolerated; any other failure — tool not found,
+// crash, non-zero exit — is returned as an error including captured stderr.
+func externalDiff(toolSpec, target, source string, out io.Writer) error {
+	parts := strings.Fields(toolSpec)
+	if len(parts) == 0 {
+		return fmt.Errorf("diff tool: empty command")
+	}
+	tool := parts[0]
+	userArgs := parts[1:]
 	isDiff := tool == "diff"
+	var args []string
 	if isDiff {
 		args = append(args, "-u")
 	}
+	args = append(args, userArgs...)
 	args = append(args, target, source)
 	cmd := exec.Command(tool, args...)
 	cmd.Stdout = out

@@ -667,6 +667,21 @@ func TestApply_diffFlagExternalTool(t *testing.T) {
 	require.Contains(t, out, filepath.Join(dir, "modules", "demo", "files", "config"))
 }
 
+func TestApply_diffFlagExternalToolWithArgs(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+	writeCopyProfile(t, dir, "old\n", "new\n")
+
+	var buf bytes.Buffer
+	// "echo --marker" → echo prints "--marker" then the two file paths,
+	// proving the tool spec was split into command + user args.
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo --marker", Out: &buf}).Run())
+	out := buf.String()
+	require.Contains(t, out, "--marker")
+}
+
 func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")

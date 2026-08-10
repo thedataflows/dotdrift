@@ -95,3 +95,13 @@ var IsTerminal = func(w io.Writer) bool {
 func StreamLive(verbose bool, out, err io.Writer) bool {
 	return verbose || (IsTerminal(out) && IsTerminal(err))
 }
+
+// NoColor, when true, disables ANSI color output in dotdrift's own rendering.
+// Set by the --no-color flag or the NO_COLOR env var (no-color.org standard).
+var NoColor bool
+
+// ColorEnabled reports whether color should be applied for w: it is a terminal
+// and NoColor has not been set.
+func ColorEnabled(w io.Writer) bool {
+	return !NoColor && IsTerminal(w)
+}

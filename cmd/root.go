@@ -14,6 +14,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
 const (
@@ -31,6 +32,7 @@ type RootFlags struct {
 	LogFormat     string `help:"Log format (console,json)" enum:"console,json" default:"console" env:"LOG_FORMAT"`
 	PProf         bool   `help:"Enable pprof profiling server" default:"false"`
 	PProfListenOn string `help:"Listen address for pprof profiling server" default:"127.0.0.1:6060"`
+	NoColor       bool   `help:"Disable colored output" default:"false"`
 }
 
 // root CLI structure.
@@ -70,6 +72,10 @@ func (cli *CLI) AfterApply(kctx *kong.Context) error {
 				log.Error().Err(err).Str("listen", cli.PProfListenOn).Msg("pprof profiling server stopped")
 			}
 		}()
+	}
+	if cli.NoColor || os.Getenv("NO_COLOR") != "" {
+		executil.NoColor = true
+		os.Setenv("NO_COLOR", "1") // propagate to child processes (mise, paru)
 	}
 	return nil
 }

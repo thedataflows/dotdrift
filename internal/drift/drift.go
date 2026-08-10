@@ -517,7 +517,7 @@ func Render(w io.Writer, findings []Finding) {
 		}
 	}
 
-	color := executil.IsTerminal(w)
+	color := executil.ColorEnabled(w)
 
 	wroteSection := false
 	for _, sec := range sectionOrder {

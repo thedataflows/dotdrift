@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
@@ -708,6 +710,20 @@ func TestRender_modulePrefix(t *testing.T) {
 	out := buf.String()
 	require.Contains(t, out, "editor: neovim — missing")
 	require.Contains(t, out, "?: vim — missing")
+}
+
+func TestRender_noColorDisablesANSI(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = true
+
+	var buf bytes.Buffer
+	drift.Render(&buf, []drift.Finding{
+		{Section: "packages", Item: "neovim", Status: drift.Drift, Detail: "missing", Module: "editor"},
+	})
+	require.NotContains(t, buf.String(), "\033[", "no ANSI codes when NoColor is set, even on a terminal")
 }
 
 func TestRender_allOK(t *testing.T) {

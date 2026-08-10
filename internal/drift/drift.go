@@ -585,13 +585,14 @@ func renderFinding(w io.Writer, f Finding, color bool) {
 }
 
 // findingColor returns the ANSI color for a finding: red for not-a-symlink and
-// unknown (permissions/structural), yellow for content-differs, orange for
-// everything else (missing, version mismatch, not enabled, etc.).
+// unknown (permissions/structural), yellow for content-differs and version
+// mismatch (exists but doesn't match desired state), orange for everything
+// else (missing, not enabled, still installed, etc.).
 func findingColor(f Finding) string {
 	if f.Status == Unknown || strings.Contains(f.Detail, "not a symlink") {
 		return ansiRed
 	}
-	if f.Detail == "content differs" {
+	if f.Detail == "content differs" || strings.HasPrefix(f.Detail, "installed ") {
 		return ansiYellow
 	}
 	return ansiOrange

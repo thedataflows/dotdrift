@@ -145,3 +145,34 @@ func TestStatus_defaultsToProfileStatePath(t *testing.T) {
 	require.NoError(t, (&StatusCmd{Profile: profile, out: &buf}).Run())
 	require.Contains(t, buf.String(), "state: "+state.ProfileStatePath(profile))
 }
+
+func TestStatus_verboseShowsProgress(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
+
+	var buf, errBuf bytes.Buffer
+	require.NoError(t, (&StatusCmd{
+		Profile: profile,
+		State:   filepath.Join(t.TempDir(), "state.json"),
+		Verbose: true,
+		out:     &buf,
+		err:     &errBuf,
+	}).Run())
+
+	// Progress lines reach stderr; stdout report stays clean.
+	require.Contains(t, errBuf.String(), "checking packages: demo-pkg")
+	require.NotContains(t, buf.String(), "checking")
+}
+
+func TestStatus_jobsFlagAccepted(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	var j1, j0 bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, Jobs: 1, out: &j1}).Run())
+	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, Jobs: 0, out: &j0}).Run())
+	require.Equal(t, j0.String(), j1.String())
+}

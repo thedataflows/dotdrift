@@ -144,7 +144,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift modules [modules...]` | List selected and skipped modules (optionally limited to the listed modules). |
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
 | `dotdrift apply [--yes] [--no-hooks] [--verbose] [modules...]` | Run the full pipeline and resume from the last successful step (the cursor file is deleted on completion; optionally limited to the listed modules). |
-| `dotdrift status` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Exits 0 even when drift is found. |
+| `dotdrift status [-v] [-j N]` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Probes run concurrently (`-j N` workers; default: CPUs); `-v` streams per-probe progress (`checking <section>: <item>`) to stderr. Exits 0 even when drift is found. |
 | `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 

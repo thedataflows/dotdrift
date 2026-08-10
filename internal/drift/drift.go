@@ -9,9 +9,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
 
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -98,82 +101,161 @@ func defaultStatDir(path string) (bool, error) {
 // sectionOrder is the fixed display order for report sections.
 var sectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb"}
 
-// Check runs every read-only probe for the plan and returns findings in fixed
-// section order (packages → tools → dotfiles → mounts → smb). Items within a
-// section follow plan order (tools are sorted by name for determinism). A
-// section whose plan has zero items produces zero findings and is omitted from
-// Render.
-func Check(ctx context.Context, plan *resolve.Plan, profileRoot string, pr Probes) []Finding {
+// CheckOptions controls how Check runs its probes.
+type CheckOptions struct {
+	// Jobs bounds concurrent probe workers; <= 0 uses runtime.NumCPU().
+	Jobs int
+	// Verbose, when non-nil, receives one "checking <section>: <item>" line
+	// per probe as it starts. Writes are serialized internally.
+	Verbose io.Writer
+}
+
+// probeTask is one unit of concurrent work: a probe producing a single finding.
+// section/item identify the probe for verbose progress; run does the probe.
+type probeTask struct {
+	section string
+	item    string
+	run     func(ctx context.Context) Finding
+}
+
+// Check runs every read-only probe for the plan concurrently (bounded by
+// opts.Jobs; <= 0 → runtime.NumCPU) and returns findings in fixed section order
+// (packages → tools → dotfiles → mounts → smb). Each worker writes only its own
+// indexed result slot, so output order is deterministic regardless of
+// completion order. opts.Verbose, when non-nil, receives one
+// "checking <section>: <item>" line per probe as it starts. A nil plan returns nil.
+func Check(ctx context.Context, plan *resolve.Plan, profileRoot string, pr Probes, opts CheckOptions) []Finding {
 	if plan == nil {
 		return nil
 	}
-	var findings []Finding
-	findings = append(findings, checkPackages(ctx, plan, pr)...)
-	findings = append(findings, checkTools(ctx, plan, pr)...)
-	findings = append(findings, checkDotfiles(ctx, plan, profileRoot, pr)...)
-	findings = append(findings, checkMounts(ctx, plan, pr)...)
-	findings = append(findings, checkSmb(ctx, plan, pr)...)
-	return findings
+	tasks := checkPackages(plan, pr)
+	tasks = append(tasks, checkTools(plan, pr)...)
+	tasks = append(tasks, checkDotfiles(plan, profileRoot, pr)...)
+	tasks = append(tasks, checkMounts(plan, pr)...)
+	tasks = append(tasks, checkSmb(plan, pr)...)
+
+	jobs := opts.Jobs
+	if jobs <= 0 {
+		jobs = runtime.NumCPU()
+	}
+
+	var vw *executil.LockedWriter
+	if opts.Verbose != nil {
+		vw = &executil.LockedWriter{W: opts.Verbose}
+	}
+
+	results := make([]Finding, len(tasks))
+	work := make(chan int)
+	var wg sync.WaitGroup
+	for range jobs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range work {
+				t := tasks[i]
+				if vw != nil {
+					fmt.Fprintf(vw, "checking %s: %s\n", t.section, t.item)
+				}
+				results[i] = t.run(ctx)
+			}
+		}()
+	}
+	for i := range tasks {
+		work <- i
+	}
+	close(work)
+	wg.Wait()
+	return results
 }
 
-func checkPackages(ctx context.Context, plan *resolve.Plan, pr Probes) []Finding {
-	var out []Finding
+func checkPackages(plan *resolve.Plan, pr Probes) []probeTask {
+	var tasks []probeTask
 	for _, pkg := range plan.Packages.Install {
-		installed, err := pr.IsInstalled(ctx, pkg)
-		switch {
-		case err != nil:
-			out = append(out, Finding{"packages", pkg, Unknown, err.Error()})
-		case installed:
-			out = append(out, Finding{"packages", pkg, OK, ""})
-		default:
-			out = append(out, Finding{"packages", pkg, Drift, "missing"})
-		}
+		tasks = append(tasks, probeTask{
+			section: "packages",
+			item:    pkg,
+			run: func(ctx context.Context) Finding {
+				installed, err := pr.IsInstalled(ctx, pkg)
+				switch {
+				case err != nil:
+					return Finding{"packages", pkg, Unknown, err.Error()}
+				case installed:
+					return Finding{"packages", pkg, OK, ""}
+				default:
+					return Finding{"packages", pkg, Drift, "missing"}
+				}
+			},
+		})
 	}
 	for _, pkg := range plan.Packages.Remove {
-		installed, err := pr.IsInstalled(ctx, pkg)
-		switch {
-		case err != nil:
-			out = append(out, Finding{"packages", pkg, Unknown, err.Error()})
-		case installed:
-			out = append(out, Finding{"packages", pkg, Drift, "still installed"})
-		default:
-			out = append(out, Finding{"packages", pkg, OK, ""})
-		}
+		tasks = append(tasks, probeTask{
+			section: "packages",
+			item:    pkg,
+			run: func(ctx context.Context) Finding {
+				installed, err := pr.IsInstalled(ctx, pkg)
+				switch {
+				case err != nil:
+					return Finding{"packages", pkg, Unknown, err.Error()}
+				case installed:
+					return Finding{"packages", pkg, Drift, "still installed"}
+				default:
+					return Finding{"packages", pkg, OK, ""}
+				}
+			},
+		})
 	}
-	return out
+	return tasks
 }
 
-func checkTools(ctx context.Context, plan *resolve.Plan, pr Probes) []Finding {
-	var out []Finding
+func checkTools(plan *resolve.Plan, pr Probes) []probeTask {
+	var tasks []probeTask
 	for _, name := range sortedKeys(plan.Tools.Versions) {
 		want := plan.Tools.Versions[name]
-		got, err := pr.ToolCurrent(ctx, name)
-		if err != nil || got == "" {
-			out = append(out, Finding{"tools", name, Unknown, "mise not available or tool not installed"})
-			continue
-		}
-		if got == want || strings.HasPrefix(got, want+".") {
-			out = append(out, Finding{"tools", name, OK, ""})
-		} else {
-			out = append(out, Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want)})
-		}
+		tasks = append(tasks, probeTask{
+			section: "tools",
+			item:    name,
+			run: func(ctx context.Context) Finding {
+				got, err := pr.ToolCurrent(ctx, name)
+				if err != nil || got == "" {
+					return Finding{"tools", name, Unknown, "mise not available or tool not installed"}
+				}
+				if got == want || strings.HasPrefix(got, want+".") {
+					return Finding{"tools", name, OK, ""}
+				}
+				return Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want)}
+			},
+		})
 	}
-	return out
+	return tasks
 }
 
-func checkDotfiles(ctx context.Context, plan *resolve.Plan, profileRoot string, pr Probes) []Finding {
-	var out []Finding
+func checkDotfiles(plan *resolve.Plan, profileRoot string, pr Probes) []probeTask {
+	var tasks []probeTask
 	for _, e := range plan.Dotfiles.Entries {
 		files, err := mise.ResolveBootstrapFiles([]resolve.DotfileEntry{e}, profileRoot, pr.HomeDir)
 		if err != nil {
-			out = append(out, Finding{"dotfiles", e.Target, Unknown, err.Error()})
+			target := e.Target
+			errMsg := err.Error()
+			tasks = append(tasks, probeTask{
+				section: "dotfiles",
+				item:    target,
+				run: func(ctx context.Context) Finding {
+					return Finding{"dotfiles", target, Unknown, errMsg}
+				},
+			})
 			continue
 		}
 		for _, f := range files {
-			out = append(out, checkDotfileFile(f, pr))
+			tasks = append(tasks, probeTask{
+				section: "dotfiles",
+				item:    f.Target,
+				run: func(ctx context.Context) Finding {
+					return checkDotfileFile(f, pr)
+				},
+			})
 		}
 	}
-	return out
+	return tasks
 }
 
 func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
@@ -215,12 +297,18 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode)}
 }
 
-func checkMounts(ctx context.Context, plan *resolve.Plan, pr Probes) []Finding {
-	var out []Finding
+func checkMounts(plan *resolve.Plan, pr Probes) []probeTask {
+	var tasks []probeTask
 	for _, e := range plan.Mounts.Entries {
-		out = append(out, checkMount(ctx, e, pr))
+		tasks = append(tasks, probeTask{
+			section: "mounts",
+			item:    e.Spec.Destination,
+			run: func(ctx context.Context) Finding {
+				return checkMount(ctx, e, pr)
+			},
+		})
 	}
-	return out
+	return tasks
 }
 
 func checkMount(ctx context.Context, e resolve.MountEntry, pr Probes) Finding {
@@ -277,65 +365,97 @@ func enabledState(ctx context.Context, pr Probes, unit string) (enabled bool, st
 	return false, Unknown, fmt.Sprintf("unexpected is-enabled output %s", trimmed)
 }
 
-func checkSmb(ctx context.Context, plan *resolve.Plan, pr Probes) []Finding {
-	var out []Finding
+func checkSmb(plan *resolve.Plan, pr Probes) []probeTask {
+	var tasks []probeTask
 	for _, mod := range plan.Smb.Modules {
-		out = append(out, checkSmbModule(ctx, mod, pr)...)
+		tasks = append(tasks, checkSmbModule(mod, pr)...)
 	}
-	return out
+	return tasks
 }
 
-func checkSmbModule(ctx context.Context, mod resolve.SmbModuleSpec, pr Probes) []Finding {
+func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 	const section = "smb"
-	var out []Finding
+	var tasks []probeTask
 
 	group := mod.Spec.Group
 	if group == "" {
 		group = "smb"
 	}
-	if _, err := pr.Run(ctx, "getent", "group", group); err != nil {
-		out = append(out, Finding{section, group, Drift, fmt.Sprintf("group %s missing", group)})
-	} else {
-		out = append(out, Finding{section, group, OK, ""})
-	}
+
+	tasks = append(tasks, probeTask{
+		section: section,
+		item:    group,
+		run: func(ctx context.Context) Finding {
+			if _, err := pr.Run(ctx, "getent", "group", group); err != nil {
+				return Finding{section, group, Drift, fmt.Sprintf("group %s missing", group)}
+			}
+			return Finding{section, group, OK, ""}
+		},
+	})
 
 	for _, u := range mod.Spec.Users {
-		got, err := pr.Run(ctx, "id", "-Gn", u)
-		if err != nil {
-			out = append(out, Finding{section, u, Drift, fmt.Sprintf("user %s missing", u)})
-			continue
-		}
-		if !containsField(got, group) {
-			out = append(out, Finding{section, u, Drift, fmt.Sprintf("user %s not in group %s", u, group)})
-			continue
-		}
-		out = append(out, Finding{section, u, OK, ""})
+		tasks = append(tasks, probeTask{
+			section: section,
+			item:    u,
+			run: func(ctx context.Context) Finding {
+				got, err := pr.Run(ctx, "id", "-Gn", u)
+				if err != nil {
+					return Finding{section, u, Drift, fmt.Sprintf("user %s missing", u)}
+				}
+				if !containsField(got, group) {
+					return Finding{section, u, Drift, fmt.Sprintf("user %s not in group %s", u, group)}
+				}
+				return Finding{section, u, OK, ""}
+			},
+		})
 	}
 
-	out = append(out, checkService(ctx, section, "smb", pr))
+	tasks = append(tasks, probeTask{
+		section: section,
+		item:    "smb",
+		run: func(ctx context.Context) Finding {
+			return checkService(ctx, section, "smb", pr)
+		},
+	})
 	if mod.Spec.Avahi == nil || *mod.Spec.Avahi {
-		out = append(out, checkService(ctx, section, "avahi-daemon", pr))
+		tasks = append(tasks, probeTask{
+			section: section,
+			item:    "avahi-daemon",
+			run: func(ctx context.Context) Finding {
+				return checkService(ctx, section, "avahi-daemon", pr)
+			},
+		})
 	}
 
+	// ponytail: each share calls testparm -s itself (was one call per module);
+	// O(shares × testparm) — testparm is a fast local read, so the duplication
+	// buys uniform one-finding-per-task granularity. If a profile with many
+	// shares shows probe cost, memoize the output per module.
 	if len(mod.Spec.Shares) > 0 {
-		tp, err := pr.Run(ctx, "testparm", "-s")
 		names := make([]string, 0, len(mod.Spec.Shares))
 		for name := range mod.Spec.Shares {
 			names = append(names, name)
 		}
 		sort.Strings(names)
 		for _, name := range names {
-			switch {
-			case err != nil:
-				out = append(out, Finding{section, name, Unknown, "testparm failed"})
-			case strings.Contains(tp, "["+name+"]"):
-				out = append(out, Finding{section, name, OK, ""})
-			default:
-				out = append(out, Finding{section, name, Drift, fmt.Sprintf("share %s not in smb config", name)})
-			}
+			tasks = append(tasks, probeTask{
+				section: section,
+				item:    name,
+				run: func(ctx context.Context) Finding {
+					tp, err := pr.Run(ctx, "testparm", "-s")
+					switch {
+					case err != nil:
+						return Finding{section, name, Unknown, "testparm failed"}
+					case strings.Contains(tp, "["+name+"]"):
+						return Finding{section, name, OK, ""}
+					default:
+						return Finding{section, name, Drift, fmt.Sprintf("share %s not in smb config", name)}
+					}
+				},
+			})
 		}
 	}
-	return out
+	return tasks
 }
 
 // checkService verifies a systemd service is enabled and active (the enabled

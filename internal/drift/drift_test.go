@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
@@ -59,7 +60,7 @@ func runFake(responses map[string]string, errs map[string]error) func(context.Co
 }
 
 func check(ctx context.Context, plan *resolve.Plan, pr drift.Probes) []drift.Finding {
-	return drift.Check(ctx, plan, "", pr)
+	return drift.Check(ctx, plan, "", pr, drift.CheckOptions{})
 }
 
 // --- packages ---
@@ -172,7 +173,7 @@ func TestCheck_dotfilesSymlinkOK(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr, drift.CheckOptions{})
 	require.Len(t, fs, 1)
 	require.Equal(t, drift.OK, fs[0].Status)
 }
@@ -188,7 +189,7 @@ func TestCheck_dotfilesSymlinkWrongTarget(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.Drift, fs[0].Status)
 	require.Contains(t, fs[0].Detail, "points to")
 }
@@ -201,7 +202,7 @@ func TestCheck_dotfilesSymlinkMissing(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "symlink"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.Drift, fs[0].Status)
 	require.Equal(t, "missing", fs[0].Detail)
 }
@@ -215,7 +216,7 @@ func TestCheck_dotfilesCopyEqual(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.OK, fs[0].Status)
 }
 
@@ -228,7 +229,7 @@ func TestCheck_dotfilesCopyDiffers(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.Drift, fs[0].Status)
 	require.Equal(t, "content differs", fs[0].Detail)
 }
@@ -241,7 +242,7 @@ func TestCheck_dotfilesCopyMissingTarget(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "copy"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.Drift, fs[0].Status)
 	require.Equal(t, "missing", fs[0].Detail)
 }
@@ -255,7 +256,7 @@ func TestCheck_dotfilesTemplateExists(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "template"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "template"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.OK, fs[0].Status, "template is existence-only; rendered content is not compared")
 }
 
@@ -267,7 +268,7 @@ func TestCheck_dotfilesTemplateMissing(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "template"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgt, Source: src, Mode: "template"}), root, pr, drift.CheckOptions{})
 	require.Equal(t, drift.Drift, fs[0].Status)
 	require.Equal(t, "missing", fs[0].Detail)
 }
@@ -286,8 +287,7 @@ func TestCheck_dotfilesSymlinkEachPerChild(t *testing.T) {
 
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
-	fs := drift.Check(context.Background(),
-		dotfilePlan(resolve.DotfileEntry{Target: tgtDir, Source: "units", Mode: "symlink-each"}), root, pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: tgtDir, Source: "units", Mode: "symlink-each"}), root, pr, drift.CheckOptions{})
 	require.Len(t, fs, 2, "symlink-each expands to one finding per child")
 	for _, f := range fs {
 		require.Equal(t, drift.OK, f.Status)
@@ -298,8 +298,7 @@ func TestCheck_dotfilesExpansionError(t *testing.T) {
 	pr := fakeProbes()
 	pr.HomeDir = "/home/u"
 	// symlink-each against a missing source dir → ResolveBootstrapFiles errors.
-	fs := drift.Check(context.Background(),
-		dotfilePlan(resolve.DotfileEntry{Target: "/etc/x", Source: "nope", Mode: "symlink-each"}), t.TempDir(), pr)
+	fs := drift.Check(context.Background(), dotfilePlan(resolve.DotfileEntry{Target: "/etc/x", Source: "nope", Mode: "symlink-each"}), t.TempDir(), pr, drift.CheckOptions{})
 	require.Len(t, fs, 1)
 	require.Equal(t, drift.Unknown, fs[0].Status)
 }
@@ -571,7 +570,96 @@ func TestCheck_zeroItemSectionsOmitted(t *testing.T) {
 }
 
 func TestCheck_nilPlan(t *testing.T) {
-	require.Nil(t, drift.Check(context.Background(), nil, "", fakeProbes()))
+	require.Nil(t, drift.Check(context.Background(), nil, "", fakeProbes(), drift.CheckOptions{}))
+}
+
+// --- concurrency ---
+
+func TestCheck_concurrentOrderStable(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return true, nil }
+	pr.ToolCurrent = func(context.Context, string) (string, error) { return "1.0.0", nil }
+	pr.StatDir = func(string) (bool, error) { return true, nil }
+	pr.Run = runFake(map[string]string{
+		"systemctl is-enabled mnt-data.mount": "enabled",
+		"systemctl is-active mnt-data.mount":  "active",
+		"getent group smb":                    "smb",
+		"id -Gn alice":                        "smb wheel",
+		"systemctl is-enabled smb":            "enabled",
+		"systemctl is-active smb":             "active",
+		"systemctl is-enabled avahi-daemon":   "enabled",
+		"systemctl is-active avahi-daemon":    "active",
+		"testparm -s":                         "[global]\n[media]\npath=/srv/media\n",
+	}, nil)
+
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{Install: []string{"pkg-a"}, Remove: []string{"pkg-b"}},
+		Tools:    resolve.ToolsStep{Versions: map[string]string{"go": "1.0.0"}},
+		Mounts: resolve.MountsStep{Entries: []resolve.MountEntry{
+			{Name: "m", Spec: profile.MountSpec{Destination: "/mnt/data", State: "enabled"}, Module: "mod"},
+		}},
+		Smb: resolve.SmbStep{Modules: []resolve.SmbModuleSpec{
+			{Spec: profile.SmbSpec{Users: []string{"alice"}, Shares: map[string]profile.ShareSpec{"media": {Path: "/srv/media"}}}},
+		}},
+	}
+
+	seq := drift.Check(context.Background(), plan, "", pr, drift.CheckOptions{Jobs: 1})
+	par := drift.Check(context.Background(), plan, "", pr, drift.CheckOptions{Jobs: 8})
+	require.Equal(t, seq, par)
+}
+
+func TestCheck_runsConcurrently(t *testing.T) {
+	pr := fakeProbes()
+	arrived := make(chan string, 4)
+	release := make(chan struct{})
+	pr.IsInstalled = func(_ context.Context, pkg string) (bool, error) {
+		arrived <- pkg
+		<-release
+		return true, nil
+	}
+
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{Install: []string{"p1", "p2", "p3", "p4"}},
+	}
+
+	done := make(chan []drift.Finding, 1)
+	go func() {
+		done <- drift.Check(context.Background(), plan, "", pr, drift.CheckOptions{Jobs: 4})
+	}()
+
+	// All 4 probes must arrive before any finishes (each blocks on release).
+	for range 4 {
+		select {
+		case <-arrived:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for concurrent probe starts — probes did not run concurrently")
+		}
+	}
+	close(release)
+
+	select {
+	case fs := <-done:
+		require.Len(t, fs, 4)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for Check to finish")
+	}
+}
+
+func TestCheck_verboseProgress(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return true, nil }
+
+	plan := &resolve.Plan{
+		Packages: resolve.PackagesStep{Install: []string{"alpha", "beta"}, Remove: []string{"gamma"}},
+	}
+
+	var buf bytes.Buffer
+	fs := drift.Check(context.Background(), plan, "", pr, drift.CheckOptions{Verbose: &buf})
+
+	require.Equal(t, len(fs), strings.Count(buf.String(), "\n"), "one verbose line per finding")
+	for _, f := range fs {
+		require.Contains(t, buf.String(), "checking "+f.Section+": "+f.Item)
+	}
 }
 
 // --- Render ---

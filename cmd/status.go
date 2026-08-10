@@ -17,7 +17,10 @@ import (
 type StatusCmd struct {
 	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
 	State   string `help:"Path to state file" type:"path" default:""`
+	Verbose bool   `help:"Show each probe as it starts ('checking <section>: <item>') on stderr" short:"v" default:"false"`
+	Jobs    int    `help:"Concurrent probe workers (0 = number of CPUs)" short:"j" default:"0"`
 	out     io.Writer
+	err     io.Writer
 }
 
 // Run loads state, resolves the plan, probes the live system for drift, and
@@ -51,7 +54,15 @@ func (c *StatusCmd) Run() error {
 	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
 	pr.ToolCurrent = mise.NewExecMise(defaultMise()).Current
 	profileRoot, _ := filepath.Abs(p.Root)
-	findings := drift.Check(context.Background(), plan, profileRoot, pr)
+	opts := drift.CheckOptions{Jobs: c.Jobs}
+	if c.Verbose {
+		errW := c.err
+		if errW == nil {
+			errW = os.Stderr
+		}
+		opts.Verbose = errW
+	}
+	findings := drift.Check(context.Background(), plan, profileRoot, pr, opts)
 
 	out := c.out
 	if out == nil {

@@ -176,3 +176,39 @@ func TestStatus_jobsFlagAccepted(t *testing.T) {
 	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, Jobs: 0, out: &j0}).Run())
 	require.Equal(t, j0.String(), j1.String())
 }
+
+func TestStatus_moduleFilterLimitsScope(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, &recordingBackend{events: &[]string{}}, fakeMiseNoOp)
+
+	// Two-module profile: "alpha" installs alpha-pkg, "beta" installs beta-pkg.
+	dir := t.TempDir()
+	for _, mod := range []struct{ dir, pkg string }{
+		{"alpha", "alpha-pkg"},
+		{"beta", "beta-pkg"},
+	} {
+		modDir := filepath.Join(dir, "modules", mod.dir)
+		require.NoError(t, os.MkdirAll(modDir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "`+mod.dir+`"
+app = "`+mod.dir+`"
+
+[packages]
+present = ["`+mod.pkg+`"]
+`), 0o644))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+
+	// No filter: both packages drift.
+	var all bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: statePath, out: &all}).Run())
+	require.Contains(t, all.String(), "alpha: alpha-pkg — missing")
+	require.Contains(t, all.String(), "beta: beta-pkg — missing")
+
+	// Filter to "alpha" only: alpha-pkg drifts, beta-pkg absent from output.
+	var filtered bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: statePath, Modules: []string{"alpha"}, out: &filtered}).Run())
+	require.Contains(t, filtered.String(), "alpha: alpha-pkg — missing")
+	require.NotContains(t, filtered.String(), "beta")
+}

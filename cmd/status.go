@@ -9,16 +9,18 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
 // StatusCmd reports drift between the resolved profile and the live system,
 // plus the apply resume cursor. Read-only; exits 0 even when drift is found.
 type StatusCmd struct {
-	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
-	State   string `help:"Path to state file" type:"path" default:""`
-	Verbose bool   `help:"Show each probe as it starts ('checking <section>: <item>') on stderr" short:"v" default:"false"`
-	Jobs    int    `help:"Concurrent probe workers (0 = number of CPUs)" short:"j" default:"0"`
+	Profile string   `help:"Path to profile directory" type:"existingdir" default:"."`
+	State   string   `help:"Path to state file" type:"path" default:""`
+	Verbose bool     `help:"Show each probe as it starts ('checking <section>: <item>') on stderr" short:"v" default:"false"`
+	Jobs    int      `help:"Concurrent probe workers (0 = number of CPUs)" short:"j" default:"0"`
+	Modules []string `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	out     io.Writer
 	err     io.Writer
 }
@@ -44,6 +46,9 @@ func (c *StatusCmd) Run() error {
 	p, err := profileLoad(c.Profile, f)
 	if err != nil {
 		return fmt.Errorf("load profile: %w", err)
+	}
+	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
+		return fmt.Errorf("module filter: %w", err)
 	}
 	plan, err := resolvePlan(p, f)
 	if err != nil {

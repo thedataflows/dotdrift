@@ -597,3 +597,72 @@ func TestApply_nonVerboseLeavesRunnersQuiet(t *testing.T) {
 	require.False(t, backend.verbose, "packages backend must stay quiet without --verbose")
 	require.False(t, sr.verbose, "smb runner must stay quiet without --verbose")
 }
+
+// --- diff flag ---
+
+func writeCopyProfile(t *testing.T, dir, targetContent, sourceContent string) string {
+	t.Helper()
+	target := filepath.Join(dir, "live-target")
+	require.NoError(t, os.WriteFile(target, []byte(targetContent), 0o644))
+	modDir := filepath.Join(dir, "modules", "demo")
+	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte(sourceContent), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
+app = "demo"
+
+[dotfiles]
+"`+target+`" = { source = "files/config", mode = "copy" }
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+	return target
+}
+
+func TestApply_diffFlagShowsDiff(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+	writeCopyProfile(t, dir, "theme = \"light\"\n", "theme = \"dark\"\n")
+
+	var buf bytes.Buffer
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "internal", Out: &buf}).Run())
+
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "[demo]")
+	require.Contains(t, out, "---")
+	require.Contains(t, out, "+++")
+	require.Contains(t, out, "-theme = \"light\"")
+	require.Contains(t, out, "+theme = \"dark\"")
+}
+
+func TestApply_diffFlagIdenticalFilesNoDiff(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+	writeCopyProfile(t, dir, "same\n", "same\n")
+
+	var buf bytes.Buffer
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "internal", Out: &buf}).Run())
+
+	out := buf.String()
+	require.NotContains(t, out, "---")
+	require.NotContains(t, out, "+++")
+}
+
+func TestApply_diffFlagExternalTool(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+	target := writeCopyProfile(t, dir, "old\n", "new\n")
+
+	var buf bytes.Buffer
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo", Out: &buf}).Run())
+
+	// echo prints its args (the two file paths), proving the tool was invoked
+	out := buf.String()
+	require.Contains(t, out, target)
+	require.Contains(t, out, filepath.Join(dir, "modules", "demo", "files", "config"))
+}

@@ -130,6 +130,16 @@ func Run(version string, args []string) error {
 	}
 
 	cli.args = args
+	// Normalize bare --diff to --diff=internal: kong string flags require a
+	// value, but apply --diff (no value) means "use the internal diff".
+	for i, a := range args {
+		if a == "--" {
+			break
+		}
+		if a == "--diff" {
+			args[i] = "--diff=internal"
+		}
+	}
 	kctx, err := parser.Parse(args)
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		return nil

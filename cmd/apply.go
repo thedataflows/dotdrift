@@ -258,6 +258,7 @@ type ApplyCmd struct {
 	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
 	NoHooks bool      `help:"Skip pre/post hook commands (also DOTDRIFT_NO_HOOKS=1)" default:"false"`
 	Verbose bool      `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
+	Diff    string    `help:"Show diff for files whose content differs before applying; bare = internal diff, --diff=tool uses the named tool" default:""`
 	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Out     io.Writer `kong:"-"`
 }
@@ -303,8 +304,16 @@ func (c *ApplyCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
+	profileRoot, err := filepath.Abs(p.Root)
+	if err != nil {
+		return fmt.Errorf("resolve profile root: %w", err)
+	}
 	if err := printPlan(out, plan, p, f, nil); err != nil {
 		return err
+	}
+
+	if c.Diff != "" {
+		showDotfileDiffs(plan, profileRoot, c.Diff, out)
 	}
 
 	m := defaultMise()
@@ -321,10 +330,6 @@ func (c *ApplyCmd) Run() error {
 	// rewrite this file section-by-section, so if apply crashes or fails
 	// before them, the on-disk config still mirrors the whole resolved plan
 	// for crash recovery and manual mise runs.
-	profileRoot, err := filepath.Abs(p.Root)
-	if err != nil {
-		return fmt.Errorf("resolve profile root: %w", err)
-	}
 	configDir := filepath.Join(filepath.Dir(statePath), "mise")
 	configPath := filepath.Join(configDir, "mise.toml")
 	if err := os.MkdirAll(configDir, 0o755); err != nil {

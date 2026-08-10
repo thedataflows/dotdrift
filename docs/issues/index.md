@@ -20,3 +20,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0002](0002-delegate-convergence-to-mise-bootstrap.md) | Delegate convergence mechanics to mise bootstrap | open | high |
 | [0003](0003-paru-mise-package-plugin.md) | paru mise package plugin | done | high |
 | [0004](0004-resume-cursor-and-status-drift.md) | Resume-cursor-only state and status drift report | done | medium |
+| [0005](0005-apply-diff-flag.md) | Apply --diff flag | done | medium |

@@ -20,6 +20,7 @@ type StatusCmd struct {
 	State   string   `help:"Path to state file" type:"path" default:""`
 	Verbose bool     `help:"Show each probe as it starts ('checking <section>: <item>') on stderr" short:"v" default:"false"`
 	Jobs    int      `help:"Concurrent probe workers (0 = number of CPUs)" short:"j" default:"0"`
+	Diff    string   `help:"Show diff for files whose content differs; bare = internal diff, --diff=tool uses the named tool" default:""`
 	Modules []string `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	out     io.Writer
 	err     io.Writer
@@ -81,5 +82,9 @@ func (c *StatusCmd) Run() error {
 		fmt.Fprintf(out, "resume: last completed %q — next apply resumes after it\n", s.LastCompleted)
 	}
 	drift.Render(out, findings)
+
+	if c.Diff != "" {
+		showDotfileDiffs(plan, profileRoot, c.Diff, out)
+	}
 	return nil
 }

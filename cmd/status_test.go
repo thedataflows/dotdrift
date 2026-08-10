@@ -212,3 +212,37 @@ present = ["`+mod.pkg+`"]
 	require.Contains(t, filtered.String(), "alpha: alpha-pkg — missing")
 	require.NotContains(t, filtered.String(), "beta")
 }
+
+func TestStatus_diffFlagShowsDiff(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+
+	// Profile with a copy-mode dotfile whose target has different content
+	dir := t.TempDir()
+	target := filepath.Join(dir, "live-target")
+	require.NoError(t, os.WriteFile(target, []byte("theme = \"light\"\n"), 0o644))
+	modDir := filepath.Join(dir, "modules", "demo")
+	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte("theme = \"dark\"\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
+app = "demo"
+
+[dotfiles]
+"`+target+`" = { source = "files/config", mode = "copy" }
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), Diff: "internal", out: &buf}).Run())
+
+	out := buf.String()
+	t.Log(out)
+	// Drift report present
+	require.Contains(t, out, "content differs")
+	// Diff output present after the report
+	require.Contains(t, out, "[demo]")
+	require.Contains(t, out, "---")
+	require.Contains(t, out, "+++")
+	require.Contains(t, out, "-theme = \"light\"")
+	require.Contains(t, out, "+theme = \"dark\"")
+}

@@ -536,7 +536,11 @@ func Render(w io.Writer, findings []Finding) {
 			renderFinding(w, f, color)
 		}
 		if allOK {
-			fmt.Fprintf(w, "  ok: all %d checks passed\n", len(secFindings))
+			line := fmt.Sprintf("  ok: all %d checks passed", len(secFindings))
+			if color {
+				line = ansiGreen + line + ansiReset
+			}
+			fmt.Fprintln(w, line)
 		}
 	}
 
@@ -544,7 +548,11 @@ func Render(w io.Writer, findings []Finding) {
 		fmt.Fprintln(w)
 	}
 	if driftCount == 0 && unknownCount == 0 {
-		fmt.Fprintln(w, "no drift")
+		line := "no drift"
+		if color {
+			line = ansiGreen + line + ansiReset
+		}
+		fmt.Fprintln(w, line)
 		return
 	}
 	itemWord := "items"
@@ -564,6 +572,7 @@ const (
 	ansiRed    = "\033[31m"
 	ansiYellow = "\033[33m"
 	ansiOrange = "\033[38;5;208m"
+	ansiGreen  = "\033[32m"
 )
 
 // renderFinding writes one drift/unknown finding line. The owning module

@@ -666,3 +666,16 @@ func TestApply_diffFlagExternalTool(t *testing.T) {
 	require.Contains(t, out, target)
 	require.Contains(t, out, filepath.Join(dir, "modules", "demo", "files", "config"))
 }
+
+func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+	writeCopyProfile(t, dir, "old\n", "new\n")
+
+	var buf bytes.Buffer
+	err := (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "nonexistent-diff-tool-xyz", Out: &buf}).Run()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nonexistent-diff-tool-xyz")
+}

@@ -313,7 +313,9 @@ func (c *ApplyCmd) Run() error {
 	}
 
 	if c.Diff != "" {
-		showDotfileDiffs(plan, profileRoot, c.Diff, out)
+		if err := showDotfileDiffs(plan, profileRoot, c.Diff, out); err != nil {
+			return err
+		}
 	}
 
 	m := defaultMise()

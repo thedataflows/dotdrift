@@ -84,7 +84,9 @@ func (c *StatusCmd) Run() error {
 	drift.Render(out, findings)
 
 	if c.Diff != "" {
-		showDotfileDiffs(plan, profileRoot, c.Diff, out)
+		if err := showDotfileDiffs(plan, profileRoot, c.Diff, out); err != nil {
+			return err
+		}
 	}
 	return nil
 }

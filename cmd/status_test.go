@@ -246,3 +246,27 @@ app = "demo"
 	require.Contains(t, out, "-theme = \"light\"")
 	require.Contains(t, out, "+theme = \"dark\"")
 }
+
+func TestStatus_diffFlagToolNotFoundErrors(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+
+	dir := t.TempDir()
+	target := filepath.Join(dir, "live-target")
+	require.NoError(t, os.WriteFile(target, []byte("old\n"), 0o644))
+	modDir := filepath.Join(dir, "modules", "demo")
+	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte("new\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
+app = "demo"
+
+[dotfiles]
+"`+target+`" = { source = "files/config", mode = "copy" }
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+
+	var buf bytes.Buffer
+	err := (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), Diff: "nonexistent-diff-tool-xyz", out: &buf}).Run()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "nonexistent-diff-tool-xyz")
+}

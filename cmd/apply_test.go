@@ -656,17 +656,16 @@ func TestApply_diffFlagExternalTool(t *testing.T) {
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	stubApplyDeps(t, f)
-	writeCopyProfile(t, dir, "old\n", "new\n")
+	target := writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
-	// cat reads the combined diff from stdin and prints it, proving the tool
-	// was invoked with the diff content piped via stdin (single invocation).
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "cat", Out: &buf}).Run())
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo", Out: &buf}).Run())
+
+	// echo prints its args (the two file paths), proving the tool was invoked
+	// with target and source as arguments.
 	out := buf.String()
-	require.Contains(t, out, "---")
-	require.Contains(t, out, "+++")
-	require.Contains(t, out, "-old")
-	require.Contains(t, out, "+new")
+	require.Contains(t, out, target)
+	require.Contains(t, out, filepath.Join(dir, "modules", "demo", "files", "config"))
 }
 
 func TestApply_diffFlagExternalToolWithArgs(t *testing.T) {
@@ -677,14 +676,11 @@ func TestApply_diffFlagExternalToolWithArgs(t *testing.T) {
 	writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
-	// "cat -n" numbers lines — proves the tool spec was split into
-	// command + user args, and the diff content was piped via stdin.
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "cat -n", Out: &buf}).Run())
+	// "echo --marker" → echo prints "--marker" then the two file paths,
+	// proving the tool spec was split into command + user args.
+	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo --marker", Out: &buf}).Run())
 	out := buf.String()
-	require.Contains(t, out, "---")
-	require.Contains(t, out, "+++")
-	// cat -n prefixes lines with a number + tab
-	require.Regexp(t, `\s+1\t`, out)
+	require.Contains(t, out, "--marker")
 }
 
 func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {

@@ -60,8 +60,9 @@ func showDotfileDiffs(plan *resolve.Plan, profileRoot string, tool string, out i
 // externalDiff runs a diff tool as a subprocess with the target and source
 // file paths as arguments. The tool spec may include arguments (e.g.
 // "delta --no-gitconfig"); it is split on whitespace. "diff" gets -u prepended
-// for unified format. Only diff's exit code 1 (files differ) is tolerated;
-// any other failure — tool not found, crash, non-zero exit — is returned as an
+// for unified format. Exit code 1 (differences found) is tolerated for all
+// tools — it is the standard exit for diff, git diff, delta, difftastic.
+// Any other failure — tool not found, crash, exit >1 — is returned as an
 // error including captured stderr. The full tool spec appears in single quotes.
 func externalDiff(toolSpec, target, source string, out io.Writer) error {
 	parts := strings.Fields(toolSpec)
@@ -70,9 +71,8 @@ func externalDiff(toolSpec, target, source string, out io.Writer) error {
 	}
 	tool := parts[0]
 	userArgs := parts[1:]
-	isDiff := tool == "diff"
 	var args []string
-	if isDiff {
+	if tool == "diff" {
 		args = append(args, "-u")
 	}
 	args = append(args, userArgs...)
@@ -83,9 +83,8 @@ func externalDiff(toolSpec, target, source string, out io.Writer) error {
 	cmd.Stderr = &stderr
 	err := cmd.Run()
 	if err != nil {
-		// diff exits 1 when files differ — that's the normal case, not an error.
-		if exitErr, ok := err.(*exec.ExitError); ok && isDiff && exitErr.ExitCode() == 1 {
-			return nil
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil // exit 1 = differences found (standard across diff tools)
 		}
 		detail := strings.TrimSpace(stderr.String())
 		if detail != "" {

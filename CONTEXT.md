@@ -25,6 +25,14 @@ independent: a host-layer module can be system-scoped.
 A directory of related configuration plus a `module.toml` describing it.
 Presence in any layer means managed; there is no enable list.
 
+### Edit entry
+
+A partial modification to a file the module does not fully own — injecting a
+single line, a marker-delimited block, or a rendered snippet — as opposed to
+a whole-file entry (symlink/copy/template) that takes over the target path
+entirely. Identified by an edit id within the file path. Like whole-file
+entries, edit entries work at either scope and merge per key across layers.
+
 ### Filter
 
 An explicit, per-invocation narrowing of scope to named modules on `modules`,

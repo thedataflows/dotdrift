@@ -7,3 +7,6 @@ present = ["bash", "ripgrep"]
 [dotfiles]
 "~/.bashrc" = { source = "home/.bashrc", mode = "symlink" }
 "~/.bash_profile" = { source = "home/.bash_profile", mode = "symlink" }
+# Edit entry: inject a mise activation block into ~/.profile (a file dotdrift
+# does not fully own). Key is <file-path>/<edit-id>; the last slash splits them.
+"~/.profile/mise" = { block = 'eval "$(mise activate bash)"' }

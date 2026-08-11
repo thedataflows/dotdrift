@@ -25,6 +25,7 @@ const (
 	ansiReset = "\033[0m"
 	ansiGreen = "\033[32m"
 	ansiRed   = "\033[31m"
+	ansiGrey  = "\033[90m" // bright black — used to dim the description
 )
 
 // Run loads the profile and prints selection status.
@@ -44,8 +45,9 @@ func (c *ModulesCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
+	color := executil.ColorEnabled(out)
 	selected, skipped := "+", "-"
-	if executil.ColorEnabled(out) {
+	if color {
 		selected = ansiGreen + "+" + ansiReset
 		skipped = ansiRed + "-" + ansiReset
 	}
@@ -58,22 +60,29 @@ func (c *ModulesCmd) Run() error {
 		if m.App != m.ID {
 			fmt.Fprintf(&b, " (app: %s)", m.App)
 		}
-		writeDescription(&b, m.Config.Description)
+		writeDescription(&b, m.Config.Description, color)
 		fmt.Fprintln(out, b.String())
 	}
 	for _, s := range p.Skipped {
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s %s %s", skipped, s.Module.ID, s.Reason)
-		writeDescription(&b, s.Module.Config.Description)
+		writeDescription(&b, s.Module.Config.Description, color)
 		fmt.Fprintln(out, b.String())
 	}
 	return nil
 }
 
 // writeDescription appends a module's description after an em-dash separator
-// (the same separator the drift report uses for detail) when one is set.
-func writeDescription(b *strings.Builder, desc string) {
-	if desc != "" {
-		fmt.Fprintf(b, " — %s", desc)
+// (the same separator the drift report uses for detail) when one is set. On a
+// TTY the whole suffix is dimmed grey so the description reads as secondary
+// to the colored +/- status marker.
+func writeDescription(b *strings.Builder, desc string, color bool) {
+	if desc == "" {
+		return
 	}
+	if color {
+		fmt.Fprintf(b, " %s— %s%s", ansiGrey, desc, ansiReset)
+		return
+	}
+	fmt.Fprintf(b, " — %s", desc)
 }

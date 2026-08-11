@@ -98,6 +98,7 @@ python = "3.12"
 # Edit entries: partial edits keyed by "<file-path>/<edit-id>" (any scope).
 "~/.zshrc/activate" = { block = 'eval "$(mise activate zsh)"' }
 "~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
+"~/.zshrc/snippet" = { source = "snippets/zsh-snippet.sh", mode = "edit" }
 "~/.gitconfig/id" = { source = "snippets/git.tmpl", template = "tera" }
 
 [hooks]
@@ -159,20 +160,27 @@ public = false
       is symlinked individually into the target directory.
   - **Edit entries** are partial edits to a file something else owns. The key
     is `<file-path>/<edit-id>` (the last slash splits file path from edit id);
-    the value uses one of three forms, mirroring mise's vocabulary exactly
-    (https://mise.jdx.dev/dotfiles.html, "Edit entries"):
+    the value uses one of four forms:
     - `line = "..."`: ensure an exact line exists in the file.
     - `block = "..."` (optionally `comment = "#"`): wrap the block in mise
       marker delimiters (`>>> mise:<edit-id> >>>` / `<<< mise:<edit-id> <<<`),
       prefixed with the comment character. Re-apply updates the block in place.
+    - `source = "..."` + `mode = "edit"`: read the source file's raw contents
+      and use them as a block (dotdrift convenience — mise has no raw-source
+      block form; `source` alone is a whole-file entry). The source is
+      resolved across layers at plan time and the contents become the block.
+      `comment` is supported, same as inline `block`. Avoids multi-line inline
+      content in `module.toml`.
     - `source = "..."` + `template = "tera"`: render the source via the engine
-      and insert it as a block. `source` is resolved across layers like a
-      whole-file source.
+      and insert it as a block (mise renders at apply time). `source` is
+      resolved across layers like a whole-file source.
     Edit-entry rules (each violation is a resolve-time error naming the module
-    and key): an edit must not set `mode`; set only one of `line`/`block`;
-    `template` requires `source` and excludes `line`/`block`; `comment` applies
-    only to `block`; the key must be `<file-path>/<edit-id>` with a non-empty
-    file path (not `~`, not `/`) and an edit id matching `[A-Za-z0-9._-]+`.
+    and key): set at most one of `line`/`block`/`template`; `mode = "edit"`
+    requires `source` and is exclusive with `line`/`block`/`template`; any
+    other `mode` on an edit entry is an error; `comment` applies only to
+    `block` and `mode = "edit"`; the key must be `<file-path>/<edit-id>` with a
+    non-empty file path (not `~`, not `/`) and an edit id matching
+    `[A-Za-z0-9._-]+`.
     Edit entries work at either scope, like whole-file entries. User-scope
     edits apply as the invoking user; system-scope edits (e.g. `/etc/hosts/...`)
     apply via elevated `mise dotfiles apply` (`sudo`) — the only mechanism for

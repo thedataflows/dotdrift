@@ -134,10 +134,13 @@ type Dotfile struct {
 	Template string `toml:"template"` // edit: engine name (e.g. "tera"); requires source
 }
 
-// IsEdit reports whether the entry is a partial edit (line/block/template-edit)
-// rather than a whole-file entry. An empty line/block/template means the entry
-// is whole-file (an ensure-empty-line edit is nonsense; mise is the backstop).
-func (d Dotfile) IsEdit() bool { return d.Line != "" || d.Block != "" || d.Template != "" }
+// IsEdit reports whether the entry is a partial edit (line/block/template, or
+// mode = "edit" with a source file) rather than a whole-file entry. An empty
+// line/block/template and a mode other than "edit" means the entry is
+// whole-file (an ensure-empty-line edit is nonsense; mise is the backstop).
+func (d Dotfile) IsEdit() bool {
+	return d.Line != "" || d.Block != "" || d.Template != "" || d.Mode == "edit"
+}
 
 // Module is a discovered module with its resolved identity and path.
 type Module struct {

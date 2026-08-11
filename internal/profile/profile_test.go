@@ -110,6 +110,7 @@ func TestDotfile_IsEdit(t *testing.T) {
 	require.True(t, profile.Dotfile{Line: "x"}.IsEdit())
 	require.True(t, profile.Dotfile{Block: "x"}.IsEdit())
 	require.True(t, profile.Dotfile{Template: "tera"}.IsEdit())
+	require.True(t, profile.Dotfile{Mode: "edit"}.IsEdit(), "mode=edit with source is an edit")
 }
 
 func TestDiscoverModules_empty(t *testing.T) {

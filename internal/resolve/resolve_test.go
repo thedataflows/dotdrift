@@ -429,6 +429,81 @@ func TestMergeDotfiles_editEntryLineResolves(t *testing.T) {
 	require.Empty(t, e.Mode)
 }
 
+// mode = "edit" reads the source file's raw contents and uses them as a
+// block — no template rendering. The source is resolved across layers; the
+// resulting entry is a normal block edit (Mode/Source cleared).
+func TestMergeDotfiles_editModeReadsSourceFile(t *testing.T) {
+	root := t.TempDir()
+	dir := writeModule(t, root, "mod", `
+[dotfiles]
+"~/.zshrc/aliases" = { source = "aliases.sh", mode = "edit", comment = "#" }
+`)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "aliases.sh"), []byte("alias ll='ls -l'\nalias la='ls -la'\n"), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err)
+	require.Len(t, plan.Dotfiles.Entries, 1)
+	e := plan.Dotfiles.Entries[0]
+	require.Equal(t, "alias ll='ls -l'\nalias la='ls -la'\n", e.Block, "block should be the source file's raw contents")
+	require.Equal(t, "#", e.Comment, "comment should be preserved")
+	require.Empty(t, e.Mode, "mode should be translated away")
+	require.Empty(t, e.Source, "source should be cleared (block edits have no source)")
+	require.True(t, e.IsEdit())
+}
+
+// mode = "edit" resolves the source across layers: base declares it, file
+// exists only in the user layer → block content comes from the user layer.
+func TestMergeDotfiles_editModeResolvesSourceAcrossLayers(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.zshrc/aliases" = { source = "aliases.sh", mode = "edit" }
+`)
+	userDir := filepath.Join(root, "users", "u", "modules", "mod")
+	require.NoError(t, os.MkdirAll(userDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(userDir, "aliases.sh"), []byte("alias fromuser='yes'\n"), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err)
+	require.Len(t, plan.Dotfiles.Entries, 1)
+	require.Equal(t, "alias fromuser='yes'\n", plan.Dotfiles.Entries[0].Block)
+}
+
+func TestMergeDotfiles_editModeErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		toml   string
+		errHas string
+	}{
+		{
+			name:   "mode edit without source",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { mode = "edit" }` + "\n",
+			errHas: "mode = \"edit\" requires source",
+		},
+		{
+			name:   "mode edit with line",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { source = "s", mode = "edit", line = "x" }` + "\n",
+			errHas: "exclusive with line/block/template",
+		},
+		{
+			name:   "mode edit with block",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { source = "s", mode = "edit", block = "x" }` + "\n",
+			errHas: "exclusive with line/block/template",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dir := writeModule(t, root, "mod", tc.toml)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "s"), []byte("x"), 0o644))
+			_, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.errHas)
+		})
+	}
+}
+
 // A template edit's source resolves across layers: base declares it, the file
 // exists only in the user layer → resolved source points at the user layer.
 func TestMergeDotfiles_editTemplateResolvesSourceAcrossLayers(t *testing.T) {

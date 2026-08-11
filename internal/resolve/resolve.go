@@ -390,6 +390,31 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 	entries := make([]DotfileEntry, 0, len(winners))
 	for target, winner := range winners {
 		df := winner.df
+		// mode = "edit" is a dotdrift convenience: read the source file's raw
+		// contents and use them as an inline block (no template rendering).
+		// Translated away here so everything downstream — validate, emit, drift,
+		// plan — sees a normal block edit. Unlike source+template (which mise
+		// renders at apply time), this reads at resolve time because mise has no
+		// raw-source block form — source alone is a whole-file entry.
+		if df.Mode == "edit" {
+			if df.Source == "" {
+				return nil, fmt.Errorf("module %s: dotfile %q: mode = \"edit\" requires source", moduleID, target)
+			}
+			if df.Line != "" || df.Block != "" || df.Template != "" {
+				return nil, fmt.Errorf("module %s: dotfile %q: mode = \"edit\" is exclusive with line/block/template", moduleID, target)
+			}
+			editSrc, err := resolveSource(winner, moduleID, base, host, user)
+			if err != nil {
+				return nil, err
+			}
+			data, err := os.ReadFile(editSrc)
+			if err != nil {
+				return nil, fmt.Errorf("module %s: dotfile %q: read edit source %q: %w", moduleID, target, editSrc, err)
+			}
+			df.Block = string(data)
+			df.Source = ""
+			df.Mode = ""
+		}
 		if df.IsEdit() {
 			if err := validateEditEntry(moduleID, target, df); err != nil {
 				return nil, err

@@ -117,7 +117,7 @@ A single `dotdrift apply` covers both scopes. User dotfiles apply as usual; syst
 
 ## Edit entries
 
-A `[dotfiles]` entry can be a partial edit to a file something else owns — keyed by `<file-path>/<edit-id>` (the last slash splits file path from edit id). Three forms mirror [mise's vocabulary](https://mise.jdx.dev/dotfiles.html) exactly:
+A `[dotfiles]` entry can be a partial edit to a file something else owns — keyed by `<file-path>/<edit-id>` (the last slash splits file path from edit id). Four forms:
 
 ```toml
 # modules/<id>/module.toml
@@ -128,15 +128,20 @@ A `[dotfiles]` entry can be a partial edit to a file something else owns — key
 # A marker-delimited block, re-applied in place; comment is optional (default #)
 "~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
 
-# A rendered block (source resolved across layers like a whole-file source)
+# A block loaded from a source file (raw contents, no rendering).
+# Avoids multi-line inline content in module.toml.
+"~/.zshrc/aliases" = { source = "aliases.sh", mode = "edit" }
+
+# A rendered block (mise renders the template at apply time)
 "~/.gitconfig/user" = { source = "git-user.tmpl", template = "tera" }
 ```
 
 - **`line`** ensures an exact line exists in the file.
 - **`block`** wraps content in mise marker delimiters (`>>> mise:<id> >>>` / `<<< mise:<id> <<<`); re-apply updates the block in place. `comment` sets the comment prefix.
-- **`source` + `template`** renders the source via the named engine (e.g. `tera`) and inserts it as a block.
+- **`source` + `mode = "edit"`** reads the source file's raw contents and uses them as a block (dotdrift convenience — keeps multi-line snippets out of `module.toml`; resolved across layers at plan time).
+- **`source` + `template`** renders the source via the named engine (e.g. `tera`) and inserts it as a block (mise renders at apply time).
 - **Either scope** — like whole-file entries. User-scope edits apply as the invoking user; system-scope edits (e.g. `/etc/hosts/dev`) apply via elevated `mise dotfiles apply` (`sudo`).
-- **`status` drift** — `line` is checked by exact match, `block` by content between markers, `template` by marker presence only (rendering needs mise's engine).
+- **`status` drift** — `line` is checked by exact match, `block` (including `mode = "edit"`) by content between markers, `template` by marker presence only (rendering needs mise's engine).
 
 See `docs/product/profile-layout.md` for the full validation rules and `examples/simple/` for a worked block-edit example.
 

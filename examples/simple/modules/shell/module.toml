@@ -10,3 +10,6 @@ present = ["bash", "ripgrep"]
 # Edit entry: inject a mise activation block into ~/.profile (a file dotdrift
 # does not fully own). Key is <file-path>/<edit-id>; the last slash splits them.
 "~/.profile/mise" = { block = 'eval "$(mise activate bash)"' }
+# Edit entry from a source file: mode = "edit" reads the file and uses its
+# contents as the block (no template rendering). Avoids inline multi-line content.
+"~/.profile/aliases" = { source = "home/aliases.sh", mode = "edit" }

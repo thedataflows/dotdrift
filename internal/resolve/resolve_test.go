@@ -504,6 +504,27 @@ func TestMergeDotfiles_editModeErrors(t *testing.T) {
 	}
 }
 
+// The common mistake: using the file path directly as the edit key. The last
+// slash consumes the filename, so the file part resolves to a directory on
+// disk. Resolve must catch this with an actionable error naming the directory.
+func TestMergeDotfiles_editTargetIsDirectoryErrors(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	targetDir := filepath.Join(home, ".config", "keepassxc")
+	require.NoError(t, os.MkdirAll(targetDir, 0o755))
+
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.config/keepassxc/keepassxc.ini" = { line = "x" }
+`)
+	_, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "is a directory")
+	require.Contains(t, err.Error(), "keepassxc")
+	require.Contains(t, err.Error(), "<edit-id>", "error should suggest appending an edit-id")
+}
+
 // A template edit's source resolves across layers: base declares it, the file
 // exists only in the user layer → resolved source points at the user layer.
 func TestMergeDotfiles_editTemplateResolvesSourceAcrossLayers(t *testing.T) {

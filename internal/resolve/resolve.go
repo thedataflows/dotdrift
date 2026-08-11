@@ -374,6 +374,31 @@ func validateEditEntry(moduleID, target string, df profile.Dotfile) error {
 	return nil
 }
 
+// checkEditTargetNotDir catches the common mistake of using the file path
+// directly as the edit-entry key: the last slash consumes the filename, so the
+// "file" part is the parent directory. If that directory exists on disk, mise
+// would fail with an opaque read error; fail here naming the cause and the fix.
+// The check is best-effort: targets that don't exist yet (first apply) skip it.
+func checkEditTargetNotDir(moduleID, target string) error {
+	file, _ := SplitEditTarget(target)
+	expanded := file
+	if strings.HasPrefix(file, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			expanded = filepath.Join(home, file[2:])
+		}
+	} else if file == "~" {
+		if home, err := os.UserHomeDir(); err == nil {
+			expanded = home
+		}
+	}
+	info, err := os.Stat(expanded)
+	if err != nil || !info.IsDir() {
+		return nil // not a directory (or doesn't exist yet) — not our problem
+	}
+	return fmt.Errorf("module %s: dotfile %q: edit target file %q is a directory — the key splits at the last slash (<file-path>/<edit-id>), so the filename became the edit-id; append an edit-id suffix, e.g. %q",
+		moduleID, target, expanded, target+"/<edit-id>")
+}
+
 func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, error) {
 	winners := make(map[string]dotfileWinner)
 	for target, df := range base.cfg.Dotfiles {
@@ -417,6 +442,13 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 		}
 		if df.IsEdit() {
 			if err := validateEditEntry(moduleID, target, df); err != nil {
+				return nil, err
+			}
+			// Guard against the common mistake of using the file path directly
+			// as the key: the last slash consumes the filename, leaving a
+			// directory as the file part. mise would fail with an opaque
+			// read error; fail here naming the cause and the fix.
+			if err := checkEditTargetNotDir(moduleID, target); err != nil {
 				return nil, err
 			}
 		} else if !validDotfileModes[df.Mode] {

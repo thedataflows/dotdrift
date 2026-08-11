@@ -321,6 +321,135 @@ func TestCheck_dotfilesExpansionError(t *testing.T) {
 	require.Equal(t, drift.Unknown, fs[0].Status)
 }
 
+// --- edit entries (line/block/template drift probes) ---
+
+func TestCheck_dotfileEditLinePresent(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "hosts")
+	require.NoError(t, os.WriteFile(tgt, []byte("127.0.0.1 localhost\n127.0.0.1 dev.local\n"), 0o644))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/dev", Line: "127.0.0.1 dev.local", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Len(t, fs, 1)
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_dotfileEditLineMissing(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "hosts")
+	require.NoError(t, os.WriteFile(tgt, []byte("127.0.0.1 localhost\n"), 0o644))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/dev", Line: "127.0.0.1 dev.local", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "missing", fs[0].Detail)
+}
+
+func TestCheck_dotfileEditBlockMatch(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "zshrc")
+	require.NoError(t, os.WriteFile(tgt, []byte(
+		"# header\n# >>> mise:activate >>> managed by mise\nalias ll='ls -l'\nalias la='ls -la'\n# <<< mise:activate <<<\n"), 0o644))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'\nalias la='ls -la'", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_dotfileEditBlockDiffers(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "zshrc")
+	require.NoError(t, os.WriteFile(tgt, []byte(
+		"# >>> mise:activate >>>\nstale\n# <<< mise:activate <<<\n"), 0o644))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "content differs", fs[0].Detail)
+}
+
+func TestCheck_dotfileEditBlockMissing(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "zshrc")
+	require.NoError(t, os.WriteFile(tgt, []byte("# nothing here\n"), 0o644))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "missing", fs[0].Detail)
+}
+
+func TestCheck_dotfileEditBlockCorrupted(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "zshrc")
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	for _, tc := range []struct {
+		name    string
+		content string
+	}{
+		{"open-only", "# >>> mise:activate >>>\nalias ll='ls -l'\n"},
+		{"close-before-open", "# <<< mise:activate <<<\n# >>> mise:activate >>>\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NoError(t, os.WriteFile(tgt, []byte(tc.content), 0o644))
+			fs := drift.Check(context.Background(),
+				dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'", Module: "m"}),
+				t.TempDir(), pr, drift.CheckOptions{})
+			require.Equal(t, drift.Drift, fs[0].Status)
+			require.Equal(t, "corrupted markers", fs[0].Detail)
+		})
+	}
+}
+
+func TestCheck_dotfileEditSymlinkTarget(t *testing.T) {
+	src := filepath.Join(t.TempDir(), "real")
+	require.NoError(t, os.WriteFile(src, []byte("x"), 0o644))
+	tgt := filepath.Join(t.TempDir(), "zshrc")
+	require.NoError(t, os.Symlink(src, tgt))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.Drift, fs[0].Status)
+	require.Equal(t, "target is a symlink", fs[0].Detail)
+}
+
+func TestCheck_dotfileEditTemplateMarkerPresenceOnly(t *testing.T) {
+	tgt := filepath.Join(t.TempDir(), "gitconfig")
+	// Markers present but content differs from the source template — still OK,
+	// because rendering needs mise's tera engine (existence-only, like whole-file template).
+	require.NoError(t, os.WriteFile(tgt, []byte("# >>> mise:id >>>\nrendered-but-different\n# <<< mise:id <<<\n"), 0o644))
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/id", Source: "git.tmpl", Template: "tera", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.OK, fs[0].Status)
+}
+
+func TestCheck_dotfileEditUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("permission-denial test is meaningless as root")
+	}
+	tgt := filepath.Join(t.TempDir(), "zshrc")
+	require.NoError(t, os.WriteFile(tgt, []byte("x"), 0o644))
+	require.NoError(t, os.Chmod(tgt, 0o000))
+	t.Cleanup(func() { _ = os.Chmod(tgt, 0o644) })
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	pr.ReadFile = os.ReadFile // real ReadFile surfaces EACCES
+	fs := drift.Check(context.Background(),
+		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'", Module: "m"}),
+		t.TempDir(), pr, drift.CheckOptions{})
+	require.Equal(t, drift.Unknown, fs[0].Status, "EACCES → Unknown")
+}
+
 func mountPlan(spec profile.MountSpec) *resolve.Plan {
 	return &resolve.Plan{Mounts: resolve.MountsStep{Entries: []resolve.MountEntry{
 		{Name: "m", Spec: spec, Module: "mod"},

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -240,6 +241,17 @@ func checkTools(plan *resolve.Plan, pr Probes) []probeTask {
 func checkDotfiles(plan *resolve.Plan, profileRoot string, pr Probes) []probeTask {
 	var tasks []probeTask
 	for _, e := range plan.Dotfiles.Entries {
+		// Edit entries (line/block/template) bypass ResolveBootstrapFiles,
+		// which assumes an on-disk source and whole-file semantics.
+		if e.IsEdit() {
+			tasks = append(tasks, probeTask{
+				section: "dotfiles",
+				module:  e.Module,
+				item:    e.Target,
+				run:     func(ctx context.Context) Finding { return checkDotfileEdit(e, pr) },
+			})
+			continue
+		}
 		files, err := mise.ResolveBootstrapFiles([]resolve.DotfileEntry{e}, profileRoot, pr.HomeDir)
 		if err != nil {
 			target := e.Target
@@ -308,6 +320,92 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 		return Finding{"dotfiles", f.Target, OK, "", ""}
 	}
 	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode), ""}
+}
+
+// checkDotfileEdit probes an edit entry (line/block/template) against the live
+// file it targets. It bypasses ResolveBootstrapFiles (which needs an on-disk
+// source and whole-file semantics): edit entries are partial edits to a file
+// something else owns, so the probe reads the target file directly.
+//
+//   - Symlink target → Drift ("target is a symlink"): mise refuses edits
+//     through managed symlinks; resolve should have caught a whole-file
+//     collision, but a hand-managed symlink surfaces here.
+//   - Missing file → Drift ("missing").
+//   - line edit → exact-match scan of the file's lines; OK if present.
+//   - block edit → comment-prefix-independent marker scan on mise's documented
+//     delimiters (`>>> mise:<id> >>>` / `<<< mise:<id> <<<`); content between
+//     markers is compared byte-for-byte.
+//   - template edit → marker presence only (rendering needs mise's tera engine;
+//     consistent with the whole-file template existence-only check).
+func checkDotfileEdit(e resolve.DotfileEntry, pr Probes) Finding {
+	file, id := resolve.SplitEditTarget(e.Target)
+	file = expandHome(file, pr.HomeDir)
+
+	// Symlink refusal: Readlink succeeds only for a symlink.
+	if _, err := pr.Readlink(file); err == nil {
+		return Finding{"dotfiles", e.Target, Drift, "target is a symlink", ""}
+	}
+
+	content, err := pr.ReadFile(file)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Finding{"dotfiles", e.Target, Drift, "missing", ""}
+		}
+		return Finding{"dotfiles", e.Target, Unknown, err.Error(), ""}
+	}
+	lines := strings.Split(string(content), "\n")
+
+	if e.Line != "" {
+		for _, l := range lines {
+			if l == e.Line {
+				return Finding{"dotfiles", e.Target, OK, "", ""}
+			}
+		}
+		return Finding{"dotfiles", e.Target, Drift, "missing", ""}
+	}
+
+	// Block / template-edit: marker scan (comment-prefix independent).
+	open, close := ">>> mise:"+id+" >>>", "<<< mise:"+id+" <<<"
+	oi, ci := -1, -1
+	for i, l := range lines {
+		if oi < 0 && strings.Contains(l, open) {
+			oi = i
+		}
+		if ci < 0 && strings.Contains(l, close) {
+			ci = i
+		}
+	}
+	switch {
+	case oi < 0 && ci < 0:
+		return Finding{"dotfiles", e.Target, Drift, "missing", ""}
+	case oi >= 0 && ci > oi:
+		// markers OK
+	default:
+		return Finding{"dotfiles", e.Target, Drift, "corrupted markers", ""}
+	}
+	// Template edit: marker presence is enough.
+	if e.Template != "" {
+		return Finding{"dotfiles", e.Target, OK, "", ""}
+	}
+	// Inline block: compare content between markers.
+	got := strings.Join(lines[oi+1:ci], "\n")
+	if got == strings.TrimRight(e.Block, "\n") {
+		return Finding{"dotfiles", e.Target, OK, "", ""}
+	}
+	return Finding{"dotfiles", e.Target, Drift, "content differs", ""}
+}
+
+// expandHome replaces a leading ~ with homeDir. Local copy of mise's
+// unexported helper (tied to bootstrap file resolution there); kept local so
+// one caller does not widen another package's API.
+func expandHome(path, home string) string {
+	if strings.HasPrefix(path, "~/") {
+		return filepath.Join(home, path[2:])
+	}
+	if path == "~" {
+		return home
+	}
+	return path
 }
 
 func checkMounts(plan *resolve.Plan, pr Probes) []probeTask {

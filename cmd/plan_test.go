@@ -448,3 +448,83 @@ optional = true
 	require.Equal(t, "echo flaky", got.Hooks.Pre[1].Command)
 	require.True(t, got.Hooks.Pre[1].Optional, "optional flag must reach JSON output")
 }
+
+// Edit entries render their fields in the text plan (line/block[+comment]/
+// source+template) with no empty mode: line. Whole-file entries are unchanged.
+func TestCLI_plan_editEntryTextOutput(t *testing.T) {
+	root := t.TempDir()
+	modDir := filepath.Join(root, "modules", "edits")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "git.tmpl"), []byte("name = x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+[dotfiles]
+"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }
+"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
+"~/.gitconfig/id" = { source = "git.tmpl", template = "tera" }
+`), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u", OS: "linux"}
+
+	var buf bytes.Buffer
+	require.NoError(t, (&cmd.PlanCmd{Profile: root, Facts: f, Out: &buf}).Run())
+	out := buf.String()
+
+	require.Contains(t, out, "~/.zshrc/dev:")
+	require.Contains(t, out, `line: "127.0.0.1 dev.local"`)
+	require.Contains(t, out, "~/.zshrc/aliases:")
+	require.Contains(t, out, `block: "alias ll='ls -l'"`)
+	require.Contains(t, out, `comment: "#"`)
+	require.Contains(t, out, "~/.gitconfig/id:")
+	require.Contains(t, out, "    source: ")
+	require.Contains(t, out, "    template: tera")
+	// Edit entries must not render an empty mode: line.
+	for _, line := range strings.Split(out, "\n") {
+		require.NotEqual(t, "    mode:", strings.TrimSpace(line))
+	}
+}
+
+// plan --json carries the edit fields (line/block/comment/template) on each
+// edit entry; whole-file entries stay unchanged (omitempty).
+func TestCLI_plan_editEntryJSON(t *testing.T) {
+	root := t.TempDir()
+	modDir := filepath.Join(root, "modules", "edits")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "git.tmpl"), []byte("name = x"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+[dotfiles]
+"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }
+"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
+"~/.gitconfig/id" = { source = "git.tmpl", template = "tera" }
+`), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u", OS: "linux"}
+
+	var buf bytes.Buffer
+	require.NoError(t, (&cmd.PlanCmd{Profile: root, Facts: f, Out: &buf, JSON: true}).Run())
+
+	var doc struct {
+		Dotfiles []struct {
+			Target   string `json:"target"`
+			Line     string `json:"line"`
+			Block    string `json:"block"`
+			Comment  string `json:"comment"`
+			Template string `json:"template"`
+			Mode     string `json:"mode"`
+		} `json:"dotfiles"`
+	}
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &doc))
+	byTarget := make(map[string]struct {
+		Line, Block, Comment, Template, Mode string
+	}, len(doc.Dotfiles))
+	for _, d := range doc.Dotfiles {
+		byTarget[d.Target] = struct {
+			Line, Block, Comment, Template, Mode string
+		}{d.Line, d.Block, d.Comment, d.Template, d.Mode}
+	}
+	require.Equal(t, "127.0.0.1 dev.local", byTarget["~/.zshrc/dev"].Line)
+	require.Equal(t, "alias ll='ls -l'", byTarget["~/.zshrc/aliases"].Block)
+	require.Equal(t, "#", byTarget["~/.zshrc/aliases"].Comment)
+	require.Equal(t, "tera", byTarget["~/.gitconfig/id"].Template)
+	// Edit entries carry no mode (omitempty keeps it absent).
+	for _, d := range byTarget {
+		require.Empty(t, d.Mode)
+	}
+}

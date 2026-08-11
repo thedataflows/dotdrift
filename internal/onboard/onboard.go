@@ -49,10 +49,19 @@ type PackageEntry struct {
 	Description string
 }
 
-// dotfileEntry is one managed path rendered as an inline TOML table.
+// dotfileEntry is one managed path rendered as an inline TOML table. It has
+// no TOML tags: mergeExisting decodes an existing module.toml into
+// profile.Dotfile (which carries the tags) and converts here, so BurntSushi
+// never decodes into this struct directly. Carrying the edit fields (in
+// addition to Source/Mode) means re-onboarding a module whose module.toml
+// has hand-written edit entries round-trips them instead of dropping them.
 type dotfileEntry struct {
-	Source string
-	Mode   string
+	Source   string
+	Mode     string
+	Line     string
+	Block    string
+	Comment  string
+	Template string
 }
 
 // moduleConfig is the shape written to module.toml. It is rendered by
@@ -334,10 +343,16 @@ func mergeExisting(existing string, cfg moduleConfig) (string, error) {
 		return "", fmt.Errorf("decode existing module.toml: %w", err)
 	}
 
-	// Dotfiles: union; this run's entries override source/mode.
+	// Dotfiles: union; this run's entries override source/mode. All fields
+	// (including edit-entry line/block/comment/template) are copied so
+	// hand-written edit entries round-trip a re-onboard instead of being
+	// silently dropped to zero values.
 	dotfiles := make(map[string]dotfileEntry, len(pc.Dotfiles)+len(cfg.Dotfiles))
 	for k, v := range pc.Dotfiles {
-		dotfiles[k] = dotfileEntry{Source: v.Source, Mode: v.Mode}
+		dotfiles[k] = dotfileEntry{
+			Source: v.Source, Mode: v.Mode,
+			Line: v.Line, Block: v.Block, Comment: v.Comment, Template: v.Template,
+		}
 	}
 	for k, v := range cfg.Dotfiles {
 		dotfiles[k] = v
@@ -517,7 +532,29 @@ func encodeDotfilesSection(dotfiles map[string]dotfileEntry) string {
 	b.WriteString("[dotfiles]\n")
 	for _, k := range keys {
 		e := dotfiles[k]
-		b.WriteString(tomlBasicString(k) + " = { source = " + tomlBasicString(e.Source) + ", mode = " + tomlBasicString(e.Mode) + " }\n")
+		// Build the inline table from whichever fields are set. Whole-file
+		// entries (source+mode) render exactly as before; edit entries
+		// (line/block[/comment]/source+template) round-trip their fields.
+		var parts []string
+		if e.Source != "" {
+			parts = append(parts, "source = "+tomlBasicString(e.Source))
+		}
+		if e.Mode != "" {
+			parts = append(parts, "mode = "+tomlBasicString(e.Mode))
+		}
+		if e.Line != "" {
+			parts = append(parts, "line = "+tomlBasicString(e.Line))
+		}
+		if e.Block != "" {
+			parts = append(parts, "block = "+tomlBasicString(e.Block))
+		}
+		if e.Comment != "" {
+			parts = append(parts, "comment = "+tomlBasicString(e.Comment))
+		}
+		if e.Template != "" {
+			parts = append(parts, "template = "+tomlBasicString(e.Template))
+		}
+		b.WriteString(tomlBasicString(k) + " = { " + strings.Join(parts, ", ") + " }\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

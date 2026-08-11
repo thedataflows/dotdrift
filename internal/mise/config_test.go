@@ -148,3 +148,61 @@ func TestGenerateDotfiles_escapesQuotesAndBackslashes(t *testing.T) {
 	require.Equal(t, "symlink", decoded.Dotfiles[`~/weird"dir\file`].Mode)
 	require.Equal(t, ".bashrc", decoded.Dotfiles["~/.bashrc"].Source)
 }
+
+// Edit entries emit the three mise forms: { line }, { block[, comment] },
+// { source, template }. Whole-file entries still emit { source, mode }.
+func TestGenerateDotfiles_editEntries(t *testing.T) {
+	entries := []resolve.DotfileEntry{
+		{Target: "~/.zshrc/dev", Line: "127.0.0.1 dev.local"},
+		{Target: "~/.zshrc/aliases", Block: "alias ll='ls -l'", Comment: "#"},
+		{Target: "~/.zshrc/activate", Block: `eval "$(mise activate zsh)"`},
+		{Target: "~/.gitconfig/id", Source: "snippets/git.tmpl", Template: "tera"},
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
+	}
+	out := mise.GenerateDotfiles(entries)
+
+	require.Contains(t, out, `"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }`)
+	require.Contains(t, out, `"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }`)
+	require.Contains(t, out, `"~/.zshrc/activate" = { block = "eval \"$(mise activate zsh)\"" }`)
+	require.Contains(t, out, `"~/.gitconfig/id" = { source = "snippets/git.tmpl", template = "tera" }`)
+	require.Contains(t, out, `"~/.bashrc" = { source = ".bashrc", mode = "symlink" }`)
+
+	// The whole section must stay parseable TOML.
+	var decoded struct {
+		Dotfiles map[string]struct {
+			Source   string `toml:"source"`
+			Mode     string `toml:"mode"`
+			Line     string `toml:"line"`
+			Block    string `toml:"block"`
+			Comment  string `toml:"comment"`
+			Template string `toml:"template"`
+		} `toml:"dotfiles"`
+	}
+	_, err := toml.Decode(out, &decoded)
+	require.NoError(t, err, "generated TOML must be parseable: %q", out)
+	require.Equal(t, "127.0.0.1 dev.local", decoded.Dotfiles["~/.zshrc/dev"].Line)
+	require.Equal(t, "alias ll='ls -l'", decoded.Dotfiles["~/.zshrc/aliases"].Block)
+	require.Equal(t, "#", decoded.Dotfiles["~/.zshrc/aliases"].Comment)
+}
+
+// A multi-line block (newlines, quotes, backslashes) round-trips byte-identical
+// through BurntSushi — the same decode mise performs.
+func TestGenerateDotfiles_editBlockMultilineRoundTrip(t *testing.T) {
+	block := "alias ll='ls -l'\nalias la='ls -la'\nexport PATH=\"$HOME/bin:$PATH\""
+	entries := []resolve.DotfileEntry{
+		{Target: "~/.zshrc/aliases", Block: block, Comment: "#"},
+	}
+	out := mise.GenerateDotfiles(entries)
+
+	var decoded struct {
+		Dotfiles map[string]struct {
+			Block   string `toml:"block"`
+			Comment string `toml:"comment"`
+		} `toml:"dotfiles"`
+	}
+	_, err := toml.Decode(out, &decoded)
+	require.NoError(t, err, "generated TOML must be parseable: %q", out)
+	require.Equal(t, block, decoded.Dotfiles["~/.zshrc/aliases"].Block,
+		"multi-line block must round-trip byte-identical")
+	require.Equal(t, "#", decoded.Dotfiles["~/.zshrc/aliases"].Comment)
+}

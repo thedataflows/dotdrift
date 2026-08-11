@@ -91,9 +91,14 @@ node = "20"
 python = "3.12"
 
 [dotfiles]
+# Whole-file entries: source + mode.
 "~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 "~/.config/nvim" = { source = "nvim", mode = "symlink-each" }
 "~/.config/app/config.toml" = { source = "config.toml", mode = "copy" }
+# Edit entries: partial edits keyed by "<file-path>/<edit-id>" (user-scope only).
+"~/.zshrc/activate" = { block = 'eval "$(mise activate zsh)"' }
+"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
+"~/.gitconfig/id" = { source = "snippets/git.tmpl", template = "tera" }
 
 [hooks]
 # A plain string is a required hook; an inline table { command, optional }
@@ -141,17 +146,46 @@ public = false
   root-owned paths) belong in a `scope = "system"` module. Any other value is
   a resolve-time error naming the module and the value.
 - `packages.absent` cancels a `present` entry from a lower layer.
-- `dotfiles` keys are target paths (absolute or `~/...`). Values are tables with:
-  - `source`: relative path inside the module directory.
-  - `mode`: `symlink`, `symlink-each`, `copy`, or `template` — exactly mise's
-    mode vocabulary, passed through to the generated `mise.toml` unchanged.
-    Any other value (including an omitted mode) is a resolve-time error naming
-    the module and the mode — mise silently ignores entries with an
-    unrecognized mode, so dotdrift fails loudly instead.
-    `symlink-each` requires the source to be a directory; each file inside it
-    is symlinked individually into the target directory.
-- Higher layers (user > host > module) override lower layers for the same dotfile target.
-- Two selected modules claiming the same dotfile target is a resolve-time error naming the target and every claiming module (it would otherwise produce a duplicate-key `mise.toml` that mise refuses to parse).
+- `dotfiles` entries come in two kinds, distinguished by their fields:
+  - **Whole-file entries** take over a target path entirely. The key is a
+    target path (absolute or `~/...`); the value is a table with:
+    - `source`: relative path inside the module directory.
+    - `mode`: `symlink`, `symlink-each`, `copy`, or `template` — exactly mise's
+      mode vocabulary, passed through to the generated `mise.toml` unchanged.
+      Any other value (including an omitted mode) is a resolve-time error naming
+      the module and the mode — mise silently ignores entries with an
+      unrecognized mode, so dotdrift fails loudly instead.
+      `symlink-each` requires the source to be a directory; each file inside it
+      is symlinked individually into the target directory.
+  - **Edit entries** are partial edits to a file something else owns. The key
+    is `<file-path>/<edit-id>` (the last slash splits file path from edit id);
+    the value uses one of three forms, mirroring mise's vocabulary exactly
+    (https://mise.jdx.dev/dotfiles.html, "Edit entries"):
+    - `line = "..."`: ensure an exact line exists in the file.
+    - `block = "..."` (optionally `comment = "#"`): wrap the block in mise
+      marker delimiters (`>>> mise:<edit-id> >>>` / `<<< mise:<edit-id> <<<`),
+      prefixed with the comment character. Re-apply updates the block in place.
+    - `source = "..."` + `template = "tera"`: render the source via the engine
+      and insert it as a block. `source` is resolved across layers like a
+      whole-file source.
+    Edit-entry rules (each violation is a resolve-time error naming the module
+    and key): an edit must not set `mode`; set only one of `line`/`block`;
+    `template` requires `source` and excludes `line`/`block`; `comment` applies
+    only to `block`; the key must be `<file-path>/<edit-id>` with a non-empty
+    file path (not `~`, not `/`) and an edit id matching `[A-Za-z0-9._-]+`.
+    Edit entries are **user-scope only** — system files are whole-file only
+    (`[bootstrap.files]` has no edit support); use `copy`/`template` or a post
+    hook for system-scope partial writes.
+- Higher layers (user > host > module) override lower layers for the same
+  dotfile key. For edit entries the key is the full `<file-path>/<edit-id>`,
+  so a higher layer overrides only the same edit id on the same file; other
+  edit ids on that file survive.
+- Two selected modules claiming the same dotfile target is a resolve-time
+  error naming the target and every claiming module (it would otherwise
+  produce a duplicate-key `mise.toml` that mise refuses to parse). An edit
+  entry on a file another module claims as a whole-file target is likewise a
+  conflict — mise refuses to edit through a managed symlink, so dotdrift
+  fails at resolve naming both modules and the file.
 - `hooks.pre` / `hooks.post` are arrays of shell commands run as mise tasks during
   `dotdrift apply` (`hooks-pre` before packages, `hooks-post` after dotfiles).
   Unlike every other section, hooks merge by **append** across layers — base,

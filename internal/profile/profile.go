@@ -118,11 +118,26 @@ func (h *HookCommand) UnmarshalTOML(v any) error {
 	return nil
 }
 
-// Dotfile describes a single managed path.
+// Dotfile describes a single managed path. Whole-file entries use
+// Source+Mode (symlink, symlink-each, copy, template). Edit entries are
+// partial edits to a file something else owns, keyed by "<file-path>/<edit-id>"
+// in the [dotfiles] map: a `line` ensures an exact line exists, a `block`
+// wraps content in mise marker delimiters, and a `source`+`template` renders
+// a block via an engine (e.g. "tera"). The syntax mirrors mise's edit-entry
+// vocabulary exactly (see https://mise.jdx.dev/dotfiles.html, "Edit entries").
 type Dotfile struct {
-	Source string `toml:"source"`
-	Mode   string `toml:"mode"`
+	Source   string `toml:"source"`
+	Mode     string `toml:"mode"`
+	Line     string `toml:"line"`     // edit: ensure exact line exists
+	Block    string `toml:"block"`    // edit: marker-delimited block
+	Comment  string `toml:"comment"`  // edit: comment prefix for a block (mise default: #)
+	Template string `toml:"template"` // edit: engine name (e.g. "tera"); requires source
 }
+
+// IsEdit reports whether the entry is a partial edit (line/block/template-edit)
+// rather than a whole-file entry. An empty line/block/template means the entry
+// is whole-file (an ensure-empty-line edit is nonsense; mise is the backstop).
+func (d Dotfile) IsEdit() bool { return d.Line != "" || d.Block != "" || d.Template != "" }
 
 // Module is a discovered module with its resolved identity and path.
 type Module struct {

@@ -656,7 +656,12 @@ func tomlEscape(s string) string {
 	return tomlEscaper.Replace(s)
 }
 
-var tomlEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+// tomlEscaper escapes a string for a TOML basic string. The replacer runs
+// single-pass: backslash is first so an already-escaped sequence is not
+// double-escaped. Newlines/tabs/CR are escaped so multi-line blocks survive
+// as one-line basic strings (TOML basic strings may not contain raw control
+// chars — a literal newline would end the value early).
+var tomlEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\t", `\t`, "\r", `\r`)
 
 // GenerateTools emits a mise.toml [tools] section from the resolved plan.
 func GenerateTools(versions map[string]string) string {
@@ -676,7 +681,11 @@ func GenerateTools(versions map[string]string) string {
 	return b.String()
 }
 
-// GenerateDotfiles emits a mise.toml [dotfiles] section from the resolved plan.
+// GenerateDotfiles emits a mise.toml [dotfiles] section from the resolved
+// plan. Whole-file entries emit { source, mode }; edit entries emit the form
+// mise's dotfiles phase parses: { line }, { block[, comment] }, or
+// { source, template }. The map key is the entry Target verbatim — for an
+// edit entry that is the full "<file-path>/<edit-id>" string.
 func GenerateDotfiles(entries []resolve.DotfileEntry) string {
 	if len(entries) == 0 {
 		return ""
@@ -684,8 +693,22 @@ func GenerateDotfiles(entries []resolve.DotfileEntry) string {
 	var b strings.Builder
 	b.WriteString("[dotfiles]\n")
 	for _, e := range entries {
-		fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", mode = \"%s\" }\n",
-			tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Mode))
+		switch {
+		case e.Line != "":
+			fmt.Fprintf(&b, "\"%s\" = { line = \"%s\" }\n", tomlEscape(e.Target), tomlEscape(e.Line))
+		case e.Block != "":
+			fmt.Fprintf(&b, "\"%s\" = { block = \"%s\"", tomlEscape(e.Target), tomlEscape(e.Block))
+			if e.Comment != "" {
+				fmt.Fprintf(&b, ", comment = \"%s\"", tomlEscape(e.Comment))
+			}
+			b.WriteString(" }\n")
+		case e.Template != "":
+			fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", template = \"%s\" }\n",
+				tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Template))
+		default: // whole-file, unchanged
+			fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", mode = \"%s\" }\n",
+				tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Mode))
+		}
 	}
 	return b.String()
 }

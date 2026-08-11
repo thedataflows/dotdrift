@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -52,9 +53,20 @@ type DotfileEntry struct {
 	Target string
 	Source string
 	Mode   string
-	Module string
-	Layer  string
-	Scope  string
+	// Edit-entry fields (empty for whole-file entries). See profile.Dotfile.
+	Line     string
+	Block    string
+	Comment  string
+	Template string
+	Module   string
+	Layer    string
+	Scope    string
+}
+
+// IsEdit reports whether the entry is a partial edit (line/block/template-edit)
+// rather than a whole-file entry. Mirrors profile.Dotfile.IsEdit.
+func (e DotfileEntry) IsEdit() bool {
+	return e.Line != "" || e.Block != "" || e.Template != ""
 }
 
 // HooksStep lists the pre/post apply hook commands aggregated across all
@@ -321,6 +333,47 @@ var validDotfileModes = map[string]bool{
 	"template":     true,
 }
 
+// SplitEditTarget splits an edit-entry key into file path and edit id at the
+// last slash: "~/.zshrc/activate" → ("~/.zshrc", "activate"). No slash →
+// ("", key); validation reports it. The map key for an edit entry is the full
+// "<file-path>/<edit-id>" string, so per-key winner merging is already by
+// (file, id) — this helper is for validation and drift, not for merging.
+func SplitEditTarget(key string) (file, id string) {
+	if i := strings.LastIndex(key, "/"); i >= 0 {
+		return key[:i], key[i+1:]
+	}
+	return "", key
+}
+
+// editIDRe bounds the edit-id segment of an edit-entry key. mise's marker
+// delimiters embed the id verbatim, so a narrow charset avoids ambiguous or
+// injective markers.
+var editIDRe = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// validateEditEntry checks an edit entry's fields and target shape, in order.
+// Errors use the existing "module %s: dotfile %q: …" style. The target must
+// already be the full "<file-path>/<edit-id>" key.
+func validateEditEntry(moduleID, target string, df profile.Dotfile) error {
+	file, id := SplitEditTarget(target)
+	switch {
+	case df.Mode != "":
+		return fmt.Errorf("module %s: dotfile %q: edit entry must not set mode (line/block/template already make it an edit)", moduleID, target)
+	case df.Line != "" && df.Block != "":
+		return fmt.Errorf("module %s: dotfile %q: set only one of line or block", moduleID, target)
+	case df.Template != "" && df.Source == "":
+		return fmt.Errorf("module %s: dotfile %q: template edit requires source", moduleID, target)
+	case df.Template != "" && (df.Line != "" || df.Block != ""):
+		return fmt.Errorf("module %s: dotfile %q: template edit must not set line or block", moduleID, target)
+	case df.Comment != "" && df.Block == "":
+		return fmt.Errorf("module %s: dotfile %q: comment only applies to block edits", moduleID, target)
+	case file == "" || file == "~" || file == "/":
+		return fmt.Errorf("module %s: dotfile %q: edit target must be <file-path>/<edit-id> (e.g. \"~/.zshrc/activate\")", moduleID, target)
+	case !editIDRe.MatchString(id):
+		return fmt.Errorf("module %s: dotfile %q: edit id %q must match [A-Za-z0-9._-]+", moduleID, target, id)
+	}
+	return nil
+}
+
 func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, error) {
 	winners := make(map[string]dotfileWinner)
 	for target, df := range base.cfg.Dotfiles {
@@ -336,20 +389,38 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 	moduleID := filepath.Base(base.path)
 	entries := make([]DotfileEntry, 0, len(winners))
 	for target, winner := range winners {
-		if !validDotfileModes[winner.df.Mode] {
-			return nil, fmt.Errorf("module %s: dotfile %q: unknown mode %q (valid: symlink, symlink-each, copy, template)", moduleID, target, winner.df.Mode)
+		df := winner.df
+		if df.IsEdit() {
+			if scope == profile.ScopeSystem {
+				return nil, fmt.Errorf("module %s: dotfile %q: edit entries (line/block/template) require user scope — system files are whole-file only ([bootstrap.files] has no edit support); use copy/template or a post hook", moduleID, target)
+			}
+			if err := validateEditEntry(moduleID, target, df); err != nil {
+				return nil, err
+			}
+		} else if !validDotfileModes[df.Mode] {
+			return nil, fmt.Errorf("module %s: dotfile %q: unknown mode %q (valid: symlink, symlink-each, copy, template)", moduleID, target, df.Mode)
 		}
-		source, err := resolveSource(winner, moduleID, base, host, user)
-		if err != nil {
-			return nil, err
+		// Source is resolved for whole-file entries and template edits; inline
+		// line/block edits have no on-disk source.
+		var source string
+		if df.Source != "" {
+			var err error
+			source, err = resolveSource(winner, moduleID, base, host, user)
+			if err != nil {
+				return nil, err
+			}
 		}
 		entries = append(entries, DotfileEntry{
-			Target: target,
-			Source: source,
-			Mode:   winner.df.Mode,
-			Module: moduleID,
-			Layer:  winner.layer,
-			Scope:  scope,
+			Target:   target,
+			Source:   source,
+			Mode:     df.Mode,
+			Line:     df.Line,
+			Block:    df.Block,
+			Comment:  df.Comment,
+			Template: df.Template,
+			Module:   moduleID,
+			Layer:    winner.layer,
+			Scope:    scope,
 		})
 	}
 	return entries, nil
@@ -393,6 +464,25 @@ func checkDotfileConflicts(entries []DotfileEntry) error {
 		sort.Strings(mods)
 		conflicts = append(conflicts, fmt.Sprintf("%q claimed by modules [%s]",
 			target, strings.Join(mods, ", ")))
+	}
+	// An edit entry (line/block/template) on a file that another module also
+	// claims as a whole-file target is a conflict: mise refuses to edit
+	// through a managed symlink at apply. Fail at resolve naming both modules.
+	whole := make(map[string]string) // whole-file target → module
+	for _, e := range entries {
+		if !e.IsEdit() {
+			whole[e.Target] = e.Module
+		}
+	}
+	for _, e := range entries {
+		if !e.IsEdit() {
+			continue
+		}
+		file, _ := SplitEditTarget(e.Target)
+		if mod, ok := whole[file]; ok {
+			conflicts = append(conflicts, fmt.Sprintf("edit %q (module %s) targets file %q claimed as whole-file by module %s",
+				e.Target, e.Module, file, mod))
+		}
 	}
 	if len(conflicts) == 0 {
 		return nil

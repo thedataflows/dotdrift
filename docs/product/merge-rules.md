@@ -22,6 +22,8 @@ are selected**, not the invoking user's.
 |------|------------|
 | Dotfiles target path | User entry wins; lower layers dropped for that target |
 | Dotfiles target path across modules | **Error at resolve time** — two selected modules claiming the same target fail naming the target and both modules (would emit a duplicate-key `mise.toml`) |
+| Dotfiles edit entry (`<file>/<id>`) | User entry wins **per edit id** on a file; other edit ids on the same file survive (the map key is the full `<file>/<id>`) |
+| Edit entry vs whole-file on same file | **Error at resolve time** — mise refuses edits through a managed symlink; fail naming both modules and the file |
 | File tree same relative path | User > host > module |
 | Packages present/absent | Higher layer wins; absent can cancel present |
 | Tools map keys | Higher layer wins |

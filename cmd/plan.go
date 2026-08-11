@@ -89,9 +89,14 @@ type planJSONDotfile struct {
 	Target string `json:"target"`
 	Source string `json:"source"`
 	Mode   string `json:"mode"`
-	Module string `json:"module"`
-	Layer  string `json:"layer"`
-	Scope  string `json:"scope"`
+	// Edit-entry fields (omitted for whole-file entries via omitempty).
+	Line     string `json:"line,omitempty"`
+	Block    string `json:"block,omitempty"`
+	Comment  string `json:"comment,omitempty"`
+	Template string `json:"template,omitempty"`
+	Module   string `json:"module"`
+	Layer    string `json:"layer"`
+	Scope    string `json:"scope"`
 }
 
 type planJSONMount struct {
@@ -172,12 +177,16 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 	doc.Hooks.Post = toPlanJSONHooks(plan.Hooks.Post)
 	for _, e := range plan.Dotfiles.Entries {
 		doc.Dotfiles = append(doc.Dotfiles, planJSONDotfile{
-			Target: e.Target,
-			Source: e.Source,
-			Mode:   e.Mode,
-			Module: e.Module,
-			Layer:  e.Layer,
-			Scope:  e.Scope,
+			Target:   e.Target,
+			Source:   e.Source,
+			Mode:     e.Mode,
+			Line:     e.Line,
+			Block:    e.Block,
+			Comment:  e.Comment,
+			Template: e.Template,
+			Module:   e.Module,
+			Layer:    e.Layer,
+			Scope:    e.Scope,
 		})
 	}
 	doc.Mounts = make([]planJSONMount, 0, len(plan.Mounts.Entries))
@@ -280,10 +289,23 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 	fmt.Fprintln(out, "dotfiles:")
 	for _, e := range plan.Dotfiles.Entries {
 		fmt.Fprintf(out, "  %s:\n", e.Target)
-		fmt.Fprintf(out, "    source: %s\n", e.Source)
-		fmt.Fprintf(out, "    mode: %s\n", e.Mode)
+		switch {
+		case e.Line != "":
+			fmt.Fprintf(out, "    line: %q\n", e.Line)
+		case e.Block != "":
+			fmt.Fprintf(out, "    block: %q\n", e.Block)
+			if e.Comment != "" {
+				fmt.Fprintf(out, "    comment: %q\n", e.Comment)
+			}
+		case e.Template != "":
+			fmt.Fprintf(out, "    source: %s\n", e.Source)
+			fmt.Fprintf(out, "    template: %s\n", e.Template)
+		default:
+			fmt.Fprintf(out, "    source: %s\n", e.Source)
+			fmt.Fprintf(out, "    mode: %s\n", e.Mode)
+		}
 		// System-scope entries are marked on the module line; user scope is
-		// the default and stays unmarked.
+		// the default and stays unmarked. (Edit entries are always user-scope.)
 		marker := ""
 		if e.Scope == profile.ScopeSystem {
 			marker = " [system]"

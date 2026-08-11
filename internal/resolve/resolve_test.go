@@ -406,3 +406,191 @@ command = "echo user-req"
 		{Command: "echo user-req"},
 	}, plan.Hooks.Pre)
 }
+
+// --- edit entries (line/block/template partial edits) ---
+
+// An inline line edit resolves with no source file on disk — resolveSource is
+// skipped for line/block edits (they have no on-disk source).
+func TestMergeDotfiles_editEntryLineResolves(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }
+`)
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err)
+	require.Len(t, plan.Dotfiles.Entries, 1)
+	e := plan.Dotfiles.Entries[0]
+	require.Equal(t, "127.0.0.1 dev.local", e.Line)
+	require.True(t, e.IsEdit())
+	require.Empty(t, e.Source, "line edit has no on-disk source")
+	require.Empty(t, e.Mode)
+}
+
+// A template edit's source resolves across layers: base declares it, the file
+// exists only in the user layer → resolved source points at the user layer.
+func TestMergeDotfiles_editTemplateResolvesSourceAcrossLayers(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.gitconfig/id" = { source = "git.tmpl", template = "tera" }
+`)
+	userDir := filepath.Join(root, "users", "u", "modules", "mod")
+	require.NoError(t, os.MkdirAll(userDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(userDir, "git.tmpl"), []byte("name = x"), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err)
+	require.Len(t, plan.Dotfiles.Entries, 1)
+	e := plan.Dotfiles.Entries[0]
+	require.Equal(t, "tera", e.Template)
+	require.True(t, strings.Contains(e.Source, filepath.Join("users", "u", "modules", "mod", "git.tmpl")),
+		"template edit source should resolve from the user layer, got %s", e.Source)
+}
+
+// Edit entries merge per key: a host overlay overrides only the same key; a
+// base-only key survives. (The map key is the full <file>/<id> string, so the
+// existing per-key winner loop merges edits for free.)
+func TestMergeDotfiles_editLayerWinnerPerKey(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.zshrc/k1" = { block = "base-A" }
+"~/.zshrc/k2" = { block = "base-C" }
+`)
+	hostDir := filepath.Join(root, "hosts", "h", "modules", "mod")
+	require.NoError(t, os.MkdirAll(hostDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(hostDir, "module.toml"), []byte(`
+[dotfiles]
+"~/.zshrc/k1" = { block = "host-B" }
+`), 0o644))
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err)
+	byTarget := make(map[string]resolve.DotfileEntry, len(plan.Dotfiles.Entries))
+	for _, e := range plan.Dotfiles.Entries {
+		byTarget[e.Target] = e
+	}
+	require.Equal(t, "host-B", byTarget["~/.zshrc/k1"].Block, "host layer should win for k1")
+	require.Equal(t, "host", byTarget["~/.zshrc/k1"].Layer)
+	require.Equal(t, "base-C", byTarget["~/.zshrc/k2"].Block, "base-only key k2 should survive")
+	require.Equal(t, "base", byTarget["~/.zshrc/k2"].Layer)
+}
+
+// Table test over validateEditEntry's seven rules.
+func TestMergeDotfiles_editValidationErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		toml   string
+		errHas string
+	}{
+		{
+			name:   "mode set on edit",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { line = "x", mode = "copy" }` + "\n",
+			errHas: "must not set mode",
+		},
+		{
+			name:   "both line and block",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { line = "x", block = "y" }` + "\n",
+			errHas: "set only one of line or block",
+		},
+		{
+			name:   "template without source",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { template = "tera" }` + "\n",
+			errHas: "template edit requires source",
+		},
+		{
+			name:   "template plus line",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { template = "tera", source = "s.tmpl", line = "x" }` + "\n",
+			errHas: "template edit must not set line or block",
+		},
+		{
+			name:   "comment without block",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/a" = { line = "x", comment = "#" }` + "\n",
+			errHas: "comment only applies to block edits",
+		},
+		{
+			name:   "target has no slash",
+			toml:   `[dotfiles]` + "\n" + `"noslash" = { line = "x" }` + "\n",
+			errHas: "edit target must be <file-path>/<edit-id>",
+		},
+		{
+			name:   "edit id has a space",
+			toml:   `[dotfiles]` + "\n" + `"~/.zshrc/bad id" = { line = "x" }` + "\n",
+			errHas: "edit id",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeModule(t, root, "mod", tc.toml)
+			_, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), tc.errHas)
+			require.Contains(t, err.Error(), "mod", "error should name the module")
+		})
+	}
+}
+
+// System-scope edit entries are rejected: system files are whole-file only.
+func TestMergeDotfiles_editSystemScopeRejected(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "mod", `
+scope = "system"
+[dotfiles]
+"/etc/hosts/dev" = { line = "127.0.0.1 dev.local" }
+`)
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "require user scope")
+	require.Contains(t, err.Error(), "mod")
+}
+
+// An edit entry on a file another module claims as whole-file is a conflict
+// (mise refuses edits through managed symlinks). Cross-module and same-module.
+func TestCheckDotfileConflicts_editVsWholeFile(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		baseA    string
+		baseB    string
+		wantSubs []string
+	}{
+		{
+			name:     "cross-module",
+			baseA:    `[dotfiles]` + "\n" + `"~/.zshrc" = { source = "zshrc", mode = "symlink" }` + "\n",
+			baseB:    `[dotfiles]` + "\n" + `"~/.zshrc/activate" = { block = "eval x" }` + "\n",
+			wantSubs: []string{"edit", "~/.zshrc/activate", "whole-file"},
+		},
+		{
+			name: "same-module",
+			baseA: `[dotfiles]` + "\n" +
+				`"~/.zshrc" = { source = "zshrc", mode = "symlink" }` + "\n" +
+				`"~/.zshrc/activate" = { block = "eval x" }` + "\n",
+			baseB:    "",
+			wantSubs: []string{"edit", "~/.zshrc/activate", "whole-file"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dirA := writeModule(t, root, "moda", tc.baseA)
+			require.NoError(t, os.WriteFile(filepath.Join(dirA, "zshrc"), []byte("x"), 0o644))
+			if tc.baseB != "" {
+				writeModule(t, root, "modb", tc.baseB)
+			}
+			f := &facts.Facts{Hostname: "h", Username: "u"}
+
+			_, err := loadAndResolve(t, root, f)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "conflict")
+			for _, s := range tc.wantSubs {
+				require.Contains(t, err.Error(), s)
+			}
+		})
+	}
+}

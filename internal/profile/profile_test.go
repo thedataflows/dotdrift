@@ -1,6 +1,7 @@
 package profile_test
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -78,6 +79,37 @@ func TestLoadModuleTOML_dotfiles(t *testing.T) {
 	require.Equal(t, profile.Dotfile{Source: ".bashrc", Mode: "symlink"}, m.Config.Dotfiles["~/.bashrc"])
 	require.Equal(t, profile.Dotfile{Source: "nvim", Mode: "symlink-each"}, m.Config.Dotfiles["~/.config/nvim"])
 	require.Equal(t, profile.Dotfile{Source: "config.toml", Mode: "copy"}, m.Config.Dotfiles["~/.config/app/config.toml"])
+}
+
+// Edit entries (line/block/template partial edits, keyed by "<file>/<id>")
+// decode into the new Dotfile fields exactly as mise spells them.
+func TestLoadModuleTOML_dotfileEditEntries(t *testing.T) {
+	root := t.TempDir()
+	modDir := filepath.Join(root, "modules", "edits")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+[dotfiles]
+"~/.zshrc/activate" = { block = 'eval "$(mise activate zsh)"' }
+"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
+"/etc/hosts/dev" = { line = "127.0.0.1 dev.local" }
+"~/.gitconfig/id" = { source = "snippets/git.tmpl", template = "tera" }
+`), 0o644))
+
+	p, err := profile.Load(root, &facts.Facts{})
+	require.NoError(t, err)
+	m := findModule(t, p, "edits")
+	require.Equal(t, profile.Dotfile{Block: `eval "$(mise activate zsh)"`}, m.Config.Dotfiles["~/.zshrc/activate"])
+	require.Equal(t, profile.Dotfile{Block: "alias ll='ls -l'", Comment: "#"}, m.Config.Dotfiles["~/.zshrc/aliases"])
+	require.Equal(t, profile.Dotfile{Line: "127.0.0.1 dev.local"}, m.Config.Dotfiles["/etc/hosts/dev"])
+	require.Equal(t, profile.Dotfile{Source: "snippets/git.tmpl", Template: "tera"}, m.Config.Dotfiles["~/.gitconfig/id"])
+}
+
+func TestDotfile_IsEdit(t *testing.T) {
+	require.False(t, profile.Dotfile{Mode: "symlink"}.IsEdit(), "whole-file entry is not an edit")
+	require.False(t, profile.Dotfile{}.IsEdit(), "empty entry is not an edit")
+	require.True(t, profile.Dotfile{Line: "x"}.IsEdit())
+	require.True(t, profile.Dotfile{Block: "x"}.IsEdit())
+	require.True(t, profile.Dotfile{Template: "tera"}.IsEdit())
 }
 
 func TestDiscoverModules_empty(t *testing.T) {

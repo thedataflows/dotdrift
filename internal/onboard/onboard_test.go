@@ -427,6 +427,42 @@ func TestOnboard_mergePreservesOtherSections(t *testing.T) {
 	require.Contains(t, content, `"~/.bashrc"`)
 }
 
+// Re-onboarding a module whose module.toml carries hand-written edit entries
+// (line/block/template) must round-trip them verbatim — onboard decodes the
+// existing [dotfiles] and re-encodes only the set fields, so an edit entry is
+// preserved instead of being silently rewritten as { source = "", mode = "" }.
+func TestOnboard_reonboardPreservesEditEntries(t *testing.T) {
+	home := t.TempDir()
+	profileRoot := t.TempDir()
+	isolateState(t)
+	require.NoError(t, writeFile(filepath.Join(home, ".bashrc"), "a"))
+
+	modDir := filepath.Join(profileRoot, "modules", "mix")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, writeFile(filepath.Join(modDir, "module.toml"), `
+[dotfiles]
+"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }
+"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
+"~/.gitconfig/id" = { source = "git.tmpl", template = "tera" }
+`))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profileRoot, Paths: []string{"~/.bashrc"}, App: "mix", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(modDir, "module.toml"))
+	require.NoError(t, err)
+	// The three edit entries survive verbatim (fields re-encoded in field order).
+	require.Contains(t, content, `"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }`)
+	require.Contains(t, content, `"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }`)
+	require.Contains(t, content, `"~/.gitconfig/id" = { source = "git.tmpl", template = "tera" }`)
+	// The newly onboarded whole-file entry is present too.
+	require.Contains(t, content, `"~/.bashrc" = { source = "home/.bashrc", mode = "symlink" }`)
+	// No entry was collapsed to empty source/mode.
+	require.NotContains(t, content, `{ source = "", mode = "" }`)
+}
+
 // Adding a path without re-declaring packages keeps existing package
 // description comments: the [packages] section is left untouched.
 func TestOnboard_mergePreservesPackageDescriptions(t *testing.T) {

@@ -536,8 +536,9 @@ func TestMergeDotfiles_editValidationErrors(t *testing.T) {
 	}
 }
 
-// System-scope edit entries are rejected: system files are whole-file only.
-func TestMergeDotfiles_editSystemScopeRejected(t *testing.T) {
+// System-scope edit entries resolve normally — they apply via elevated
+// mise dotfiles apply (the only path for in-place system edits).
+func TestMergeDotfiles_editSystemScopeResolves(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "mod", `
 scope = "system"
@@ -546,10 +547,12 @@ scope = "system"
 `)
 	f := &facts.Facts{Hostname: "h", Username: "u"}
 
-	_, err := loadAndResolve(t, root, f)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "require user scope")
-	require.Contains(t, err.Error(), "mod")
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err)
+	require.Len(t, plan.Dotfiles.Entries, 1)
+	e := plan.Dotfiles.Entries[0]
+	require.Equal(t, "127.0.0.1 dev.local", e.Line)
+	require.Equal(t, profile.ScopeSystem, e.Scope, "system-scope edit entry keeps its scope")
 }
 
 // An edit entry on a file another module claims as whole-file is a conflict

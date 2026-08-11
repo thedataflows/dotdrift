@@ -87,3 +87,79 @@ func TestApply_noSystemEntriesSkipsDotfilesSystem(t *testing.T) {
 	_, err := os.Stat(filepath.Join(dir, "mise", "dotfiles-system"))
 	require.True(t, os.IsNotExist(err), "no dotfiles-system config dir must be created")
 }
+
+// System-scope edit entries (line/block/template) run through the elevated
+// mise dotfiles apply path — [bootstrap.files] can only place files, not edit
+// them in place. The system step writes a dedicated [dotfiles] config and
+// invokes DotfilesApplySudo for the edit entries.
+func TestApply_systemEditEntriesUseDotfilesApply(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	// Build a profile with one system-scope module carrying an edit entry.
+	profileDir := t.TempDir()
+	modDir := filepath.Join(profileDir, "modules", "sysmod")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+scope = "system"
+[dotfiles]
+"/etc/hosts/dev" = { line = "127.0.0.1 dev.local" }
+`), 0o644))
+
+	f := &facts.Facts{Hostname: "h", Username: "u", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: profileDir, State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	// The system edit runs as an elevated `mise dotfiles apply` from the
+	// system/edits config dir.
+	var foundEditApply bool
+	for _, e := range *events {
+		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("system", "edits")) {
+			foundEditApply = true
+		}
+	}
+	require.True(t, foundEditApply, "system edit entries must reach elevated dotfiles apply, events: %v", *events)
+
+	// The edit config carries a [dotfiles] section (not [bootstrap.files]).
+	editCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "edits", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(editCfg), "[dotfiles]")
+	require.Contains(t, string(editCfg), `line = "127.0.0.1 dev.local"`)
+	require.NotContains(t, string(editCfg), "[bootstrap.files]")
+}
+
+// System-scope whole-file and edit entries coexist in one system step:
+// whole-file → [bootstrap.files], edit → elevated dotfiles apply.
+func TestApply_systemWholeFileAndEditBothApply(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	profileDir := t.TempDir()
+	modDir := filepath.Join(profileDir, "modules", "sysmod")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "demo.conf"), []byte("config"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+scope = "system"
+[dotfiles]
+"/etc/demo.conf" = { source = "demo.conf", mode = "copy" }
+"/etc/hosts/dev" = { line = "127.0.0.1 dev.local" }
+`), 0o644))
+
+	f := &facts.Facts{Hostname: "h", Username: "u", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: profileDir, State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	var foundBootstrap, foundEditApply bool
+	for _, e := range *events {
+		if strings.Contains(e, "bootstrap") && strings.Contains(e, "--only files") {
+			foundBootstrap = true
+		}
+		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("system", "edits")) {
+			foundEditApply = true
+		}
+	}
+	require.True(t, foundBootstrap, "whole-file system entries must reach bootstrap --only files, events: %v", *events)
+	require.True(t, foundEditApply, "system edit entries must reach elevated dotfiles apply, events: %v", *events)
+}

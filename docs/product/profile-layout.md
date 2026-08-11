@@ -95,7 +95,7 @@ python = "3.12"
 "~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 "~/.config/nvim" = { source = "nvim", mode = "symlink-each" }
 "~/.config/app/config.toml" = { source = "config.toml", mode = "copy" }
-# Edit entries: partial edits keyed by "<file-path>/<edit-id>" (user-scope only).
+# Edit entries: partial edits keyed by "<file-path>/<edit-id>" (any scope).
 "~/.zshrc/activate" = { block = 'eval "$(mise activate zsh)"' }
 "~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
 "~/.gitconfig/id" = { source = "snippets/git.tmpl", template = "tera" }
@@ -173,9 +173,10 @@ public = false
     `template` requires `source` and excludes `line`/`block`; `comment` applies
     only to `block`; the key must be `<file-path>/<edit-id>` with a non-empty
     file path (not `~`, not `/`) and an edit id matching `[A-Za-z0-9._-]+`.
-    Edit entries are **user-scope only** — system files are whole-file only
-    (`[bootstrap.files]` has no edit support); use `copy`/`template` or a post
-    hook for system-scope partial writes.
+    Edit entries work at either scope, like whole-file entries. User-scope
+    edits apply as the invoking user; system-scope edits (e.g. `/etc/hosts/...`)
+    apply via elevated `mise dotfiles apply` (`sudo`) — the only mechanism for
+    in-place edits, since `[bootstrap.files]` does file placement, not edits.
 - Higher layers (user > host > module) override lower layers for the same
   dotfile key. For edit entries the key is the full `<file-path>/<edit-id>`,
   so a higher layer overrides only the same edit id on the same file; other

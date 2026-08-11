@@ -117,18 +117,22 @@ func (s *packagesStep) Run(ctx context.Context) error {
 	return s.runner.Bootstrap(ctx, s.configPath, true, "packages")
 }
 
-// systemFilesStep replaces DotfilesSystemStep: it emits [bootstrap.files] from
-// system-scope dotfile entries and [bootstrap.directories] from mount
-// destinations, then converges via `mise bootstrap --only files`. The hidden
-// sudo helpers in mise bootstrap are strictly safer than the old
-// `sudo -E mise dotfiles apply` path (never leak content in argv/logs).
+// systemFilesStep applies system-scope dotfile entries with root privileges.
+// Whole-file entries (symlink/copy/template) become [bootstrap.files] and
+// converge via `mise bootstrap --only files` (hidden sudo helpers, never leak
+// content in argv/logs). Edit entries (line/block/template) have no
+// [bootstrap.files] equivalent, so they run through `mise dotfiles apply` with
+// elevation (DotfilesApplySudo) — the only mechanism mise has for in-place
+// edits. Mount destinations become [bootstrap.directories] (mkdir).
 type systemFilesStep struct {
-	runner     mise.Runner
+	runner     mise.Runner    // for mise bootstrap --only files
+	exec       *mise.ExecMise // for sudo mise dotfiles apply (system edits)
 	entries    []resolve.DotfileEntry
 	sourceRoot string
 	homeDir    string
 	dirs       []string // mount destinations for [bootstrap.directories]
 	configPath string
+	yes        bool
 }
 
 var _ apply.Step = (*systemFilesStep)(nil)
@@ -136,21 +140,54 @@ var _ apply.Step = (*systemFilesStep)(nil)
 func (s *systemFilesStep) Name() string { return "dotfiles-system" }
 
 func (s *systemFilesStep) Run(ctx context.Context) error {
-	files, err := mise.ResolveBootstrapFiles(s.entries, s.sourceRoot, s.homeDir)
-	if err != nil {
-		return err
+	// Split system entries by kind: whole-file entries become [bootstrap.files]
+	// (mise bootstrap --only files); edit entries run through mise dotfiles
+	// apply with elevation (the only path for in-place edits). ResolveBootstrapFiles
+	// assumes whole-file semantics (on-disk source + mode), so edit entries
+	// must be filtered out before it.
+	var whole, edit []resolve.DotfileEntry
+	for _, e := range s.entries {
+		if e.IsEdit() {
+			edit = append(edit, e)
+		} else {
+			whole = append(whole, e)
+		}
 	}
-	content := mise.GenerateBootstrapFiles(files)
-	if d := mise.GenerateBootstrapDirectories(s.dirs); d != "" {
-		content += "\n" + d
+	// Whole-file entries + mount directories → mise bootstrap --only files.
+	if len(whole) > 0 || len(s.dirs) > 0 {
+		files, err := mise.ResolveBootstrapFiles(whole, s.sourceRoot, s.homeDir)
+		if err != nil {
+			return err
+		}
+		content := mise.GenerateBootstrapFiles(files)
+		if d := mise.GenerateBootstrapDirectories(s.dirs); d != "" {
+			content += "\n" + d
+		}
+		if content != "" {
+			if err := writeBootstrapConfig(s.configPath, content); err != nil {
+				return err
+			}
+			if err := s.runner.Bootstrap(ctx, s.configPath, true, "files"); err != nil {
+				return err
+			}
+		}
 	}
-	if content == "" {
-		return nil
+	// Edit entries → sudo mise dotfiles apply from a dedicated config.
+	// [bootstrap.files] does file placement, not in-place edits, so the
+	// elevated dotfiles-apply path is the only mechanism for system edits.
+	if len(edit) > 0 {
+		if s.exec == nil {
+			return fmt.Errorf("system edit entries require an exec mise runner")
+		}
+		editConfigPath := filepath.Join(filepath.Dir(s.configPath), "edits", "mise.toml")
+		if err := writeBootstrapConfig(editConfigPath, mise.GenerateDotfiles(edit)); err != nil {
+			return err
+		}
+		if err := s.exec.DotfilesApplySudo(ctx, editConfigPath, s.yes); err != nil {
+			return fmt.Errorf("mise dotfiles apply (system edits): %w", err)
+		}
 	}
-	if err := writeBootstrapConfig(s.configPath, content); err != nil {
-		return err
-	}
-	return s.runner.Bootstrap(ctx, s.configPath, true, "files")
+	return nil
 }
 
 // mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for
@@ -412,8 +449,8 @@ func (c *ApplyCmd) Run() error {
 		}
 		homeDir, _ := os.UserHomeDir()
 		steps = append(steps, &systemFilesStep{
-			runner: runner, entries: systemEntries, sourceRoot: profileRoot,
-			homeDir: homeDir, dirs: mountDests, configPath: systemConfigPath,
+			runner: runner, exec: runner, entries: systemEntries, sourceRoot: profileRoot,
+			homeDir: homeDir, dirs: mountDests, configPath: systemConfigPath, yes: c.Yes,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.

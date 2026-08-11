@@ -391,9 +391,6 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 	for target, winner := range winners {
 		df := winner.df
 		if df.IsEdit() {
-			if scope == profile.ScopeSystem {
-				return nil, fmt.Errorf("module %s: dotfile %q: edit entries (line/block/template) require user scope — system files are whole-file only ([bootstrap.files] has no edit support); use copy/template or a post hook", moduleID, target)
-			}
 			if err := validateEditEntry(moduleID, target, df); err != nil {
 				return nil, err
 			}

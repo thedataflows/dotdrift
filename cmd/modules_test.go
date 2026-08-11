@@ -2,11 +2,14 @@ package cmd_test
 
 import (
 	"bytes"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	cmd "github.com/thedataflows/dotdrift/cmd"
+	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
 func TestCLI_modules_listsStatus(t *testing.T) {
@@ -18,8 +21,8 @@ func TestCLI_modules_listsStatus(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	out := buf.String()
-	require.Contains(t, out, "selected b\n", "app column is omitted when app == id")
-	require.Contains(t, out, "skipped  a disabled")
+	require.Contains(t, out, "+ b\n", "app column is omitted when app == id")
+	require.Contains(t, out, "- a disabled")
 }
 
 // A module with an explicit app different from its id keeps the app
@@ -31,7 +34,7 @@ func TestCLI_modules_appAndScopeTags(t *testing.T) {
 		Out:     &buf,
 	}
 	require.NoError(t, c.Run())
-	require.Contains(t, buf.String(), "selected foo (app: FooApp)\n")
+	require.Contains(t, buf.String(), "+ foo (app: FooApp)\n")
 
 	buf.Reset()
 	c = &cmd.ModulesCmd{
@@ -40,9 +43,9 @@ func TestCLI_modules_appAndScopeTags(t *testing.T) {
 	}
 	require.NoError(t, c.Run())
 	out := buf.String()
-	require.Contains(t, out, "selected demo [system]\n")
-	require.Contains(t, out, "selected shell\n", "user-scope modules render without a scope tag")
-	require.NotContains(t, out, "selected shell [system]")
+	require.Contains(t, out, "+ demo [system]\n")
+	require.Contains(t, out, "+ shell\n", "user-scope modules render without a scope tag")
+	require.NotContains(t, out, "+ shell [system]")
 }
 
 // A positional module filter limits the listing: the listed module stays
@@ -57,8 +60,8 @@ func TestCLI_modules_filterKeepsListed(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	out := buf.String()
-	require.Contains(t, out, "selected b\n")
-	require.Contains(t, out, "skipped  a disabled")
+	require.Contains(t, out, "+ b\n")
+	require.Contains(t, out, "- a disabled")
 	require.NotContains(t, out, "module filter", "a was already disabled; the filter adds no skip")
 }
 
@@ -74,8 +77,8 @@ func TestCLI_modules_filterExcludesSelected(t *testing.T) {
 	err := c.Run()
 	require.NoError(t, err)
 	out := buf.String()
-	require.Contains(t, out, "selected shell\n")
-	require.Contains(t, out, "skipped  demo module filter")
+	require.Contains(t, out, "+ shell\n")
+	require.Contains(t, out, "- demo module filter")
 }
 
 // Unknown module ids are a loud error naming the unknown ids and the valid
@@ -107,4 +110,47 @@ func TestCLI_modules_filterDisabledErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "a")
 	require.Contains(t, err.Error(), "disabled")
+}
+
+// A module whose module.toml carries a description shows it after the id and
+// tags, for both selected and skipped modules. The `+`/`-` markers are
+// colored (green/red) only on a TTY; piped output is plain.
+func TestCLI_modules_descriptionAndColor(t *testing.T) {
+	dir := t.TempDir()
+	demoDir := filepath.Join(dir, "modules", "demo")
+	require.NoError(t, os.MkdirAll(demoDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(demoDir, "module.toml"), []byte(`id = "demo"
+scope = "system"
+description = "System-wide demo configuration"
+`), 0o644))
+	editDir := filepath.Join(dir, "modules", "edit")
+	require.NoError(t, os.MkdirAll(editDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(editDir, "module.toml"), []byte(`id = "edit"
+description = "Editor setup"
+`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = [\"edit\"]\n"), 0o644))
+
+	// Piped (no TTY): plain markers, description appended after an em-dash.
+	var buf bytes.Buffer
+	require.NoError(t, (&cmd.ModulesCmd{Profile: dir, Out: &buf}).Run())
+	out := buf.String()
+	require.Contains(t, out, "+ demo [system] — System-wide demo configuration\n")
+	require.Contains(t, out, "- edit disabled — Editor setup\n")
+	require.NotContains(t, out, "\033[", "no ANSI codes when piped")
+	// On a TTY the markers are colored; descriptions are still present.
+	// Both globals are controlled: another cmd test may drive the real CLI
+	// parser which latches executil.NoColor=true for the process.
+	origTerm, origNoColor := executil.IsTerminal, executil.NoColor
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+	t.Cleanup(func() {
+		executil.IsTerminal = origTerm
+		executil.NoColor = origNoColor
+	})
+
+	buf.Reset()
+	require.NoError(t, (&cmd.ModulesCmd{Profile: dir, Out: &buf}).Run())
+	colored := buf.String()
+	require.Contains(t, colored, "\033[32m+\033[0m demo [system]")
+	require.Contains(t, colored, "\033[31m-\033[0m edit disabled")
 }

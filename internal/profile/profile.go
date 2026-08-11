@@ -32,16 +32,17 @@ const (
 
 // ModuleConfig is the base module.toml configuration.
 type ModuleConfig struct {
-	ID       string               `toml:"id"`
-	App      string               `toml:"app"`
-	Scope    string               `toml:"scope"`
-	When     When                 `toml:"when"`
-	Packages Packages             `toml:"packages"`
-	Tools    map[string]string    `toml:"tools"`
-	Dotfiles map[string]Dotfile   `toml:"dotfiles"`
-	Hooks    Hooks                `toml:"hooks"`
-	Mounts   map[string]MountSpec `toml:"mounts"`
-	Smb      SmbSpec              `toml:"smb"`
+	ID          string               `toml:"id"`
+	App         string               `toml:"app"`
+	Description string               `toml:"description"`
+	Scope       string               `toml:"scope"`
+	When        When                 `toml:"when"`
+	Packages    Packages             `toml:"packages"`
+	Tools       map[string]string    `toml:"tools"`
+	Dotfiles    map[string]Dotfile   `toml:"dotfiles"`
+	Hooks       Hooks                `toml:"hooks"`
+	Mounts      map[string]MountSpec `toml:"mounts"`
+	Smb         SmbSpec              `toml:"smb"`
 }
 
 // ScopeOrDefault returns the module's dotfile scope, defaulting to user when

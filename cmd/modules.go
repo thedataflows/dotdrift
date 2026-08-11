@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/detect"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
@@ -16,6 +17,15 @@ type ModulesCmd struct {
 	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
 	Out     io.Writer `kong:"-"`
 }
+
+// Selection status markers. `+`/`-` are colored (green/red) only on a TTY;
+// plain when piped or under --no-color, matching the rest of dotdrift's
+// color gating (executil.ColorEnabled).
+const (
+	ansiReset = "\033[0m"
+	ansiGreen = "\033[32m"
+	ansiRed   = "\033[31m"
+)
 
 // Run loads the profile and prints selection status.
 func (c *ModulesCmd) Run() error {
@@ -34,18 +44,36 @@ func (c *ModulesCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
+	selected, skipped := "+", "-"
+	if executil.ColorEnabled(out) {
+		selected = ansiGreen + "+" + ansiReset
+		skipped = ansiRed + "-" + ansiReset
+	}
 	for _, m := range p.Selected {
-		var tags strings.Builder
+		var b strings.Builder
+		fmt.Fprintf(&b, "%s %s", selected, m.ID)
 		if m.Config.Scope == profile.ScopeSystem {
-			tags.WriteString(" [system]")
+			b.WriteString(" [system]")
 		}
 		if m.App != m.ID {
-			fmt.Fprintf(&tags, " (app: %s)", m.App)
+			fmt.Fprintf(&b, " (app: %s)", m.App)
 		}
-		fmt.Fprintf(out, "selected %s%s\n", m.ID, tags.String())
+		writeDescription(&b, m.Config.Description)
+		fmt.Fprintln(out, b.String())
 	}
 	for _, s := range p.Skipped {
-		fmt.Fprintf(out, "skipped  %s %s\n", s.Module.ID, s.Reason)
+		var b strings.Builder
+		fmt.Fprintf(&b, "%s %s %s", skipped, s.Module.ID, s.Reason)
+		writeDescription(&b, s.Module.Config.Description)
+		fmt.Fprintln(out, b.String())
 	}
 	return nil
+}
+
+// writeDescription appends a module's description after an em-dash separator
+// (the same separator the drift report uses for detail) when one is set.
+func writeDescription(b *strings.Builder, desc string) {
+	if desc != "" {
+		fmt.Fprintf(b, " — %s", desc)
+	}
 }

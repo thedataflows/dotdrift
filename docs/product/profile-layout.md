@@ -74,6 +74,7 @@ disable = ["id1", "id2"]
 id = "optional-id"
 app = "optional-app"
 scope = "user"
+description = "optional human-readable summary"
 
 [when]
 hosts = ["myhost"]
@@ -146,6 +147,11 @@ public = false
   privileges during `dotdrift apply`. Dotfile targets under `/etc` (or other
   root-owned paths) belong in a `scope = "system"` module. Any other value is
   a resolve-time error naming the module and the value.
+- `description` is an optional human-readable summary of the module. When set,
+  `dotdrift modules` shows it appended to the module's line
+  (`<marker> <id>… — <description>`). It is display-only metadata, not a
+  resolution input, and is read from the representative layer like `scope`
+  (an overlay's `description` is ignored).
 - `packages.absent` cancels a `present` entry from a lower layer.
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a

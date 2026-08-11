@@ -29,7 +29,7 @@ are selected**, not the invoking user's.
 | Tools map keys | Higher layer wins |
 | `modules.disable` | **Union** across layers (any disable sticks; no silent re-enable in v0.1) |
 | `when` filters | Evaluated on module; fail → not selected |
-| Module `scope` | **Representative layer only** (base preferred by discovery order); overlay `scope` declarations are ignored |
+| Module `scope`, `description` | **Representative layer only** (base preferred by discovery order); overlay declarations are ignored |
 | `mounts.<name>` | **Whole-entry by name**: higher layer's entry fully replaces the lower layer's (like dotfiles per-target); no field-level merge |
 | `smb.shares.<name>` | **Whole-entry by name**, same as mounts |
 | `smb` scalars (`group`, `users`, `avahi`) | **Replace when set**: a higher layer's non-empty value (or present `avahi` key) replaces; unset keys leave the lower value. `users` replaces wholesale — never appended (contrast: hooks append) |
@@ -46,7 +46,7 @@ declared `id`: the user overlay for `hosts/<h>/modules/foo/` lives at
 
 The representative module config (the first layer in base → host → user
 order containing the directory) supplies module-level metadata such as
-`scope`, `id`, `app`, and `when`; overlays merge only packages, tools,
+`scope`, `id`, `app`, `description`, and `when`; overlays merge only packages, tools,
 dotfiles, hooks, mounts, and smb.
 
 `when` filter values match detected facts by **case-sensitive exact match**

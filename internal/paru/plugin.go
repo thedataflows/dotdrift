@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -153,7 +152,7 @@ func installedHash(dir string) (string, error) {
 func hashFiles(files []pluginFile) string {
 	h := sha256.New()
 	for _, f := range files {
-		io.WriteString(h, f.path)
+		h.Write([]byte(f.path))
 		h.Write([]byte{0})
 		h.Write(f.content)
 		h.Write([]byte{0})

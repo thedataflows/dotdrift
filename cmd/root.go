@@ -1,3 +1,4 @@
+// Package cmd implements the dotdrift command-line interface and its subcommands.
 package cmd
 
 import (
@@ -35,7 +36,7 @@ type RootFlags struct {
 	NoColor       bool   `help:"Disable colored output" default:"false" env:"NO_COLOR"`
 }
 
-// root CLI structure.
+// CLI is the root command structure for dotdrift.
 type CLI struct {
 	RootFlags `kong:"embed"`
 
@@ -75,7 +76,10 @@ func (cli *CLI) AfterApply(kctx *kong.Context) error {
 	}
 	if cli.NoColor || os.Getenv("NO_COLOR") != "" {
 		executil.NoColor = true
-		os.Setenv("NO_COLOR", "1") // propagate to child processes (mise, paru)
+		// Propagate to child processes (mise, paru).
+		if err := os.Setenv("NO_COLOR", "1"); err != nil {
+			return fmt.Errorf("set NO_COLOR: %w", err)
+		}
 	}
 	return nil
 }

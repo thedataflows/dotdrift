@@ -185,32 +185,3 @@ func TestExecRunner_Run_contextCancelKillsCommand(t *testing.T) {
 	require.Error(t, err, "cancelling ctx must kill the running command")
 	require.Less(t, time.Since(start), 10*time.Second, "command must be killed promptly, not run to completion")
 }
-
-type fakeBackend struct {
-	ctx          context.Context
-	presentCalls [][]string
-	absentCalls  [][]string
-	err          error
-	absentErr    error
-}
-
-func (f *fakeBackend) Present(ctx context.Context, pkgs []string) error {
-	f.ctx = ctx
-	f.presentCalls = append(f.presentCalls, pkgs)
-	return f.err
-}
-
-func (f *fakeBackend) Absent(ctx context.Context, pkgs []string) error {
-	f.ctx = ctx
-	f.absentCalls = append(f.absentCalls, pkgs)
-	if f.absentErr != nil {
-		return f.absentErr
-	}
-	return f.err
-}
-
-func (f *fakeBackend) IsInstalled(ctx context.Context, pkg string) (bool, error) {
-	return false, nil
-}
-
-func (f *fakeBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }

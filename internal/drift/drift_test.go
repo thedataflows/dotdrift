@@ -539,8 +539,6 @@ func smbPlan(mod resolve.SmbModuleSpec) *resolve.Plan {
 	return &resolve.Plan{Smb: resolve.SmbStep{Modules: []resolve.SmbModuleSpec{mod}}}
 }
 
-func boolPtr(b bool) *bool { return &b }
-
 func TestCheck_smbGroupMissing(t *testing.T) {
 	pr := fakeProbes()
 	pr.Run = runFake(nil, map[string]error{"getent group smb": errors.New("no")})

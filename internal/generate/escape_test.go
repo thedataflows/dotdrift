@@ -10,10 +10,14 @@ import (
 // escapeVectors are ground-truth outputs captured from the real
 // `systemd-escape --path` binary (systemd 258, CachyOS host).
 //
-// Known divergence: for a non-normalized path with an interior ".."
-// component (e.g. "/a/../b") the real binary hard-fails; EscapePath
-// instead normalizes it away ("/a/../b" -> "b") since it cannot
-// return an error. That case is intentionally not in the table.
+// Known divergence: for non-normalized ".." paths the real binary
+// hard-fails, version-dependent — systemd >=258 normalizes a leading
+// ".." ("/../a" -> "a") but rejects interior ones; older systemd
+// (e.g. 249 in CI) rejects both. EscapePath normalizes instead of
+// erroring since it cannot return an error. Interior ".." ("/a/../b")
+// is omitted from the table; leading ".." ("/../a") is included and
+// pinned here, and TestEscape_matchesSystemdEscape skips any input the
+// live binary rejects.
 var escapeVectors = []struct {
 	name  string
 	input string
@@ -71,7 +75,13 @@ func TestEscape_matchesSystemdEscape(t *testing.T) {
 	for _, tt := range escapeVectors {
 		t.Run(tt.name, func(t *testing.T) {
 			out, err := exec.Command(bin, "--path", tt.input).Output()
-			require.NoError(t, err)
+			if err != nil {
+				// The binary hard-fails on non-normalized ".." paths (see the
+				// version-dependent divergence note above); EscapePath's output
+				// for those is pinned by TestEscape_vectors, so skip rather than
+				// treat a binary rejection as a divergence.
+				t.Skipf("systemd-escape rejected %q: %v", tt.input, err)
+			}
 			live := string(out[:len(out)-1]) // strip trailing newline
 			require.Equal(t, live, EscapePath(tt.input),
 				"EscapePath(%q) diverges from systemd-escape", tt.input)

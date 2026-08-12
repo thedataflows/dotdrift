@@ -182,16 +182,6 @@ func TestGenerateBootstrapAccounts_sortedUsers(t *testing.T) {
 
 // helpers
 
-func countLines(s string) int {
-	n := 0
-	for _, c := range s {
-		if c == '\n' {
-			n++
-		}
-	}
-	return n + 1
-}
-
 func indexOf(s, substr string) int {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {

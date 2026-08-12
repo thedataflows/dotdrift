@@ -57,15 +57,6 @@ func setVerboseRunner(v bool, rs ...any) {
 	}
 }
 
-// pipelineStepNames is the single source of truth for the ordered pipeline
-// step names: apply builds its steps in this order and status reports
-// progress against it. Update this list when adding or removing a step.
-// hooks-pre/hooks-post, dotfiles-system, mounts, and smb are conditional:
-// they only run when the plan has hook commands / system-scope dotfile
-// entries / mount entries / smb modules, so a completed apply may
-// legitimately show fewer completed steps than the denominator.
-var pipelineStepNames = []string{"hooks-pre", "packages", "tools", "dotfiles", "dotfiles-system", "mounts", "smb", "hooks-post"}
-
 // packagesStep is the apply pipeline step for packages. It delegates install
 // to mise bootstrap (which converges [bootstrap.packages] via the paru plugin
 // or built-in managers) while keeping removal inline — mise's package-plugin

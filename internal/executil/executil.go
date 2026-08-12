@@ -96,7 +96,7 @@ func StreamLive(verbose bool, out, err io.Writer) bool {
 	return verbose || (IsTerminal(out) && IsTerminal(err))
 }
 
-// NoColor, when true, disables ANSI color output in dotdrift's own rendering.
+// NoColor disables ANSI color output in dotdrift's own rendering when true.
 // Set by the --no-color flag or the NO_COLOR env var (no-color.org standard).
 var NoColor bool
 

@@ -896,3 +896,50 @@ func TestRender_pluralSummary(t *testing.T) {
 	})
 	require.Contains(t, buf.String(), "drift: 2 items\n")
 }
+
+// With color on, finding lines render the module and the item in different
+// shades of the same (issue-type) hue — faint for the module, bold for the
+// item — in every section.
+func TestRender_shadesModuleVsItem(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+
+	var buf bytes.Buffer
+	drift.Render(&buf, []drift.Finding{
+		{Section: "packages", Item: "bbb", Status: drift.Drift, Detail: "missing", Module: "alpha"},
+		{Section: "dotfiles", Item: "~/.zshrc", Status: drift.Drift, Detail: "content differs", Module: "zsh"},
+	})
+	out := buf.String()
+	missing := "\033[38;5;208m" // missing → orange
+	require.Contains(t, out, "\033[2m"+missing+"alpha\033[0m", "packages: module in faint shade of the finding hue")
+	require.Contains(t, out, "\033[1m"+missing+"bbb\033[0m", "packages: item in bold shade of the finding hue")
+	require.Contains(t, out, missing+" — missing\033[0m", "detail in the plain finding hue")
+	differs := "\033[33m" // content differs → yellow
+	require.Contains(t, out, "\033[2m"+differs+"zsh\033[0m", "dotfiles: module in faint shade of the finding hue")
+	require.Contains(t, out, "\033[1m"+differs+"~/.zshrc\033[0m", "dotfiles: item in bold shade of the finding hue")
+}
+
+// The hue follows the issue type in every section: an unknown finding shades
+// red, a version/content mismatch yellow, anything else orange.
+func TestRender_shadesFollowIssueType(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+
+	var buf bytes.Buffer
+	drift.Render(&buf, []drift.Finding{
+		{Section: "packages", Item: "jq", Status: drift.Unknown, Detail: "dpkg query failed", Module: "alpha"},
+		{Section: "tools", Item: "node", Status: drift.Drift, Detail: "installed 1, want 2", Module: "alpha"},
+		{Section: "mounts", Item: "/mnt/data", Status: drift.Drift, Detail: "not enabled", Module: "nas"},
+	})
+	out := buf.String()
+	require.Contains(t, out, "\033[2m\033[31malpha\033[0m", "unknown → faint red module")
+	require.Contains(t, out, "\033[1m\033[31mjq\033[0m", "unknown → bold red item")
+	require.Contains(t, out, "\033[2m\033[33malpha\033[0m", "version drift → faint yellow module")
+	require.Contains(t, out, "\033[1m\033[33mnode\033[0m", "version drift → bold yellow item")
+	require.Contains(t, out, "\033[2m\033[38;5;208mnas\033[0m", "other drift → faint orange module")
+	require.Contains(t, out, "\033[1m\033[38;5;208m/mnt/data\033[0m", "other drift → bold orange item")
+}

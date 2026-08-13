@@ -675,6 +675,8 @@ func Render(w io.Writer, findings []Finding) {
 // ANSI color codes for TTY output; applied only when color is true.
 const (
 	ansiReset  = "\033[0m"
+	ansiBold   = "\033[1m"
+	ansiFaint  = "\033[2m"
 	ansiRed    = "\033[31m"
 	ansiYellow = "\033[33m"
 	ansiOrange = "\033[38;5;208m"
@@ -682,7 +684,10 @@ const (
 )
 
 // renderFinding writes one drift/unknown finding line. The owning module
-// replaces the redundant status prefix; unknown items get a (?) suffix.
+// replaces the redundant status prefix; unknown items get a (?) suffix. With
+// color on, the finding hue splits into two shades — faint for the module,
+// bold for the item — so the grouped owner and the item read as distinct
+// columns of the same color; the detail rides the plain hue.
 func renderFinding(w io.Writer, f Finding, color bool) {
 	mod := f.Module
 	if mod == "" {
@@ -692,10 +697,15 @@ func renderFinding(w io.Writer, f Finding, color bool) {
 	if f.Status == Unknown {
 		suffix = " (?)"
 	}
-	line := fmt.Sprintf("  %s: %s — %s%s", mod, f.Item, f.Detail, suffix)
 	if color {
-		line = findingColor(f) + line + ansiReset
+		hue := findingColor(f)
+		fmt.Fprintf(w, "  %s%s%s%s: %s%s%s%s%s — %s%s\n",
+			ansiFaint, hue, mod, ansiReset,
+			ansiBold, hue, f.Item, ansiReset,
+			hue, f.Detail+suffix, ansiReset)
+		return
 	}
+	line := fmt.Sprintf("  %s: %s — %s%s", mod, f.Item, f.Detail, suffix)
 	fmt.Fprintln(w, line)
 }
 

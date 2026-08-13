@@ -38,6 +38,14 @@ profile/
 
 ## Validation
 
+- `module.toml` is validated **strictly against the schema below**: any key
+  outside it (a typo like `preset` under `[packages]`, a misplaced table) is
+  a load-time error naming the file, line, and key —
+  `<path>/module.toml:<line>: unknown key "<key>" [in <table>]`. Every
+  module.toml read (all layers, resolve, onboard, generate, TUI) applies the
+  same check, so an invalid file fails every command immediately instead of
+  silently decoding to zero values. Structured hook tables
+  (`[[hooks.pre]]`/`[[hooks.post]]`) accept only `command` and `optional`.
 - `modules/` must exist. Loading a directory without it fails with
   `not a dotdrift profile: <path> missing modules/ directory` — a typo'd
   profile path is never silently treated as an empty profile.

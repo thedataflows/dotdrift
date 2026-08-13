@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
 
@@ -83,8 +82,8 @@ func loadModule(path, dirName string) (*Module, error) {
 		return nil, err
 	}
 	var cfg ModuleConfig
-	if _, err := toml.DecodeFile(modToml, &cfg); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", modToml, err)
+	if err := DecodeModuleTOMLFile(modToml, &cfg); err != nil {
+		return nil, err
 	}
 	if cfg.ID == "" {
 		cfg.ID = dirName

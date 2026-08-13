@@ -227,11 +227,11 @@ func renderUnits(input Input, presets map[string]Entry) map[string]string {
 func readModuleConfig(dir string) (profile.ModuleConfig, error) {
 	var cfg profile.ModuleConfig
 	path := filepath.Join(dir, moduleTomlName)
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	if err := profile.DecodeModuleTOMLFile(path, &cfg); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return cfg, nil
 		}
-		return cfg, fmt.Errorf("decode %s: %w", path, err)
+		return cfg, err
 	}
 	return cfg, nil
 }

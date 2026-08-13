@@ -212,6 +212,14 @@ func checkPackages(plan *resolve.Plan, pr Probes) []probeTask {
 			},
 		})
 	}
+	// Sort by owning module first, then package name: a module's packages
+	// stay grouped in the report (install and remove entries interleave).
+	sort.Slice(tasks, func(i, j int) bool {
+		if tasks[i].module != tasks[j].module {
+			return tasks[i].module < tasks[j].module
+		}
+		return tasks[i].item < tasks[j].item
+	})
 	return tasks
 }
 

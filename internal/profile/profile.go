@@ -98,6 +98,16 @@ type HookCommand struct {
 	Optional bool   `toml:"optional"`
 }
 
+// unknownHookKeyError flags a key outside the {command, optional} hook
+// schema. Structured hook tables bypass strict-mode Undecoded detection (the
+// custom unmarshaler consumes the subtree), so the check lives here and
+// DecodeModuleTOMLFile locates the offending line.
+type unknownHookKeyError struct{ key string }
+
+func (e *unknownHookKeyError) Error() string {
+	return fmt.Sprintf("unknown key %q in hook entry (valid keys: command, optional)", e.key)
+}
+
 // UnmarshalTOML accepts both spellings. The legacy form feeds each array
 // element as a string; the structured form feeds a map with command/optional.
 func (h *HookCommand) UnmarshalTOML(v any) error {
@@ -105,6 +115,11 @@ func (h *HookCommand) UnmarshalTOML(v any) error {
 	case string:
 		h.Command = val
 	case map[string]any:
+		for k := range val {
+			if k != "command" && k != "optional" {
+				return &unknownHookKeyError{key: k}
+			}
+		}
 		if cmd, ok := val["command"].(string); ok {
 			h.Command = cmd
 		}
@@ -195,8 +210,8 @@ func LoadModuleConfig(dir string) (*ModuleConfig, error) {
 		return nil, err
 	}
 	var cfg ModuleConfig
-	if _, err := toml.DecodeFile(modToml, &cfg); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", modToml, err)
+	if err := DecodeModuleTOMLFile(modToml, &cfg); err != nil {
+		return nil, err
 	}
 	id := cfg.ID
 	if id == "" {

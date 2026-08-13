@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
@@ -275,8 +274,8 @@ func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {
 		}
 		return cfg, err
 	}
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
-		return cfg, fmt.Errorf("decode %s: %w", path, err)
+	if err := profile.DecodeModuleTOMLFile(path, &cfg); err != nil {
+		return cfg, err
 	}
 	return cfg, nil
 }

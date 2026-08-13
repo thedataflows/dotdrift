@@ -110,6 +110,27 @@ func TestCheck_packagesProbeError(t *testing.T) {
 	require.Contains(t, f.Detail, "dpkg query failed")
 }
 
+// Packages findings are sorted by owning module first, then by package name,
+// so a module's packages stay grouped in the report. Install and remove
+// entries interleave under the same ordering.
+func TestCheck_packagesSortedByModuleThenName(t *testing.T) {
+	pr := fakeProbes()
+	pr.IsInstalled = func(context.Context, string) (bool, error) { return false, nil }
+	plan := &resolve.Plan{Packages: resolve.PackagesStep{
+		Install: []string{"zzz", "aaa", "mmm"},
+		Remove:  []string{"gone"},
+		PresentModules: map[string][]string{
+			"zzz": {"beta"}, "aaa": {"beta"}, "mmm": {"alpha"},
+		},
+		AbsentModules: map[string][]string{"gone": {"alpha"}},
+	}}
+	var got []string
+	for _, f := range section(check(context.Background(), plan, pr), "packages") {
+		got = append(got, f.Item)
+	}
+	require.Equal(t, []string{"gone", "mmm", "aaa", "zzz"}, got)
+}
+
 // --- tools ---
 
 func TestCheck_toolsMatch(t *testing.T) {

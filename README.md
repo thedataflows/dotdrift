@@ -79,6 +79,8 @@ profile/
 
 Each layer's `dotdrift.toml` may carry a `[modules] disable` list. Disables are unioned across the base, host, and user layers.
 
+`module.toml` is validated strictly: an unknown key (typo, misplaced table) fails every command at load with `<path>/module.toml:<line>: unknown key "<key>"`, never a silent zero value. The full attribute set is documented in [profile layout](docs/product/profile-layout.md).
+
 ## Hooks
 
 A module may declare shell commands to run around the apply pipeline:

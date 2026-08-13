@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
@@ -46,11 +45,11 @@ func ExistingMountSources(root string, sel generate.Selection) ([]string, error)
 	}
 	path := filepath.Join(dir, "module.toml")
 	var cfg profile.ModuleConfig
-	if _, err := toml.DecodeFile(path, &cfg); err != nil {
+	if err := profile.DecodeModuleTOMLFile(path, &cfg); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("decode %s: %w", path, err)
+		return nil, err
 	}
 	sources := make([]string, 0, len(cfg.Mounts))
 	for _, name := range slices.Sorted(maps.Keys(cfg.Mounts)) {

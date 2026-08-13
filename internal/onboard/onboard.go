@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -327,7 +326,7 @@ func mergeModuleTOML(moduleDir string, cfg moduleConfig) error {
 		}
 		return os.WriteFile(path, []byte(encodeModuleTOML(cfg)), 0o644)
 	}
-	out, err := mergeExisting(string(existing), cfg)
+	out, err := mergeExisting(path, string(existing), cfg)
 	if err != nil {
 		return err
 	}
@@ -337,10 +336,10 @@ func mergeModuleTOML(moduleDir string, cfg moduleConfig) error {
 // mergeExisting folds cfg into an existing module.toml's text. It decodes the
 // existing managed values (for union), then reassembles the file preserving
 // non-managed sections verbatim while regenerating managed ones inline.
-func mergeExisting(existing string, cfg moduleConfig) (string, error) {
+func mergeExisting(path, existing string, cfg moduleConfig) (string, error) {
 	var pc profile.ModuleConfig
-	if _, err := toml.Decode(existing, &pc); err != nil {
-		return "", fmt.Errorf("decode existing module.toml: %w", err)
+	if err := profile.DecodeModuleTOML(path, []byte(existing), &pc); err != nil {
+		return "", err
 	}
 
 	// Dotfiles: union; this run's entries override source/mode. All fields

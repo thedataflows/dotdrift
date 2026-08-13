@@ -191,3 +191,36 @@ bogus = 1
 	require.Contains(t, err.Error(), "module.toml:2")
 	require.Contains(t, err.Error(), `unknown key "bogus"`)
 }
+
+// A value of the wrong shape (bare word where TOML expects a value, or a
+// string where the schema has a bool) fails with file:line:col, the
+// offending source line, and a caret under the bad token — same reporting
+// bar as unknown keys.
+
+func TestStrictModuleTOML_parseErrorShowsSourceAndCaret(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+disabled = a
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	msg := err.Error()
+	require.Contains(t, msg, "module.toml:2:12", "file:line:col of the bad token")
+	require.Contains(t, msg, "expected value")
+	require.Contains(t, msg, "disabled = a", "offending source line shown")
+	require.Contains(t, msg, "^", "caret marker under the bad token")
+}
+
+func TestStrictModuleTOML_typeErrorShowsSourceAndCaret(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+disabled = "a"
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	msg := err.Error()
+	require.Contains(t, msg, "module.toml:2", "file:line of the type mismatch")
+	require.Contains(t, msg, "boolean", "expected destination type named")
+	require.Contains(t, msg, `disabled = "a"`, "offending source line shown")
+	require.Contains(t, msg, "^", "caret marker under the value")
+}

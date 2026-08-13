@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -37,12 +39,75 @@ func DecodeModuleTOML(path string, data []byte, cfg *ModuleConfig) error {
 	}
 	md, err := toml.Decode(string(data), cfg)
 	if err != nil {
-		return fmt.Errorf("decode %s: %w", path, err)
+		return decodeError(path, data, err)
 	}
 	if undecoded := md.Undecoded(); len(undecoded) > 0 {
 		return unknownKeysError(path, data, undecoded)
 	}
 	return nil
+}
+
+// unifyErrRe extracts line and message from BurntSushi's unify (type-mismatch)
+// errors, which carry position only as text: `toml: line N (last key "k"): msg`.
+var unifyErrRe = regexp.MustCompile(`^toml: line (\d+) \(last key "(?:[^"\\]|\\.)*"\): (?s)(.*)$`)
+
+// decodeError reformats a toml.Decode failure to the unknown-key reporting
+// bar: file:line:col, the offending source line, and a caret under the bad
+// token. Parse errors arrive as structured toml.ParseError; unify (type)
+// errors carry their position only inside the message string.
+func decodeError(path string, src []byte, err error) error {
+	var perr toml.ParseError
+	if errors.As(err, &perr) && perr.Position.Line > 0 {
+		return errors.New(formatTomlError(path, src, perr.Position.Line, perr.Position.Col, perr.Message))
+	}
+	if m := unifyErrRe.FindStringSubmatch(err.Error()); m != nil {
+		line, _ := strconv.Atoi(m[1])
+		return errors.New(formatTomlError(path, src, line, valueColumn(src, line), m[2]))
+	}
+	return fmt.Errorf("decode %s: %w", path, err)
+}
+
+// formatTomlError renders "<path>:<line>[:<col>]: <msg>" followed by the
+// offending source line and a caret under column col.
+func formatTomlError(path string, src []byte, line, col int, msg string) string {
+	header := fmt.Sprintf("%s:%d: %s", path, line, msg)
+	if col > 0 {
+		header = fmt.Sprintf("%s:%d:%d: %s", path, line, col, msg)
+	}
+	lines := strings.Split(string(src), "\n")
+	if line < 1 || line > len(lines) {
+		return header
+	}
+	if col < 1 {
+		col = 1
+	}
+	return fmt.Sprintf("%s\n    %s\n    %s^", header, lines[line-1], strings.Repeat(" ", col-1))
+}
+
+// valueColumn returns the 1-based column where the value starts on source
+// line `line` (first non-space after the top-level "="), or 0 when the line
+// assigns nothing.
+func valueColumn(src []byte, line int) int {
+	lines := strings.Split(string(src), "\n")
+	if line < 1 || line > len(lines) {
+		return 0
+	}
+	l := lines[line-1]
+	var quote rune
+	for i, r := range l {
+		switch {
+		case quote != 0:
+			if r == quote {
+				quote = 0
+			}
+		case r == '"' || r == '\'':
+			quote = r
+		case r == '=':
+			rest := l[i+1:]
+			return i + 2 + (len(rest) - len(strings.TrimLeft(rest, " \t")))
+		}
+	}
+	return 0
 }
 
 // findUnknownHookKey scans for [[hooks.pre]]/[[hooks.post]] tables and

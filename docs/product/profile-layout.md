@@ -41,7 +41,11 @@ profile/
 - `module.toml` is validated **strictly against the schema below**: any key
   outside it (a typo like `preset` under `[packages]`, a misplaced table) is
   a load-time error naming the file, line, and key —
-  `<path>/module.toml:<line>: unknown key "<key>" [in <table>]`. Every
+  `<path>/module.toml:<line>: unknown key "<key>" [in <table>]`. Values of
+  the wrong shape (TOML parse errors, or a type mismatch like
+  `disabled = "a"` on a boolean key) fail with the same reporting bar —
+  `<path>/module.toml:<line>:<col>: <message>` plus the offending source
+  line and a caret under the bad token. Every
   module.toml read (all layers, resolve, onboard, generate, TUI) applies the
   same check, so an invalid file fails every command immediately instead of
   silently decoding to zero values. Structured hook tables

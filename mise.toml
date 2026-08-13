@@ -11,3 +11,8 @@ run = [
     "goreleaser build --clean --snapshot --single-target"
 ]
 
+[tasks."lint"]
+run = [
+    "golangci-lint run ./..."
+]
+

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -58,7 +59,14 @@ var unifyErrRe = regexp.MustCompile(`^toml: line (\d+) \(last key "(?:[^"\\]|\\.
 func decodeError(path string, src []byte, err error) error {
 	var perr toml.ParseError
 	if errors.As(err, &perr) && perr.Position.Line > 0 {
-		return errors.New(formatTomlError(path, src, perr.Position.Line, perr.Position.Col, perr.Message))
+		msg := perr.Message
+		if strings.HasPrefix(msg, "expected value") {
+			if hint := expectedScalarHint(perr.LastKey); hint != "" {
+				pieces := splitKeyPieces(perr.LastKey)
+				msg = fmt.Sprintf("%s (%q expects %s)", msg, pieces[len(pieces)-1], hint)
+			}
+		}
+		return errors.New(formatTomlError(path, src, perr.Position.Line, perr.Position.Col, msg))
 	}
 	if m := unifyErrRe.FindStringSubmatch(err.Error()); m != nil {
 		line, _ := strconv.Atoi(m[1])
@@ -163,6 +171,68 @@ func unknownKeysError(path string, src []byte, keys []toml.Key) error {
 		}
 	}
 	return errors.New(strings.Join(msgs, "\n"))
+}
+
+// expectedScalarHint walks the ModuleConfig schema (toml tags) along a dotted
+// key and describes the expected value type for scalar leaves ("a boolean:
+// true or false", "a list of quoted strings", ...). Empty for unknown keys
+// and table leaves — the parse-error hint exists to answer "what value goes
+// here", which tables don't need.
+func expectedScalarHint(key string) string {
+	if key == "" {
+		return ""
+	}
+	t := reflect.TypeOf(ModuleConfig{})
+	for _, piece := range splitKeyPieces(key) {
+		t = deref(t)
+		switch t.Kind() {
+		case reflect.Struct:
+			f, ok := tomlField(t, piece)
+			if !ok {
+				return ""
+			}
+			t = f.Type
+		case reflect.Map, reflect.Slice:
+			t = t.Elem()
+		default:
+			return ""
+		}
+	}
+	switch deref(t).Kind() {
+	case reflect.Bool:
+		return "a boolean: true or false"
+	case reflect.String:
+		return "a quoted string"
+	case reflect.Slice:
+		if deref(t.Elem()).Kind() == reflect.String {
+			return "a list of quoted strings"
+		}
+	case reflect.Int, reflect.Int64:
+		return "an integer"
+	}
+	return ""
+}
+
+func deref(t reflect.Type) reflect.Type {
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
+}
+
+// tomlField finds the struct field whose toml tag names it `name`.
+func tomlField(t reflect.Type, name string) (reflect.StructField, bool) {
+	for i := range t.NumField() {
+		f := t.Field(i)
+		tag := f.Tag.Get("toml")
+		if tag == "-" {
+			continue
+		}
+		if n, _, _ := strings.Cut(tag, ","); n == name {
+			return f, true
+		}
+	}
+	return reflect.StructField{}, false
 }
 
 // locateKeyLine scans TOML source for the 1-based line where the key path

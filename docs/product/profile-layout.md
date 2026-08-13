@@ -45,7 +45,9 @@ profile/
   the wrong shape (TOML parse errors, or a type mismatch like
   `disabled = "a"` on a boolean key) fail with the same reporting bar —
   `<path>/module.toml:<line>:<col>: <message>` plus the offending source
-  line and a caret under the bad token. Every
+  line and a caret under the bad token; for a known scalar key the message
+  also names the expected type (`"disabled" expects a boolean: true or
+  false`). Every
   module.toml read (all layers, resolve, onboard, generate, TUI) applies the
   same check, so an invalid file fails every command immediately instead of
   silently decoding to zero values. Structured hook tables

@@ -224,3 +224,49 @@ disabled = "a"
 	require.Contains(t, msg, `disabled = "a"`, "offending source line shown")
 	require.Contains(t, msg, "^", "caret marker under the value")
 }
+
+// A bare word where TOML expects a value is a parse error; when the key is a
+// known schema scalar the error names the expected type, so the fix is
+// obvious without opening the docs.
+func TestStrictModuleTOML_parseErrorNamesExpectedType(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+disabled = b
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `"disabled" expects a boolean`)
+}
+
+func TestStrictModuleTOML_parseErrorNamesExpectedTypeNested(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+[smb.shares.media]
+path = "/srv"
+writable = yes
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `"writable" expects a boolean`)
+}
+
+func TestStrictModuleTOML_parseErrorNoHintForUnknownKey(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+bogus = b
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "expects", "unknown keys get no type hint")
+}
+
+func TestStrictModuleTOML_parseErrorListHint(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+[packages]
+present = neovim
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `"present" expects a list of quoted strings`)
+}

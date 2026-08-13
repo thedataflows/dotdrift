@@ -28,7 +28,7 @@ func (p *Profile) discover(root string, f *facts.Facts) error {
 	if f.Username != "" {
 		layers = append(layers, filepath.Join(root, "users", f.Username, "modules"))
 	}
-	byDir := make(map[string]struct{})
+	byDir := make(map[string]int) // dirName → index in p.Modules
 	seenIDs := make(map[string]string)
 	for i, layerDir := range layers {
 		entries, err := os.ReadDir(layerDir)
@@ -45,9 +45,6 @@ func (p *Profile) discover(root string, f *facts.Facts) error {
 			if !entry.IsDir() {
 				continue
 			}
-			if _, ok := byDir[entry.Name()]; ok {
-				continue
-			}
 			modPath := filepath.Join(layerDir, entry.Name())
 			mod, err := loadModule(modPath, entry.Name())
 			if err != nil {
@@ -56,11 +53,20 @@ func (p *Profile) discover(root string, f *facts.Facts) error {
 			if mod == nil {
 				continue
 			}
+			if prevIdx, ok := byDir[entry.Name()]; ok {
+				// Overlay: a higher layer's module.toml may set disabled = true
+				// to disable the module the base layer discovered. Any disable
+				// sticks (union semantics, same as dotdrift.toml's disable list).
+				if mod.Config.Disabled {
+					p.Modules[prevIdx].Config.Disabled = true
+				}
+				continue
+			}
 			if prev, dup := seenIDs[mod.ID]; dup {
 				return fmt.Errorf("duplicate module id %q: %s and %s", mod.ID, prev, modPath)
 			}
 			seenIDs[mod.ID] = modPath
-			byDir[entry.Name()] = struct{}{}
+			byDir[entry.Name()] = len(p.Modules)
 			p.Modules = append(p.Modules, *mod)
 		}
 	}

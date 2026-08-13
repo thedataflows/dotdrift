@@ -75,6 +75,7 @@ id = "optional-id"
 app = "optional-app"
 scope = "user"
 description = "optional human-readable summary"
+disabled = false
 
 [when]
 hosts = ["myhost"]
@@ -152,6 +153,11 @@ public = false
   (`<marker> <id>… — <description>`). It is display-only metadata, not a
   resolution input, and is read from the representative layer like `scope`
   (an overlay's `description` is ignored).
+- `disabled` is an optional boolean (`false` when omitted). When `true`, the
+  module is skipped with reason "disabled" — the same effect as listing it in
+  `dotdrift.toml`'s `[modules] disable`. Disables are **unioned** across layers:
+  setting `disabled = true` in a host or user overlay disables the base module;
+  an overlay setting `disabled = false` does not un-disable (any disable sticks).
 - `packages.absent` cancels a `present` entry from a lower layer.
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a

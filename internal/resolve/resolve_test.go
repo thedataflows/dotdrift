@@ -296,7 +296,10 @@ func TestResolve_overlayTOMLErrorPropagated(t *testing.T) {
 			require.NoError(t, os.WriteFile(filepath.Join(overlayDir, "module.toml"), []byte("not = [valid"), 0o644))
 
 			f := &facts.Facts{Hostname: "myhost", Username: "cri"}
-			_, err := loadAndResolve(t, root, f)
+			// Discovery now loads overlay module.toml files (to check the
+			// disabled flag), so malformed TOML surfaces at Load time —
+			// earlier and better than during resolve.
+			_, err := profile.Load(root, f)
 			require.Error(t, err, "malformed %s overlay module.toml must propagate", layer)
 			require.Contains(t, err.Error(), "shell", "error should name the module")
 			require.Contains(t, err.Error(), filepath.Join(layer, name), "error should identify the overlay path")

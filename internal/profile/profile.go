@@ -35,6 +35,7 @@ type ModuleConfig struct {
 	ID          string               `toml:"id"`
 	App         string               `toml:"app"`
 	Description string               `toml:"description"`
+	Disabled    bool                 `toml:"disabled"`
 	Scope       string               `toml:"scope"`
 	When        When                 `toml:"when"`
 	Packages    Packages             `toml:"packages"`
@@ -236,6 +237,10 @@ func (p *Profile) Select(f *facts.Facts) {
 	p.Selected = nil
 	p.Skipped = nil
 	for _, m := range p.Modules {
+		if m.Config.Disabled {
+			p.Skipped = append(p.Skipped, Skip{Module: m, Reason: "disabled"})
+			continue
+		}
 		if reason, disabled := p.isDisabled(m); disabled {
 			p.Skipped = append(p.Skipped, Skip{Module: m, Reason: reason})
 			continue

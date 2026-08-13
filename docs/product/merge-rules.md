@@ -28,6 +28,7 @@ are selected**, not the invoking user's.
 | Packages present/absent | Higher layer wins; absent can cancel present |
 | Tools map keys | Higher layer wins |
 | `modules.disable` | **Union** across layers (any disable sticks; no silent re-enable in v0.1) |
+| Module `disabled` property | **Union** across layers — same semantics as `modules.disable` |
 | `when` filters | Evaluated on module; fail → not selected |
 | Module `scope`, `description` | **Representative layer only** (base preferred by discovery order); overlay declarations are ignored |
 | `mounts.<name>` | **Whole-entry by name**: higher layer's entry fully replaces the lower layer's (like dotfiles per-target); no field-level merge |

@@ -316,3 +316,60 @@ func skippedIDs(p *profile.Profile) []string {
 	}
 	return ids
 }
+
+// writeModule creates a module directory with a module.toml at the given
+// relative path under root.
+func writeModule(t *testing.T, root, relPath, tomlContent string) {
+	t.Helper()
+	dir := filepath.Join(root, relPath)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(tomlContent), 0o644))
+}
+
+// disabled = true in a module's own module.toml skips it with reason "disabled".
+func TestModuleDisabledProperty_baseLayer(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/vim", "disabled = true\n")
+	writeModule(t, root, "modules/git", "")
+	p, err := profile.Load(root, &facts.Facts{})
+	require.NoError(t, err)
+	require.Equal(t, []string{"git"}, selectedIDs(p))
+	require.Equal(t, []string{"vim"}, skippedIDs(p))
+	require.Equal(t, "disabled", p.Skipped[0].Reason)
+}
+
+// disabled = true in a host overlay's module.toml disables the base module
+// (union semantics: any layer disabling sticks).
+func TestModuleDisabledProperty_hostOverlay(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/vim", "")
+	writeModule(t, root, "hosts/myhost/modules/vim", "disabled = true\n")
+	p, err := profile.Load(root, &facts.Facts{Hostname: "myhost"})
+	require.NoError(t, err)
+	require.Empty(t, selectedIDs(p))
+	require.Equal(t, []string{"vim"}, skippedIDs(p))
+	require.Equal(t, "disabled", p.Skipped[0].Reason)
+}
+
+// disabled = true in a user overlay's module.toml disables the base module.
+func TestModuleDisabledProperty_userOverlay(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/vim", "")
+	writeModule(t, root, "users/cri/modules/vim", "disabled = true\n")
+	p, err := profile.Load(root, &facts.Facts{Username: "cri"})
+	require.NoError(t, err)
+	require.Empty(t, selectedIDs(p))
+	require.Equal(t, []string{"vim"}, skippedIDs(p))
+}
+
+// disabled = false in an overlay does NOT un-disable a module that the base
+// layer disabled (any disable sticks — union semantics, same as disable list).
+func TestModuleDisabledProperty_overlayFalseDoesNotUnDisable(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/vim", "disabled = true\n")
+	writeModule(t, root, "hosts/myhost/modules/vim", "disabled = false\n")
+	p, err := profile.Load(root, &facts.Facts{Hostname: "myhost"})
+	require.NoError(t, err)
+	require.Empty(t, selectedIDs(p))
+	require.Equal(t, []string{"vim"}, skippedIDs(p))
+}

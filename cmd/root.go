@@ -24,9 +24,6 @@ const (
 	appEnvPrefix = "DD"
 )
 
-// CurrentLogFormat records the active log format set at runtime.
-var CurrentLogFormat string
-
 // RootFlags holds global CLI flags.
 type RootFlags struct {
 	LogLevel      string `help:"Log level (trace,debug,info,warn,error)" enum:"trace,debug,info,warn,error" default:"info" env:"LOG_LEVEL"`
@@ -99,7 +96,6 @@ func setGlobalLoggerLogLevel(levelStr string) error {
 }
 
 func setGlobalLoggerLogFormat(format string) error {
-	CurrentLogFormat = format
 	switch format {
 	case "console":
 		log.Logger = log.Logger.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})

@@ -6,6 +6,14 @@ function PLUGIN:PackageInstall(ctx)
   local flags = ""
   if ctx.dry_run then flags = flags .. " --dry-run" end
   if ctx.update then flags = flags .. " --update" end
-  os.execute("dotdrift paru install" .. flags .. " " .. table.concat(names, " "))
+  local cmd = "dotdrift paru install" .. flags .. " " .. table.concat(names, " ") .. " 2>&1"
+  local pipe = io.popen(cmd, "r")
+  if pipe then
+    for line in pipe:lines() do
+      io.stderr:write(line .. "\n")
+      io.stderr:flush()
+    end
+    pipe:close()
+  end
   return {}
 end

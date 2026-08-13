@@ -184,3 +184,10 @@ func TestWritePlugin_writesExactEmbeddedSet(t *testing.T) {
 		"hooks/package_install.lua",
 	}, got)
 }
+
+// PluginVersion is parsed from the embedded metadata.lua so log output
+// references the real version without a hand-maintained constant.
+func TestPluginVersion_matchesMetadataLua(t *testing.T) {
+	// metadata.lua declares version = "1.0.1"
+	require.Equal(t, "1.0.1", paru.PluginVersion)
+}

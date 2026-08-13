@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 )
 
@@ -29,6 +30,24 @@ var pluginRoot = func() fs.FS {
 		panic(err) // unreachable: miseplugin/ is embedded above
 	}
 	return sub
+}()
+
+// versionRe matches the version key in metadata.lua's PLUGIN table.
+var versionRe = regexp.MustCompile(`version\s*=\s*"([^"]+)"`)
+
+// PluginVersion is the version declared in the embedded metadata.lua, parsed
+// at package init so log output references the real version without a
+// hand-maintained constant.
+var PluginVersion = func() string {
+	data, err := fs.ReadFile(pluginRoot, "metadata.lua")
+	if err != nil {
+		return "unknown"
+	}
+	m := versionRe.FindSubmatch(data)
+	if len(m) < 2 {
+		return "unknown"
+	}
+	return string(m[1])
 }()
 
 // WritePlugin writes the embedded paru plugin into dir, preserving its layout.

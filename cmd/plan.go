@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -50,23 +49,15 @@ func (c *PlanCmd) Run() error {
 	f := c.Facts
 	if f == nil {
 		var err error
-		f, err = detect.Detect()
+		f, err = detectFacts()
 		if err != nil {
 			return fmt.Errorf("detect: %w", err)
 		}
 	}
 
-	p, err := profile.Load(c.Profile, f)
+	p, plan, err := loadAndResolvePlan(c.Profile, c.Modules, f)
 	if err != nil {
-		return fmt.Errorf("load profile: %w", err)
-	}
-	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
 		return err
-	}
-
-	plan, err := resolve.Resolve(p, f)
-	if err != nil {
-		return fmt.Errorf("resolve plan: %w", err)
 	}
 
 	out := c.Out

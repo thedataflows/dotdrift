@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
@@ -30,15 +29,8 @@ const (
 
 // Run loads the profile and prints selection status.
 func (c *ModulesCmd) Run() error {
-	f, err := detect.Detect()
+	_, p, err := loadProfile(c.Profile, c.Modules)
 	if err != nil {
-		return fmt.Errorf("detect: %w", err)
-	}
-	p, err := profile.Load(c.Profile, f)
-	if err != nil {
-		return fmt.Errorf("load profile: %w", err)
-	}
-	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
 		return err
 	}
 	out := c.Out

@@ -14,6 +14,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -44,6 +45,54 @@ var (
 	// Swapped out by tests.
 	stdinIsTerminal = executil.IsStdinTerminal
 )
+
+// loadAndResolve runs the detect → load → filter → resolve preamble shared by
+// apply, status, and plan. Returns facts, profile, and resolved plan.
+func loadAndResolve(profilePath string, modules []string) (*facts.Facts, *profile.Profile, *resolve.Plan, error) {
+	f, err := detectFacts()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("detect: %w", err)
+	}
+	p, plan, err := loadAndResolvePlan(profilePath, modules, f)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return f, p, plan, nil
+}
+
+// loadAndResolvePlan loads the profile and resolves the plan using the given
+// facts. Called by loadAndResolve and by PlanCmd (which injects its own facts).
+func loadAndResolvePlan(profilePath string, modules []string, f *facts.Facts) (*profile.Profile, *resolve.Plan, error) {
+	p, err := profileLoad(profilePath, f)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load profile: %w", err)
+	}
+	if err := p.LimitTo(profile.ParseModuleFilter(modules)); err != nil {
+		return nil, nil, err
+	}
+	plan, err := resolvePlan(p, f)
+	if err != nil {
+		return nil, nil, fmt.Errorf("resolve plan: %w", err)
+	}
+	return p, plan, nil
+}
+
+// loadProfile runs the detect → load → filter preamble shared by modules.
+// Returns facts and profile (no plan resolution).
+func loadProfile(profilePath string, modules []string) (*facts.Facts, *profile.Profile, error) {
+	f, err := detectFacts()
+	if err != nil {
+		return nil, nil, fmt.Errorf("detect: %w", err)
+	}
+	p, err := profileLoad(profilePath, f)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load profile: %w", err)
+	}
+	if err := p.LimitTo(profile.ParseModuleFilter(modules)); err != nil {
+		return nil, nil, err
+	}
+	return f, p, nil
+}
 
 // verboseRunner is the narrow seam concrete runners implement to receive the
 // --verbose flag. Interface shapes (packages.Backend, mounts.Runner,
@@ -351,22 +400,9 @@ type ApplyCmd struct {
 
 // Run executes the apply pipeline with resume semantics.
 func (c *ApplyCmd) Run() error {
-	f, err := detectFacts()
+	f, p, plan, err := loadAndResolve(c.Profile, c.Modules)
 	if err != nil {
-		return fmt.Errorf("detect: %w", err)
-	}
-
-	p, err := profileLoad(c.Profile, f)
-	if err != nil {
-		return fmt.Errorf("load profile: %w", err)
-	}
-	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
 		return err
-	}
-
-	plan, err := resolvePlan(p, f)
-	if err != nil {
-		return fmt.Errorf("resolve plan: %w", err)
 	}
 
 	statePath := c.State

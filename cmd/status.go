@@ -11,7 +11,6 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/mise"
-	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
@@ -42,20 +41,9 @@ func (c *StatusCmd) Run() error {
 		return fmt.Errorf("load state: %w", err)
 	}
 
-	f, err := detectFacts()
+	f, p, plan, err := loadAndResolve(c.Profile, c.Modules)
 	if err != nil {
-		return fmt.Errorf("detect: %w", err)
-	}
-	p, err := profileLoad(c.Profile, f)
-	if err != nil {
-		return fmt.Errorf("load profile: %w", err)
-	}
-	if err := p.LimitTo(profile.ParseModuleFilter(c.Modules)); err != nil {
-		return fmt.Errorf("module filter: %w", err)
-	}
-	plan, err := resolvePlan(p, f)
-	if err != nil {
-		return fmt.Errorf("resolve plan: %w", err)
+		return err
 	}
 	pr := drift.DefaultProbes()
 	pr.IsInstalled = packagesFor(f.Backend).IsInstalled

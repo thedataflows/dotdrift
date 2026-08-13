@@ -109,14 +109,17 @@ func (s *packagesStep) Run(ctx context.Context) error {
 	return s.runner.Bootstrap(ctx, s.configPath, true, "packages")
 }
 
-// systemFilesStep applies system-scope dotfile entries. It generates a
-// [dotfiles] config and runs mise dotfiles apply as the current user first;
-// if the OS denies access (e.g. /etc targets), it retries elevated via sudo.
-// Mount destination directories use the same try/retry pattern (mkdir -p,
-// sudo mkdir -p on EACCES).
+// systemFilesStep applies system-scope dotfile entries. Whole-file entries
+// are expanded (symlink-each → individual files) and translated to content
+// copies (symlink→copy: a system file must not be a fragile symlink into the
+// user's profile). Edit entries pass through as-is. The combined [dotfiles]
+// config runs via mise dotfiles apply, retried elevated (sudo) when the OS
+// denies access. Mount destination directories use the same try/retry pattern.
 type systemFilesStep struct {
-	exec       *mise.ExecMise // for mise dotfiles apply (+ sudo retry)
+	exec       *mise.ExecMise
 	entries    []resolve.DotfileEntry
+	sourceRoot string
+	homeDir    string
 	dirs       []string // mount destinations for mkdir
 	configPath string
 	yes        bool
@@ -127,19 +130,35 @@ var _ apply.Step = (*systemFilesStep)(nil)
 func (s *systemFilesStep) Name() string { return "dotfiles-system" }
 
 func (s *systemFilesStep) Run(ctx context.Context) error {
-	// System dotfiles: try as the current user, retry elevated on permission
-	// denied. mise dotfiles apply writes to system paths (/etc, /usr/…) which
-	// a normal user cannot write — the OS returns EACCES and mise emits
-	// "Permission denied (os error 13)". We detect that and retry with sudo.
+	// System dotfiles: split whole-file vs edit, expand and mode-translate
+	// whole-file entries (symlink→copy safety), then try mise dotfiles apply
+	// as the current user — retry elevated (sudo) on permission denied.
 	if len(s.entries) > 0 {
 		if s.exec == nil {
 			return fmt.Errorf("system dotfiles require an exec mise runner")
 		}
-		if err := writeBootstrapConfig(s.configPath, mise.GenerateDotfiles(s.entries)); err != nil {
+		var whole, edit []resolve.DotfileEntry
+		for _, e := range s.entries {
+			if e.IsEdit() {
+				edit = append(edit, e)
+			} else {
+				whole = append(whole, e)
+			}
+		}
+		var allEntries []resolve.DotfileEntry
+		if len(whole) > 0 {
+			files, err := mise.ResolveBootstrapFiles(whole, s.sourceRoot, s.homeDir)
+			if err != nil {
+				return fmt.Errorf("resolve system files: %w", err)
+			}
+			allEntries = append(allEntries, mise.SystemDotfileEntries(files)...)
+		}
+		allEntries = append(allEntries, edit...)
+		if err := writeBootstrapConfig(s.configPath, mise.GenerateDotfiles(allEntries)); err != nil {
 			return fmt.Errorf("write system dotfiles config: %w", err)
 		}
 		if err := s.exec.DotfilesApply(ctx, s.configPath, s.yes, false); err != nil {
-		if mise.IsPermissionDenied(err) && os.Geteuid() != 0 {
+			if mise.IsPermissionDenied(err) && os.Geteuid() != 0 {
 				if err := s.exec.DotfilesApplySudo(ctx, s.configPath, s.yes); err != nil {
 					return fmt.Errorf("system dotfiles (elevated): %w", err)
 				}
@@ -435,9 +454,10 @@ func (c *ApplyCmd) Run() error {
 		for _, e := range plan.Mounts.Entries {
 			mountDests = append(mountDests, e.Spec.Destination)
 		}
+		homeDir, _ := os.UserHomeDir()
 		steps = append(steps, &systemFilesStep{
-			exec: runner, entries: systemEntries,
-			dirs: mountDests, configPath: systemConfigPath, yes: c.Yes,
+			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
+			homeDir: homeDir, dirs: mountDests, configPath: systemConfigPath, yes: c.Yes,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.

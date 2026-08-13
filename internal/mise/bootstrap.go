@@ -132,6 +132,29 @@ func GenerateBootstrapFiles(files []BootstrapFile) string {
 	return b.String()
 }
 
+// SystemDotfileEntries converts resolved bootstrap files into dotfile entries
+// for [dotfiles] emission, applying the symlink→copy safety translation:
+// system files become content copies (mode = "copy") regardless of the
+// declared mode — a symlink from /etc into a user's profile directory is
+// fragile (a moved profile or changed user breaks it). Template entries keep
+// their mode. symlink-each entries are pre-expanded by ResolveBootstrapFiles,
+// so each child arrives here as an individual file.
+func SystemDotfileEntries(files []BootstrapFile) []resolve.DotfileEntry {
+	entries := make([]resolve.DotfileEntry, len(files))
+	for i, f := range files {
+		mode := "copy"
+		if f.Template {
+			mode = "template"
+		}
+		entries[i] = resolve.DotfileEntry{
+			Target: f.Target,
+			Source: f.Source,
+			Mode:   mode,
+		}
+	}
+	return entries
+}
+
 // --- Mount destinations → [bootstrap.directories] ---
 
 // GenerateBootstrapDirectories emits a [bootstrap.directories] section so

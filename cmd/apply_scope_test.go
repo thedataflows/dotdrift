@@ -203,6 +203,8 @@ func TestSystemFilesStep_retriesElevatedOnPermissionDenied(t *testing.T) {
 		entries: []resolve.DotfileEntry{
 			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
 		},
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
 		configPath: configPath,
 		yes:        true,
 	}
@@ -236,6 +238,8 @@ func TestSystemFilesStep_noRetryOnNonPermissionError(t *testing.T) {
 		entries: []resolve.DotfileEntry{
 			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
 		},
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
 		configPath: configPath,
 		yes:        true,
 	}
@@ -244,4 +248,42 @@ func TestSystemFilesStep_noRetryOnNonPermissionError(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, 1, callCount, "should not retry on non-permission errors")
 	require.Contains(t, err.Error(), "config parse error")
+}
+
+// System-scope entries declared as symlink are translated to copy mode in the
+// generated [dotfiles] config — a symlink from /etc into the user's profile is
+// fragile. symlink-each entries are expanded to individual copy entries.
+func TestSystemFilesStep_symlinkTranslatedToCopy(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: "/etc/symlinked.conf", Source: "files/symlinked.conf", Mode: "symlink"},
+		},
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
+		configPath: configPath,
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), `mode = "copy"`,
+		"system symlink entries must be translated to copy mode")
+	require.NotContains(t, string(cfg), `mode = "symlink"`,
+		"system symlink entries must NOT keep symlink mode")
 }

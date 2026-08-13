@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/mise"
@@ -55,10 +57,10 @@ func (c *StatusCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("resolve plan: %w", err)
 	}
-
 	pr := drift.DefaultProbes()
 	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
 	pr.ToolCurrent = mise.NewExecMise(defaultMise()).Current
+	pr = elevateProbes(pr) // retry elevated on permission denied (system files)
 	profileRoot, _ := filepath.Abs(p.Root)
 	opts := drift.CheckOptions{Jobs: c.Jobs}
 	if c.Verbose {
@@ -89,4 +91,74 @@ func (c *StatusCmd) Run() error {
 		}
 	}
 	return nil
+}
+
+// sudoRead executes `sudo <name> <args>` and returns stdout. A test seam so
+// status tests can assert elevation behavior without running real sudo.
+var sudoRead = func(name string, args ...string) ([]byte, error) {
+	return exec.Command("sudo", append([]string{name}, args...)...).Output()
+}
+
+// elevateProbes wraps the file-access probes (Readlink, ReadFile, StatDir) so
+// each retries elevated via sudo when the OS denies access. Only permission
+// denied triggers the retry — other errors (not-exist, invalid path) propagate
+// as-is. Already-root processes skip the wrapping entirely. Run (external
+// commands like systemctl/getent) is left untouched; those commands work for
+// normal users in the read-only status path.
+func elevateProbes(pr drift.Probes) drift.Probes {
+	if os.Geteuid() == 0 {
+		return pr
+	}
+	if pr.Readlink != nil {
+		pr.Readlink = elevateReadlink(pr.Readlink)
+	}
+	if pr.ReadFile != nil {
+		pr.ReadFile = elevateReadFile(pr.ReadFile)
+	}
+	if pr.StatDir != nil {
+		pr.StatDir = elevateStatDir(pr.StatDir)
+	}
+	return pr
+}
+
+func elevateReadlink(inner func(string) (string, error)) func(string) (string, error) {
+	return func(path string) (string, error) {
+		target, err := inner(path)
+		if err == nil || !os.IsPermission(err) {
+			return target, err
+		}
+		out, sudoErr := sudoRead("readlink", path)
+		if sudoErr != nil {
+			return target, err
+		}
+		return strings.TrimSpace(string(out)), nil
+	}
+}
+
+func elevateReadFile(inner func(string) ([]byte, error)) func(string) ([]byte, error) {
+	return func(path string) ([]byte, error) {
+		content, err := inner(path)
+		if err == nil || !os.IsPermission(err) {
+			return content, err
+		}
+		out, sudoErr := sudoRead("cat", path)
+		if sudoErr != nil {
+			return content, err
+		}
+		return out, nil
+	}
+}
+
+func elevateStatDir(inner func(string) (bool, error)) func(string) (bool, error) {
+	return func(path string) (bool, error) {
+		isDir, err := inner(path)
+		if err == nil || !os.IsPermission(err) {
+			return isDir, err
+		}
+		out, sudoErr := sudoRead("stat", "-c", "%F", path)
+		if sudoErr != nil {
+			return isDir, err
+		}
+		return strings.TrimSpace(string(out)) == "directory", nil
+	}
 }

@@ -270,3 +270,113 @@ app = "demo"
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "nonexistent-diff-tool-xyz")
 }
+
+// elevateProbes wraps Readlink/ReadFile/StatDir to retry elevated on permission
+// denied. These tests verify the wrapping behavior using fake inner functions
+// and a fake sudoRead seam.
+func TestElevateProbes_readlinkRetriesElevated(t *testing.T) {
+	orig := sudoRead
+	t.Cleanup(func() { sudoRead = orig })
+	sudoRead = func(name string, args ...string) ([]byte, error) {
+		require.Equal(t, "readlink", name)
+		require.Equal(t, []string{"/etc/secret"}, args)
+		return []byte("/target/path\n"), nil
+	}
+	inner := func(path string) (string, error) {
+		return "", os.ErrPermission
+	}
+	wrapped := elevateReadlink(inner)
+	got, err := wrapped("/etc/secret")
+	require.NoError(t, err)
+	require.Equal(t, "/target/path", got)
+}
+
+func TestElevateProbes_readlinkNoRetryOnSuccess(t *testing.T) {
+	called := false
+	sudoRead = func(string, ...string) ([]byte, error) {
+		called = true
+		return nil, errors.New("should not be called")
+	}
+	inner := func(path string) (string, error) { return "/existing/target", nil }
+	wrapped := elevateReadlink(inner)
+	got, err := wrapped("/etc/foo")
+	require.NoError(t, err)
+	require.Equal(t, "/existing/target", got)
+	require.False(t, called, "sudo must not be called when inner succeeds")
+}
+
+func TestElevateProbes_readlinkNoRetryOnNonPermission(t *testing.T) {
+	called := false
+	sudoRead = func(string, ...string) ([]byte, error) {
+		called = true
+		return nil, errors.New("should not be called")
+	}
+	innerErr := errors.New("not a symlink")
+	inner := func(path string) (string, error) { return "", innerErr }
+	wrapped := elevateReadlink(inner)
+	_, err := wrapped("/etc/foo")
+	require.ErrorIs(t, err, innerErr)
+	require.False(t, called, "sudo must not be called for non-permission errors")
+}
+
+func TestElevateProbes_readFileRetriesElevated(t *testing.T) {
+	orig := sudoRead
+	t.Cleanup(func() { sudoRead = orig })
+	sudoRead = func(name string, args ...string) ([]byte, error) {
+		require.Equal(t, "cat", name)
+		return []byte("file content"), nil
+	}
+	inner := func(path string) ([]byte, error) {
+		return nil, os.ErrPermission
+	}
+	wrapped := elevateReadFile(inner)
+	got, err := wrapped("/etc/secret")
+	require.NoError(t, err)
+	require.Equal(t, "file content", string(got))
+}
+
+func TestElevateProbes_statDirRetriesElevated(t *testing.T) {
+	orig := sudoRead
+	t.Cleanup(func() { sudoRead = orig })
+	sudoRead = func(name string, args ...string) ([]byte, error) {
+		require.Equal(t, "stat", name)
+		return []byte("directory\n"), nil
+	}
+	inner := func(path string) (bool, error) {
+		return false, os.ErrPermission
+	}
+	wrapped := elevateStatDir(inner)
+	got, err := wrapped("/mnt/secret")
+	require.NoError(t, err)
+	require.True(t, got)
+}
+
+func TestElevateProbes_statDirNotDirectoryElevated(t *testing.T) {
+	orig := sudoRead
+	t.Cleanup(func() { sudoRead = orig })
+	sudoRead = func(string, ...string) ([]byte, error) {
+		return []byte("regular file\n"), nil
+	}
+	inner := func(path string) (bool, error) {
+		return false, os.ErrPermission
+	}
+	wrapped := elevateStatDir(inner)
+	got, err := wrapped("/etc/secret")
+	require.NoError(t, err)
+	require.False(t, got)
+}
+
+// When sudo itself fails, the wrapper returns the original error.
+func TestElevateProbes_sudoFailureReturnsOriginalError(t *testing.T) {
+	orig := sudoRead
+	t.Cleanup(func() { sudoRead = orig })
+	sudoRead = func(string, ...string) ([]byte, error) {
+		return nil, errors.New("sudo: command not found")
+	}
+	inner := func(path string) ([]byte, error) {
+		return nil, os.ErrPermission
+	}
+	wrapped := elevateReadFile(inner)
+	_, err := wrapped("/etc/secret")
+	require.ErrorIs(t, err, os.ErrPermission, "should return original permission error when sudo fails")
+}

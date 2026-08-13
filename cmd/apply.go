@@ -98,11 +98,8 @@ func (s *packagesStep) Run(ctx context.Context) error {
 	if len(s.plan.Packages.Install) == 0 {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(s.configPath), 0o755); err != nil {
-		return fmt.Errorf("create packages config dir: %w", err)
-	}
 	content := mise.GenerateBootstrapPackages(s.plan.Packages.Install, s.backendStr)
-	if err := os.WriteFile(s.configPath, []byte(content), 0o644); err != nil {
+	if err := writeBootstrapConfig(s.configPath, content); err != nil {
 		return fmt.Errorf("write packages config: %w", err)
 	}
 	// dotdrift copies the paru plugin into mise's registry itself (EnsureInstalled
@@ -423,10 +420,7 @@ func (c *ApplyCmd) Run() error {
 	// for crash recovery and manual mise runs.
 	configDir := filepath.Join(filepath.Dir(statePath), "mise")
 	configPath := filepath.Join(configDir, "mise.toml")
-	if err := os.MkdirAll(configDir, 0o755); err != nil {
-		return fmt.Errorf("create mise config dir: %w", err)
-	}
-	if err := os.WriteFile(configPath, []byte(mise.GenerateApplyConfig(plan, profileRoot, f, stdinIsTerminal())), 0o644); err != nil {
+	if err := writeBootstrapConfig(configPath, mise.GenerateApplyConfig(plan, profileRoot, f, stdinIsTerminal())); err != nil {
 		return fmt.Errorf("write mise config: %w", err)
 	}
 
@@ -448,12 +442,7 @@ func (c *ApplyCmd) Run() error {
 	// plugin registry (hash-gated) — real files, no symlink, no declaration.
 	var misePluginsDir string
 	if f.Backend == "paru" {
-		xdgData := os.Getenv("XDG_DATA_HOME")
-		if xdgData == "" {
-			home, _ := os.UserHomeDir()
-			xdgData = filepath.Join(home, ".local", "share")
-		}
-		misePluginsDir = mise.MisePluginsDir(xdgData)
+		misePluginsDir = mise.PluginsDirFromEnv()
 	}
 
 	// Hooks steps are skipped at construction when their command list is

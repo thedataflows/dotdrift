@@ -147,3 +147,21 @@ func TestStreamLive_table(t *testing.T) {
 		})
 	}
 }
+
+func TestOrStdout_nilDefaultsToOsStdout(t *testing.T) {
+	require.Equal(t, os.Stdout, executil.OrStdout(nil))
+}
+
+func TestOrStdout_nonNilReturnsArg(t *testing.T) {
+	var b bytes.Buffer
+	require.Equal(t, &b, executil.OrStdout(&b))
+}
+
+func TestOrStderr_nilDefaultsToOsStderr(t *testing.T) {
+	require.Equal(t, os.Stderr, executil.OrStderr(nil))
+}
+
+func TestOrStderr_nonNilReturnsArg(t *testing.T) {
+	var b bytes.Buffer
+	require.Equal(t, &b, executil.OrStderr(&b))
+}

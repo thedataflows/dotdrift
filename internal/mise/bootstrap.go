@@ -63,6 +63,22 @@ func MisePluginsDir(xdgDataHome string) string {
 	return strings.Join([]string{xdgDataHome, "mise", "plugins"}, "/")
 }
 
+// PluginsDirFromEnv resolves the mise plugin registry directory from the
+// environment ($XDG_DATA_HOME/mise/plugins, falling back to
+// ~/.local/share/mise/plugins). Returns the empty string when no home
+// directory can be determined.
+func PluginsDirFromEnv() string {
+	xdgData := os.Getenv("XDG_DATA_HOME")
+	if xdgData == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		xdgData = filepath.Join(home, ".local", "share")
+	}
+	return MisePluginsDir(xdgData)
+}
+
 // --- System dotfiles → [bootstrap.files] ---
 
 // BootstrapFile is one concrete file target for [bootstrap.files].

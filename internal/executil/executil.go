@@ -105,3 +105,20 @@ var NoColor bool
 func ColorEnabled(w io.Writer) bool {
 	return !NoColor && IsTerminal(w)
 }
+
+// OrStdout returns w if non-nil, else os.Stdout. Replaces the repeated
+// `out := c.Out; if out == nil { out = os.Stdout }` pattern.
+func OrStdout(w io.Writer) io.Writer {
+	if w == nil {
+		return os.Stdout
+	}
+	return w
+}
+
+// OrStderr returns w if non-nil, else os.Stderr.
+func OrStderr(w io.Writer) io.Writer {
+	if w == nil {
+		return os.Stderr
+	}
+	return w
+}

@@ -121,44 +121,46 @@ func elevateProbes(pr drift.Probes) drift.Probes {
 	return pr
 }
 
-func elevateReadlink(inner func(string) (string, error)) func(string) (string, error) {
-	return func(path string) (string, error) {
-		target, err := inner(path)
+// elevate wraps a probe function so it retries elevated via sudo when the OS
+// denies access. The inner function runs first; on permission denied, sudo
+// runs and its result is returned. When sudo itself fails, the original
+// permission error is returned.
+func elevate[T any](inner func(string) (T, error), sudo func(string) (T, error)) func(string) (T, error) {
+	return func(path string) (T, error) {
+		result, err := inner(path)
 		if err == nil || !os.IsPermission(err) {
-			return target, err
+			return result, err
 		}
-		out, sudoErr := sudoRead("readlink", path)
+		sudoResult, sudoErr := sudo(path)
 		if sudoErr != nil {
-			return target, err
+			return result, err
+		}
+		return sudoResult, nil
+	}
+}
+
+func elevateReadlink(inner func(string) (string, error)) func(string) (string, error) {
+	return elevate(inner, func(path string) (string, error) {
+		out, err := sudoRead("readlink", path)
+		if err != nil {
+			return "", err
 		}
 		return strings.TrimSpace(string(out)), nil
-	}
+	})
 }
 
 func elevateReadFile(inner func(string) ([]byte, error)) func(string) ([]byte, error) {
-	return func(path string) ([]byte, error) {
-		content, err := inner(path)
-		if err == nil || !os.IsPermission(err) {
-			return content, err
-		}
-		out, sudoErr := sudoRead("cat", path)
-		if sudoErr != nil {
-			return content, err
-		}
-		return out, nil
-	}
+	return elevate(inner, func(path string) ([]byte, error) {
+		return sudoRead("cat", path)
+	})
 }
 
 func elevateStatDir(inner func(string) (bool, error)) func(string) (bool, error) {
-	return func(path string) (bool, error) {
-		isDir, err := inner(path)
-		if err == nil || !os.IsPermission(err) {
-			return isDir, err
-		}
-		out, sudoErr := sudoRead("stat", "-c", "%F", path)
-		if sudoErr != nil {
-			return isDir, err
+	return elevate(inner, func(path string) (bool, error) {
+		out, err := sudoRead("stat", "-c", "%F", path)
+		if err != nil {
+			return false, err
 		}
 		return strings.TrimSpace(string(out)) == "directory", nil
-	}
+	})
 }

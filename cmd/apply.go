@@ -481,11 +481,35 @@ func (c *ApplyCmd) Run() error {
 		misePluginsDir = mise.PluginsDirFromEnv()
 	}
 
-	// Hooks steps are skipped at construction when their command list is
-	// empty or when the user opted out via --no-hooks / DOTDRIFT_NO_HOOKS=1
-	// (HooksStep.Run also no-ops on an empty list as a second line of
-	// defense). hooks-pre runs before packages so a pre-hook failure aborts
-	// before any side effect; hooks-post runs last.
+	steps := c.buildSteps(plan, runner, f, profileRoot, out, misePluginsDir, map[string]string{
+		"tools":    toolsConfigPath,
+		"dotfiles": dotfilesConfigPath,
+		"packages": packagesConfigPath,
+		"system":   systemConfigPath,
+		"mounts":   mountsConfigPath,
+		"smb":      smbConfigPath,
+		"shared":   configPath,
+	})
+
+	pipeline := apply.NewPipeline(steps, store.Save)
+	pipeline.SetState(s)
+	if err := pipeline.Run(context.Background()); err != nil {
+		return fmt.Errorf("apply: %w", err)
+	}
+	if err := store.Remove(); err != nil {
+		return fmt.Errorf("remove state file: %w", err)
+	}
+	return nil
+}
+
+// buildSteps assembles the apply pipeline from the resolved plan. It splits
+// dotfiles by scope, appends conditional steps (system files, mounts, smb,
+// hooks) based on plan contents and --no-hooks, and returns them in pipeline
+// order. paths maps logical names to generated mise.toml config paths.
+func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
+	f *facts.Facts, profileRoot string, out io.Writer, misePluginsDir string,
+	paths map[string]string,
+) []apply.Step {
 	hooksDisabled := c.NoHooks || os.Getenv("DOTDRIFT_NO_HOOKS") == "1"
 	backend := packagesFor(f.Backend)
 	setVerboseRunner(c.Verbose, backend)
@@ -508,14 +532,14 @@ func (c *ApplyCmd) Run() error {
 	var steps []apply.Step
 	if !hooksDisabled && len(plan.Hooks.Pre) > 0 {
 		steps = append(steps, &mise.HooksStep{
-			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: configPath,
+			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: paths["shared"],
 			Task: "hooks-pre", StepName: "hooks-pre",
 		})
 	}
 	steps = append(steps,
-		&packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: packagesConfigPath, misePluginsDir: misePluginsDir},
-		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: toolsConfigPath},
-		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: dotfilesConfigPath, Yes: c.Yes},
+		&packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: paths["packages"], misePluginsDir: misePluginsDir},
+		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"]},
+		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes},
 	)
 	// System dotfiles + mount directories → systemFilesStep.
 	// Runs when there are system-scope dotfiles OR mount destinations (mkdir).
@@ -527,13 +551,13 @@ func (c *ApplyCmd) Run() error {
 		homeDir, _ := os.UserHomeDir()
 		steps = append(steps, &systemFilesStep{
 			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
-			homeDir: homeDir, dirs: mountDests, configPath: systemConfigPath, yes: c.Yes,
+			homeDir: homeDir, dirs: mountDests, configPath: paths["system"], yes: c.Yes,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.
 	if len(plan.Mounts.Entries) > 0 {
 		steps = append(steps, &mountsServicesStep{
-			runner: runner, entries: plan.Mounts.Entries, configPath: mountsConfigPath,
+			runner: runner, entries: plan.Mounts.Entries, configPath: paths["mounts"],
 		})
 	}
 	// SMB accounts + services → mise bootstrap --only accounts,services,
@@ -542,24 +566,15 @@ func (c *ApplyCmd) Run() error {
 		sr := newSmbRunner()
 		setVerboseRunner(c.Verbose, sr)
 		steps = append(steps, &smbBootstrapStep{
-			runner: runner, modules: plan.Smb.Modules, configPath: smbConfigPath,
+			runner: runner, modules: plan.Smb.Modules, configPath: paths["smb"],
 			smbRunner: sr, out: out,
 		})
 	}
 	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{
-			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: configPath,
+			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: paths["shared"],
 			Task: "hooks-post", StepName: "hooks-post",
 		})
 	}
-
-	pipeline := apply.NewPipeline(steps, store.Save)
-	pipeline.SetState(s)
-	if err := pipeline.Run(context.Background()); err != nil {
-		return fmt.Errorf("apply: %w", err)
-	}
-	if err := store.Remove(); err != nil {
-		return fmt.Errorf("remove state file: %w", err)
-	}
-	return nil
+	return steps
 }

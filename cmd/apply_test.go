@@ -94,9 +94,11 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 
 	origDetect, origLoad, origResolve, origMise, origFor := detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor
 	origSmbRunner := newSmbRunner
+	origEnsureDir := ensureDir
 	t.Cleanup(func() {
 		detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor = origDetect, origLoad, origResolve, origMise, origFor
 		newSmbRunner = origSmbRunner
+		ensureDir = origEnsureDir
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
@@ -111,6 +113,7 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	defaultMise = func() *mise.Mise { return fakeMise(events) }
 	packagesFor = func(string) packages.Backend { return backend }
 	newSmbRunner = func() smb.Runner { return &recordingSmbRunner{events: events} }
+	ensureDir = func(_ context.Context, _ string) error { return nil }
 	return events, backend
 }
 
@@ -398,7 +401,7 @@ func TestApply_mountsStepConditional(t *testing.T) {
 	requireOrder(t, *events,
 		"mise:run run",       // hooks:pre
 		"mise:run bootstrap", // packages
-		"mise:run bootstrap", // system files
+		"mise:run dotfiles apply", // system files
 		"mise:run bootstrap", // mounts services
 		"mise:run bootstrap", // smb accounts+services
 		"smb:run",            // PostBootstrap testparm
@@ -552,15 +555,18 @@ func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, bac
 	var captured *mise.Mise
 	origDetect, origMise, origFor := detectFacts, defaultMise, packagesFor
 	origSmbRunner := newSmbRunner
+	origEnsureDir := ensureDir
 	t.Cleanup(func() {
 		detectFacts, defaultMise, packagesFor = origDetect, origMise, origFor
 		newSmbRunner = origSmbRunner
+		ensureDir = origEnsureDir
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
 	defaultMise = func() *mise.Mise { captured = fakeMise(events); return captured }
 	packagesFor = func(string) packages.Backend { return backend }
 	newSmbRunner = func() smb.Runner { return sr }
+	ensureDir = func(_ context.Context, _ string) error { return nil }
 	return &captured, backend, sr
 }
 

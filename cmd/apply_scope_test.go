@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +10,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 func scopeFixture(t *testing.T) string {
@@ -16,8 +20,8 @@ func scopeFixture(t *testing.T) string {
 }
 
 // A profile with system-scope modules gains a dotfiles-system step that runs
-// after dotfiles, applies only the system entries from its own config dir,
-// and is recorded in resume state.
+// after dotfiles, applies only the system entries via mise dotfiles apply from
+// its own config dir, and is recorded in resume state.
 func TestApply_dotfilesSystemStep(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -27,9 +31,10 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	cmd := &ApplyCmd{Profile: scopeFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// User dotfiles still use mise dotfiles apply; system dotfiles now use
-	// mise bootstrap --only files from the system/ config dir.
+	// User and system dotfiles both use mise dotfiles apply, each from their
+	// own config dir; the system step runs after the user step.
 	userApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "dotfiles")
+	systemApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "system")
 	userIdx := -1
 	for i, e := range *events {
 		if strings.Contains(e, userApply) {
@@ -38,7 +43,7 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	}
 	systemIdx := -1
 	for i, e := range *events {
-		if strings.Contains(e, "bootstrap") && strings.Contains(e, "--only files") {
+		if strings.Contains(e, systemApply) {
 			systemIdx = i
 		}
 	}
@@ -53,7 +58,7 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 
 	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(sysCfg), "[bootstrap.files]")
+	require.Contains(t, string(sysCfg), "[dotfiles]")
 	require.Contains(t, string(sysCfg), "/etc/demo.conf")
 
 	// The pre-pipeline full config (D8a crash snapshot) still contains everything.
@@ -88,10 +93,10 @@ func TestApply_noSystemEntriesSkipsDotfilesSystem(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "no dotfiles-system config dir must be created")
 }
 
-// System-scope edit entries (line/block/template) run through the elevated
-// mise dotfiles apply path — [bootstrap.files] can only place files, not edit
-// them in place. The system step writes a dedicated [dotfiles] config and
-// invokes DotfilesApplySudo for the edit entries.
+// System-scope edit entries (line/block/template) apply via the same unified
+// dotfiles apply path as whole-file entries — the system step writes a single
+// [dotfiles] config and invokes mise dotfiles apply. When the OS denies access
+// (permission denied), the step retries elevated via DotfilesApplySudo.
 func TestApply_systemEditEntriesUseDotfilesApply(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -111,26 +116,25 @@ scope = "system"
 	cmd := &ApplyCmd{Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// The system edit runs as an elevated `mise dotfiles apply` from the
-	// system/edits config dir.
-	var foundEditApply bool
+	// The system edit runs as `mise dotfiles apply` from the system/ config dir.
+	var foundApply bool
 	for _, e := range *events {
-		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("system", "edits")) {
-			foundEditApply = true
+		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system")) {
+			foundApply = true
 		}
 	}
-	require.True(t, foundEditApply, "system edit entries must reach elevated dotfiles apply, events: %v", *events)
+	require.True(t, foundApply, "system edit entries must reach dotfiles apply, events: %v", *events)
 
-	// The edit config carries a [dotfiles] section (not [bootstrap.files]).
-	editCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "edits", "mise.toml"))
+	// The system config carries a [dotfiles] section (not [bootstrap.files]).
+	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(editCfg), "[dotfiles]")
-	require.Contains(t, string(editCfg), `line = "127.0.0.1 dev.local"`)
-	require.NotContains(t, string(editCfg), "[bootstrap.files]")
+	require.Contains(t, string(sysCfg), "[dotfiles]")
+	require.Contains(t, string(sysCfg), `line = "127.0.0.1 dev.local"`)
+	require.NotContains(t, string(sysCfg), "[bootstrap.files]")
 }
 
 // System-scope whole-file and edit entries coexist in one system step:
-// whole-file → [bootstrap.files], edit → elevated dotfiles apply.
+// both apply via a single [dotfiles] config and one mise dotfiles apply call.
 func TestApply_systemWholeFileAndEditBothApply(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -151,15 +155,93 @@ scope = "system"
 	cmd := &ApplyCmd{Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	var foundBootstrap, foundEditApply bool
+	// Both whole-file and edit entries reach the same dotfiles apply call.
+	var foundApply bool
 	for _, e := range *events {
-		if strings.Contains(e, "bootstrap") && strings.Contains(e, "--only files") {
-			foundBootstrap = true
-		}
-		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("system", "edits")) {
-			foundEditApply = true
+		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system")) {
+			foundApply = true
 		}
 	}
-	require.True(t, foundBootstrap, "whole-file system entries must reach bootstrap --only files, events: %v", *events)
-	require.True(t, foundEditApply, "system edit entries must reach elevated dotfiles apply, events: %v", *events)
+	require.True(t, foundApply, "system entries must reach dotfiles apply, events: %v", *events)
+
+	// The unified config has both entries in [dotfiles].
+	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(sysCfg), "/etc/demo.conf")
+	require.Contains(t, string(sysCfg), `line = "127.0.0.1 dev.local"`)
+}
+
+// When mise dotfiles apply fails with permission denied (system paths like
+// /etc), the system step retries elevated via DotfilesApplySudo (sudo -E).
+func TestSystemFilesStep_retriesElevatedOnPermissionDenied(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("elevation retry test requires a non-root user")
+	}
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	callCount := 0
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			callCount++
+			// Non-sudo attempt fails with permission denied.
+			if name != "sudo" {
+				return "", fmt.Errorf("exit status 1\nPermission denied (os error 13)")
+			}
+			// Sudo retry succeeds.
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
+		},
+		configPath: configPath,
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	require.Equal(t, 2, callCount,
+		"should try dotfiles apply (fail) then retry elevated (succeed)")
+}
+
+// When mise dotfiles apply fails with a non-permission error, the system step
+// does NOT retry elevated — the original error propagates.
+func TestSystemFilesStep_noRetryOnNonPermissionError(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	callCount := 0
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			callCount++
+			return "", fmt.Errorf("exit status 1\nmise ERROR config parse error")
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
+		},
+		configPath: configPath,
+		yes:        true,
+	}
+
+	err := step.Run(context.Background())
+	require.Error(t, err)
+	require.Equal(t, 1, callCount, "should not retry on non-permission errors")
+	require.Contains(t, err.Error(), "config parse error")
 }

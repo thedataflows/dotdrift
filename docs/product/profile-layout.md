@@ -189,8 +189,8 @@ public = false
     `[A-Za-z0-9._-]+`.
     Edit entries work at either scope, like whole-file entries. User-scope
     edits apply as the invoking user; system-scope edits (e.g. `/etc/hosts/...`)
-    apply via elevated `mise dotfiles apply` (`sudo`) — the only mechanism for
-    in-place edits, since `[bootstrap.files]` does file placement, not edits.
+    apply via `mise dotfiles apply`, retried elevated (`sudo`) when the OS
+    denies access — the same try/retry pattern as whole-file system entries.
 - Higher layers (user > host > module) override lower layers for the same
   dotfile key. For edit entries the key is the full `<file-path>/<edit-id>`,
   so a higher layer overrides only the same edit id on the same file; other

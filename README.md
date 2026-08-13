@@ -109,9 +109,9 @@ scope = "system"
 "/etc/demo.conf" = { source = "demo.conf", mode = "copy" }
 ```
 
-A single `dotdrift apply` covers both scopes. User dotfiles apply as usual; system dotfiles apply in a `dotfiles-system` step via `sudo`.
+A single `dotdrift apply` covers both scopes. User dotfiles apply as usual; system dotfiles try `mise dotfiles apply` as the current user first, and retry elevated via `sudo` when the OS denies access (permission denied).
 
-- One password prompt per apply, thanks to sudo's timestamp cache — none at all when already running as root.
+- sudo's timestamp cache means at most one password prompt per apply — none at all when already running as root or when the system files are already converged.
 - System-scope entries are marked `[system]` in `dotdrift plan`.
 - Packages self-elevate via the distro backend, and hooks carry their own inline privilege, so neither needs scope machinery.
 

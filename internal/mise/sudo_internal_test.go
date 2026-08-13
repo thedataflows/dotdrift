@@ -1,11 +1,17 @@
 package mise
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
 // swapEUID pins the effective-uid seam for the duration of a test.
@@ -85,4 +91,69 @@ func TestExecMise_dotfilesApplySudo_trustsGeneratedConfigDir(t *testing.T) {
 	lines := captureLines(t, capture)
 	require.Equal(t, "TRUSTED="+cfgDir, lines[0],
 		"mise subprocess env must trust the generated config's directory")
+}
+
+// IsPermissionDenied detects the OS "Permission denied" message mise emits
+// on stderr, both in raw error strings (non-streaming path) and in the
+// captured stderr attached to streaming-path errors.
+func TestIsPermissionDenied(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"unrelated", errPlain, false},
+		{"permissionInString", errPerm, true},
+		{"streamErrorWithPermission", &streamError{
+			err:    errPlain,
+			stderr: "mise ERROR Permission denied (os error 13)",
+		}, true},
+		{"streamErrorWithoutPermission", &streamError{
+			err:    errPlain,
+			stderr: "mise ERROR config parse error",
+		}, false},
+		{"wrappedStreamError", fmt.Errorf("apply: %w", &streamError{
+			err:    errPlain,
+			stderr: "mise ERROR Permission denied (os error 13)",
+		}), true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, IsPermissionDenied(tt.err))
+		})
+	}
+}
+
+var errPlain = errors.New("exit status 1")
+var errPerm = errors.New("exit status 1\nmise ERROR Permission denied (os error 13)")
+
+// The streaming path tees stderr to a buffer so IsPermissionDenied works even
+// when output is streamed live to the terminal (the interactive apply case).
+func TestRunOp_streamingCapturesStderr(t *testing.T) {
+	// Force the streaming path by making IsTerminal return true.
+	orig := executil.IsTerminal
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	t.Cleanup(func() { executil.IsTerminal = orig })
+
+	// Script: version probe answers, otherwise print to stderr and exit 1.
+	script := filepath.Join(t.TempDir(), "mise")
+	content := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo " + MinMiseVersion + "; exit 0; fi\n" +
+		"echo 'Permission denied (os error 13)' >&2\n" +
+		"exit 1\n"
+	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
+
+	var out bytes.Buffer
+	m := &Mise{
+		LookPath: func(string) (string, error) { return script, nil },
+		Out:      &out,
+		Err:      &out,
+	}
+	em := NewExecMise(m)
+
+	err := em.Bootstrap(context.Background(), "/cfg/mise.toml", true, "files")
+	require.Error(t, err)
+	require.True(t, IsPermissionDenied(err),
+		"streaming path must capture stderr so IsPermissionDenied works, got: %v", err)
 }

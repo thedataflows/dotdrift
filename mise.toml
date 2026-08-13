@@ -18,4 +18,3 @@ run = [
     "golangci-lint run ./...",
     "gosec -exclude=G301,G302,G304,G306,G204,G703,G108 ./..."
 ]
-

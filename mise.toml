@@ -5,6 +5,8 @@ go = '1.26'
 "goreleaser" = '2.17'
 ## https://github.com/golangci/golangci-lint/releases
 "golangci-lint" = '2'
+## https://github.com/securego/gosec/releases
+"aqua:securego/gosec" = '2'
 
 [tasks."build"]
 run = [
@@ -13,6 +15,7 @@ run = [
 
 [tasks."lint"]
 run = [
-    "golangci-lint run ./..."
+    "golangci-lint run ./...",
+    "gosec -exclude=G301,G302,G304,G306,G204,G703,G108 ./..."
 ]
 

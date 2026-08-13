@@ -68,8 +68,12 @@ func (cli *CLI) AfterApply(kctx *kong.Context) error {
 	if cli.PProf {
 		log.Info().Str("listen", cli.PProfListenOn).Msg("Starting pprof profiling server")
 		runtime.SetBlockProfileRate(1)
+		srv := &http.Server{
+			Addr:              cli.PProfListenOn,
+			ReadHeaderTimeout: 10 * time.Second,
+		}
 		go func() {
-			if err := http.ListenAndServe(cli.PProfListenOn, nil); err != nil {
+			if err := srv.ListenAndServe(); err != nil {
 				log.Error().Err(err).Str("listen", cli.PProfListenOn).Msg("pprof profiling server stopped")
 			}
 		}()

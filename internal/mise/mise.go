@@ -448,7 +448,7 @@ func isWritable(path string) bool {
 	if err != nil {
 		return false
 	}
-	f.Close()
+	_ = f.Close()
 	return true
 }
 

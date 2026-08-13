@@ -7,8 +7,12 @@ package paru
 import (
 	"context"
 	"fmt"
+	"io"
+	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
 // Run executes name with args, returning trimmed stdout on success or the
@@ -22,14 +26,50 @@ func (ExecRunner) Run(ctx context.Context, name string, args ...string) (string,
 	return strings.TrimSpace(string(out)), nil
 }
 
+// RunStream wires the child's stdout/stderr straight to Out/Err so its output
+// streams live (the install path), echoing the command line set -x-style
+// ("+ argv") to Err before execution. The paru install command is always
+// verbose — mise invokes it as a fresh subprocess whose output would otherwise
+// be captured and discarded. Streaming returns no captured output (the
+// terminal already shows it).
+func (e ExecRunner) RunStream(ctx context.Context, name string, args ...string) (string, error) {
+	out, errW := e.Out, e.Err
+	if out == nil {
+		out = os.Stdout
+	}
+	if errW == nil {
+		errW = os.Stderr
+	}
+	executil.EchoCommand(errW, append([]string{name}, args...))
+	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdout = out
+	cmd.Stderr = errW
+	return "", cmd.Run()
+}
+
 // Runner executes one command and returns its stdout (trimmed) on success or
 // the combined output on failure.
 type Runner interface {
 	Run(ctx context.Context, name string, args ...string) (string, error)
 }
 
-// ExecRunner runs commands via exec.CommandContext.
-type ExecRunner struct{}
+// ExecRunner runs commands via exec.CommandContext. Run captures combined
+// output (the probe path — pacman -Q); RunStream wires the child's stdout/stderr
+// straight to Out/Err so its output streams live (the install path), echoing
+// the command line set -x-style ("+ argv") to Err before execution. Fakes
+// implement only Runner, so they stay on the captured path untouched.
+type ExecRunner struct {
+	// Out/Err are the streaming destinations; nil defaults to
+	// os.Stdout/os.Stderr.
+	Out io.Writer
+	Err io.Writer
+}
+
+// streamRunner is ExecRunner's streaming surface. Fakes implement only
+// Runner, so they stay on the captured path untouched.
+type streamRunner interface {
+	RunStream(ctx context.Context, name string, args ...string) (string, error)
+}
 
 // State is one element of the installed-status response.
 type State struct {
@@ -86,6 +126,16 @@ func InstallArgs(names []string, dryRun, update bool) []string {
 	return args
 }
 
+// runMutating runs an install command: through the streaming surface when the
+// runner offers one, otherwise the captured Run path. Probes never come
+// through here — they call Runner.Run directly.
+func runMutating(ctx context.Context, r Runner, name string, args ...string) (string, error) {
+	if sr, ok := r.(streamRunner); ok {
+		return sr.RunStream(ctx, name, args...)
+	}
+	return r.Run(ctx, name, args...)
+}
+
 // Install runs `paru -S --needed --noconfirm <names>`. paru self-elevates
 // (calls sudo pacman internally); this function invokes no sudo itself.
 func Install(ctx context.Context, runner Runner, names []string, dryRun, update bool) error {
@@ -95,6 +145,6 @@ func Install(ctx context.Context, runner Runner, names []string, dryRun, update 
 	if dryRun {
 		return nil
 	}
-	_, err := runner.Run(ctx, "paru", InstallArgs(names, false, update)...)
+	_, err := runMutating(ctx, runner, "paru", InstallArgs(names, false, update)...)
 	return err
 }

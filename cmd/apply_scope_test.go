@@ -171,28 +171,27 @@ scope = "system"
 	require.Contains(t, string(sysCfg), `line = "127.0.0.1 dev.local"`)
 }
 
-// When mise dotfiles apply fails with permission denied (system paths like
-// /etc), the system step retries elevated via DotfilesApplySudo (sudo -E).
-func TestSystemFilesStep_retriesElevatedOnPermissionDenied(t *testing.T) {
+// A system target the current user can't write (e.g. under /etc) converges
+// elevated in a single sudo pass: the writability pre-flight chooses sudo up
+// front instead of a failing user attempt followed by a retry (the old path
+// inspected mise's captured stderr for "Permission denied", but runOp now
+// streams straight to the terminal to keep mise's color, so it can't read
+// stderr back).
+func TestSystemFilesStep_convergesElevatedWhenTargetNotUserWritable(t *testing.T) {
 	if os.Geteuid() == 0 {
-		t.Skip("elevation retry test requires a non-root user")
+		t.Skip("elevation test requires a non-root user")
 	}
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
 
-	callCount := 0
+	var names []string
 	m := &mise.Mise{
 		LookPath: func(string) (string, error) { return "/fake/mise", nil },
 		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
 			if len(args) > 0 && args[0] == "--version" {
 				return mise.MinMiseVersion + "\n", nil
 			}
-			callCount++
-			// Non-sudo attempt fails with permission denied.
-			if name != "sudo" {
-				return "", fmt.Errorf("exit status 1\nPermission denied (os error 13)")
-			}
-			// Sudo retry succeeds.
+			names = append(names, name)
 			return "", nil
 		},
 	}
@@ -210,24 +209,26 @@ func TestSystemFilesStep_retriesElevatedOnPermissionDenied(t *testing.T) {
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	require.Equal(t, 2, callCount,
-		"should try dotfiles apply (fail) then retry elevated (succeed)")
+	require.Equal(t, []string{"sudo"}, names,
+		"a non-writable system target must converge elevated directly, with no user attempt")
 }
 
-// When mise dotfiles apply fails with a non-permission error, the system step
-// does NOT retry elevated — the original error propagates.
-func TestSystemFilesStep_noRetryOnNonPermissionError(t *testing.T) {
+// A system target the current user CAN write (e.g. under a user-owned dir)
+// converges as the user — no sudo — and a non-permission failure propagates
+// verbatim; the writability pre-flight only elevates when a target is not
+// user-writable.
+func TestSystemFilesStep_userWritableTargetStaysUserAndPropagatesError(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
 
-	callCount := 0
+	var names []string
 	m := &mise.Mise{
 		LookPath: func(string) (string, error) { return "/fake/mise", nil },
 		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
 			if len(args) > 0 && args[0] == "--version" {
 				return mise.MinMiseVersion + "\n", nil
 			}
-			callCount++
+			names = append(names, name)
 			return "", fmt.Errorf("exit status 1\nmise ERROR config parse error")
 		},
 	}
@@ -236,7 +237,7 @@ func TestSystemFilesStep_noRetryOnNonPermissionError(t *testing.T) {
 	step := &systemFilesStep{
 		exec: em,
 		entries: []resolve.DotfileEntry{
-			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
+			{Target: filepath.Join(dir, "mine.conf"), Source: "mine.conf", Mode: "copy"},
 		},
 		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
@@ -246,8 +247,29 @@ func TestSystemFilesStep_noRetryOnNonPermissionError(t *testing.T) {
 
 	err := step.Run(context.Background())
 	require.Error(t, err)
-	require.Equal(t, 1, callCount, "should not retry on non-permission errors")
+	require.NotContains(t, names, "sudo", "a user-writable target must not elevate")
 	require.Contains(t, err.Error(), "config parse error")
+}
+
+// pathUserWritable walks up to the nearest existing ancestor and checks the
+// write-access bit: a new file under a user-owned dir is writable; under a
+// read-only dir (or root-owned /etc) it is not.
+func TestPathUserWritable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("writability test requires a non-root user")
+	}
+	userDir := t.TempDir()
+	require.True(t, pathUserWritable(filepath.Join(userDir, "new-file")),
+		"a path under a user-owned dir is writable")
+
+	locked := t.TempDir()
+	require.NoError(t, os.Chmod(locked, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	require.False(t, pathUserWritable(filepath.Join(locked, "new-file")),
+		"a path under a read-only dir is not writable")
+
+	require.False(t, pathUserWritable("/etc/dotdrift-probe.conf"),
+		"a path under root-owned /etc is not user-writable")
 }
 
 // System-scope entries declared as symlink are translated to copy mode in the

@@ -3,10 +3,12 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
@@ -84,7 +86,7 @@ func (s *packagesStep) Run(ctx context.Context) error {
 		if updated, err := paru.EnsureInstalled(s.misePluginsDir, "paru"); err != nil {
 			return fmt.Errorf("maintain paru plugin: %w", err)
 		} else if updated {
-			log.Info().Msg("paru mise plugin installed/updated")
+			log.Info().Str("version", paru.PluginVersion).Msg("paru mise plugin installed/updated")
 		}
 	}
 	// Removal is best-effort (warn, don't fail) — same contract as before.
@@ -157,12 +159,17 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		if err := writeBootstrapConfig(s.configPath, mise.GenerateDotfiles(allEntries)); err != nil {
 			return fmt.Errorf("write system dotfiles config: %w", err)
 		}
-		if err := s.exec.DotfilesApply(ctx, s.configPath, s.yes, false); err != nil {
-			if mise.IsPermissionDenied(err) && os.Geteuid() != 0 {
-				if err := s.exec.DotfilesApplySudo(ctx, s.configPath, s.yes); err != nil {
-					return fmt.Errorf("system dotfiles (elevated): %w", err)
-				}
-			} else {
+		// Decide elevation up front from the targets' writability, not from
+		// inspecting mise's stderr: runOp streams the child's fds straight to
+		// the terminal (preserving mise's color), so its stderr is not captured
+		// and "Permission denied" can't be read back. Any system target the
+		// current user can't write → converge elevated in one sudo pass.
+		if os.Geteuid() != 0 && !systemTargetsUserWritable(allEntries, s.homeDir) {
+			if err := s.exec.DotfilesApplySudo(ctx, s.configPath, s.yes); err != nil {
+				return fmt.Errorf("system dotfiles (elevated): %w", err)
+			}
+		} else {
+			if err := s.exec.DotfilesApply(ctx, s.configPath, s.yes, false); err != nil {
 				return fmt.Errorf("system dotfiles: %w", err)
 			}
 		}
@@ -174,6 +181,44 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// systemTargetsUserWritable reports whether the current user can write every
+// system dotfile target (whole-file or edit). Any non-writable target ⇒ the
+// batch must converge elevated (sudo) in one pass. Used to decide sudo up
+// front instead of inspecting mise's stderr (which runOp no longer captures —
+// it streams straight to the terminal to keep mise's color).
+func systemTargetsUserWritable(entries []resolve.DotfileEntry, homeDir string) bool {
+	for _, e := range entries {
+		p := e.Target
+		if strings.HasPrefix(p, "~/") {
+			p = filepath.Join(homeDir, p[2:])
+		}
+		if !pathUserWritable(p) {
+			return false
+		}
+	}
+	return true
+}
+
+// pathUserWritable reports whether the current user can write to path: if path
+// exists, check it directly; otherwise walk up to the nearest existing
+// ancestor (the directory that must hold the new entry) and check that. The
+// walk-up also resolves edit keys like /etc/foo.conf/<id>: the file the edit
+// keys into is itself the ancestor that must be writable. Reaching the
+// filesystem root without a writable ancestor means not writable.
+func pathUserWritable(path string) bool {
+	p := path
+	for {
+		if _, err := os.Stat(p); err == nil {
+			return unix.Access(p, unix.W_OK) == nil
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
 }
 
 // mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for

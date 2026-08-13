@@ -334,6 +334,49 @@ func TestExecMise_nonVerboseNoEcho(t *testing.T) {
 	require.Empty(t, errW.String())
 }
 
+// miseVerboseEnvScript writes an executable fake `mise` that answers
+// `--version` and otherwise prints its MISE_VERBOSE env value to stdout.
+func miseVerboseEnvScript(t *testing.T) string {
+	t.Helper()
+	script := filepath.Join(t.TempDir(), "mise")
+	content := "#!/bin/sh\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.8.2; exit 0; fi\n" +
+		"echo MISE_VERBOSE=$MISE_VERBOSE\n"
+	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
+	return script
+}
+
+// Verbose runs mise verbosely: the mise child sees MISE_VERBOSE=1 (mise's own
+// env var for verbose mode — works uniformly for direct and `sudo -E` paths,
+// which a `--verbose` flag could not). Probes are unaffected.
+func TestMise_runOp_verboseRunsMiseVerbosely(t *testing.T) {
+	var out, errW bytes.Buffer
+	script := miseVerboseEnvScript(t)
+	m := &Mise{
+		LookPath: func(string) (string, error) { return script, nil },
+		Verbose:  true,
+		Out:      &out,
+		Err:      &errW,
+	}
+	_, err := m.runOp(context.Background(), nil, script, "install", "--cd", t.TempDir())
+	require.NoError(t, err)
+	require.Contains(t, out.String(), "MISE_VERBOSE=1", "verbose must run mise with MISE_VERBOSE=1")
+}
+
+// Non-verbose leaves MISE_VERBOSE unset: the value is empty, not 1.
+func TestMise_runOp_nonVerboseLeavesMiseVerboseUnset(t *testing.T) {
+	var out, errW bytes.Buffer
+	script := miseVerboseEnvScript(t)
+	m := &Mise{
+		LookPath: func(string) (string, error) { return script, nil },
+		Out:      &out,
+		Err:      &errW,
+	}
+	got, err := m.runOp(context.Background(), nil, script, "install", "--cd", t.TempDir())
+	require.NoError(t, err)
+	require.NotContains(t, got, "MISE_VERBOSE=1", "non-verbose must not set MISE_VERBOSE")
+}
+
 // DotfilesApply with force=true adds --force to the argv (onboard takeover
 // of a live file it just copied); force=false keeps today's argv.
 func TestExecMise_dotfilesApplyForceFlag(t *testing.T) {

@@ -124,7 +124,7 @@ func requireOrder(t *testing.T, events []string, want ...string) {
 	for _, w := range want {
 		found := -1
 		for i := at; i < len(events); i++ {
-			if strings.HasPrefix(events[i], w) {
+			if strings.Contains(events[i], w) {
 				found = i
 				break
 			}
@@ -401,7 +401,7 @@ func TestApply_mountsStepConditional(t *testing.T) {
 	requireOrder(t, *events,
 		"mise:run run",       // hooks:pre
 		"mise:run bootstrap", // packages
-		"mise:run dotfiles apply", // system files
+		"dotfiles apply",     // system files (user path when writable, sudo -E when not)
 		"mise:run bootstrap", // mounts services
 		"mise:run bootstrap", // smb accounts+services
 		"smb:run",            // PostBootstrap testparm

@@ -2,7 +2,6 @@
 package mise
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -176,63 +175,36 @@ func (m *Mise) writers() (io.Writer, io.Writer) {
 	return out, errW
 }
 
-// streamError wraps an exec error from the streaming path with captured
-// stderr, so callers can inspect the output (e.g. permission-denied detection
-// for elevated retry) without it appearing in the error message — the output
-// was already streamed live to the terminal.
-type streamError struct {
-	err    error
-	stderr string
-}
-
-func (e *streamError) Error() string { return e.err.Error() }
-func (e *streamError) Unwrap() error { return e.err }
-
-// capturedStderr returns the child process's stderr captured during a streaming
-// exec, or "" if the error did not come from the streaming path.
-func capturedStderr(err error) string {
-	var se *streamError
-	if errors.As(err, &se) {
-		return se.stderr
-	}
-	return ""
-}
-
-// IsPermissionDenied reports whether err indicates the OS denied access to a
-// resource — the condition that justifies an elevated (sudo) retry. It inspects
-// both the error chain and any captured child stderr from the streaming exec
-// path, because mise emits "Permission denied (os error 13)" on stderr, not as
-// a wrapped Go error.
-func IsPermissionDenied(err error) bool {
-	if err == nil {
-		return false
-	}
-	if s := capturedStderr(err); s != "" {
-		return strings.Contains(s, "Permission denied")
-	}
-	return strings.Contains(err.Error(), "Permission denied")
-}
-
 // runOp executes one operation command (install/dotfiles/task). On the real
 // exec path the child's stdout/stderr stream live to the configured writers
 // whenever --verbose is set OR both destinations are terminals (an interactive
-// apply), wiring the child's fds straight to them so it keeps its own color
-// output and its output stays off error/log lines instead of being captured.
-// Under --verbose the command line is also echoed set -x-style ("+ argv") to
-// Err before execution; the interactive default omits that trace. Stderr is
-// teed to an internal buffer so a streaming failure can be inspected (e.g. for
-// permission-denied detection) without duplicating output in the error message.
-// Fakes bypass streaming (they own their output); a non-verbose, piped run still
-// captures via runWithEnv so a failure carries self-contained diagnostics.
-// Probes never come through here.
+// apply), wiring the child's fds straight to them — never piped through a
+// MultiWriter — so the child's isatty checks pass and it keeps its own color
+// output. (mise/paru emit zero ANSI when their output is a pipe and honor no
+// force-color override, so a pipe is the only thing that strips color; piping
+// nothing preserves it, and dotdrift never strips color itself.) Under
+// --verbose the command line is also echoed set -x-style ("+ argv") to Err
+// before execution; the interactive default omits that trace. A failure
+// returns the bare exec error — the output already streamed live — so callers
+// that need to react to a failure do so up front (e.g. systemFilesStep probes
+// target writability before choosing sudo). Fakes bypass streaming (they own
+// their output); a non-verbose, piped run still captures via runWithEnv so a
+// failure carries self-contained diagnostics. Probes never come through here.
 func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
 	out, errW := m.writers()
 	if (m.RunContext != nil || m.Run != nil) || !executil.StreamLive(m.Verbose, out, errW) {
 		return m.runWithEnv(ctx, extraEnv, name, args...)
 	}
-	env := make([]string, 0, len(m.Env)+len(extraEnv))
+	env := make([]string, 0, len(m.Env)+len(extraEnv)+1)
 	env = append(env, m.Env...)
 	env = append(env, extraEnv...)
+	// Run mise itself verbosely: MISE_VERBOSE is mise's own env var for
+	// verbose mode (DEBUG logging to stderr). An argv --verbose flag can't be
+	// used here — the sudo path is `sudo -E <mise> …`, so the flag would land
+	// on sudo; the env var is preserved by `sudo -E` uniformly.
+	if m.Verbose {
+		env = append(env, "MISE_VERBOSE=1")
+	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
@@ -241,13 +213,9 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 		executil.EchoCommand(errW, append([]string{name}, args...))
 	}
 	cmd.Stdout = out
-	// Tee stderr: stream live AND capture for error inspection. The captured
-	// text is attached to a streamError on failure, not appended to the error
-	// message (it was already on the terminal).
-	var errBuf bytes.Buffer
-	cmd.Stderr = io.MultiWriter(errW, &errBuf)
+	cmd.Stderr = errW
 	if runErr := cmd.Run(); runErr != nil {
-		return "", &streamError{err: runErr, stderr: errBuf.String()}
+		return "", runErr
 	}
 	return "", nil
 }

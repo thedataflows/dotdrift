@@ -95,6 +95,36 @@ func TestInstall_runsParu(t *testing.T) {
 	require.Contains(t, r.calls[0], "paru -S --needed --noconfirm neovim")
 }
 
+// fakeStreamRunner embeds fakeRunner and also offers RunStream, so Install's
+// mutating path takes the streaming surface instead of the captured Run.
+type fakeStreamRunner struct {
+	fakeRunner
+	streamed      bool
+	streamedCalls []string
+}
+
+func (f *fakeStreamRunner) RunStream(_ context.Context, name string, args ...string) (string, error) {
+	f.streamed = true
+	key := name + " " + strings.Join(args, " ")
+	f.streamedCalls = append(f.streamedCalls, key)
+	if err, ok := f.errs[key]; ok {
+		return f.outputs[key], err
+	}
+	return f.outputs[key], nil
+}
+
+// Install dispatches to RunStream when the runner offers it (the real
+// ExecRunner always streams), so paru output reaches the terminal instead of
+// being captured and discarded.
+func TestInstall_streamsWhenRunnerOffersRunStream(t *testing.T) {
+	r := &fakeStreamRunner{fakeRunner: fakeRunner{outputs: map[string]string{}}}
+	err := paru.Install(context.Background(), r, []string{"neovim"}, false, false)
+	require.NoError(t, err)
+	require.True(t, r.streamed, "Install should dispatch to RunStream when offered")
+	require.Empty(t, r.calls, "captured Run path must not be used when streaming is available")
+	require.Contains(t, r.streamedCalls[0], "paru -S --needed --noconfirm neovim")
+}
+
 func TestInstall_dryRunNoOp(t *testing.T) {
 	r := &fakeRunner{}
 	err := paru.Install(context.Background(), r, []string{"neovim"}, true, false)

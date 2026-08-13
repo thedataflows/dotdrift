@@ -178,7 +178,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 
--v / --verbose (also DD_VERBOSE=1) streams package manager and mise output live on apply and onboard, echoing each command line set -x-style to stderr immediately before it runs — e.g. + paru -S --needed --noconfirm jq; without it child-process output is captured and only surfaced in errors.
+-v / --verbose (also DD_VERBOSE=1) streams package manager and mise output live on apply and onboard, echoing each command line set -x-style to stderr immediately before it runs — e.g. + paru -S --needed --noconfirm jq — and runs mise itself in verbose mode (MISE_VERBOSE=1) so its DEBUG logging streams alongside; without it child-process output is captured and only surfaced in errors.
 
 --no-color (or the NO_COLOR environment variable, per no-color.org) disables ANSI colors in all dotdrift output and propagates NO_COLOR=1 to child processes (mise, paru). On a TTY, the status report colors findings by issue type (orange = missing, red = not-a-symlink/unknown, yellow = content/version diff, green = all-OK) and diffs are colored (green additions, red deletions); piped output is always plain.
 

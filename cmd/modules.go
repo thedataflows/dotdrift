@@ -65,7 +65,11 @@ func (c *ModulesCmd) Run() error {
 	}
 	for _, s := range p.Skipped {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s %s %s", skipped, s.Module.ID, s.Reason)
+		reason := s.Reason
+		if color {
+			reason = ansiRed + reason + ansiReset
+		}
+		fmt.Fprintf(&b, "%s %s %s", skipped, s.Module.ID, reason)
 		writeDescription(&b, s.Module.Config.Description, color)
 		fmt.Fprintln(out, b.String())
 	}

@@ -224,6 +224,8 @@ Section flags on `dotdrift apply` — `--[no-]packages`, `--[no-]tools`, `--[no-
 
 --no-color (or the NO_COLOR environment variable, per no-color.org) disables ANSI colors in all dotdrift output and propagates NO_COLOR=1 to child processes (mise, paru). On a TTY, the status report colors findings by issue type (orange = missing, red = not-a-symlink/unknown, yellow = content/version diff, green = all-OK) and diffs are colored (green additions, red deletions); piped output is always plain. Every hue is a named role overridable via `[colors]` in `dotdrift.toml` — see [profile layout](docs/product/profile-layout.md).
 
+![status example](docs/screenshots/status.png)
+
 ```bash
 # Generate an NFS mount module with a nightly timer, then two samba shares
 dotdrift generate mounts --name syn01 --source nas:/volume1/syn01 \

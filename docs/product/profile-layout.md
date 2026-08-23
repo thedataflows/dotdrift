@@ -541,3 +541,37 @@ onboard never adopts from it (its paths do not invert to live targets).
 Deeper `backups` directories are ordinary content. Generations are never
 pruned automatically — clean them by hand, and consider gitignoring
 `backups/` in the profile repository.
+
+#### Restoring (`dotdrift restore`)
+
+`dotdrift restore <targets...>` (issue 0026) is the inverse of
+`--backup`: it copies backed-up destinations back to their live target
+paths. Bare `restore` is an error — at least one target is required.
+
+```bash
+# Browse what exists (generations per module, or the ones holding a path)
+dotdrift restore --list
+dotdrift restore --list ~/.config/easyeffects/db/easyeffectsrc
+
+# Restore from the newest generation holding the target (preview first)
+dotdrift restore --dry-run ~/.config/easyeffects/db/easyeffectsrc
+dotdrift restore ~/.config/easyeffects/db/easyeffectsrc
+
+# Restore from a specific generation (as shown by --list)
+dotdrift restore --gen 20260823-101500 ~/.config/easyeffects/db/easyeffectsrc
+```
+
+Targets are live paths (absolute or `~/`-relative) matched against the
+mirrored layout; discovery scans every module layer directory, so a
+target backed up by a host or user overlay restores from there. The
+command removes a symlink sitting at the target (never writes through
+it), creates missing parent directories, restores the backed-up file
+mode, and restores targets the current user cannot write (system files)
+elevated via `sudo install -D -m <mode>`. The same target backed up by
+two modules is an error naming both.
+
+Restored content is expected to drift from the profile: the command
+prints a reminder, `dotdrift status` shows `content differs`, and the
+next `apply` overwrites the target again. To keep the restored content,
+re-onboard the path (`dotdrift onboard <target>`) so it becomes the
+profile's truth.

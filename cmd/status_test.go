@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -136,6 +138,27 @@ func TestStatus_reportsOrphans(t *testing.T) {
 		"base orphans group under the base heading")
 	require.Contains(t, out, "  hosts/myhost:\n    demo: hook.sh - not referenced by [dotfiles]",
 		"host-layer orphans group under the hosts/<hostname> heading")
+}
+
+// [colors] overrides from dotdrift.toml reach the rendered report on a
+// TTY: the orphan hue is re-skinned end-to-end.
+func TestStatus_colorOverridesApply(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	dir := t.TempDir()
+	writeStatusModule(t, dir, "modules/demo", "id = \"demo\"\n", map[string]string{"stale.md": "orphan"})
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"),
+		[]byte("[colors]\norphan = \"94\"\n"), 0o644))
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
+	require.Contains(t, buf.String(), "\033[94m", "orphan hue overridden from dotdrift.toml")
+	require.NotContains(t, buf.String(), "\033[35m", "default magenta replaced")
 }
 
 // writeStatusModule writes a module.toml (unless toml is empty) plus extra

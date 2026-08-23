@@ -12,6 +12,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
@@ -74,7 +75,11 @@ func (c *StatusCmd) Run() error {
 	} else {
 		fmt.Fprintf(out, "resume: last completed %q - next apply resumes after it\n", s.LastCompleted)
 	}
-	drift.Render(out, findings)
+	pal, err := palette.FromConfig(p.Config.Colors)
+	if err != nil {
+		return err // already validated at load; unreachable double-check
+	}
+	drift.Render(out, findings, drift.WithPalette(pal))
 
 	if c.Diff != "" {
 		if err := showDotfileDiffs(plan, profileRoot, c.Diff, out); err != nil {

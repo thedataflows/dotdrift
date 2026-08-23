@@ -29,12 +29,12 @@ func TestColorDiff_appliesColors(t *testing.T) {
 	diff := "--- /old\n+++ /new\n@@ -1,2 +1,2 @@\n-old line\n context\n+new line\n"
 
 	colored := ColorDiff(diff, true)
-	require.Contains(t, colored, ansiGreen+"+new line"+ansiReset)
-	require.Contains(t, colored, ansiRed+"-old line"+ansiReset)
+	require.Contains(t, colored, seq("32")+"+new line"+ansiReset)
+	require.Contains(t, colored, seq("31")+"-old line"+ansiReset)
 	require.Contains(t, colored, ansiCyan+"@@ -1,2 +1,2 @@"+ansiReset)
 	// Headers (---/+++) and context lines are NOT colored
-	require.NotContains(t, colored, ansiRed+"---")
-	require.NotContains(t, colored, ansiGreen+"+++")
+	require.NotContains(t, colored, seq("31")+"---")
+	require.NotContains(t, colored, seq("32")+"+++")
 
 	// No color → input unchanged
 	require.Equal(t, diff, ColorDiff(diff, false))

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -190,6 +191,27 @@ func TestRender_orphansDistinctColor(t *testing.T) {
 	s := b.String()
 	require.Contains(t, s, "\033[35m", "orphan line carries the magenta hue")
 	require.NotContains(t, strings.Split(s, "orphans:")[0], "\033[35m", "non-orphan sections keep their hues")
+}
+
+// A palette override re-hues the orphans section (and missing findings).
+func TestRender_paletteOverrides(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+
+	p, err := palette.FromConfig(map[string]string{"orphan": "94", "missing": "38;5;75"})
+	require.NoError(t, err)
+
+	var b strings.Builder
+	drift.Render(&b, []drift.Finding{
+		{Section: "packages", Item: "jq", Status: drift.Drift, Detail: "missing", Module: "m"},
+		{Section: "orphans", Group: "base", Item: "notes.md", Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "m"},
+	}, drift.WithPalette(p))
+	s := b.String()
+	require.Contains(t, s, "\033[94m", "orphan lines use the overridden hue")
+	require.Contains(t, s, "\033[38;5;75m", "missing finding uses the overridden hue")
+	require.NotContains(t, s, "\033[35m", "default magenta replaced")
 }
 
 // orphanGroups groups findings by (group, module): group is the layer-root

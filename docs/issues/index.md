@@ -28,3 +28,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0010](0010-apply-section-flags.md) | Per-section apply flags | done | medium |
 | [0011](0011-status-symlink-source-validity.md) | Status misses invalid symlink sources | done | high |
 | [0012](0012-status-orphans-section.md) | Status orphans section | done | medium |
+| [0013](0013-configurable-color-palette.md) | Configurable status color palette | done | low |

@@ -912,7 +912,7 @@ func TestRender_shadesModuleVsItem(t *testing.T) {
 		{Section: "dotfiles", Item: "~/.zshrc", Status: drift.Drift, Detail: "content differs", Module: "zsh"},
 	})
 	out := buf.String()
-	missing := "\033[38;5;208m" // missing → orange
+	missing := "\033[91m" // missing → orange
 	require.Contains(t, out, "\033[2m"+missing+"alpha\033[0m", "packages: module in faint shade of the finding hue")
 	require.Contains(t, out, "\033[1m"+missing+"bbb\033[0m", "packages: item in bold shade of the finding hue")
 	require.Contains(t, out, missing+" - missing\033[0m", "detail in the plain finding hue")
@@ -940,6 +940,6 @@ func TestRender_shadesFollowIssueType(t *testing.T) {
 	require.Contains(t, out, "\033[1m\033[31mjq\033[0m", "unknown → bold red item")
 	require.Contains(t, out, "\033[2m\033[33malpha\033[0m", "version drift → faint yellow module")
 	require.Contains(t, out, "\033[1m\033[33mnode\033[0m", "version drift → bold yellow item")
-	require.Contains(t, out, "\033[2m\033[38;5;208mnas\033[0m", "other drift → faint orange module")
-	require.Contains(t, out, "\033[1m\033[38;5;208m/mnt/data\033[0m", "other drift → bold orange item")
+	require.Contains(t, out, "\033[2m\033[91mnas\033[0m", "other drift → faint orange module")
+	require.Contains(t, out, "\033[1m\033[91m/mnt/data\033[0m", "other drift → bold orange item")
 }

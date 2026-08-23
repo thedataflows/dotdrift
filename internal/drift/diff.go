@@ -1,12 +1,15 @@
 package drift
 
 import (
+	"github.com/thedataflows/dotdrift/internal/palette"
+
 	"strings"
 
 	"github.com/pmezard/go-difflib/difflib"
 )
 
-// ansiCyan for diff hunk headers; ansiGreen/ansiRed/ansiReset already exist
+// Diff hues: additions green, deletions red (both overridable via the
+// palette), hunk headers cyan (fixed).
 // in this package (drift.go).
 const ansiCyan = "\033[36m"
 
@@ -42,9 +45,9 @@ func ColorDiff(diff string, color bool) string {
 	for i, line := range lines {
 		switch {
 		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
-			lines[i] = ansiGreen + line + ansiReset
+			lines[i] = seq(palette.Default().Seq(palette.OK)) + line + ansiReset
 		case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
-			lines[i] = ansiRed + line + ansiReset
+			lines[i] = seq(palette.Default().Seq(palette.Error)) + line + ansiReset
 		case strings.HasPrefix(line, "@@"):
 			lines[i] = ansiCyan + line + ansiReset
 		}

@@ -78,9 +78,25 @@ profile/
 ```toml
 [modules]
 disable = ["id1", "id2"]
+
+[colors]
+# Optional per-role overrides of the colored-output palette. Values are raw
+# ANSI SGR parameters ("31", "1;31", "38;5;208"), not escape sequences.
+missing = "38;5;75"
+orphan  = "94"
 ```
 
 - `disable` is unioned across base, host, and user layers (any disable sticks).
+- `colors` overrides the colored-output palette per role. Roles: `ok`
+  (green, all-checks-passed / `no drift`), `missing` (**light red**, missing
+  or removed items), `warn` (yellow, content/version differs), `error`
+  (red, unknown / not-a-symlink), `orphan` (magenta, the status orphans
+  section), `dim` (bright black, dimmed module/description text). Values
+  are raw SGR parameter strings — digits and semicolons only, no ESC/CSI
+  wrapper (`"31"`, not `"\033[31m"`); anything else is a load-time error
+  naming the file and key. Overrides apply from any layer with
+  higher-layer precedence per role, affect `status`/`modules`/`plan`/diff
+  output, and never re-enable color under `NO_COLOR`/`--no-color`.
 
 # `module.toml`
 

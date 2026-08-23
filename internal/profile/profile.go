@@ -10,11 +10,16 @@ import (
 
 	"github.com/BurntSushi/toml"
 	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/palette"
 )
 
 // Config is the top-level dotdrift.toml configuration.
 type Config struct {
 	Modules ModulesConfig `toml:"modules"`
+	// Colors overrides the colored-output palette per role (see
+	// internal/palette). Validated at load: unknown roles and malformed
+	// SGR values are errors naming the file.
+	Colors map[string]string `toml:"colors"`
 }
 
 // ModulesConfig holds the [modules] table.
@@ -387,6 +392,9 @@ func loadDotdriftTOML(path string) (Config, error) {
 	if _, err := toml.DecodeFile(path, &cfg); err != nil {
 		return cfg, fmt.Errorf("decode %s: %w", path, err)
 	}
+	if _, err := palette.FromConfig(cfg.Colors); err != nil {
+		return cfg, fmt.Errorf("%s: %w", path, err)
+	}
 	return cfg, nil
 }
 
@@ -406,7 +414,19 @@ func unionConfig(base, host, user Config) Config {
 		list = append(list, id)
 	}
 	sort.Strings(list)
-	return Config{Modules: ModulesConfig{Disable: list}}
+
+	// Colors union by per-role replacement: higher layers win per role,
+	// unspecified roles keep the lower layer's value (and the default).
+	colors := make(map[string]string, len(base.Colors)+len(host.Colors)+len(user.Colors))
+	for _, cfg := range []Config{base, host, user} {
+		for role, seq := range cfg.Colors {
+			colors[role] = seq
+		}
+	}
+	if len(colors) == 0 {
+		colors = nil
+	}
+	return Config{Modules: ModulesConfig{Disable: list}, Colors: colors}
 }
 
 func (p *Profile) isDisabled(m Module) (string, bool) {

@@ -18,6 +18,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -698,7 +699,7 @@ func checkService(ctx context.Context, section, name string, pr Probes) Finding 
 // (orphans). The final line is `no drift` when nothing drifted,
 // otherwise `drift: N item(s)` with `, K unknown` appended when there are
 // unknowns.
-func Render(w io.Writer, findings []Finding) {
+func Render(w io.Writer, findings []Finding, renderOptions ...RenderOption) {
 	driftCount, unknownCount := 0, 0
 	for _, f := range findings {
 		switch f.Status {
@@ -710,6 +711,10 @@ func Render(w io.Writer, findings []Finding) {
 	}
 
 	color := executil.ColorEnabled(w)
+	opts := renderOpts{pal: palette.Default()}
+	for _, o := range renderOptions {
+		o(&opts)
+	}
 
 	wroteSection := false
 	for _, sec := range sectionOrder {
@@ -720,7 +725,7 @@ func Render(w io.Writer, findings []Finding) {
 		wroteSection = true
 		fmt.Fprintf(w, "%s:\n", sec)
 		if sec == "orphans" {
-			renderOrphans(w, secFindings, color)
+			renderOrphans(w, secFindings, color, opts.pal)
 			continue
 		}
 		allOK := true
@@ -729,12 +734,12 @@ func Render(w io.Writer, findings []Finding) {
 				continue
 			}
 			allOK = false
-			renderFinding(w, f, color)
+			renderFinding(w, f, color, opts.pal)
 		}
 		if allOK {
 			line := fmt.Sprintf("  ok: all %d checks passed", len(secFindings))
 			if color {
-				line = ansiGreen + line + ansiReset
+				line = seq(opts.pal.Seq(palette.OK)) + line + ansiReset
 			}
 			fmt.Fprintln(w, line)
 		}
@@ -746,7 +751,7 @@ func Render(w io.Writer, findings []Finding) {
 	if driftCount == 0 && unknownCount == 0 {
 		line := "no drift"
 		if color {
-			line = ansiGreen + line + ansiReset
+			line = seq(opts.pal.Seq(palette.OK)) + line + ansiReset
 		}
 		fmt.Fprintln(w, line)
 		return
@@ -762,24 +767,42 @@ func Render(w io.Writer, findings []Finding) {
 	fmt.Fprintln(w, summary)
 }
 
-// ANSI color codes for TTY output; applied only when color is true.
+// ANSI wrappers for TTY output; applied only when color is true. Hues come
+// from the active palette (see WithPalette), not fixed constants.
 const (
-	ansiReset  = "\033[0m"
-	ansiBold   = "\033[1m"
-	ansiFaint  = "\033[2m"
-	ansiRed    = "\033[31m"
-	ansiGreen  = "\033[32m"
-	ansiYellow = "\033[33m"
-	ansiMagenta = "\033[35m"
-	ansiOrange = "\033[38;5;208m"
+	ansiReset = "\033[0m"
+	ansiBold  = "\033[1m"
+	ansiFaint = "\033[2m"
 )
+
+// seq wraps raw SGR params ("31") in the ESC/CSI wrapper.
+func seq(sgr string) string {
+	return "\033[" + sgr + "m"
+}
+
+// RenderOption configures one Render call.
+type RenderOption func(*renderOpts)
+
+type renderOpts struct {
+	pal *palette.Palette
+}
+
+// WithPalette selects the color palette for the report (per-role
+// overrides from dotdrift.toml [colors]); nil falls back to the default.
+func WithPalette(p *palette.Palette) RenderOption {
+	return func(o *renderOpts) {
+		if p != nil {
+			o.pal = p
+		}
+	}
+}
 
 // renderFinding writes one drift/unknown finding line. The owning module
 // replaces the redundant status prefix; unknown items get a (?) suffix. With
 // color on, the finding hue splits into two shades — faint for the module,
 // bold for the item — so the grouped owner and the item read as distinct
 // columns of the same color; the detail rides the plain hue.
-func renderFinding(w io.Writer, f Finding, color bool) {
+func renderFinding(w io.Writer, f Finding, color bool, pal *palette.Palette) {
 	mod := f.Module
 	if mod == "" {
 		mod = "?"
@@ -789,7 +812,7 @@ func renderFinding(w io.Writer, f Finding, color bool) {
 		suffix = " (?)"
 	}
 	if color {
-		hue := findingColor(f)
+		hue := seq(pal.Seq(findingRole(f, pal)))
 		fmt.Fprintf(w, "  %s%s%s%s: %s%s%s%s%s - %s%s\n",
 			ansiFaint, hue, mod, ansiReset,
 			ansiBold, hue, f.Item, ansiReset,
@@ -804,8 +827,8 @@ func renderFinding(w io.Writer, f Finding, color bool) {
 // layer-root headings (base, hosts/<hostname>, users/<username> — already
 // ordered by CheckOrphans), one `    <module>: <file> - <detail>` line per
 // orphan. Same two-shade color scheme as flat findings, in the orphan hue.
-func renderOrphans(w io.Writer, findings []Finding, color bool) {
-	hue := ansiMagenta
+func renderOrphans(w io.Writer, findings []Finding, color bool, pal *palette.Palette) {
+	hue := seq(pal.Seq(palette.Orphan))
 	lastGroup := ""
 	for _, f := range findings {
 		if f.Group != lastGroup {
@@ -831,23 +854,23 @@ func renderOrphans(w io.Writer, findings []Finding, color bool) {
 	}
 }
 
-// findingColor returns the ANSI color for a finding: red for not-a-symlink and
-// unknown (permissions/structural), yellow for content-differs and version
-// mismatch (exists but doesn't match desired state), orange for everything
-// else (missing, not enabled, still installed, etc.).
-func findingColor(f Finding) string {
-	// Orphans get a distinct shade (magenta): unreferenced module content
-	// is profile-side housekeeping, not live-system drift.
+// findingRole maps a finding to its palette role: error (red) for
+// not-a-symlink and unknown (permissions/structural), warn (yellow) for
+// content-differs and version mismatch (exists but doesn't match desired
+// state), missing (light red) for everything else (missing, not enabled,
+// still installed, ...) — gone items read as the strongest drift signal,
+// one step below hard failures. Orphans keep their own role.
+func findingRole(f Finding, _ *palette.Palette) palette.Role {
 	if f.Section == "orphans" {
-		return ansiMagenta
+		return palette.Orphan
 	}
 	if f.Status == Unknown || strings.Contains(f.Detail, "not a symlink") {
-		return ansiRed
+		return palette.Error
 	}
 	if f.Detail == "content differs" || strings.HasPrefix(f.Detail, "installed ") {
-		return ansiYellow
+		return palette.Warn
 	}
-	return ansiOrange
+	return palette.Missing
 }
 
 func findingsOfSection(findings []Finding, section string) []Finding {

@@ -997,7 +997,7 @@ func TestOnboard_profileInternalPathAdopts(t *testing.T) {
 	}))
 
 	require.Contains(t, out.String(),
-		"adopted: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [host]",
+		"adopted: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [hosts/cri-pc]",
 		"the notice names the file and its layer")
 
 	content, err := readFile(filepath.Join(hostMod, "module.toml"))
@@ -1023,6 +1023,25 @@ func TestOnboard_profileInternalPathAdopts(t *testing.T) {
 		Home:        home, Hostname: "cri-pc",
 	})
 	require.Error(t, err, "a missing module file cannot be adopted")
+
+	// User layers spell their label the same way: users/<username>.
+	userMod := mkModule(t, filepath.Join(profile, "users", "cri", "modules", "easyeffects"), map[string]string{
+		"module.toml": "",
+		"home/.config/easyeffects/db/userrc": "user-layer orphan",
+	})
+	var out2 bytes.Buffer
+	o2 := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out2}
+	require.NoError(t, o2.Run(onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{filepath.Join(userMod, "home", ".config", "easyeffects", "db", "userrc")},
+		Home:        home, Username: "cri",
+	}))
+	require.Contains(t, out2.String(),
+		"adopted: ~/.config/easyeffects/db/userrc (home/.config/easyeffects/db/userrc) [users/cri]",
+		"user layers spell their label users/<username>")
+	userToml, err := readFile(filepath.Join(userMod, "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, userToml, `"~/.config/easyeffects/db/userrc" = { source = "home/.config/easyeffects/db/userrc", mode = "symlink" }`)
 }
 
 // The ancestor chain never claims a shared namespace root: with no

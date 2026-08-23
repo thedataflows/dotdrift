@@ -509,6 +509,6 @@ Passing a path INSIDE a module layer directory (a module file itself) is
 a **directed adoption**: onboard adds the `[dotfiles]` entry for it in
 that layer's module.toml — the path names its corresponding level — with
 no copy and no live-path mapping. Notices name the layer:
-`would adopt: <target> (<source>) [base|host|user]` in `--dry-run`,
+`would adopt: <target> (<source>) [base|hosts/<hostname>|users/<username>]` in `--dry-run`,
 `adopted: ...` in a real run, and the adopted entries ride the same mise
 apply as the onboarded paths.

@@ -33,3 +33,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0015](0015-onboard-adopts-orphans.md) | Onboard adopts orphaned module files | done | medium |
 | [0016](0016-status-orphans-current-host-only.md) | Status scans orphans only for the current host and user | done | high |
 | [0017](0017-onboard-adoption-units-and-profile-paths.md) | Onboard adoption claims giant ancestors and mangles profile-internal paths | done | high |
+| [0018](0018-adoption-notice-layer-labels.md) | Adoption notices spell layer labels like status headings | done | low |

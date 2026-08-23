@@ -165,15 +165,17 @@ func (o *Onboard) Run(opts Options) error {
 	if directedDir != "" {
 		moduleDir = directedDir
 	}
-	level := layerLevel(profRoot, moduleDir)
+	label := layerLabel(profRoot, moduleDir)
 
 	// Claims: every [dotfiles] target the module already declares in any
 	// of its layers (base, this host, this user) bounds the adoption
 	// chain — a base symlink-each entry keeps a stray overlay file from
 	// collapsing into a giant ancestor unit (issue 0017).
 	hostOwner := opts.Hostname
-	if directedDir != "" && level == "host" {
-		hostOwner = filepath.Base(filepath.Dir(filepath.Dir(moduleDir)))
+	if directedDir != "" {
+		if owner, ok := strings.CutPrefix(label, "hosts/"); ok {
+			hostOwner = owner
+		}
 	}
 	appLayers := []drift.ModuleLayer{
 		{Dir: app, Layer: "base", Path: filepath.Join(profRoot, "modules", app)},
@@ -256,9 +258,9 @@ func (o *Onboard) Run(opts Options) error {
 	}
 	notice := func(dry bool, a adoption) string {
 		if dry {
-			return fmt.Sprintf("would adopt: %s (%s) [%s]", a.Target, a.Rel, level)
+			return fmt.Sprintf("would adopt: %s (%s) [%s]", a.Target, a.Rel, label)
 		}
-		return fmt.Sprintf("adopted: %s (%s) [%s]", a.Target, a.Rel, level)
+		return fmt.Sprintf("adopted: %s (%s) [%s]", a.Target, a.Rel, label)
 	}
 	skip := func(a adoption) {
 		fmt.Fprintf(out, "already declared: %s (skipped)\n", a.Target)
@@ -475,16 +477,17 @@ func moduleLayerPath(profRoot, p string) (layerDir, rel string, ok bool) {
 	}
 }
 
-// layerLevel names which module.toml a module directory belongs to:
-// "base", "host", or "user".
-func layerLevel(profRoot, moduleDir string) string {
+// layerLabel names which module.toml a module directory belongs to:
+// "base", "hosts/<hostname>", or "users/<username>" — the same headings
+// the status orphans section groups by.
+func layerLabel(profRoot, moduleDir string) string {
 	r, err := filepath.Rel(profRoot, moduleDir)
 	if err != nil {
 		return "base"
 	}
 	parts := strings.Split(filepath.ToSlash(r), "/")
 	if len(parts) >= 2 && (parts[0] == "hosts" || parts[0] == "users") {
-		return parts[0][:4]
+		return parts[0] + "/" + parts[1]
 	}
 	return "base"
 }

@@ -10,7 +10,9 @@ import (
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
@@ -59,6 +61,7 @@ func (c *StatusCmd) Run() error {
 		opts.Verbose = errW
 	}
 	findings := drift.Check(context.Background(), plan, profileRoot, pr, opts)
+	findings = append(findings, drift.CheckOrphans(plan, statusModuleLayers(p, f))...)
 
 	out := c.out
 	if out == nil {
@@ -106,7 +109,31 @@ func elevateProbes(pr drift.Probes) drift.Probes {
 	if pr.StatDir != nil {
 		pr.StatDir = elevateStatDir(pr.StatDir)
 	}
+	if pr.ListDir != nil {
+		pr.ListDir = elevateListDir(pr.ListDir)
+	}
 	return pr
+}
+
+// statusModuleLayers lists every selected module's layer directories
+// (base, host, user) for the orphan scan: files there that no [dotfiles]
+// entry references are reported in the orphans section.
+func statusModuleLayers(p *profile.Profile, f *facts.Facts) []drift.ModuleLayer {
+	if p == nil {
+		return nil
+	}
+	var layers []drift.ModuleLayer
+	for _, m := range p.Selected {
+		dir := filepath.Base(m.Path)
+		layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "base", Path: filepath.Join(p.Root, "modules", dir)})
+		if f.Hostname != "" {
+			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "host", Path: filepath.Join(p.Root, "hosts", f.Hostname, "modules", dir)})
+		}
+		if f.Username != "" {
+			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "user", Path: filepath.Join(p.Root, "users", f.Username, "modules", dir)})
+		}
+	}
+	return layers
 }
 
 // elevate wraps a probe function so it retries elevated via sudo when the OS
@@ -151,4 +178,34 @@ func elevateStatDir(inner func(string) (bool, error)) func(string) (bool, error)
 		}
 		return strings.TrimSpace(string(out)) == "directory", nil
 	})
+}
+
+func elevateListDir(inner func(string) ([]string, error)) func(string) ([]string, error) {
+	return elevateSlice(inner, func(path string) ([]string, error) {
+		out, err := sudoRead("ls", "-1", path)
+		if err != nil {
+			return nil, err
+		}
+		lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+		if len(lines) == 1 && lines[0] == "" {
+			return nil, nil
+		}
+		return lines, nil
+	})
+}
+
+// elevateSlice is elevate for slice-returning probes (ListDir): retry
+// elevated via sudo when the OS denies access.
+func elevateSlice[T any](inner func(string) ([]T, error), sudo func(string) ([]T, error)) func(string) ([]T, error) {
+	return func(path string) ([]T, error) {
+		result, err := inner(path)
+		if err == nil || !os.IsPermission(err) {
+			return result, err
+		}
+		sudoResult, sudoErr := sudo(path)
+		if sudoErr != nil {
+			return result, err
+		}
+		return sudoResult, nil
+	}
 }

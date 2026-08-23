@@ -109,6 +109,47 @@ func TestStatus_reportsDrift(t *testing.T) {
 	require.Contains(t, out, "drift: 1 item")
 }
 
+// Unreferenced module files (and overlay files) surface in an orphans
+// section, attributed per module and layer.
+func TestStatus_reportsOrphans(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	dir := t.TempDir()
+	writeStatusModule(t, dir, "modules/demo", `id = "demo"
+
+[dotfiles]
+"~/.demo" = { source = "demo.conf", mode = "symlink" }
+`, map[string]string{
+		"demo.conf": "managed",
+		"stale.md":  "orphan",
+	})
+	writeStatusModule(t, dir, "hosts/myhost/modules/demo", "", map[string]string{
+		"hook.sh": "orphan in host layer",
+	})
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "orphans:")
+	require.Contains(t, out, "demo [base]: stale.md — not referenced by [dotfiles]")
+	require.Contains(t, out, "demo [host]: hook.sh — not referenced by [dotfiles]")
+}
+
+// writeStatusModule writes a module.toml (unless toml is empty) plus extra
+// files under the module directory rel (relative to the profile root).
+func writeStatusModule(t *testing.T, root, rel, toml string, files map[string]string) {
+	t.Helper()
+	dir := filepath.Join(root, rel)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	if toml != "" {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(toml), 0o644))
+	}
+	for name, content := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644))
+	}
+}
+
 func TestStatus_miseMissingToolsUnknown(t *testing.T) {
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	// A mise whose LookPath fails → every tool reports unknown.

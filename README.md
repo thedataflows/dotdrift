@@ -1,6 +1,6 @@
 # dotdrift
 
-A CLI tool for managing Linux configuration through git-backed profiles.
+A CLI tool for managing Linux configuration through git-backed profiles. A real life dotdrift profile: https://github.com/cr1cr1/dotfiles.
 
 ## Principles
 

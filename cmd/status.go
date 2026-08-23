@@ -77,16 +77,16 @@ func (c *StatusCmd) Run() error {
 	fmt.Fprintf(out, "state: %s\n", statePath)
 	// The resume line carries a role hue on a TTY: ok when clean, warn
 	// when a cursor is pending (an interrupted apply awaits resuming).
-	resumeLine := "resume: clean - next apply starts from the beginning"
+	resumeLine := "clean - next apply starts from the beginning"
 	resumeRole := palette.OK
 	if s.LastCompleted != "" {
-		resumeLine = fmt.Sprintf("resume: last completed %q - next apply resumes after it", s.LastCompleted)
+		resumeLine = fmt.Sprintf("last completed %q - next apply resumes after it", s.LastCompleted)
 		resumeRole = palette.Warn
 	}
 	if executil.ColorEnabled(out) {
 		resumeLine = pal.Wrap(resumeRole, resumeLine)
 	}
-	fmt.Fprintln(out, resumeLine)
+	fmt.Fprintf(out, "resume: %s\n", resumeLine)
 	drift.Render(out, findings, drift.WithPalette(pal))
 
 	if c.Diff != "" {

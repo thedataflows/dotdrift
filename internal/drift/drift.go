@@ -46,11 +46,15 @@ func (s Status) String() string {
 
 // Finding is one checked item. Detail is empty for OK.
 type Finding struct {
-	Section string // "packages" | "tools" | "dotfiles" | "mounts" | "smb"
+	Section string // "packages" | "tools" | "dotfiles" | "mounts" | "smb" | "orphans"
 	Item    string // package name, tool name, target path, unit name, share name
 	Status  Status
 	Detail  string
 	Module  string // owning module ID (empty if unknown)
+	// Group is the orphans-only layer-root heading the finding renders
+	// under: "base", "hosts/<hostname>", or "users/<username>". Empty for
+	// every other section (they render flat).
+	Group string
 }
 
 // Probes are the side-effect seams. DefaultProbes fills OS-backed defaults;
@@ -190,11 +194,11 @@ func checkPackages(plan *resolve.Plan, pr Probes) []probeTask {
 				installed, err := pr.IsInstalled(ctx, pkg)
 				switch {
 				case err != nil:
-					return Finding{"packages", pkg, Unknown, err.Error(), ""}
+					return Finding{"packages", pkg, Unknown, err.Error(), "", ""}
 				case installed:
-					return Finding{"packages", pkg, OK, "", ""}
+					return Finding{"packages", pkg, OK, "", "", ""}
 				default:
-					return Finding{"packages", pkg, Drift, "missing", ""}
+					return Finding{"packages", pkg, Drift, "missing", "", ""}
 				}
 			},
 		})
@@ -208,11 +212,11 @@ func checkPackages(plan *resolve.Plan, pr Probes) []probeTask {
 				installed, err := pr.IsInstalled(ctx, pkg)
 				switch {
 				case err != nil:
-					return Finding{"packages", pkg, Unknown, err.Error(), ""}
+					return Finding{"packages", pkg, Unknown, err.Error(), "", ""}
 				case installed:
-					return Finding{"packages", pkg, Drift, "still installed", ""}
+					return Finding{"packages", pkg, Drift, "still installed", "", ""}
 				default:
-					return Finding{"packages", pkg, OK, "", ""}
+					return Finding{"packages", pkg, OK, "", "", ""}
 				}
 			},
 		})
@@ -239,12 +243,12 @@ func checkTools(plan *resolve.Plan, pr Probes) []probeTask {
 			run: func(ctx context.Context) Finding {
 				got, err := pr.ToolCurrent(ctx, name)
 				if err != nil || got == "" {
-					return Finding{"tools", name, Unknown, "mise not available or tool not installed", ""}
+					return Finding{"tools", name, Unknown, "mise not available or tool not installed", "", ""}
 				}
 				if got == want || strings.HasPrefix(got, want+".") {
-					return Finding{"tools", name, OK, "", ""}
+					return Finding{"tools", name, OK, "", "", ""}
 				}
-				return Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want), ""}
+				return Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want), "", ""}
 			},
 		})
 	}
@@ -274,7 +278,7 @@ func checkDotfiles(plan *resolve.Plan, profileRoot string, pr Probes) []probeTas
 				module:  e.Module,
 				item:    target,
 				run: func(ctx context.Context) Finding {
-					return Finding{"dotfiles", target, Unknown, errMsg, ""}
+					return Finding{"dotfiles", target, Unknown, errMsg, "", ""}
 				},
 			})
 			continue
@@ -327,7 +331,7 @@ func staleChildren(tgtDir, srcDir string, pr Probes) []Finding {
 		if os.IsNotExist(err) {
 			return nil // missing dir already reported per child
 		}
-		return []Finding{{"dotfiles", tgtDir, Unknown, err.Error(), ""}}
+		return []Finding{{"dotfiles", tgtDir, Unknown, err.Error(), "", ""}}
 	}
 	prefix := srcDir + string(filepath.Separator)
 	var stale []Finding
@@ -345,11 +349,11 @@ func staleChildren(tgtDir, srcDir string, pr Probes) []Finding {
 		}
 		exists, err := pr.Stat(link)
 		if err != nil {
-			stale = append(stale, Finding{"dotfiles", child, Unknown, err.Error(), ""})
+			stale = append(stale, Finding{"dotfiles", child, Unknown, err.Error(), "", ""})
 			continue
 		}
 		if !exists {
-			stale = append(stale, Finding{"dotfiles", child, Drift, "stale link: source removed", ""})
+			stale = append(stale, Finding{"dotfiles", child, Drift, "stale link: source removed", "", ""})
 		}
 	}
 	return stale
@@ -361,12 +365,12 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 		target, err := pr.Readlink(f.Target)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return Finding{"dotfiles", f.Target, Drift, "missing", ""}
+				return Finding{"dotfiles", f.Target, Drift, "missing", "", ""}
 			}
-			return Finding{"dotfiles", f.Target, Drift, "not a symlink", ""}
+			return Finding{"dotfiles", f.Target, Drift, "not a symlink", "", ""}
 		}
 		if target != f.Source {
-			return Finding{"dotfiles", f.Target, Drift, fmt.Sprintf("points to %s", target), ""}
+			return Finding{"dotfiles", f.Target, Drift, fmt.Sprintf("points to %s", target), "", ""}
 		}
 		// The link points at the right path — validate the source still
 		// exists: a deleted source leaves a dangling link that would
@@ -374,39 +378,39 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 		if pr.Stat != nil {
 			exists, err := pr.Stat(f.Source)
 			if err != nil {
-				return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
+				return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
 			}
 			if !exists {
-				return Finding{"dotfiles", f.Target, Drift, "source missing (dangling link)", ""}
+				return Finding{"dotfiles", f.Target, Drift, "source missing (dangling link)", "", ""}
 			}
 		}
-		return Finding{"dotfiles", f.Target, OK, "", ""}
+		return Finding{"dotfiles", f.Target, OK, "", "", ""}
 	case "copy":
 		src, err := pr.ReadFile(f.Source)
 		if err != nil {
-			return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
+			return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
 		}
 		tgt, err := pr.ReadFile(f.Target)
 		if err != nil {
 			if os.IsNotExist(err) {
-				return Finding{"dotfiles", f.Target, Drift, "missing", ""}
+				return Finding{"dotfiles", f.Target, Drift, "missing", "", ""}
 			}
-			return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
+			return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
 		}
 		if bytes.Equal(src, tgt) {
-			return Finding{"dotfiles", f.Target, OK, "", ""}
+			return Finding{"dotfiles", f.Target, OK, "", "", ""}
 		}
-		return Finding{"dotfiles", f.Target, Drift, "content differs", ""}
+		return Finding{"dotfiles", f.Target, Drift, "content differs", "", ""}
 	case "template":
 		if _, err := pr.ReadFile(f.Target); err != nil {
 			if os.IsNotExist(err) {
-				return Finding{"dotfiles", f.Target, Drift, "missing", ""}
+				return Finding{"dotfiles", f.Target, Drift, "missing", "", ""}
 			}
-			return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
+			return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
 		}
-		return Finding{"dotfiles", f.Target, OK, "", ""}
+		return Finding{"dotfiles", f.Target, OK, "", "", ""}
 	}
-	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode), ""}
+	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode), "", ""}
 }
 
 // checkDotfileEdit probes an edit entry (line/block/template) against the live
@@ -430,25 +434,25 @@ func checkDotfileEdit(e resolve.DotfileEntry, pr Probes) Finding {
 
 	// Symlink refusal: Readlink succeeds only for a symlink.
 	if _, err := pr.Readlink(file); err == nil {
-		return Finding{"dotfiles", e.Target, Drift, "target is a symlink", ""}
+		return Finding{"dotfiles", e.Target, Drift, "target is a symlink", "", ""}
 	}
 
 	content, err := pr.ReadFile(file)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return Finding{"dotfiles", e.Target, Drift, "missing", ""}
+			return Finding{"dotfiles", e.Target, Drift, "missing", "", ""}
 		}
-		return Finding{"dotfiles", e.Target, Unknown, err.Error(), ""}
+		return Finding{"dotfiles", e.Target, Unknown, err.Error(), "", ""}
 	}
 	lines := strings.Split(string(content), "\n")
 
 	if e.Line != "" {
 		for _, l := range lines {
 			if l == e.Line {
-				return Finding{"dotfiles", e.Target, OK, "", ""}
+				return Finding{"dotfiles", e.Target, OK, "", "", ""}
 			}
 		}
-		return Finding{"dotfiles", e.Target, Drift, "missing", ""}
+		return Finding{"dotfiles", e.Target, Drift, "missing", "", ""}
 	}
 
 	// Block / template-edit: marker scan (comment-prefix independent).
@@ -464,22 +468,22 @@ func checkDotfileEdit(e resolve.DotfileEntry, pr Probes) Finding {
 	}
 	switch {
 	case oi < 0 && ci < 0:
-		return Finding{"dotfiles", e.Target, Drift, "missing", ""}
+		return Finding{"dotfiles", e.Target, Drift, "missing", "", ""}
 	case oi >= 0 && ci > oi:
 		// markers OK
 	default:
-		return Finding{"dotfiles", e.Target, Drift, "corrupted markers", ""}
+		return Finding{"dotfiles", e.Target, Drift, "corrupted markers", "", ""}
 	}
 	// Template edit: marker presence is enough.
 	if e.Template != "" {
-		return Finding{"dotfiles", e.Target, OK, "", ""}
+		return Finding{"dotfiles", e.Target, OK, "", "", ""}
 	}
 	// Inline block: compare content between markers.
 	got := strings.Join(lines[oi+1:ci], "\n")
 	if got == strings.TrimRight(e.Block, "\n") {
-		return Finding{"dotfiles", e.Target, OK, "", ""}
+		return Finding{"dotfiles", e.Target, OK, "", "", ""}
 	}
-	return Finding{"dotfiles", e.Target, Drift, "content differs", ""}
+	return Finding{"dotfiles", e.Target, Drift, "content differs", "", ""}
 }
 
 // expandHome replaces a leading ~ with homeDir. Local copy of mise's
@@ -516,32 +520,32 @@ func checkMount(ctx context.Context, e resolve.MountEntry, pr Probes) Finding {
 	unit := generate.EscapePath(e.Spec.Destination) + ".mount"
 
 	if ok, err := pr.StatDir(e.Spec.Destination); err != nil {
-		return Finding{section, item, Unknown, err.Error(), ""}
+		return Finding{section, item, Unknown, err.Error(), "", ""}
 	} else if !ok {
-		return Finding{section, item, Drift, "destination missing", ""}
+		return Finding{section, item, Drift, "destination missing", "", ""}
 	}
 
 	enabled, st, detail := enabledState(ctx, pr, unit)
 	if st == Unknown {
-		return Finding{section, item, Unknown, detail, ""}
+		return Finding{section, item, Unknown, detail, "", ""}
 	}
 	if st == Drift {
-		return Finding{section, item, Drift, detail, ""}
+		return Finding{section, item, Drift, detail, "", ""}
 	}
 	if e.Spec.State == "disabled" {
 		if enabled {
-			return Finding{section, item, Drift, "enabled but declared disabled", ""}
+			return Finding{section, item, Drift, "enabled but declared disabled", "", ""}
 		}
-		return Finding{section, item, OK, "", ""}
+		return Finding{section, item, OK, "", "", ""}
 	}
 	if !enabled {
-		return Finding{section, item, Drift, "not enabled", ""}
+		return Finding{section, item, Drift, "not enabled", "", ""}
 	}
 	activeOut, err := pr.Run(ctx, "systemctl", "is-active", unit)
 	if err != nil || strings.TrimSpace(activeOut) != "active" {
-		return Finding{section, item, Drift, "not active", ""}
+		return Finding{section, item, Drift, "not active", "", ""}
 	}
-	return Finding{section, item, OK, "", ""}
+	return Finding{section, item, OK, "", "", ""}
 }
 
 // enabledState runs `systemctl is-enabled <unit>` and classifies the output.
@@ -587,9 +591,9 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 		item:    group,
 		run: func(ctx context.Context) Finding {
 			if _, err := pr.Run(ctx, "getent", "group", group); err != nil {
-				return Finding{section, group, Drift, fmt.Sprintf("group %s missing", group), ""}
+				return Finding{section, group, Drift, fmt.Sprintf("group %s missing", group), "", ""}
 			}
-			return Finding{section, group, OK, "", ""}
+			return Finding{section, group, OK, "", "", ""}
 		},
 	})
 
@@ -601,12 +605,12 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 			run: func(ctx context.Context) Finding {
 				got, err := pr.Run(ctx, "id", "-Gn", u)
 				if err != nil {
-					return Finding{section, u, Drift, fmt.Sprintf("user %s missing", u), ""}
+					return Finding{section, u, Drift, fmt.Sprintf("user %s missing", u), "", ""}
 				}
 				if !containsField(got, group) {
-					return Finding{section, u, Drift, fmt.Sprintf("user %s not in group %s", u, group), ""}
+					return Finding{section, u, Drift, fmt.Sprintf("user %s not in group %s", u, group), "", ""}
 				}
-				return Finding{section, u, OK, "", ""}
+				return Finding{section, u, OK, "", "", ""}
 			},
 		})
 	}
@@ -649,11 +653,11 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 					tp, err := pr.Run(ctx, "testparm", "-s")
 					switch {
 					case err != nil:
-						return Finding{section, name, Unknown, "testparm failed", ""}
+						return Finding{section, name, Unknown, "testparm failed", "", ""}
 					case strings.Contains(tp, "["+name+"]"):
-						return Finding{section, name, OK, "", ""}
+						return Finding{section, name, OK, "", "", ""}
 					default:
-						return Finding{section, name, Drift, fmt.Sprintf("share %s not in smb config", name), ""}
+						return Finding{section, name, Drift, fmt.Sprintf("share %s not in smb config", name), "", ""}
 					}
 				},
 			})
@@ -667,28 +671,31 @@ func checkSmbModule(mod resolve.SmbModuleSpec, pr Probes) []probeTask {
 func checkService(ctx context.Context, section, name string, pr Probes) Finding {
 	enabled, st, detail := enabledState(ctx, pr, name)
 	if st == Unknown {
-		return Finding{section, name, Unknown, detail, ""}
+		return Finding{section, name, Unknown, detail, "", ""}
 	}
 	if st == Drift {
-		return Finding{section, name, Drift, detail, ""}
+		return Finding{section, name, Drift, detail, "", ""}
 	}
 	if !enabled {
-		return Finding{section, name, Drift, "not enabled", ""}
+		return Finding{section, name, Drift, "not enabled", "", ""}
 	}
 	activeOut, err := pr.Run(ctx, "systemctl", "is-active", name)
 	if err != nil || strings.TrimSpace(activeOut) != "active" {
-		return Finding{section, name, Drift, "not active", ""}
+		return Finding{section, name, Drift, "not active", "", ""}
 	}
-	return Finding{section, name, OK, "", ""}
+	return Finding{section, name, OK, "", "", ""}
 }
 
 // Render writes the drift report. Sections appear in fixed order and only when
-// they have ≥1 finding. Non-OK findings print as `  <module>: <item> — <detail>`;
+// they have ≥1 finding. Non-OK findings print as `  <module>: <item> - <detail>`;
 // the owning module replaces the status prefix (drift is implied for listed
 // items; unknown items get a (?) suffix). A section whose findings are all OK
-// prints `  ok: all N checks passed`. On a TTY, finding lines are colored by
-// issue type: orange (missing/version drift), red (not-a-symlink/unknown),
-// yellow (content differs). The final line is `no drift` when nothing drifted,
+// prints `  ok: all N checks passed`. The orphans section groups its findings
+// under layer-root headings (`  base:` / `  hosts/<hostname>:` /
+// `  users/<username>:`), one `    <module>: <file> - <detail>` line each.
+// On a TTY, finding lines are colored by issue type: orange (missing/version
+// drift), red (not-a-symlink/unknown), yellow (content differs), and magenta
+// (orphans). The final line is `no drift` when nothing drifted,
 // otherwise `drift: N item(s)` with `, K unknown` appended when there are
 // unknowns.
 func Render(w io.Writer, findings []Finding) {
@@ -712,6 +719,10 @@ func Render(w io.Writer, findings []Finding) {
 		}
 		wroteSection = true
 		fmt.Fprintf(w, "%s:\n", sec)
+		if sec == "orphans" {
+			renderOrphans(w, secFindings, color)
+			continue
+		}
 		allOK := true
 		for _, f := range secFindings {
 			if f.Status == OK {
@@ -779,14 +790,45 @@ func renderFinding(w io.Writer, f Finding, color bool) {
 	}
 	if color {
 		hue := findingColor(f)
-		fmt.Fprintf(w, "  %s%s%s%s: %s%s%s%s%s — %s%s\n",
+		fmt.Fprintf(w, "  %s%s%s%s: %s%s%s%s%s - %s%s\n",
 			ansiFaint, hue, mod, ansiReset,
 			ansiBold, hue, f.Item, ansiReset,
 			hue, f.Detail+suffix, ansiReset)
 		return
 	}
-	line := fmt.Sprintf("  %s: %s — %s%s", mod, f.Item, f.Detail, suffix)
+	line := fmt.Sprintf("  %s: %s - %s%s", mod, f.Item, f.Detail, suffix)
 	fmt.Fprintln(w, line)
+}
+
+// renderOrphans writes the orphans section: findings grouped under
+// layer-root headings (base, hosts/<hostname>, users/<username> — already
+// ordered by CheckOrphans), one `    <module>: <file> - <detail>` line per
+// orphan. Same two-shade color scheme as flat findings, in the orphan hue.
+func renderOrphans(w io.Writer, findings []Finding, color bool) {
+	hue := ansiMagenta
+	lastGroup := ""
+	for _, f := range findings {
+		if f.Group != lastGroup {
+			lastGroup = f.Group
+			heading := "  " + f.Group + ":"
+			if color {
+				heading = ansiBold + hue + heading + ansiReset
+			}
+			fmt.Fprintln(w, heading)
+		}
+		mod := f.Module
+		if mod == "" {
+			mod = "?"
+		}
+		if color {
+			fmt.Fprintf(w, "    %s%s%s%s: %s%s%s%s%s - %s%s\n",
+				ansiFaint, hue, mod, ansiReset,
+				ansiBold, hue, f.Item, ansiReset,
+				hue, f.Detail, ansiReset)
+			continue
+		}
+		fmt.Fprintf(w, "    %s: %s - %s\n", mod, f.Item, f.Detail)
+	}
 }
 
 // findingColor returns the ANSI color for a finding: red for not-a-symlink and

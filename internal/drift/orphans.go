@@ -1,7 +1,6 @@
 package drift
 
 import (
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -14,8 +13,8 @@ import (
 // ModuleLayer names one layer directory of one module: the module's
 // directory name (the layer-merge key), the layer it lives in, and the
 // absolute path. For host/user layers Owner names the layer's hostname or
-// username so orphan attribution reads "[host:myhost]" / "[user:cri]".
-// Callers derive these from the profile layout
+// username so orphan group headings read "hosts/<hostname>" /
+// "users/<username>". Callers derive these from the profile layout
 // (modules/<dir>, hosts/<hostname>/modules/<dir>, users/<username>/modules/<dir>).
 type ModuleLayer struct {
 	Dir   string // module directory name (dotfile-entry Module key)
@@ -24,13 +23,17 @@ type ModuleLayer struct {
 	Path  string // absolute layer module directory
 }
 
-// layerLabel renders the attribution suffix: "[base]", "[host:myhost]",
-// "[user:cri]".
-func (ml ModuleLayer) layerLabel() string {
-	if ml.Owner == "" {
-		return ml.Layer
+// groupLabel renders the layer-root group heading: "base",
+// "hosts/<hostname>", or "users/<username>".
+func (ml ModuleLayer) groupLabel() string {
+	switch ml.Layer {
+	case "host":
+		return "hosts/" + ml.Owner
+	case "user":
+		return "users/" + ml.Owner
+	default:
+		return "base"
 	}
-	return ml.Layer + ":" + ml.Owner
 }
 
 // orphanDetail is the detail line for every orphan finding.
@@ -40,10 +43,10 @@ const orphanDetail = "not referenced by [dotfiles]"
 // no [dotfiles] entry of that module references — neither explicitly
 // (source = "...") nor implicitly (the source subtree of a symlink-each
 // entry, attributed to the layer whose module.toml DECLARES the entry).
-// Findings land in the "orphans" section, attributed
-// "<dir> [base]" / "<dir> [host:<hostname>]" / "<dir> [user:<username>]",
-// so stale module content is visible per host/user/module. module.toml is
-// the manifest itself and never an orphan.
+// Findings land in the "orphans" section grouped by layer root (Group =
+// "base" / "hosts/<hostname>" / "users/<username>", Module = the bare
+// module dir), so stale content is visible per host/user/module.
+// module.toml is the manifest itself and never an orphan.
 func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
 	byKey := make(map[string]ModuleLayer, len(layers))
 	for _, ml := range layers {
@@ -74,10 +77,11 @@ func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
 			}
 			findings = append(findings, Finding{
 				Section: "orphans",
+				Group:   ml.groupLabel(),
 				Item:    rel,
 				Status:  Drift,
 				Detail:  orphanDetail,
-				Module:  fmt.Sprintf("%s [%s]", ml.Dir, ml.layerLabel()),
+				Module:  ml.Dir,
 			})
 			return nil
 		})
@@ -86,6 +90,9 @@ func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
 		}
 	}
 	sort.Slice(findings, func(i, j int) bool {
+		if findings[i].Group != findings[j].Group {
+			return findings[i].Group < findings[j].Group
+		}
 		if findings[i].Module != findings[j].Module {
 			return findings[i].Module < findings[j].Module
 		}

@@ -443,7 +443,7 @@ func TestCheck_dotfileEditSymlinkTarget(t *testing.T) {
 
 func TestCheck_dotfileEditTemplateMarkerPresenceOnly(t *testing.T) {
 	tgt := filepath.Join(t.TempDir(), "gitconfig")
-	// Markers present but content differs from the source template — still OK,
+	// Markers present but content differs from the source template - still OK,
 	// because rendering needs mise's tera engine (existence-only, like whole-file template).
 	require.NoError(t, os.WriteFile(tgt, []byte("# >>> mise:id >>>\nrendered-but-different\n# <<< mise:id <<<\n"), 0o644))
 	pr := fakeProbes()
@@ -798,7 +798,7 @@ func TestCheck_runsConcurrently(t *testing.T) {
 		select {
 		case <-arrived:
 		case <-time.After(5 * time.Second):
-			t.Fatal("timed out waiting for concurrent probe starts — probes did not run concurrently")
+			t.Fatal("timed out waiting for concurrent probe starts - probes did not run concurrently")
 		}
 	}
 	close(release)
@@ -840,8 +840,8 @@ func TestRender_mixed(t *testing.T) {
 	var buf bytes.Buffer
 	drift.Render(&buf, findings)
 	want := "packages:\n" +
-		"  ?: ripgrep — missing\n" +
-		"  ?: jq — dpkg query failed (?)\n" +
+		"  ?: ripgrep - missing\n" +
+		"  ?: jq - dpkg query failed (?)\n" +
 		"tools:\n" +
 		"  ok: all 2 checks passed\n" +
 		"\n" +
@@ -856,8 +856,8 @@ func TestRender_modulePrefix(t *testing.T) {
 		{Section: "packages", Item: "vim", Status: drift.Drift, Detail: "missing", Module: ""},
 	})
 	out := buf.String()
-	require.Contains(t, out, "editor: neovim — missing")
-	require.Contains(t, out, "?: vim — missing")
+	require.Contains(t, out, "editor: neovim - missing")
+	require.Contains(t, out, "?: vim - missing")
 }
 
 func TestRender_noColorDisablesANSI(t *testing.T) {
@@ -898,8 +898,8 @@ func TestRender_pluralSummary(t *testing.T) {
 }
 
 // With color on, finding lines render the module and the item in different
-// shades of the same (issue-type) hue — faint for the module, bold for the
-// item — in every section.
+// shades of the same (issue-type) hue - faint for the module, bold for the
+// item - in every section.
 func TestRender_shadesModuleVsItem(t *testing.T) {
 	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
 	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
@@ -915,7 +915,7 @@ func TestRender_shadesModuleVsItem(t *testing.T) {
 	missing := "\033[38;5;208m" // missing → orange
 	require.Contains(t, out, "\033[2m"+missing+"alpha\033[0m", "packages: module in faint shade of the finding hue")
 	require.Contains(t, out, "\033[1m"+missing+"bbb\033[0m", "packages: item in bold shade of the finding hue")
-	require.Contains(t, out, missing+" — missing\033[0m", "detail in the plain finding hue")
+	require.Contains(t, out, missing+" - missing\033[0m", "detail in the plain finding hue")
 	differs := "\033[33m" // content differs → yellow
 	require.Contains(t, out, "\033[2m"+differs+"zsh\033[0m", "dotfiles: module in faint shade of the finding hue")
 	require.Contains(t, out, "\033[1m"+differs+"~/.zshrc\033[0m", "dotfiles: item in bold shade of the finding hue")

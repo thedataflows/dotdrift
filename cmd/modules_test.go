@@ -134,8 +134,8 @@ description = "Editor setup"
 	var buf bytes.Buffer
 	require.NoError(t, (&cmd.ModulesCmd{Profile: dir, Out: &buf}).Run())
 	out := buf.String()
-	require.Contains(t, out, "+ demo [system] — System-wide demo configuration\n")
-	require.Contains(t, out, "- edit disabled — Editor setup\n")
+	require.Contains(t, out, "+ demo [system] - System-wide demo configuration\n")
+	require.Contains(t, out, "- edit disabled - Editor setup\n")
 	require.NotContains(t, out, "\033[", "no ANSI codes when piped")
 	// On a TTY the markers are colored; descriptions are still present.
 	// Both globals are controlled: another cmd test may drive the real CLI
@@ -154,6 +154,6 @@ description = "Editor setup"
 	require.Contains(t, colored, "\033[32m+\033[0m demo [system]")
 	require.Contains(t, colored, "\033[31m-\033[0m edit \033[31mdisabled\033[0m")
 	// Description is dimmed grey, independent of the marker color.
-	require.Contains(t, colored, "\033[90m— System-wide demo configuration\033[0m")
-	require.Contains(t, colored, "\033[90m— Editor setup\033[0m")
+	require.Contains(t, colored, "\033[90m- System-wide demo configuration\033[0m")
+	require.Contains(t, colored, "\033[90m- Editor setup\033[0m")
 }

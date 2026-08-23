@@ -77,8 +77,8 @@ func writeDescription(b *strings.Builder, desc string, color bool) {
 		return
 	}
 	if color {
-		fmt.Fprintf(b, " %s— %s%s", ansiGrey, desc, ansiReset)
+		fmt.Fprintf(b, " %s- %s%s", ansiGrey, desc, ansiReset)
 		return
 	}
-	fmt.Fprintf(b, " — %s", desc)
+	fmt.Fprintf(b, " - %s", desc)
 }

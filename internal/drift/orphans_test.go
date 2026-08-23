@@ -50,8 +50,8 @@ func TestCheckOrphans_userLayerAttribution(t *testing.T) {
 	plan := &resolve.Plan{}
 
 	fs := drift.CheckOrphans(plan, orphanLayers(root))
-	items := orphanItems(fs)
-	require.Equal(t, []string{"local.sh"}, items["shell [user:cri]"])
+	groups := orphanGroups(fs)
+	require.Equal(t, []string{"local.sh"}, groups["users/cri"]["shell"])
 }
 
 func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
@@ -69,11 +69,11 @@ func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
 	}
 
 	fs := drift.CheckOrphans(plan, orphanLayers(root))
-	items := orphanItems(fs)
-	require.ElementsMatch(t, []string{
-		"notes.md", "nested/deep.md",
-	}, items["shell [base]"], "unreferenced base files are orphans")
-	require.Equal(t, []string{"hook.sh"}, items["shell [host:h]"], "unreferenced overlay files are orphans per layer, naming the host")
+	groups := orphanGroups(fs)
+	require.ElementsMatch(t, []string{"notes.md", "nested/deep.md"},
+		groups["base"]["shell"], "unreferenced base files are orphans")
+	require.Equal(t, []string{"hook.sh"}, groups["hosts/h"]["shell"],
+		"unreferenced overlay files are orphans, grouped under the host layer root")
 	for _, f := range fs {
 		require.Equal(t, drift.Drift, f.Status)
 		require.NotEmpty(t, f.Detail)
@@ -98,7 +98,7 @@ func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 	}
 
 	fs := drift.CheckOrphans(plan, orphanLayers(root))
-	require.Empty(t, orphanItems(fs), "the whole symlink-each source subtree is referenced")
+	require.Empty(t, orphanGroups(fs), "the whole symlink-each source subtree is referenced")
 }
 
 // Sources of other modules do not mark this module's files; template edit
@@ -122,9 +122,9 @@ func TestCheckOrphans_attributionPerModule(t *testing.T) {
 	}
 
 	fs := drift.CheckOrphans(plan, layers)
-	items := orphanItems(fs)
-	require.Empty(t, items["shell [base]"], "template edit source is referenced")
-	require.Equal(t, []string{"other.conf"}, items["other [base]"])
+	groups := orphanGroups(fs)
+	require.Empty(t, groups["base"]["shell"], "template edit source is referenced")
+	require.Equal(t, []string{"other.conf"}, groups["base"]["other"])
 }
 
 // Nothing unreferenced → no findings, and the orphans section is omitted
@@ -149,17 +149,28 @@ func TestCheckOrphans_cleanModuleOmitsSection(t *testing.T) {
 }
 
 // The orphans section renders after the built-in sections.
-func TestRender_orphansSectionLast(t *testing.T) {
+// The orphans section renders last, grouped under layer-root headings
+// (base, hosts/<hostname>, users/<username>), one `module: file` line per
+// orphan. No em-dashes anywhere in the output - plain ASCII only.
+func TestRender_orphansGroupedUnderLayerRoots(t *testing.T) {
 	findings := []drift.Finding{
 		{Section: "packages", Item: "jq", Status: drift.OK, Module: "m"},
-		{Section: "orphans", Item: "notes.md", Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "m [base]"},
+		{Section: "orphans", Group: "base", Item: "home/etc/samba/smb.conf.d/shares.conf",
+			Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "system-samba"},
+		{Section: "orphans", Group: "hosts/cri-pc", Item: "file1",
+			Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "module"},
+		{Section: "orphans", Group: "users/cri", Item: "file3",
+			Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "module2"},
 	}
 	var b strings.Builder
 	drift.Render(&b, findings)
 	s := b.String()
-	require.Contains(t, s, "orphans:")
-	require.Greater(t, strings.Index(s, "orphans:"), strings.Index(s, "packages:"), "orphans renders after the built-in sections")
-	require.Contains(t, s, "m [base]: notes.md")
+	t.Log(s)
+	require.Greater(t, strings.Index(s, "orphans:"), strings.Index(s, "packages:"), "orphans renders last")
+	require.Contains(t, s, "  base:\n    system-samba: home/etc/samba/smb.conf.d/shares.conf - not referenced by [dotfiles]")
+	require.Contains(t, s, "  hosts/cri-pc:\n    module: file1 - not referenced by [dotfiles]")
+	require.Contains(t, s, "  users/cri:\n    module2: file3 - not referenced by [dotfiles]")
+	require.NotContains(t, s, "\u2014", "no em-dashes in output")
 }
 
 // On a TTY, orphan findings use a distinct shade (magenta) so they stand
@@ -174,21 +185,27 @@ func TestRender_orphansDistinctColor(t *testing.T) {
 	var b strings.Builder
 	drift.Render(&b, []drift.Finding{
 		{Section: "packages", Item: "jq", Status: drift.Drift, Detail: "missing", Module: "m"},
-		{Section: "orphans", Item: "notes.md", Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "m [base]"},
+		{Section: "orphans", Group: "base", Item: "notes.md", Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "m"},
 	})
 	s := b.String()
 	require.Contains(t, s, "\033[35m", "orphan line carries the magenta hue")
 	require.NotContains(t, strings.Split(s, "orphans:")[0], "\033[35m", "non-orphan sections keep their hues")
 }
 
-// orphanItems groups findings by the rendered module (layer-attributed).
-func orphanItems(fs []drift.Finding) map[string][]string {
-	out := map[string][]string{}
+// orphanGroups groups findings by (group, module): group is the layer-root
+// label ("base", "hosts:<h>", "users:<u>"), module the bare module dir.
+func orphanGroups(fs []drift.Finding) map[string]map[string][]string {
+	out := map[string]map[string][]string{}
 	for _, f := range fs {
-		out[f.Module] = append(out[f.Module], f.Item)
+		if out[f.Group] == nil {
+			out[f.Group] = map[string][]string{}
+		}
+		out[f.Group][f.Module] = append(out[f.Group][f.Module], f.Item)
 	}
-	for k := range out {
-		sort.Strings(out[k])
+	for _, mods := range out {
+		for k := range mods {
+			sort.Strings(mods[k])
+		}
 	}
 	return out
 }
@@ -222,9 +239,9 @@ func TestCheckOrphans_realStack(t *testing.T) {
 	require.NoError(t, err)
 
 	fs := drift.CheckOrphans(plan, []drift.ModuleLayer{{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")}})
-	require.Equal(t, map[string][]string{
-		"shell [base]": {"NOTES.md"},
-	}, orphanItems(fs), "only the true orphan; edit/symlink-each/template sources are referenced")
+	groups := orphanGroups(fs)
+	require.Equal(t, []string{"NOTES.md"}, groups["base"]["shell"],
+		"only the true orphan; edit/symlink-each/template sources are referenced")
 }
 
 // The real stack (profile.Load + resolve.Resolve + CheckOrphans), shaped
@@ -256,8 +273,8 @@ func TestCheckOrphans_realStackSymlinkEachSubtree(t *testing.T) {
 		{Dir: "easyeffects", Layer: "base", Path: filepath.Join(root, "modules", "easyeffects")},
 		{Dir: "easyeffects", Layer: "host", Owner: "cri-pc", Path: filepath.Join(root, "hosts", "cri-pc", "modules", "easyeffects")},
 	})
-	require.Equal(t, map[string][]string{
-		"easyeffects [host:cri-pc]": {"home/.config/easyeffects/db/easyeffectsrc"},
-	}, orphanItems(fs),
+	groups := orphanGroups(fs)
+	require.Equal(t, []string{"home/.config/easyeffects/db/easyeffectsrc"}, groups["hosts/cri-pc"]["easyeffects"],
 		"the whole base symlink-each subtree is referenced; only the host-overlay file nothing references is an orphan")
+	require.Empty(t, groups["base"], "the whole base symlink-each subtree is referenced")
 }

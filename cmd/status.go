@@ -70,9 +70,9 @@ func (c *StatusCmd) Run() error {
 	fmt.Fprintf(out, "profile: %s\n", c.Profile)
 	fmt.Fprintf(out, "state: %s\n", statePath)
 	if s.LastCompleted == "" {
-		fmt.Fprintln(out, "resume: clean — next apply starts from the beginning")
+		fmt.Fprintln(out, "resume: clean - next apply starts from the beginning")
 	} else {
-		fmt.Fprintf(out, "resume: last completed %q — next apply resumes after it\n", s.LastCompleted)
+		fmt.Fprintf(out, "resume: last completed %q - next apply resumes after it\n", s.LastCompleted)
 	}
 	drift.Render(out, findings)
 

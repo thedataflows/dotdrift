@@ -76,7 +76,7 @@ func TestStatus_cleanNoDrift(t *testing.T) {
 
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "resume: clean — next apply starts from the beginning")
+	require.Contains(t, out, "resume: clean - next apply starts from the beginning")
 	require.Contains(t, out, "ok: all 1 checks passed")
 	require.True(t, strings.HasSuffix(strings.TrimSpace(out), "no drift"), "final line must be 'no drift'")
 }
@@ -91,7 +91,7 @@ func TestStatus_showsCursor(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, out: &buf}).Run())
-	require.Contains(t, buf.String(), `resume: last completed "packages" — next apply resumes after it`)
+	require.Contains(t, buf.String(), `resume: last completed "packages" - next apply resumes after it`)
 }
 
 func TestStatus_reportsDrift(t *testing.T) {
@@ -105,7 +105,7 @@ func TestStatus_reportsDrift(t *testing.T) {
 	require.NoError(t, err, "status must exit 0 even when drift is found")
 	out := buf.String()
 	t.Log(out)
-	require.Contains(t, out, "demo: demo-pkg — missing")
+	require.Contains(t, out, "demo: demo-pkg - missing")
 	require.Contains(t, out, "drift: 1 item")
 }
 
@@ -132,9 +132,10 @@ func TestStatus_reportsOrphans(t *testing.T) {
 	out := buf.String()
 	t.Log(out)
 	require.Contains(t, out, "orphans:")
-	require.Contains(t, out, "demo [base]: stale.md — not referenced by [dotfiles]")
-	require.Contains(t, out, "demo [host:myhost]: hook.sh — not referenced by [dotfiles]",
-		"host-layer orphans name the host")
+	require.Contains(t, out, "  base:\n    demo: stale.md - not referenced by [dotfiles]",
+		"base orphans group under the base heading")
+	require.Contains(t, out, "  hosts/myhost:\n    demo: hook.sh - not referenced by [dotfiles]",
+		"host-layer orphans group under the hosts/<hostname> heading")
 }
 
 // writeStatusModule writes a module.toml (unless toml is empty) plus extra
@@ -246,13 +247,13 @@ present = ["`+mod.pkg+`"]
 	// No filter: both packages drift.
 	var all bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: dir, State: statePath, out: &all}).Run())
-	require.Contains(t, all.String(), "alpha: alpha-pkg — missing")
-	require.Contains(t, all.String(), "beta: beta-pkg — missing")
+	require.Contains(t, all.String(), "alpha: alpha-pkg - missing")
+	require.Contains(t, all.String(), "beta: beta-pkg - missing")
 
 	// Filter to "alpha" only: alpha-pkg drifts, beta-pkg absent from output.
 	var filtered bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: dir, State: statePath, Modules: []string{"alpha"}, out: &filtered}).Run())
-	require.Contains(t, filtered.String(), "alpha: alpha-pkg — missing")
+	require.Contains(t, filtered.String(), "alpha: alpha-pkg - missing")
 	require.NotContains(t, filtered.String(), "beta")
 }
 

@@ -68,4 +68,5 @@ Notes:
 
 ## Notes
 
-- Tests: `cmd/sections_test.go` (resolution truth table, kong parse + negation, kong-context Set detection, unknown-section error), `TestApply_onlyPackages`, `TestApply_onlyToolsAndDotfiles`, `TestApply_sectionFlagsSkipMounts`, `TestApply_noHooksFlag` rewritten over the new resolution; `TestApply_noHooksEnv` unchanged.
+- The six flags render under one `Section flags` group in `--help` (kong `group:` tag).
+- Tests: `cmd/sections_test.go` (resolution truth table, kong parse + negation, kong-context Set detection, help grouping, unknown-section error), `TestApply_onlyPackages`, `TestApply_onlyToolsAndDotfiles`, `TestApply_sectionFlagsSkipMounts`, `TestApply_noHooksFlag` rewritten over the new resolution; `TestApply_noHooksEnv` unchanged.

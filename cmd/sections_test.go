@@ -123,6 +123,34 @@ func TestApplyCmd_noHooksEnvSubtracts(t *testing.T) {
 	require.Equal(t, mustSections(t, "packages", "tools"), got)
 }
 
+// The six section flags render under one "Section flags" group in --help;
+// the other apply flags stay ungrouped.
+func TestKong_applySectionFlagsGrouped(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"apply"})
+	require.NoError(t, err)
+
+	grouped := map[string]bool{}
+	for _, fl := range cli.Apply.kctx.Flags() {
+		if !isSectionName(fl.Name) {
+			continue
+		}
+		require.NotNil(t, fl.Group, "section flag --%s must be grouped", fl.Name)
+		require.Equal(t, "Section flags", fl.Group.Key)
+		grouped[fl.Name] = true
+	}
+	require.Len(t, grouped, len(sectionNames), "all six section flags carry the group")
+
+	for _, fl := range cli.Apply.kctx.Flags() {
+		if isSectionName(fl.Name) {
+			continue
+		}
+		require.Nil(t, fl.Group, "non-section flag --%s must stay ungrouped", fl.Name)
+	}
+}
+
 // The programmatic override (tests, future callers) rejects unknown
 // section names, listing the valid ones.
 func TestApplyCmd_unknownOverrideSectionErrors(t *testing.T) {

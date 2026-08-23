@@ -401,13 +401,14 @@ type ApplyCmd struct {
 	// (--no-<section>) subtract, no flags runs everything. Each maps to
 	// the same-named module.toml plan section. No default:"false" tag —
 	// an explicit default marks the flag Set in kong, which would defeat
-	// presence detection (positive vs negated vs absent).
-	Packages bool `help:"Apply only the packages section" negatable:""`
-	Tools    bool `help:"Apply only the tools section" negatable:""`
-	Dotfiles bool `help:"Apply only the dotfiles section (user + system)" negatable:""`
-	Mounts   bool `help:"Apply only the mounts section (units + services + destination dirs)" negatable:""`
-	Smb      bool `help:"Apply only the smb section" negatable:""`
-	Hooks    bool `help:"Run pre/post hook commands" negatable:""`
+	// presence detection (positive vs negated vs absent). The group tag
+	// renders all six under one "Section flags" heading in --help.
+	Packages bool `group:"Section flags" help:"Apply only the packages section" negatable:""`
+	Tools    bool `group:"Section flags" help:"Apply only the tools section" negatable:""`
+	Dotfiles bool `group:"Section flags" help:"Apply only the dotfiles section (user + system)" negatable:""`
+	Mounts   bool `group:"Section flags" help:"Apply only the mounts section (units + services + destination dirs)" negatable:""`
+	Smb      bool `group:"Section flags" help:"Apply only the smb section" negatable:""`
+	Hooks    bool `group:"Section flags" help:"Run pre/post hook commands" negatable:""`
 
 	// onlySections overrides the flag resolution (programmatic callers,
 	// tests); nil = resolve from the parsed flags. kctx is captured by

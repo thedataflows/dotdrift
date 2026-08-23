@@ -1,0 +1,18 @@
+# Conditional module — demonstrates the full [when] expression grammar.
+# Selected only when the whole expression holds:
+#
+#   kernel >= 6.1  AND  nvidia-dkms NOT installed  AND  (nvidia GPU OR cuda tool)
+#
+# Leaves AND by default; or/and/not are recursive combinators with the same
+# [when] shape. Spec: docs/product/profile-layout.md ("The [when] filter").
+id = "conditional"
+app = "conditional"
+description = "conditional-loading demo: kernel gate + not-installed gate + or-group"
+
+[when]
+kernel = ">= 6.1"
+not = { packages = ["nvidia-dkms"] }
+or = [{ gpu = "nvidia" }, { tools = ["cuda"] }]
+
+[packages]
+present = ["nvtop"]

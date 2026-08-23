@@ -150,54 +150,10 @@ writable = true
 public = false
 ```
 
-- `when` is a **boolean expression**. Within one `[when]` table the leaf
-  fields are ANDed (an empty list means "any"; `gpu` empty means any) —
-  this plain-AND form is the whole filter when no combinator is present.
-  Three combinators build larger expressions, each sub-expression having
-  exactly the shape of `[when]` again, nested arbitrarily deep:
-  - `or = [ <when>, ... ]` — at least one element must match;
-  - `and = [ <when>, ... ]` — every element must match (grouping, e.g.
-    `(a or b) and (c or d)`);
-  - `not = { <when> }` — the sub-expression must NOT match.
-  A node matches when its leaves match AND every `and` element matches
-  AND at least one `or` element matches (when the list is non-empty) AND
-  the `not` target does not match — e.g.
-  `kernel = ">= 7"` beside `not = { packages = ["somepackage"] }` reads
-  "kernel >= 7 AND somepackage not installed". `not` over several leaves
-  negates their conjunction (De Morgan: `not = { a, b }` = not-a OR
-  not-b). Inline-table spellings (`not = { ... }`) and dotted spellings
-  (`[when.not]`, `[[when.or]]`) decode identically. Combinator hygiene is
-  enforced at load, naming the module: an empty `not = {}`, an empty
-  `or = []`/`and = []`, or an empty `or`/`and` element (`or = [{}]` — it
-  would vacuously match) are errors; a malformed `kernel` constraint is
-  an error at every depth.
-- `kernel` is one `"<op> <version>"` constraint (`<`, `<=`, `>`, `>=`, `==`,
-  `!=`), compared numerically per dotted segment against the running kernel
-  release (`7.10 > 7.1`, missing segments are zero, distro suffixes like
-  `-arch1-1` are ignored) — the same comparison as the generate registry's
-  `recommended_if`, minus the redundant `kernel` keyword. An `-rcN` suffix
-  marks a pre-release: `7.1-rc5` sorts after `7.0` but before `7.1` (the rc
-  iteration is ignored). A malformed
-  constraint is a load-time error naming the module; an empty kernel fact
-  (detection failed) never matches a non-empty constraint. Use it for
-  kernel-gated packages, e.g. one module with `kernel = "< 7.2"` installing
-  `ntfs-3g` and another with `kernel = ">= 7.2"` installing `ntfsprogs-plus`.
-  `packages` lists **system packages** and `tools` lists **mise-managed
-  tools** that must all be installed on the running system (a module
-  qualifies only when every listed name is present). Names
-  are matched exactly as written — no `aur/`-marker or `manager:`-prefix
-  normalization, case-sensitive like every other `when` value; write the
-  name the same way on both sides or the filter will not match. Installed
-  status is probed lazily at load — packages through the detected package
-  backend, tools through `mise current` (presence only, version ignored;
-  no mise binary ⇒ nothing matches) — one query per distinct name across
-  all modules; a profile declaring neither `when.packages` nor
-  `when.tools` probes nothing. A missing or indeterminable name (not
-  installed, unknown backend, query failure) fails the filter — the module
-  is skipped with reason `when filter`, never a load-time error (any list
-  of strings is well-formed, unlike a `kernel` constraint). Use it to gate
-  configuration on software the user installed by hand, or to switch
-  sibling modules on installed state.
+- `when` is the module's **conditional-loading expression** — a boolean
+  combination of system facts. Omitted/empty `[when]` always selects. The
+  full grammar, evaluation rules, validation contract, and worked examples
+  are specified in [The `[when]` filter](#the-when-filter) below.
 - `scope` is module-level: `"user"` (the default when omitted) or `"system"`.
   It decides how the module's dotfiles are applied — user-scope entries are
   applied as the invoking user, system-scope entries are applied with root
@@ -311,3 +267,153 @@ public = false
     Shares merge **whole-entry by name** across layers, exactly like mounts.
     A share's path may coincide with a mount's destination, but shares and
     mounts are declared independently — no derivation exists between them.
+
+## The `[when]` filter
+
+`[when]` is the module's conditional-loading expression: a **boolean
+expression over system facts**. A module whose expression holds is
+selected; one whose expression fails is skipped with reason
+`when filter` (visible in `dotdrift modules`, and naming it on the CLI is
+an error — the filter never resurrects a skipped module). An omitted or
+empty `[when]` always selects. The expression is evaluated against the
+facts detected at load time (hostname, username, os, kernel release,
+gpu) plus lazily probed installed-state facts (see
+[Installed-state probing](#installed-state-probing-packages--tools))).
+
+### Leaves
+
+Within one `[when]` table the leaf fields AND together; an omitted leaf
+is ignored (empty list = "any", empty scalar = "any").
+
+| Key | TOML type | Matches | Notes |
+|---|---|---|---|
+| `hosts` | list of strings | detected hostname | case-sensitive exact match |
+| `users` | list of strings | detected username | case-sensitive exact match |
+| `os` | list of strings | detected os (`linux`, …) | any-of list |
+| `gpu` | **single string** | detected gpu (`nvidia`/`amd`/`intel`/`unknown`) | not a list |
+| `kernel` | **single string** | running kernel release, `"<op> <version>"` | see below |
+| `packages` | list of strings | installed **system packages** | all must be installed; probed |
+| `tools` | list of strings | installed **mise-managed tools** | all must be installed; probed |
+
+`kernel` holds exactly one `"<op> <version>"` constraint (`<`, `<=`, `>`,
+`>=`, `==`, `!=`), compared numerically per dotted segment against the
+running kernel release (`7.10 > 7.1`, missing segments are zero, distro
+suffixes like `-arch1-1` are ignored) — the same comparison as the
+generate registry's `recommended_if`. An `-rcN` suffix marks a
+pre-release: `7.1-rc5` sorts after `7.0` but before `7.1` (the rc
+iteration is ignored). An empty kernel fact (detection failed) never
+matches a non-empty constraint; a malformed constraint is a load-time
+error (see [Validation](#validation)).
+
+`packages`/`tools` names are matched **exactly as written** — no
+`aur/`-marker or `manager:`-prefix normalization; write the name the
+same way on both sides or the filter will not match. A name that is
+absent or indeterminable fails its leaf (fail-open) but is never a
+load-time error — any list of strings is well-formed.
+
+### Combinators
+
+Three combinators build larger expressions. Each sub-expression has
+exactly the shape of `[when]` again, so nesting is unbounded:
+
+```toml
+[when]
+# leaves (ANDed) ...
+or  = [ <when>, ... ]   # ANY-OF: at least one element must match
+and = [ <when>, ... ]   # ALL-OF: every element must match (grouping)
+not = { <when> }        # NEGATION: the sub-expression must NOT match
+```
+
+A node matches when, all together:
+
+1. every leaf set on the node matches (plain AND),
+2. every `and` element matches,
+3. at least one `or` element matches — when the list is non-empty, and
+4. the `not` sub-expression does **not** match.
+
+`not` over a node with several leaves negates their **conjunction**
+(De Morgan: `not = { gpu = "nvidia", kernel = "< 7" }` =
+not-(gpu∧kernel) = not-gpu OR not-kernel). Combinators compose freely:
+`not` of an `or`, `or` of `and`-groups, `and` of `not`s — any depth.
+
+Both TOML spellings decode identically: inline tables
+(`not = { ... }`) and dotted tables / arrays of tables (`[when.not]`,
+`[[when.or]]`).
+
+### Examples
+
+```toml
+# Kernel gate AND absence: "kernel >= 7 AND somepackage NOT installed"
+[when]
+kernel = ">= 7"
+not = { packages = ["somepackage"] }
+
+# Any-of over hardware or installed state:
+[when]
+or = [{ gpu = "nvidia" }, { packages = ["nvidia-driver"] }]
+
+# Grouping: (arch or cachyos) and (nvidia or kernel >= 7):
+[when]
+and = [
+  { or = [{ os = ["arch"] }, { os = ["cachyos"] }] },
+  { or = [{ gpu = "nvidia" }, { kernel = ">= 7" }] },
+]
+
+# De Morgan: "neither nvidia GPU nor kernel < 7" (NOT of an or):
+[when]
+not = { or = [{ gpu = "nvidia" }, { kernel = "< 7" }] }
+
+# Dotted spelling, identical to the inline forms above:
+[when]
+kernel = ">= 7"
+
+[when.not]
+packages = ["somepackage"]
+
+[[when.or]]
+gpu = "nvidia"
+
+[[when.or]]
+os = ["fedora"]
+```
+
+A complete, loadable example ships as
+[`examples/simple/modules/conditional`](../../examples/simple/modules/conditional/module.toml).
+
+### Validation
+
+The expression is validated recursively at load, and a violation is a
+**load-time error naming the module** — never a silent always-select or
+never-select footgun. (An invalid `module.toml` fails every command, per
+the strict-schema rule above.)
+
+| Violation | Why it errors |
+|---|---|
+| malformed `kernel` constraint (any depth) | a typo must fail loudly, not silently never-match |
+| `not = {}` (empty table) | negates nothing — meaningless |
+| `or = []` / `and = []` (explicit empty list) | `or` can never match; `and` carries no meaning |
+| empty `or`/`and` element (e.g. `or = [{}]`) | the empty element would vacuously match, silently making the whole `or` always-true |
+| unknown key inside any `[when]` table | strict schema — typos never decode silently |
+
+The top-level node itself may be empty (`[when]` alone = always select);
+only combinator sub-expressions must be non-empty.
+
+### Installed-state probing (`packages` / `tools`)
+
+Installed status for `packages`/`tools` leaves is probed **lazily at
+profile load**, never at detection time:
+
+- `packages` — one query per distinct name via the detected package
+  backend (`paru`/`apt`/`dnf`, from the distro fact).
+- `tools` — one query per distinct name via `mise current <tool>`
+  (presence only, the version is ignored; no mise binary on PATH ⇒
+  nothing matches).
+- Names are collected from **the whole expression tree** — leaves inside
+  `or`/`and`/`not` probed like top-level leaves — and deduplicated
+  across all modules.
+- A profile declaring no `when.packages`/`when.tools` anywhere probes
+  nothing: existing profiles cost zero extra subprocesses.
+- A name that is not installed, or whose status cannot be determined
+  (unknown backend, package-manager failure, missing mise), simply fails
+  its leaf — fail-open, same as an empty kernel fact. Selection depends
+  on it; load never does.

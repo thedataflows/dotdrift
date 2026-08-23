@@ -81,6 +81,37 @@ Each layer's `dotdrift.toml` may carry a `[modules] disable` list. Disables are 
 
 `module.toml` is validated strictly: an unknown key (typo, misplaced table) fails every command at load with `<path>/module.toml:<line>: unknown key "<key>"`, never a silent zero value. The full attribute set is documented in [profile layout](docs/product/profile-layout.md).
 
+## Conditional modules (`[when]`)
+
+A module can be gated on system facts — host, user, os, gpu, kernel version, and whether packages or mise tools are installed. Leaves AND together by default:
+
+```toml
+# modules/<id>/module.toml
+[when]
+os = ["arch", "cachyos"]
+kernel = ">= 6.1"
+packages = ["nvidia-dkms"]   # system packages, probed at load
+tools = ["node"]             # mise-managed tools, probed at load
+```
+
+Boolean combinators — `or = [...]`, `and = [...]`, `not = {...}` — combine and nest arbitrarily deep; every sub-expression has the same `[when]` shape:
+
+```toml
+# "kernel >= 7 AND somepackage NOT installed"
+[when]
+kernel = ">= 7"
+not = { packages = ["somepackage"] }
+
+# "(arch or cachyos) and (nvidia GPU or kernel >= 7)"
+[when]
+and = [
+  { or = [{ os = ["arch"] }, { os = ["cachyos"] }] },
+  { or = [{ gpu = "nvidia" }, { kernel = ">= 7" }] },
+]
+```
+
+A module whose expression fails is skipped with reason `when filter` (shown by `dotdrift modules`); an empty or omitted `[when]` always selects. Malformed expressions (bad kernel constraint, empty `not`/`or`/`and`) are load-time errors naming the module. Full grammar, validation table, and probing rules: [profile layout — the `[when]` filter](docs/product/profile-layout.md#the-when-filter). A runnable example ships at `examples/simple/modules/conditional/`.
+
 ## Hooks
 
 A module may declare shell commands to run around the apply pipeline:

@@ -147,11 +147,16 @@ func TestGenerateBootstrapServices_basic(t *testing.T) {
 	svcs := []mise.BootstrapService{
 		{Name: "mnt-data.mount", Enabled: true, Running: true},
 		{Name: "smb", Enabled: true, Running: false},
+		{Name: "backup.timer", Enabled: false, Running: false},
 	}
 	got := mise.GenerateBootstrapServices(svcs)
-	require.Contains(t, got, "[bootstrap.services]")
-	require.Contains(t, got, `"mnt-data.mount" = { state = "running", enabled = "enabled" }`)
-	require.Contains(t, got, `"smb" = { state = "stopped", enabled = "enabled" }`)
+	// mise's [bootstrap.services] schema types `enabled` as a boolean —
+	// `enabled = "enabled"` (string) is rejected by mise's config parser.
+	require.Equal(t, `[bootstrap.services]
+"backup.timer" = { state = "stopped", enabled = false }
+"mnt-data.mount" = { state = "running", enabled = true }
+"smb" = { state = "stopped", enabled = true }
+`, got)
 }
 
 func TestGenerateBootstrapServices_empty(t *testing.T) {

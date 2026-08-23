@@ -205,7 +205,9 @@ type BootstrapService struct {
 	Running bool
 }
 
-// GenerateBootstrapServices emits a [bootstrap.services] section.
+// GenerateBootstrapServices emits a [bootstrap.services] section. mise's
+// schema types `enabled` as a boolean (true/false) and `state` as a
+// "running"/"stopped" string.
 func GenerateBootstrapServices(services []BootstrapService) string {
 	if len(services) == 0 {
 		return ""
@@ -218,11 +220,7 @@ func GenerateBootstrapServices(services []BootstrapService) string {
 		if s.Running {
 			state = "running"
 		}
-		enabled := "disabled"
-		if s.Enabled {
-			enabled = "enabled"
-		}
-		fmt.Fprintf(&b, "%q = { state = %q, enabled = %q }\n", s.Name, state, enabled)
+		fmt.Fprintf(&b, "%q = { state = %q, enabled = %t }\n", s.Name, state, s.Enabled)
 	}
 	return b.String()
 }

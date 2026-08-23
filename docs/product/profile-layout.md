@@ -88,7 +88,7 @@ orphan  = "94"
 
 - `disable` is unioned across base, host, and user layers (any disable sticks).
 - `colors` overrides the colored-output palette per role. Roles: `ok`
-  (green, all-checks-passed / `no drift`), `missing` (**light red**, missing
+  (green, all-checks-passed / `no drift`), `missing` (**orange**, missing
   or removed items), `warn` (yellow, content/version differs), `error`
   (red, unknown / not-a-symlink), `orphan` (magenta, the status orphans
   section), `dim` (bright black, dimmed module/description text). Values

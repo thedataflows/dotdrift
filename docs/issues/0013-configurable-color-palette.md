@@ -1,7 +1,7 @@
 ---
 type: Issue
 title: Configurable status color palette
-description: Override the colored-output defaults per named color from dotdrift.toml [colors]; missing becomes light red.
+description: Override the colored-output defaults per named color from dotdrift.toml [colors].
 tags: [issue, product]
 timestamp: 2026-08-23T00:00:00Z
 ---
@@ -19,7 +19,7 @@ timestamp: 2026-08-23T00:00:00Z
 
 ## Summary
 
-Every colored-output role in `status`/`modules`/`plan`/`diff` gets a name, and `dotdrift.toml` can override the default color per role via a new `[colors]` table. Additionally, `missing` drift switches from orange to **light red** (and its faint/bold shades derive from it) — gone items should read as the strongest signal, one step below hard failures.
+Every colored-output role in `status`/`modules`/`plan`/`diff` gets a name, and `dotdrift.toml` can override the default color per role via a new `[colors]` table. Additionally the palette makes `missing` overridable like every other role; its default stays orange.
 
 ## Details
 
@@ -29,7 +29,7 @@ ANSI SGR sequence such as `"31"` red or `"38;5;208"` orange):
 | Role | Default | Used for |
 |---|---|---|
 | `ok` | `32` (green) | all-checks-passed lines, `no drift` |
-| `missing` | `91` (**light red**, was orange) | missing/removed items — the strongest drift signal |
+| `missing` | `38;5;208` (orange) | missing/removed items (the light-red default shipped first and was reverted by request; override to `"91"` if preferred) |
 | `warn` | `33` (yellow) | content/version differs |
 | `error` | `31` (red) | unknown, not-a-symlink |
 | `orphan` | `35` (magenta) | orphans section |
@@ -70,7 +70,7 @@ colors fixed by the terminal profile) and the generate-TUI palette
 ## Acceptance Criteria
 
 - [x] `[colors]` in any `dotdrift.toml` overrides per-role defaults; unknown keys/values are load errors.
-- [x] `missing` findings render light red (plain `91`, bold `1;91` shade on TTY) instead of orange.
+- [x] `missing` findings keep the orange default; overriding to light red via `[colors] missing = "91"` works like any role.
 - [x] `NO_COLOR`/`--no-color` still fully disable color with overrides set.
 - [x] `go test ./...`, `go vet`, `golangci-lint` green.
 

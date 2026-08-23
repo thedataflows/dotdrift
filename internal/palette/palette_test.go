@@ -7,10 +7,11 @@ import (
 	"github.com/thedataflows/dotdrift/internal/palette"
 )
 
-// Defaults: every role wraps with its documented SGR sequence.
+// Defaults: every role wraps with its documented SGR sequence. Missing
+// stays orange (the light-red default was reverted by request).
 func TestDefaultPalette(t *testing.T) {
 	p := palette.Default()
-	require.Equal(t, "\033[91mx\033[0m", p.Wrap(palette.Missing, "x"))
+	require.Equal(t, "\033[38;5;208mx\033[0m", p.Wrap(palette.Missing, "x"), "missing stays orange")
 	require.Equal(t, "\033[32mx\033[0m", p.Wrap(palette.OK, "x"))
 	require.Equal(t, "\033[33mx\033[0m", p.Wrap(palette.Warn, "x"))
 	require.Equal(t, "\033[31mx\033[0m", p.Wrap(palette.Error, "x"))
@@ -21,8 +22,8 @@ func TestDefaultPalette(t *testing.T) {
 // Seq returns the raw SGR parameters, BoldSeq the bold variant.
 func TestSeqHelpers(t *testing.T) {
 	p := palette.Default()
-	require.Equal(t, "91", p.Seq(palette.Missing))
-	require.Equal(t, "1;91", p.BoldSeq(palette.Missing), "bold shade prefixes 1;")
+	require.Equal(t, "38;5;208", p.Seq(palette.Missing))
+	require.Equal(t, "1;38;5;208", p.BoldSeq(palette.Missing), "bold shade prefixes 1;")
 	p2, err := palette.FromConfig(map[string]string{"missing": "38;5;75"})
 	require.NoError(t, err)
 	require.Equal(t, "1;38;5;75", p2.BoldSeq(palette.Missing))

@@ -33,12 +33,14 @@ type Palette struct {
 	seqs map[Role]string
 }
 
-// Default returns the built-in palette. Light red (91) for missing — gone
-// items read as the strongest drift signal, one step below hard failures.
+// Default returns the built-in palette. Missing stays orange (38;5;208)
+// — the light-red experiment was reverted; orange keeps missing visually
+// distinct from hard failures (error red) while reading as "absent, not
+// broken".
 func Default() *Palette {
 	return &Palette{seqs: map[Role]string{
 		OK:      "32",
-		Missing: "91",
+		Missing: "38;5;208",
 		Warn:    "33",
 		Error:   "31",
 		Orphan:  "35",

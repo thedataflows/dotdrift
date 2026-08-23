@@ -114,6 +114,20 @@ when.hostess = ["h"]
 	require.Contains(t, err.Error(), `unknown key "hostess"`)
 }
 
+// Unknown keys inside nested when expressions (not/or/and tables) are
+// caught the same as top-level ones.
+func TestStrictModuleTOML_unknownKeyInNestedWhen(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `id = "m"
+[when]
+kernel = ">= 7"
+not = { pkgages = ["p"] }
+`)
+	_, err := profile.Load(root, &facts.Facts{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `unknown key "pkgages"`)
+}
+
 // Every documented attribute decodes without a schema error; this fixture
 // doubles as the machine-checked half of the module.toml schema (the human
 // half is docs/product/profile-layout.md).
@@ -133,6 +147,9 @@ gpu = "nvidia"
 kernel = ">= 7.1"
 packages = ["ntfs-3g"]
 tools = ["node"]
+not = { packages = ["legacy"] }
+or = [{ gpu = "amd" }, { os = ["fedora"] }]
+and = [{ users = ["u2"] }]
 
 [packages]
 present = ["neovim"]

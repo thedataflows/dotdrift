@@ -99,6 +99,10 @@ gpu = "nvidia"
 kernel = ">= 7.1"
 packages = ["ntfs-3g"]
 tools = ["node"]
+# Combinators (all optional, nestable, recursive):
+not = { packages = ["legacy"] }
+or = [{ gpu = "amd" }, { os = ["fedora"] }]
+and = [{ users = ["ops"] }]
 
 [packages]
 present = ["neovim", "ripgrep"]
@@ -146,8 +150,28 @@ writable = true
 public = false
 ```
 
-- `when` filters are ANDed. An empty list means "any". `gpu` empty means any.
-  `kernel` is one `"<op> <version>"` constraint (`<`, `<=`, `>`, `>=`, `==`,
+- `when` is a **boolean expression**. Within one `[when]` table the leaf
+  fields are ANDed (an empty list means "any"; `gpu` empty means any) —
+  this plain-AND form is the whole filter when no combinator is present.
+  Three combinators build larger expressions, each sub-expression having
+  exactly the shape of `[when]` again, nested arbitrarily deep:
+  - `or = [ <when>, ... ]` — at least one element must match;
+  - `and = [ <when>, ... ]` — every element must match (grouping, e.g.
+    `(a or b) and (c or d)`);
+  - `not = { <when> }` — the sub-expression must NOT match.
+  A node matches when its leaves match AND every `and` element matches
+  AND at least one `or` element matches (when the list is non-empty) AND
+  the `not` target does not match — e.g.
+  `kernel = ">= 7"` beside `not = { packages = ["somepackage"] }` reads
+  "kernel >= 7 AND somepackage not installed". `not` over several leaves
+  negates their conjunction (De Morgan: `not = { a, b }` = not-a OR
+  not-b). Inline-table spellings (`not = { ... }`) and dotted spellings
+  (`[when.not]`, `[[when.or]]`) decode identically. Combinator hygiene is
+  enforced at load, naming the module: an empty `not = {}`, an empty
+  `or = []`/`and = []`, or an empty `or`/`and` element (`or = [{}]` — it
+  would vacuously match) are errors; a malformed `kernel` constraint is
+  an error at every depth.
+- `kernel` is one `"<op> <version>"` constraint (`<`, `<=`, `>`, `>=`, `==`,
   `!=`), compared numerically per dotted segment against the running kernel
   release (`7.10 > 7.1`, missing segments are zero, distro suffixes like
   `-arch1-1` are ignored) — the same comparison as the generate registry's

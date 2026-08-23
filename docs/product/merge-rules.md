@@ -56,7 +56,9 @@ dotfiles, hooks, mounts, and smb.
 a **single string**, not a list. `when.packages`/`when.tools` match against
 installed status probed lazily at load (packages via the detected package
 backend, tools via `mise current`; see [profile layout](profile-layout.md)
-for the probe and fail-open contract).
+for the probe and fail-open contract). `[when]` is a boolean expression:
+leaves AND by default, with `or`/`and`/`not` combinators nesting
+arbitrarily (see [profile layout](profile-layout.md) for the grammar).
 
 # Plan visibility
 

@@ -99,6 +99,25 @@ func TestLoad_probesDeduplicatedNames(t *testing.T) {
 	require.Len(t, p.Selected, 2)
 }
 
+// when.packages/when.tools leaves anywhere in the expression tree
+// (inside or/and/not) are collected for probing like top-level leaves.
+// Only p2 answers installed: the not-group's branches are false and the
+// top-level or matches, so the module selects.
+func TestLoad_probesNestedWhenLeaves(t *testing.T) {
+	root := t.TempDir()
+	writeModuleInternal(t, root, "modules/m", `id = "m"
+[when]
+not = { or = [{ packages = ["p1"] }, { and = [{ tools = ["t1"] }] }] }
+or = [{ packages = ["p2"] }]
+`)
+	rec := swapProbe(t, map[string]bool{"p2": true})
+	p, err := Load(root, &facts.Facts{})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"p1", "p2"}, rec.pkgNames)
+	require.Equal(t, []string{"t1"}, rec.toolNames)
+	require.Len(t, p.Selected, 1)
+}
+
 func selectedIDsInternal(p *Profile) []string {
 	ids := make([]string, len(p.Selected))
 	for i, m := range p.Selected {

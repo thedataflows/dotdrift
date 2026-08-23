@@ -56,17 +56,29 @@ func (c ModuleConfig) ScopeOrDefault() string {
 	return c.Scope
 }
 
-// When filters a module by host, user, os, gpu, kernel, installed
-// packages, or installed tools. Empty fields are ignored; non-empty
-// fields must all match. Kernel holds one "<op> <version>" constraint
-// ("<", "<=", ">", ">=", "==", "!=") compared numerically per dotted
-// segment against the running kernel release; an empty kernel fact never
-// matches a non-empty constraint. Packages lists system packages and
-// tools lists mise-managed tools that must all be installed on the
-// running system (both probed lazily at load — see probes.go); a name
-// that is absent, or whose status cannot be determined, fails the
-// filter — never a load-time error, unlike a malformed kernel
-// constraint, because any list of strings is a well-formed constraint.
+// When is a boolean expression over system facts. Leaf fields — Hosts,
+// Users, OS, GPU, Kernel, Packages, Tools — AND together within one node
+// (empty/omitted leaves are ignored); Kernel holds one "<op> <version>"
+// constraint ("<", "<=", ">", ">=", "==", "!=") compared numerically per
+// dotted segment against the running kernel release, and Packages/Tools
+// list installed system packages / mise-managed tools (both probed lazily
+// at load — see probes.go). Three combinators build larger expressions,
+// each recursively a When again, nested arbitrarily deep:
+//
+//	and = [ <when>, ... ]  — all sub-expressions must match (grouping)
+//	or  = [ <when>, ... ]  — at least one sub-expression must match
+//	not = { <when> }       — the sub-expression must NOT match
+//
+// A node matches when its leaves match AND every and-group matches AND at
+// least one or-element matches (when or is non-empty) AND the not target
+// does not match. So the top level stays plain AND of fields (historical
+// behavior) until a combinator appears — e.g. `kernel = ">= 7"` beside
+// `not = { packages = ["p"] }` reads "kernel >= 7 AND p not installed".
+// NOT over several leaves negates their conjunction (De Morgan:
+// not {a, b} = not-a OR not-b). Malformed kernel constraints are load-time
+// errors at every depth; an empty not/or/and (nothing to evaluate, or an
+// or-element that would vacuously match) is a load-time error naming the
+// module — never a silent always/never-select footgun.
 type When struct {
 	Hosts    []string `toml:"hosts"`
 	Users    []string `toml:"users"`
@@ -75,6 +87,9 @@ type When struct {
 	Kernel   string   `toml:"kernel"`
 	Packages []string `toml:"packages"`
 	Tools    []string `toml:"tools"`
+	And      []When   `toml:"and"`
+	Or       []When   `toml:"or"`
+	Not      *When    `toml:"not"`
 }
 
 // Packages declares packages a module needs or forbids.
@@ -225,23 +240,63 @@ func LoadModuleConfig(dir string) (*ModuleConfig, error) {
 	if id == "" {
 		id = filepath.Base(dir)
 	}
-	if err := validateWhenKernel(id, cfg.When.Kernel); err != nil {
+	if err := validateWhen(id, cfg.When); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
 }
 
-// validateWhenKernel rejects a malformed when.kernel constraint at load
-// time, naming the module — a typo must fail loudly, never silently skip
-// the module.
-func validateWhenKernel(id, expr string) error {
-	if expr == "" {
-		return nil
+// validateWhen rejects malformed when expressions at load time, naming
+// the module — a typo must fail loudly, never silently skip the module.
+// Recursive over the expression tree: a bad kernel constraint is an
+// error at every depth, and combinator tables must not be empty (an
+// empty not negates nothing, an empty or can never match, an empty
+// or-element would vacuously match). The top-level node itself may be
+// empty (no conditions = always selected).
+func validateWhen(id string, w When) error {
+	if w.Kernel != "" {
+		if err := facts.CheckKernelConstraint(w.Kernel); err != nil {
+			return fmt.Errorf("module %s: %w", id, err)
+		}
 	}
-	if err := facts.CheckKernelConstraint(expr); err != nil {
-		return fmt.Errorf("module %s: %w", id, err)
+	for i := range w.And {
+		if err := validateWhenChild(id, fmt.Sprintf("and[%d]", i), w.And[i]); err != nil {
+			return err
+		}
+	}
+	if w.And != nil && len(w.And) == 0 {
+		return fmt.Errorf("module %s: when.and list is empty (nothing to require)", id)
+	}
+	for i := range w.Or {
+		if err := validateWhenChild(id, fmt.Sprintf("or[%d]", i), w.Or[i]); err != nil {
+			return err
+		}
+	}
+	if w.Or != nil && len(w.Or) == 0 {
+		return fmt.Errorf("module %s: when.or list is empty (nothing to match)", id)
+	}
+	if w.Not != nil {
+		if err := validateWhenChild(id, "not", *w.Not); err != nil {
+			return err
+		}
 	}
 	return nil
+}
+
+// validateWhenChild validates one combinator sub-expression, which must
+// be non-empty (unlike the top-level node).
+func validateWhenChild(id, where string, w When) error {
+	if w.isEmpty() {
+		return fmt.Errorf("module %s: when.%s expression is empty", id, where)
+	}
+	return validateWhen(id, w)
+}
+
+// isEmpty reports whether the node has no leaves and no combinators.
+func (w When) isEmpty() bool {
+	return len(w.Hosts) == 0 && len(w.Users) == 0 && len(w.OS) == 0 &&
+		w.GPU == "" && w.Kernel == "" && len(w.Packages) == 0 && len(w.Tools) == 0 &&
+		w.And == nil && w.Or == nil && w.Not == nil
 }
 
 // ModuleDir returns the path to a module directory under the given profile root.
@@ -353,47 +408,75 @@ func (p *Profile) isDisabled(m Module) (string, bool) {
 	return "", false
 }
 
+// matches reports whether the when expression selects the module,
+// evaluated recursively over the combinator tree. Installed status is
+// probed at load (enrichProbes) or injected verbatim; a name missing
+// from the fact (not installed, or not determinable) fails the leaf —
+// the same fail-open contract as an empty kernel fact.
 func (w When) matches(f *facts.Facts) (string, bool) {
+	if w.eval(f) {
+		return "", false
+	}
+	return "when filter", true
+}
+
+// eval evaluates the node: leaves AND and-groups AND or-group AND not.
+func (w When) eval(f *facts.Facts) bool {
 	if len(w.Hosts) > 0 && !contains(w.Hosts, f.Hostname) {
-		return "when filter", true
+		return false
 	}
 	if len(w.Users) > 0 && !contains(w.Users, f.Username) {
-		return "when filter", true
+		return false
 	}
 	if len(w.OS) > 0 && !contains(w.OS, f.OS) {
-		return "when filter", true
+		return false
 	}
 	if w.GPU != "" && w.GPU != f.GPU {
-		return "when filter", true
+		return false
 	}
 	if w.Kernel != "" {
-		// Validated at load (LoadModuleConfig), so the expression is
-		// well-formed here; a compare error means an unparseable running
-		// release, which never matches.
+		// Validated at load, so the expression is well-formed here; a
+		// compare error means an unparseable running release, which
+		// never matches.
 		fields := strings.Fields(w.Kernel)
 		if len(fields) != 2 {
-			return "when filter", true
+			return false
 		}
 		if ok, err := facts.CompareKernel(f.Kernel, fields[0], fields[1]); err != nil || !ok {
-			return "when filter", true
+			return false
 		}
 	}
-	// Installed status is probed at load (enrichProbes) or injected
-	// verbatim; a name missing from the fact (not installed, or not
-	// determinable) fails the filter — the same fail-open contract as
-	// an empty kernel fact. Packages are system packages, tools are
-	// mise-managed.
 	for _, name := range w.Packages {
 		if !f.InstalledPackages[name] {
-			return "when filter", true
+			return false
 		}
 	}
 	for _, name := range w.Tools {
 		if !f.InstalledTools[name] {
-			return "when filter", true
+			return false
 		}
 	}
-	return "", false
+	for i := range w.And {
+		if !w.And[i].eval(f) {
+			return false
+		}
+	}
+	if len(w.Or) > 0 {
+		any := false
+		for i := range w.Or {
+			if w.Or[i].eval(f) {
+				any = true
+				break
+			}
+		}
+		if !any {
+			return false
+		}
+	}
+	if w.Not != nil && w.Not.eval(f) {
+		return false
+	}
+	return true
 }
 
 func contains(list []string, s string) bool {

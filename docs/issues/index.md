@@ -22,3 +22,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0004](0004-resume-cursor-and-status-drift.md) | Resume-cursor-only state and status drift report | done | medium |
 | [0005](0005-apply-diff-flag.md) | Apply --diff flag | done | medium |
 | [0006](0006-when-packages-condition.md) | when.packages / when.tools installed-state conditions | done | medium |
+| [0007](0007-when-expression-combinators.md) | when expression combinators and/or/not | done | medium |

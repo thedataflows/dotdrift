@@ -53,27 +53,16 @@ var probeInstalledTools = func(names []string) map[string]bool {
 
 // enrichProbes returns the facts to select with, probed for the installed
 // status of every package/tool any module's when.packages/when.tools
-// references. Explicitly provided facts win (tests inject them); a profile
-// declaring neither probes nothing, so existing profiles cost zero extra
-// subprocesses. The returned facts never alias-and-mutate the caller's value.
+// references, anywhere in its expression tree (top-level leaves and
+// or/and/not sub-expressions alike). Explicitly provided facts win (tests
+// inject them); a profile declaring neither probes nothing, so existing
+// profiles cost zero extra subprocesses. The returned facts never
+// alias-and-mutate the caller's value.
 func enrichProbes(f *facts.Facts, modules []Module) *facts.Facts {
 	var pkgNames, toolNames []string
 	pkgSeen, toolSeen := make(map[string]struct{}), make(map[string]struct{})
 	for _, m := range modules {
-		for _, name := range m.Config.When.Packages {
-			if _, dup := pkgSeen[name]; dup {
-				continue
-			}
-			pkgSeen[name] = struct{}{}
-			pkgNames = append(pkgNames, name)
-		}
-		for _, name := range m.Config.When.Tools {
-			if _, dup := toolSeen[name]; dup {
-				continue
-			}
-			toolSeen[name] = struct{}{}
-			toolNames = append(toolNames, name)
-		}
+		collectWhenLeaves(&m.Config.When, &pkgNames, pkgSeen, &toolNames, toolSeen)
 	}
 	if len(pkgNames) == 0 && len(toolNames) == 0 {
 		return f
@@ -86,4 +75,32 @@ func enrichProbes(f *facts.Facts, modules []Module) *facts.Facts {
 		cp.InstalledTools = probeInstalledTools(toolNames)
 	}
 	return &cp
+}
+
+// collectWhenLeaves walks a when expression tree, appending every distinct
+// package/tool leaf name.
+func collectWhenLeaves(w *When, pkgNames *[]string, pkgSeen map[string]struct{}, toolNames *[]string, toolSeen map[string]struct{}) {
+	for _, name := range w.Packages {
+		if _, dup := pkgSeen[name]; dup {
+			continue
+		}
+		pkgSeen[name] = struct{}{}
+		*pkgNames = append(*pkgNames, name)
+	}
+	for _, name := range w.Tools {
+		if _, dup := toolSeen[name]; dup {
+			continue
+		}
+		toolSeen[name] = struct{}{}
+		*toolNames = append(*toolNames, name)
+	}
+	for i := range w.And {
+		collectWhenLeaves(&w.And[i], pkgNames, pkgSeen, toolNames, toolSeen)
+	}
+	for i := range w.Or {
+		collectWhenLeaves(&w.Or[i], pkgNames, pkgSeen, toolNames, toolSeen)
+	}
+	if w.Not != nil {
+		collectWhenLeaves(w.Not, pkgNames, pkgSeen, toolNames, toolSeen)
+	}
 }

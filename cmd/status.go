@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/palette"
@@ -68,17 +69,24 @@ func (c *StatusCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
-	fmt.Fprintf(out, "profile: %s\n", c.Profile)
-	fmt.Fprintf(out, "state: %s\n", statePath)
-	if s.LastCompleted == "" {
-		fmt.Fprintln(out, "resume: clean - next apply starts from the beginning")
-	} else {
-		fmt.Fprintf(out, "resume: last completed %q - next apply resumes after it\n", s.LastCompleted)
-	}
 	pal, err := palette.FromConfig(p.Config.Colors)
 	if err != nil {
 		return err // already validated at load; unreachable double-check
 	}
+	fmt.Fprintf(out, "profile: %s\n", c.Profile)
+	fmt.Fprintf(out, "state: %s\n", statePath)
+	// The resume line carries a role hue on a TTY: ok when clean, warn
+	// when a cursor is pending (an interrupted apply awaits resuming).
+	resumeLine := "resume: clean - next apply starts from the beginning"
+	resumeRole := palette.OK
+	if s.LastCompleted != "" {
+		resumeLine = fmt.Sprintf("resume: last completed %q - next apply resumes after it", s.LastCompleted)
+		resumeRole = palette.Warn
+	}
+	if executil.ColorEnabled(out) {
+		resumeLine = pal.Wrap(resumeRole, resumeLine)
+	}
+	fmt.Fprintln(out, resumeLine)
 	drift.Render(out, findings, drift.WithPalette(pal))
 
 	if c.Diff != "" {

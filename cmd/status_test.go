@@ -96,6 +96,32 @@ func TestStatus_showsCursor(t *testing.T) {
 	require.Contains(t, buf.String(), `resume: last completed "packages" - next apply resumes after it`)
 }
 
+// On a TTY the resume line carries a role hue: ok (green) when clean,
+// warn (yellow) when a cursor is pending. Piped output stays plain
+// (covered by every other status test).
+func TestStatus_resumeLineColored(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	profile := statusMinimalProfile(t)
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: profile, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
+	require.Contains(t, buf.String(), "\033[32mresume: clean - next apply starts from the beginning",
+		"clean resume line wraps in the ok hue")
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
+	buf.Reset()
+	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, out: &buf}).Run())
+	require.Contains(t, buf.String(), "\033[33mresume: last completed",
+		"pending-cursor resume line wraps in the warn hue")
+}
+
 func TestStatus_reportsDrift(t *testing.T) {
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	// recordingBackend.IsInstalled reports everything absent → drift.

@@ -222,7 +222,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 
 Section flags on `dotdrift apply` — `--[no-]packages`, `--[no-]tools`, `--[no-]dotfiles`, `--[no-]mounts`, `--[no-]smb`, `--[no-]hooks` — scope a run to parts of the plan: `dotdrift apply --packages` installs/removes packages only; `dotdrift apply --no-hooks` runs everything except hooks (`DOTDRIFT_NO_HOOKS=1` is equivalent and always wins); `dotdrift apply --tools --dotfiles` runs exactly tools and dotfiles. An empty selection (everything negated) is an error.
 
---no-color (or the NO_COLOR environment variable, per no-color.org) disables ANSI colors in all dotdrift output and propagates NO_COLOR=1 to child processes (mise, paru). On a TTY, the status report colors findings by issue type (orange = missing, red = not-a-symlink/unknown, yellow = content/version diff, green = all-OK) and diffs are colored (green additions, red deletions); piped output is always plain.
+--no-color (or the NO_COLOR environment variable, per no-color.org) disables ANSI colors in all dotdrift output and propagates NO_COLOR=1 to child processes (mise, paru). On a TTY, the status report colors findings by issue type (orange = missing, red = not-a-symlink/unknown, yellow = content/version diff, green = all-OK) and diffs are colored (green additions, red deletions); piped output is always plain. Every hue is a named role overridable via `[colors]` in `dotdrift.toml` — see [profile layout](docs/product/profile-layout.md).
 
 ```bash
 # Generate an NFS mount module with a nightly timer, then two samba shares

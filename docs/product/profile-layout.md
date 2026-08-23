@@ -88,8 +88,10 @@ orphan  = "94"
 
 - `disable` is unioned across base, host, and user layers (any disable sticks).
 - `colors` overrides the colored-output palette per role. Roles: `ok`
-  (green, all-checks-passed / `no drift`), `missing` (**orange**, missing
-  or removed items), `warn` (yellow, content/version differs), `error`
+  (green, all-checks-passed / `no drift` / the clean `resume:` line),
+  `missing` (**orange**, missing
+  or removed items), `warn` (yellow, content/version differs, and the
+  pending `resume:` line when a cursor exists), `error`
   (red, unknown / not-a-symlink), `orphan` (magenta, the status orphans
   section), `dim` (bright black, dimmed module/description text). Values
   are raw SGR parameter strings — digits and semicolons only, no ESC/CSI

@@ -133,7 +133,8 @@ func TestStatus_reportsOrphans(t *testing.T) {
 	t.Log(out)
 	require.Contains(t, out, "orphans:")
 	require.Contains(t, out, "demo [base]: stale.md — not referenced by [dotfiles]")
-	require.Contains(t, out, "demo [host]: hook.sh — not referenced by [dotfiles]")
+	require.Contains(t, out, "demo [host:myhost]: hook.sh — not referenced by [dotfiles]",
+		"host-layer orphans name the host")
 }
 
 // writeStatusModule writes a module.toml (unless toml is empty) plus extra

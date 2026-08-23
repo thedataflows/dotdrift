@@ -12,12 +12,24 @@ import (
 
 // ModuleLayer names one layer directory of one module: the module's
 // directory name (the layer-merge key), the layer it lives in, and the
-// absolute path. Callers derive these from the profile layout
+// absolute path. For host/user layers Owner names the layer's hostname or
+// username so orphan attribution reads "[host:myhost]" / "[user:cri]".
+// Callers derive these from the profile layout
 // (modules/<dir>, hosts/<hostname>/modules/<dir>, users/<username>/modules/<dir>).
 type ModuleLayer struct {
 	Dir   string // module directory name (dotfile-entry Module key)
 	Layer string // "base" | "host" | "user"
+	Owner string // hostname (host layer) or username (user layer); empty for base
 	Path  string // absolute layer module directory
+}
+
+// layerLabel renders the attribution suffix: "[base]", "[host:myhost]",
+// "[user:cri]".
+func (ml ModuleLayer) layerLabel() string {
+	if ml.Owner == "" {
+		return ml.Layer
+	}
+	return ml.Layer + ":" + ml.Owner
 }
 
 // orphanDetail is the detail line for every orphan finding.
@@ -60,7 +72,7 @@ func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
 				Item:    rel,
 				Status:  Drift,
 				Detail:  orphanDetail,
-				Module:  fmt.Sprintf("%s [%s]", ml.Dir, ml.Layer),
+				Module:  fmt.Sprintf("%s [%s]", ml.Dir, ml.layerLabel()),
 			})
 			return nil
 		})

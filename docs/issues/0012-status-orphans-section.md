@@ -31,7 +31,7 @@ An **orphan** is a file inside a selected module's layer directory that the reso
 - not a **direct child** of a `symlink-each` source directory (implicitly deployed), and
 - not `module.toml` (the manifest itself).
 
-Everything else in the walk is reported: `orphans:` section, item = path relative to the layer module directory, detail `not referenced by [dotfiles]`, module attribution `<dir> [<layer>]` (e.g. `shell [host]`) — so host- and user-overlay leftovers are distinguishable from base ones.
+Everything else in the walk is reported: `orphans:` section, item = path relative to the layer module directory, detail `not referenced by [dotfiles]`, module attribution naming the layer — `<dir> [base]`, `<dir> [host:<hostname>]`, `<dir> [user:<username>]` — so a specific host's or user's overlay leftovers are distinguishable from base ones at a glance.
 
 Deliberate semantics:
 
@@ -59,4 +59,5 @@ Implementation: `drift.CheckOrphans(plan, layers []ModuleLayer)` walks each prov
 ## Notes
 
 - **Follow-up fix (same day, dogfooding)**: the first cut flagged `mode = "edit"` source files as orphans — resolve inlines their contents into the block and clears `Source`, so the scan lost the reference. `resolve.DotfileEntry` gained `EditSource` (the resolved path of the consumed edit source, set during the mode translation in `mergeDotfiles`) and `referencedSources` counts it. Reproduced through the real stack (`profile.Load` → `resolve.Resolve` → `CheckOrphans`, `TestCheckOrphans_realStack`) — symlink-each children were already correct end-to-end; only edit sources leaked.
+- **Follow-up fix (same day)**: host/user attribution now names the host/user — `ModuleLayer.Owner` — rendering `[host:cri-pc]` / `[user:cri]` instead of a bare `[host]`/`[user]`, so multi-host/multi-user profiles distinguish whose overlay leaked.
 - Tests: `internal/drift/orphans_test.go` (unreferenced per layer, symlink-each children referenced vs nested, per-module attribution, clean module omits section, render order, real-stack regression), `cmd/status_test.go` `TestStatus_reportsOrphans` (end-to-end through the command).

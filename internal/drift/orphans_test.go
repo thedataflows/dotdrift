@@ -31,8 +31,25 @@ func writeTree(t *testing.T, root string, files map[string]string) {
 func orphanLayers(root string) []drift.ModuleLayer {
 	return []drift.ModuleLayer{
 		{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")},
-		{Dir: "shell", Layer: "host", Path: filepath.Join(root, "hosts", "h", "modules", "shell")},
+		{Dir: "shell", Layer: "host", Owner: "h", Path: filepath.Join(root, "hosts", "h", "modules", "shell")},
+		{Dir: "shell", Layer: "user", Owner: "cri", Path: filepath.Join(root, "users", "cri", "modules", "shell")},
 	}
+}
+
+// User-layer orphans are attributed "[user:<username>]" — same as host
+// layers name their host — so a multi-user profile's leftovers are
+// distinguishable at a glance.
+func TestCheckOrphans_userLayerAttribution(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"modules/shell/module.toml":       "",
+		"users/cri/modules/shell/local.sh": "orphan in the user overlay",
+	})
+	plan := &resolve.Plan{}
+
+	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	items := orphanItems(fs)
+	require.Equal(t, []string{"local.sh"}, items["shell [user:cri]"])
 }
 
 func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
@@ -54,7 +71,7 @@ func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
 	require.ElementsMatch(t, []string{
 		"notes.md", "nested/deep.md",
 	}, items["shell [base]"], "unreferenced base files are orphans")
-	require.Equal(t, []string{"hook.sh"}, items["shell [host]"], "unreferenced overlay files are orphans per layer")
+	require.Equal(t, []string{"hook.sh"}, items["shell [host:h]"], "unreferenced overlay files are orphans per layer, naming the host")
 	for _, f := range fs {
 		require.Equal(t, drift.Drift, f.Status)
 		require.NotEmpty(t, f.Detail)
@@ -80,7 +97,7 @@ func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 
 	fs := drift.CheckOrphans(plan, orphanLayers(root))
 	items := orphanItems(fs)
-	require.Empty(t, items["shell [host]"], "no host layer dir exists")
+	require.Empty(t, items["shell [host:h]"], "no host layer dir exists")
 	require.Equal(t, []string{"units/nested/c.conf"}, items["shell [base]"],
 		"direct children referenced; nested files are orphans")
 }

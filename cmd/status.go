@@ -127,10 +127,10 @@ func statusModuleLayers(p *profile.Profile, f *facts.Facts) []drift.ModuleLayer 
 		dir := filepath.Base(m.Path)
 		layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "base", Path: filepath.Join(p.Root, "modules", dir)})
 		if f.Hostname != "" {
-			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "host", Path: filepath.Join(p.Root, "hosts", f.Hostname, "modules", dir)})
+			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "host", Owner: f.Hostname, Path: filepath.Join(p.Root, "hosts", f.Hostname, "modules", dir)})
 		}
 		if f.Username != "" {
-			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "user", Path: filepath.Join(p.Root, "users", f.Username, "modules", dir)})
+			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "user", Owner: f.Username, Path: filepath.Join(p.Root, "users", f.Username, "modules", dir)})
 		}
 	}
 	return layers

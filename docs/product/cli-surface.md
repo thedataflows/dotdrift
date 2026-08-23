@@ -173,8 +173,8 @@ dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 | `--mode symlink\|copy\|template` | symlink | Apps that rewrite configs → copy |
 | `--packages P` | none | Declare distro packages in module.toml; each entry is a bare name or `name="description"` (the description becomes a TOML comment) |
 | `--tools T` | none | Declare mise tool (comma-separated or repeated for several) |
-| `--host=<hostname>` | base layer | Onboard into `hosts/<hostname>/modules/...` (empty/omitted = base) |
-| `--user=<username>` | base layer | Onboard into `users/<username>/modules/...` (empty/omitted = base) |
+| `--host=<hostname>` | base layer | Onboard into `hosts/<hostname>/modules/...`; an EMPTY value (`--host=`) means the current host, omitting the flag means the base layer |
+| `--user=<username>` | base layer | Onboard into `users/<username>/modules/...`; an EMPTY value (`--user=`) means the current user, omitting the flag means the base layer |
 | `--host` + `--user` | base layer | Both layers in one run: content copied and declared in each |
 | `--dry-run` | false | Preview only |
 | `-v`, `--verbose` | false | Stream the mise install/dotfiles output live instead of capture-and-discard, echoing each command line `set -x`-style (`+ <argv>`) to stderr before it runs (also `DD_VERBOSE=1`) |

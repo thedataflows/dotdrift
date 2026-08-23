@@ -38,3 +38,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0020](0020-onboard-user-flag.md) | onboard --user flag; --host --user together | done | medium |
 | [0021](0021-onboard-overlay-flag-values.md) | onboard --host/--user take an optional value | done | medium |
 | [0022](0022-simplify-onboard-overlay-flags.md) | Simplify onboard --host/--user to plain string flags | done | medium |
+| [0023](0023-overlay-flag-empty-value-means-current.md) | onboard --host=/--user= (empty value) means the current host/user | done | medium |

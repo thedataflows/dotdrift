@@ -55,8 +55,8 @@ func TestKong_onboardOverlayFlags(t *testing.T) {
 	require.NoError(t, err)
 	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--host=h", "--user=u"})
 	require.NoError(t, err)
-	require.Equal(t, "h", cli.Onboard.Host)
-	require.Equal(t, "u", cli.Onboard.User)
+	require.Equal(t, "h", *cli.Onboard.Host)
+	require.Equal(t, "u", *cli.Onboard.User)
 }
 
 // --verbose parses on apply and onboard (and only there).

@@ -17,8 +17,8 @@ type OnboardCmd struct {
 	Mode     string   `help:"Dotfile mode" enum:"symlink,symlink-each,copy,template" default:"symlink"`
 	Packages []string `help:"Distro packages to declare; each entry is a bare name or name=\"description\" (the description becomes a TOML comment)"`
 	Tools    []string `help:"Mise tools to declare"`
-	Host     string   `help:"Onboard into hosts/<hostname> (default: base layer)"`
-	User     string   `help:"Onboard into users/<username> (default: base layer)"`
+	Host     *string  `help:"Onboard into hosts/<hostname>; empty value = current host, omitted = base layer"`
+	User     *string  `help:"Onboard into users/<username>; empty value = current user, omitted = base layer"`
 	DryRun   bool     `help:"Preview only"`
 	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
 	Verbose  bool     `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
@@ -44,14 +44,15 @@ func (c *OnboardCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("parse packages: %w", err)
 	}
-	// Empty flag = not selecting that overlay; the hostname/username fall
-	// back to the detected facts (layer-claim context for adoption).
+	// nil flag = base layer; empty value (`--host=`) = current host/user;
+	// explicit value wins. Detection also fills the claim context for
+	// adoption when the flag selects this machine.
 	hostname, username := f.Hostname, f.Username
-	if c.Host != "" {
-		hostname = c.Host
+	if c.Host != nil && *c.Host != "" {
+		hostname = *c.Host
 	}
-	if c.User != "" {
-		username = c.User
+	if c.User != nil && *c.User != "" {
+		username = *c.User
 	}
 	return o.Run(onboard.Options{
 		ProfileRoot: c.Profile,
@@ -60,9 +61,9 @@ func (c *OnboardCmd) Run() error {
 		Mode:        c.Mode,
 		Packages:    pkgs,
 		Tools:       c.Tools,
-		Host:        c.Host != "",
+		Host:        c.Host != nil,
 		Hostname:    hostname,
-		User:        c.User != "",
+		User:        c.User != nil,
 		Username:    username,
 		DryRun:      c.DryRun,
 		Yes:         c.Yes,

@@ -284,6 +284,97 @@ func TestSelection_whenFilter(t *testing.T) {
 		require.NoError(t, err)
 		require.Contains(t, skippedIDs(p), "kernelonly")
 	})
+
+	t.Run("packages match", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
+			InstalledPackages: map[string]bool{"installed-pkg": true},
+		})
+		require.NoError(t, err)
+		require.Contains(t, selectedIDs(p), "pkgonly")
+		require.Contains(t, skippedIDs(p), "kernelonly")
+	})
+
+	t.Run("packages mismatch", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
+			InstalledPackages: map[string]bool{"other-pkg": true},
+		})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "pkgonly")
+		require.Equal(t, "when filter", skipReason(t, p, "pkgonly"))
+	})
+
+	t.Run("packages empty fact", func(t *testing.T) {
+		// An empty/absent installed-set fact never matches a non-empty
+		// when.packages constraint (same contract as when.kernel).
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "pkgonly")
+	})
+
+	t.Run("packages ANDed with kernel", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
+			Kernel:           "7.2.0",
+			InstalledPackages: map[string]bool{"installed-pkg": true},
+		})
+		require.NoError(t, err)
+		require.Contains(t, selectedIDs(p), "pkgonly")
+		require.Contains(t, selectedIDs(p), "kernelonly")
+	})
+
+	t.Run("tools match", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
+			InstalledTools: map[string]bool{"installed-tool": true},
+		})
+		require.NoError(t, err)
+		require.Contains(t, selectedIDs(p), "toolonly")
+	})
+
+	t.Run("tools mismatch", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
+			InstalledTools: map[string]bool{"other-tool": true},
+		})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "toolonly")
+		require.Equal(t, "when filter", skipReason(t, p, "toolonly"))
+	})
+
+	t.Run("tools empty fact", func(t *testing.T) {
+		// No mise / nothing probed never matches a non-empty when.tools
+		// constraint (same contract as when.packages/kernel).
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{})
+		require.NoError(t, err)
+		require.Contains(t, skippedIDs(p), "toolonly")
+	})
+
+	t.Run("tools ANDed with packages", func(t *testing.T) {
+		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
+			InstalledPackages: map[string]bool{"installed-pkg": true},
+			InstalledTools:    map[string]bool{"installed-tool": true},
+		})
+		require.NoError(t, err)
+		require.Contains(t, selectedIDs(p), "pkgonly")
+		require.Contains(t, selectedIDs(p), "toolonly")
+	})
+}
+
+func TestLoadModuleTOML_whenPackages(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `[when]
+packages = ["ntfs-3g", "paru:jq"]
+`)
+	cfg, err := profile.LoadModuleConfig(filepath.Join(root, "modules", "m"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"ntfs-3g", "paru:jq"}, cfg.When.Packages)
+}
+
+func TestLoadModuleTOML_whenTools(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "modules/m", `[when]
+tools = ["node", "python"]
+`)
+	cfg, err := profile.LoadModuleConfig(filepath.Join(root, "modules", "m"))
+	require.NoError(t, err)
+	require.Equal(t, []string{"node", "python"}, cfg.When.Tools)
 }
 
 func TestLoadModuleTOML_whenKernel(t *testing.T) {
@@ -315,6 +406,17 @@ func skippedIDs(p *profile.Profile) []string {
 		ids[i] = s.Module.ID
 	}
 	return ids
+}
+
+func skipReason(t *testing.T, p *profile.Profile, id string) string {
+	t.Helper()
+	for _, s := range p.Skipped {
+		if s.Module.ID == id {
+			return s.Reason
+		}
+	}
+	t.Fatalf("module %q not skipped", id)
+	return ""
 }
 
 // writeModule creates a module directory with a module.toml at the given

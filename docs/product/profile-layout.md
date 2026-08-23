@@ -97,6 +97,8 @@ users = ["cri"]
 os = ["arch", "cachyos"]
 gpu = "nvidia"
 kernel = ">= 7.1"
+packages = ["ntfs-3g"]
+tools = ["node"]
 
 [packages]
 present = ["neovim", "ripgrep"]
@@ -156,6 +158,22 @@ public = false
   (detection failed) never matches a non-empty constraint. Use it for
   kernel-gated packages, e.g. one module with `kernel = "< 7.2"` installing
   `ntfs-3g` and another with `kernel = ">= 7.2"` installing `ntfsprogs-plus`.
+  `packages` lists **system packages** and `tools` lists **mise-managed
+  tools** that must all be installed on the running system (a module
+  qualifies only when every listed name is present). Names
+  are matched exactly as written — no `aur/`-marker or `manager:`-prefix
+  normalization, case-sensitive like every other `when` value; write the
+  name the same way on both sides or the filter will not match. Installed
+  status is probed lazily at load — packages through the detected package
+  backend, tools through `mise current` (presence only, version ignored;
+  no mise binary ⇒ nothing matches) — one query per distinct name across
+  all modules; a profile declaring neither `when.packages` nor
+  `when.tools` probes nothing. A missing or indeterminable name (not
+  installed, unknown backend, query failure) fails the filter — the module
+  is skipped with reason `when filter`, never a load-time error (any list
+  of strings is well-formed, unlike a `kernel` constraint). Use it to gate
+  configuration on software the user installed by hand, or to switch
+  sibling modules on installed state.
 - `scope` is module-level: `"user"` (the default when omitted) or `"system"`.
   It decides how the module's dotfiles are applied — user-scope entries are
   applied as the invoking user, system-scope entries are applied with root

@@ -131,6 +131,8 @@ users = ["u"]
 os = ["arch"]
 gpu = "nvidia"
 kernel = ">= 7.1"
+packages = ["ntfs-3g"]
+tools = ["node"]
 
 [packages]
 present = ["neovim"]

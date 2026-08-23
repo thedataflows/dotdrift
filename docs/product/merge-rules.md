@@ -53,7 +53,10 @@ dotfiles, hooks, mounts, and smb.
 `when` filter values match detected facts by **case-sensitive exact match**
 (`when.distro: Arch` never matches detected `arch`). GPU detection is
 **first-match** over `lspci` output (nvidia → amd → intel), and `when.gpu` is
-a **single string**, not a list.
+a **single string**, not a list. `when.packages`/`when.tools` match against
+installed status probed lazily at load (packages via the detected package
+backend, tools via `mise current`; see [profile layout](profile-layout.md)
+for the probe and fail-open contract).
 
 # Plan visibility
 

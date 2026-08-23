@@ -56,18 +56,25 @@ func (c ModuleConfig) ScopeOrDefault() string {
 	return c.Scope
 }
 
-// When filters a module by host, user, os, gpu, or kernel.
-// Empty fields are ignored; non-empty fields must all match.
-// Kernel holds one "<op> <version>" constraint ("<", "<=", ">", ">=",
-// "==", "!=") compared numerically per dotted segment against the running
-// kernel release; an empty kernel fact never matches a non-empty
-// constraint.
+// When filters a module by host, user, os, gpu, kernel, installed
+// packages, or installed tools. Empty fields are ignored; non-empty
+// fields must all match. Kernel holds one "<op> <version>" constraint
+// ("<", "<=", ">", ">=", "==", "!=") compared numerically per dotted
+// segment against the running kernel release; an empty kernel fact never
+// matches a non-empty constraint. Packages lists system packages and
+// tools lists mise-managed tools that must all be installed on the
+// running system (both probed lazily at load — see probes.go); a name
+// that is absent, or whose status cannot be determined, fails the
+// filter — never a load-time error, unlike a malformed kernel
+// constraint, because any list of strings is a well-formed constraint.
 type When struct {
-	Hosts  []string `toml:"hosts"`
-	Users  []string `toml:"users"`
-	OS     []string `toml:"os"`
-	GPU    string   `toml:"gpu"`
-	Kernel string   `toml:"kernel"`
+	Hosts    []string `toml:"hosts"`
+	Users    []string `toml:"users"`
+	OS       []string `toml:"os"`
+	GPU      string   `toml:"gpu"`
+	Kernel   string   `toml:"kernel"`
+	Packages []string `toml:"packages"`
+	Tools    []string `toml:"tools"`
 }
 
 // Packages declares packages a module needs or forbids.
@@ -195,6 +202,7 @@ func Load(root string, f *facts.Facts) (*Profile, error) {
 	if err := p.discover(root, f); err != nil {
 		return nil, err
 	}
+	f = enrichProbes(f, p.Modules)
 	p.Select(f)
 	return p, nil
 }
@@ -367,6 +375,21 @@ func (w When) matches(f *facts.Facts) (string, bool) {
 			return "when filter", true
 		}
 		if ok, err := facts.CompareKernel(f.Kernel, fields[0], fields[1]); err != nil || !ok {
+			return "when filter", true
+		}
+	}
+	// Installed status is probed at load (enrichProbes) or injected
+	// verbatim; a name missing from the fact (not installed, or not
+	// determinable) fails the filter — the same fail-open contract as
+	// an empty kernel fact. Packages are system packages, tools are
+	// mise-managed.
+	for _, name := range w.Packages {
+		if !f.InstalledPackages[name] {
+			return "when filter", true
+		}
+	}
+	for _, name := range w.Tools {
+		if !f.InstalledTools[name] {
 			return "when filter", true
 		}
 	}

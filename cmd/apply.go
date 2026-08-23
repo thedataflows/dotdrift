@@ -577,7 +577,7 @@ func backupCopyTargets(plan *resolve.Plan, profileRoot string, f *facts.Facts, o
 			return err
 		}
 		if n > 0 {
-			fmt.Fprintf(out, "backup: %d path(s) -> %s\n", n, filepath.Join(dir, "backups", gen))
+			fmt.Fprintf(out, "backup: %d path(s) -> %s\n", n, filepath.Join(moduleRel(profileRoot, dir), "backups", gen))
 		}
 	}
 	return nil

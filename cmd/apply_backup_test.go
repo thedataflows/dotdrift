@@ -103,7 +103,19 @@ func TestApply_backupSnapshotsCopyTargets(t *testing.T) {
 	_, err = os.Stat(filepath.Join(baseGen, home, ".config", "demo", "linked.conf"))
 	require.True(t, os.IsNotExist(err), "symlink-mode target is not backed up")
 
-	require.Contains(t, out.String(), "backup:", "a summary line reports the backups")
+	require.Contains(t, out.String(), "backup: 1 path(s) -> modules/demo/backups/", "summary names the module and generation")
+	require.Contains(t, out.String(), "backup: 1 path(s) -> "+filepath.Join("hosts", "myhost", "modules", "demo", "backups"), "host layer's backup is reported too")
+
+	var backupLines []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, "backup: ") {
+			backupLines = append(backupLines, line)
+		}
+	}
+	require.Len(t, backupLines, 2, "one summary line per module that received backups")
+	for _, line := range backupLines {
+		require.NotContains(t, line, string(filepath.Separator)+"tmp", "summary paths are profile-relative, not absolute: %s", line)
+	}
 }
 
 // Without --backup nothing is written: no backups/ directory appears.

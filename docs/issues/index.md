@@ -42,3 +42,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0024](0024-restore-overlay-bool-with-value.md) | Restore bool-like --host/--user (bare flags must compose) | done | medium |
 | [0025](0025-apply-backup-copy-mode-destinations.md) | apply --backup: snapshot copy-mode destinations before overwrite | done | medium |
 | [0026](0026-restore-command.md) | restore command: copy backed-up copy-mode targets back to their live paths | done | medium |
+| [0027](0027-readme-backup-restore-examples.md) | README: backup/restore usage examples | done | low |

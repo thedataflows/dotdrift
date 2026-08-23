@@ -228,6 +228,7 @@ func TestRestore_list(t *testing.T) {
 	require.Contains(t, listing, "20260823-101500  2 file(s)")
 	require.Contains(t, listing, "modules/other:")
 	require.Contains(t, listing, "20260822-090000  1 file(s)")
+	require.NotContains(t, listing, root+string(filepath.Separator), "full listing headings are profile-relative, not absolute")
 
 	b.Reset()
 	cmd = &RestoreCmd{Profile: root, List: true, Targets: []string{"~/.zshrc"}, Out: &b}

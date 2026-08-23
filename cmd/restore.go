@@ -169,7 +169,7 @@ func (c *RestoreCmd) list(hits map[string]map[string][]restoreHit, home, profile
 		}
 		sort.Strings(dirs)
 		for _, dir := range dirs {
-			fmt.Fprintf(out, "%s:\n", dir)
+			fmt.Fprintf(out, "%s:\n", moduleRel(profileRoot, dir))
 			var gens []string
 			for gen := range counts[dir] {
 				gens = append(gens, gen)

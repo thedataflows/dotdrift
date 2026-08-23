@@ -219,6 +219,58 @@ dotdrift adopt --dry-run ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.confi
 
 Reference rules and adoption bounds live in [profile layout](docs/product/profile-layout.md); `status` scans every host/user layer of the profile, so orphans on other machines show anywhere.
 
+## Backups and restoring
+
+`copy` is the only dotfile mode whose apply **overwrites** destination content (symlinks are recreated as links, edits are marker-scoped). `apply --backup` snapshots those destinations into the profile first, and `restore` brings them back. A few scenarios:
+
+**Back up before an apply.** Every existing `copy`-mode destination is copied into the declaring module's `backups/<timestamp>/` tree, mirroring absolute paths — host-layer entries land in their host's module dir:
+
+```bash
+dotdrift apply --backup
+# backup: 2 path(s) -> modules/easyeffects/backups/20260824-153000
+# backup: 1 path(s) -> hosts/cri-pc/modules/demo/backups/20260824-153000
+```
+
+```text
+modules/easyeffects/backups/20260824-153000/home/cri/.config/easyeffects/db/easyeffectsrc
+```
+
+Directories copy recursively, file modes are preserved, and an unreadable target aborts the apply — a safety flag never fails open. Nothing is written without the flag. Generations are never pruned automatically; consider gitignoring `backups/`.
+
+**See what exists.** `restore --list` shows generations per module layer, or just the ones holding a path:
+
+```bash
+dotdrift restore --list
+# modules/easyeffects:
+#   20260824-153000  2 file(s)
+#   20260823-101500  2 file(s)
+
+dotdrift restore --list ~/.config/easyeffects/db/easyeffectsrc
+# ~/.config/easyeffects/db/easyeffectsrc:
+#   modules/easyeffects 20260824-153000
+#   modules/easyeffects 20260823-101500
+```
+
+**Restore a file.** Copies the backup back over the live target — newest generation by default, `--dry-run` to preview:
+
+```bash
+dotdrift restore --dry-run ~/.config/easyeffects/db/easyeffectsrc
+# would restore: /home/cri/.config/easyeffects/db/easyeffectsrc (modules/easyeffects/backups/20260824-153000)
+
+dotdrift restore ~/.config/easyeffects/db/easyeffectsrc
+# restored: /home/cri/.config/easyeffects/db/easyeffectsrc (modules/easyeffects/backups/20260824-153000)
+```
+
+`--gen <timestamp>` picks an older generation (as shown by `--list`). System files (`/etc/...`) restore elevated via `sudo install -D -m <mode>` — at most one password prompt per run. A symlink sitting at the target is replaced, never written through.
+
+**Keep the restored content.** Restored files now differ from the profile — `status` reports `content differs` and the next `apply` overwrites them again. To make restored content the profile's truth, re-onboard it:
+
+```bash
+dotdrift onboard ~/.config/easyeffects/db/easyeffectsrc
+```
+
+Bare `dotdrift restore` is an error — at least one target is required. Full rules in [profile layout — backups](docs/product/profile-layout.md).
+
 ## Generate
 
 `dotdrift generate` renders a derived module from declarations in `module.toml`:

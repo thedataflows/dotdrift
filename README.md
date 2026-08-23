@@ -197,7 +197,7 @@ dotdrift onboard ~/.config/nvim
 
 Re-running **updates**: the module copy is refreshed from the live path (directories replaced wholesale, so deletions propagate) and `module.toml` is merged — existing entries and unmanaged sections survive.
 
-`--host=<hostname>` / `--user=<username>` land the module in that host's/user's layer; an empty value (`--host=` / `--user=`) means the current host/user, and omitting the flags lands in `modules/` (both flags together onboard into both layers).
+`--host` / `--user` land the module in the host/user layer — bare flag = current host/user, `--host=<hostname>` / `--user=<username>` = explicit; omitting them lands in `modules/` (both flags together onboard into both layers).
 
 **Adopt an orphaned module file.** A file sitting in the profile that no `[dotfiles]` entry references (status lists it under `orphans:`) is declared by passing the module file itself — no copy, the entry lands in that layer's `module.toml`:
 

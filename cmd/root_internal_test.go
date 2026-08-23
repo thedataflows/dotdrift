@@ -55,8 +55,17 @@ func TestKong_onboardOverlayFlags(t *testing.T) {
 	require.NoError(t, err)
 	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--host=h", "--user=u"})
 	require.NoError(t, err)
-	require.Equal(t, "h", *cli.Onboard.Host)
-	require.Equal(t, "u", *cli.Onboard.User)
+	require.Equal(t, "h", cli.Onboard.Host.Value)
+	require.Equal(t, "u", cli.Onboard.User.Value)
+
+	// Bare flags compose: --host --user parses without a value error.
+	cli = CLI{}
+	parser, err = kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--host", "--user"})
+	require.NoError(t, err)
+	require.True(t, cli.Onboard.Host.Set)
+	require.True(t, cli.Onboard.User.Set)
 }
 
 // --verbose parses on apply and onboard (and only there).

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dotdrift Component Architecture",
+    "output": "architecture.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "plan-path", "label": "Plan path", "focus": ["cli", "profile", "resolve", "apply"], "note": "From CLI invocation to the executable plan." },
+      { "id": "convergence", "label": "Convergence", "focus": ["apply", "mise", "pkgmgr", "system"], "note": "dotdrift drives steps; mise touches the machine." },
+      { "id": "safety", "label": "Safety surfaces", "focus": ["backup", "drift", "onboard", "profile"], "note": "Backup, drift probes, adoption, and the profile they feed." }
+    ]
+  },
+  "components": [
+    { "id": "profile", "type": "backend", "label": "Profile Loader", "sublabel": "module.toml + layers", "pos": [240, 140], "size": [130, 60] },
+    { "id": "onboard", "type": "backend", "label": "Onboard / Adopt", "sublabel": "live path to module", "pos": [460, 140], "size": [130, 60] },
+    { "id": "pkgmgr", "type": "external", "label": "paru / pacman / apt", "sublabel": "package backends", "pos": [920, 140], "size": [140, 60] },
+    { "id": "cli", "type": "frontend", "label": "dotdrift CLI", "sublabel": "cmd/", "pos": [40, 300], "size": [120, 60] },
+    { "id": "resolve", "type": "backend", "label": "Resolver", "sublabel": "user > host > base", "pos": [240, 300], "size": [130, 60] },
+    { "id": "apply", "type": "backend", "label": "Apply Pipeline", "sublabel": "ordered steps", "pos": [460, 300], "size": [130, 60] },
+    { "id": "mise", "type": "external", "label": "mise", "sublabel": "convergence engine", "pos": [690, 300], "size": [120, 60], "tag": ">= 2026.8.2" },
+    { "id": "system", "type": "external", "label": "Live System", "sublabel": "~/, /etc, systemd, samba", "pos": [920, 300], "size": [140, 60] },
+    { "id": "drift", "type": "backend", "label": "Drift + Orphans", "sublabel": "status probes", "pos": [240, 460], "size": [130, 60] },
+    { "id": "backup", "type": "backend", "label": "Backup / Restore", "sublabel": "copy-mode targets", "pos": [460, 540], "size": [130, 60] }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "dotdrift (Go binary)", "wraps": ["cli", "profile", "resolve", "drift", "onboard", "apply", "backup"] },
+    { "kind": "region", "label": "host machine", "wraps": ["mise", "system", "pkgmgr"] }
+  ],
+  "connections": [
+    { "id": "cli-load", "from": "cli", "to": "profile", "label": "load", "fromSide": "right", "toSide": "left" },
+    { "id": "profile-layers", "from": "profile", "to": "resolve", "label": "layers", "labelAt": [312, 214] },
+    { "id": "resolve-plan", "from": "resolve", "to": "apply", "label": "plan", "variant": "emphasis" },
+    { "id": "apply-mise", "from": "apply", "to": "mise", "label": "bootstrap / dotfiles apply", "variant": "emphasis", "labelAt": [640, 270] },
+    { "id": "mise-system", "from": "mise", "to": "system", "label": "converge", "variant": "emphasis" },
+    { "id": "mise-pkgmgr", "from": "mise", "to": "pkgmgr", "label": "install / remove", "variant": "dashed", "fromSide": "top", "toSide": "left" },
+    { "id": "drift-resolve", "from": "drift", "to": "resolve", "label": "plan", "variant": "dashed" },
+    { "id": "onboard-profile", "from": "onboard", "to": "profile", "label": "merge entries", "variant": "dashed" },
+    { "id": "backup-apply", "from": "backup", "to": "apply", "label": "--backup", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Declarative core", "items": ["Layered module.toml merged user > host > base", "Resolve builds one plan for the machine's view", "Cross-module target conflicts fail at resolve time"] },
+    { "dot": "cyan", "title": "Single executor", "items": ["Every converge operation runs through mise", "dotdrift generates config and drives ordered steps", "Package managers sit behind mise plugins"] },
+    { "dot": "rose", "title": "Safety rails", "items": ["Resume cursor serialized by a sidecar flock", "apply --backup fails closed on unreadable targets", "Restore never writes through a symlink"] }
+  ]
+}

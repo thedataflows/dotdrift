@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "dotdrift apply Pipeline",
+    "output": "workflow-apply.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "ordered-steps",
+        "label": "Ordered steps",
+        "focus": [
+          "detect",
+          "hooksPre",
+          "packages",
+          "tools",
+          "dotfiles",
+          "dotsys",
+          "mounts",
+          "hooksPost"
+        ],
+        "note": "One pass from preamble through convergence to activation."
+      },
+      {
+        "id": "scoped-execution",
+        "label": "Scoped execution",
+        "focus": [
+          "dotfiles",
+          "dotsys",
+          "mounts",
+          "hooksPost"
+        ],
+        "note": "User-scope steps versus the elevated system-scope pass."
+      },
+      {
+        "id": "resume-path",
+        "label": "Resume path",
+        "focus": [
+          "dotsys",
+          "cursor",
+          "hooksPre"
+        ],
+        "note": "A failed step is re-run from the cursor on the next apply."
+      }
+    ],
+    "viewBox": [
+      1240,
+      760
+    ]
+  },
+  "lanes": [
+    {
+      "id": "pre",
+      "label": "Preamble"
+    },
+    {
+      "id": "user",
+      "label": "User scope"
+    },
+    {
+      "id": "sys",
+      "label": "System scope"
+    },
+    {
+      "id": "rec",
+      "label": "Recovery",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "setup",
+      "label": "Setup",
+      "fromCol": 0,
+      "toCol": 0
+    },
+    {
+      "id": "converge",
+      "label": "Converge",
+      "fromCol": 1,
+      "toCol": 3,
+      "variant": "emphasis"
+    },
+    {
+      "id": "activate",
+      "label": "Activate",
+      "fromCol": 4,
+      "toCol": 4
+    },
+    {
+      "id": "finish",
+      "label": "Finish",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "elevated",
+      "label": "sudo when needed",
+      "lane": "sys",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "security"
+    }
+  ],
+  "mainPath": [
+    "detect",
+    "hooksPre",
+    "packages",
+    "tools",
+    "dotfiles",
+    "dotsys",
+    "mounts",
+    "hooksPost"
+  ],
+  "nodes": [
+    {
+      "id": "detect",
+      "lane": "pre",
+      "col": 0,
+      "type": "backend",
+      "label": "Resolve",
+      "sublabel": "facts, layers, plan"
+    },
+    {
+      "id": "backupn",
+      "lane": "pre",
+      "col": 1,
+      "type": "database",
+      "label": "--backup",
+      "sublabel": "snapshot copy targets",
+      "tag": "fail-closed"
+    },
+    {
+      "id": "hooksPre",
+      "lane": "user",
+      "col": 0,
+      "type": "backend",
+      "label": "hooks-pre",
+      "sublabel": "mise tasks"
+    },
+    {
+      "id": "packages",
+      "lane": "user",
+      "col": 1,
+      "type": "backend",
+      "label": "packages",
+      "sublabel": "paru plugin",
+      "width": 64
+    },
+    {
+      "id": "tools",
+      "lane": "user",
+      "col": 2,
+      "type": "backend",
+      "label": "tools",
+      "sublabel": "mise install",
+      "width": 64
+    },
+    {
+      "id": "dotfiles",
+      "lane": "user",
+      "col": 3,
+      "type": "backend",
+      "label": "dotfiles",
+      "sublabel": "symlink / copy"
+    },
+    {
+      "id": "dotsys",
+      "lane": "sys",
+      "col": 3,
+      "type": "security",
+      "label": "dotfiles-sys",
+      "sublabel": "sudo -E mise",
+      "tag": "/etc targets",
+      "width": 64
+    },
+    {
+      "id": "mounts",
+      "lane": "sys",
+      "col": 4,
+      "type": "cloud",
+      "label": "mounts + smb",
+      "sublabel": "services, accounts",
+      "width": 64
+    },
+    {
+      "id": "hooksPost",
+      "lane": "user",
+      "col": 5,
+      "type": "backend",
+      "label": "hooks-post",
+      "sublabel": "idempotent"
+    },
+    {
+      "id": "cursor",
+      "lane": "rec",
+      "col": 3,
+      "type": "database",
+      "label": "Resume Cursor",
+      "sublabel": "state.json + flock",
+      "tag": "on failure"
+    }
+  ],
+  "edges": [
+    {
+      "from": "detect",
+      "to": "backupn",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "from": "backupn",
+      "to": "packages",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "drop"
+    },
+    {
+      "from": "detect",
+      "to": "hooksPre",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "hooksPre",
+      "to": "packages",
+      "route": "bottom-channel",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "from": "packages",
+      "to": "tools",
+      "route": "bottom-channel",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "from": "tools",
+      "to": "dotfiles",
+      "route": "bottom-channel",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "from": "dotfiles",
+      "to": "dotsys",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "dotsys",
+      "to": "mounts",
+      "route": "bottom-channel",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    },
+    {
+      "from": "mounts",
+      "to": "hooksPost",
+      "variant": "emphasis",
+      "route": "drop",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "from": "dotsys",
+      "to": "cursor",
+      "variant": "security",
+      "role": "error",
+      "route": "drop",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "from": "cursor",
+      "to": "hooksPre",
+      "label": "rerun resumes",
+      "variant": "emphasis",
+      "role": "return",
+      "route": "return-left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "One pass, ordered",
+      "items": [
+        "hooks-pre \u2192 packages \u2192 tools \u2192 dotfiles \u2192 dotfiles-system \u2192 mounts/smb \u2192 hooks-post",
+        "Section flags filter which steps execute",
+        "The full plan is printed and snapshotted regardless"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Scoped execution",
+      "items": [
+        "User-scope steps run as the invoking user",
+        "System targets converge elevated in one sudo pass",
+        "Mounts and smb activate after files land"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Crash-safe resume",
+      "items": [
+        "The cursor records the last completed step",
+        "A sidecar flock serializes concurrent applies",
+        "A completed apply deletes its cursor"
+      ]
+    }
+  ]
+}

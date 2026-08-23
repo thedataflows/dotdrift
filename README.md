@@ -9,6 +9,8 @@ A CLI tool for managing Linux configuration through git-backed profiles. A real 
 - **Mise owns files**: symlink, copy, template, and partial-edit operations are performed by [mise](https://mise.jdx.dev).
 - **Selection precedence**: module → host → user; user wins, `disable` is unioned across layers.
 
+![dotdrift-architecture](docs/diagrams/architecture.png)
+
 ## Installation
 
 ### From a release (recommended)

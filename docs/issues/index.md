@@ -31,3 +31,5 @@ use, plus emergent features and chores. Planned work lives in
 | [0013](0013-configurable-color-palette.md) | Configurable status color palette | done | low |
 | [0014](0014-dir-source-subtree-orphan-false-positive.md) | Directory sources flag their own subtree as orphans | done | high |
 | [0015](0015-onboard-adopts-orphans.md) | Onboard adopts orphaned module files | done | medium |
+| [0016](0016-status-orphans-current-host-only.md) | Status scans orphans only for the current host and user | done | high |
+| [0017](0017-onboard-adoption-units-and-profile-paths.md) | Onboard adoption claims giant ancestors and mangles profile-internal paths | done | high |

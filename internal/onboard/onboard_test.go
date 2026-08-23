@@ -735,16 +735,20 @@ func TestOnboard_ctxPropagatesToMiseRunner(t *testing.T) {
 // snapshotted over the module source first (onboard snapshots live
 // state), keeping the forced takeover apply lossless.
 
-// mkModule pre-creates a module dir with files and returns its path.
-func mkModule(t *testing.T, profile, app string, files map[string]string) string {
+// mkModule pre-creates a module directory (dir, absolute or
+// profile-relative) with files and returns its path.
+func mkModule(t *testing.T, dir string, files map[string]string) string {
 	t.Helper()
-	dir := filepath.Join(profile, "modules", app)
 	for rel, content := range files {
 		p := filepath.Join(dir, rel)
 		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
 		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
 	}
 	return dir
+}
+
+func modDir(profile, app string) string {
+	return filepath.Join(profile, "modules", app)
 }
 
 func TestOnboard_adoptsOrphans(t *testing.T) {
@@ -760,7 +764,7 @@ func TestOnboard_adoptsOrphans(t *testing.T) {
 	live := filepath.Join(home, ".config", "app", "keep.toml")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
 	require.NoError(t, writeFile(live, "keep"))
-	mkModule(t, profile, "app", map[string]string{
+	mkModule(t, modDir(profile, "app"), map[string]string{
 		// module.toml declares nothing yet (empty file).
 		"module.toml": "",
 		// Orphan file with a live counterpart (stale copy).
@@ -796,8 +800,8 @@ func TestOnboard_adoptsOrphans(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "live fresh", snapshotted, "live content wins over the stale orphan copy")
 
-	require.Contains(t, out.String(), "adopted: ~/.config/stray.toml")
-	require.Contains(t, out.String(), "adopted: ~/.config/legacy")
+	require.Contains(t, out.String(), "adopted: ~/.config/stray.toml (home/.config/stray.toml) [base]")
+	require.Contains(t, out.String(), "adopted: ~/.config/legacy (home/.config/legacy) [base]")
 }
 
 // Files under a directory source are already deployed by that entry
@@ -810,7 +814,7 @@ func TestOnboard_adoptionSkipsReferencedSubtrees(t *testing.T) {
 	live := filepath.Join(home, ".config", "app", "new.toml")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
 	require.NoError(t, writeFile(live, "new"))
-	mkModule(t, profile, "app", map[string]string{
+	mkModule(t, modDir(profile, "app"), map[string]string{
 		"module.toml": `[dotfiles]
 "~/.config/app" = { source = "home/.config/app", mode = "symlink" }
 `,
@@ -843,7 +847,7 @@ func TestOnboard_reOnboardChangedSourceAdoptsOld(t *testing.T) {
 	liveDir := filepath.Join(home, ".config", "app")
 	require.NoError(t, os.MkdirAll(liveDir, 0o755))
 	require.NoError(t, writeFile(filepath.Join(liveDir, "config.toml"), "cfg"))
-	mkModule(t, profile, "app", map[string]string{
+	mkModule(t, modDir(profile, "app"), map[string]string{
 		"module.toml": `[dotfiles]
 "~/.config/app" = { source = "home/custom", mode = "symlink" }
 `,
@@ -873,7 +877,7 @@ func TestOnboard_adoptionSkipsClaimedTargets(t *testing.T) {
 	live := filepath.Join(home, ".config", "app", "new.toml")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
 	require.NoError(t, writeFile(live, "new"))
-	mkModule(t, profile, "app", map[string]string{
+	mkModule(t, modDir(profile, "app"), map[string]string{
 		"module.toml": `[dotfiles]
 "~/.config/dup" = { source = "home/claimed", mode = "symlink" }
 `,
@@ -900,7 +904,7 @@ func TestOnboard_adoptionSelfCopyGuard(t *testing.T) {
 	profile := t.TempDir()
 	isolateState(t)
 
-	mod := mkModule(t, profile, "app", map[string]string{
+	mod := mkModule(t, modDir(profile, "app"), map[string]string{
 		"module.toml":         "",
 		"home/.config/orph":   "precious",
 	})
@@ -933,7 +937,7 @@ func TestOnboard_dryRunListsAdoptions(t *testing.T) {
 	live := filepath.Join(home, ".config", "app", "keep.toml")
 	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
 	require.NoError(t, writeFile(live, "keep"))
-	mkModule(t, profile, "app", map[string]string{
+	mkModule(t, modDir(profile, "app"), map[string]string{
 		"module.toml":                 "",
 		"home/.config/legacy/orph.conf": "orphan until adopted",
 	})
@@ -944,7 +948,7 @@ func TestOnboard_dryRunListsAdoptions(t *testing.T) {
 		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home, DryRun: true,
 	}))
 
-	require.Contains(t, out.String(), "would adopt: ~/.config/legacy")
+	require.Contains(t, out.String(), "would adopt: ~/.config/legacy (home/.config/legacy) [base]")
 	require.NotContains(t, out.String(), "would adopt: ~ (home)",
 		"the whole-home unit is narrowed: it would nest under this run's target")
 	// Dry-run writes nothing: module.toml stays empty, the orphan stays.
@@ -954,4 +958,100 @@ func TestOnboard_dryRunListsAdoptions(t *testing.T) {
 	kept, err := readFile(filepath.Join(profile, "modules", "app", "home", ".config", "legacy", "orph.conf"))
 	require.NoError(t, err)
 	require.Equal(t, "orphan until adopted", kept)
+}
+
+// A path INSIDE a module layer directory of the profile is a module file,
+// not a live path: onboard answers by adopting it into ITS layer's
+// module.toml (the field-report easyeffects command). No copy, no garbage
+// target derived from the profile path, file content untouched.
+func TestOnboard_profileInternalPathAdopts(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	base := mkModule(t, filepath.Join(profile, "modules", "easyeffects"), map[string]string{
+		"module.toml": `[dotfiles]
+"~/.config/easyeffects" = { source = "home/.config/easyeffects", mode = "symlink-each" }
+`,
+		"home/.config/easyeffects/db/deesserrc": "base preset",
+	})
+	hostMod := mkModule(t, filepath.Join(profile, "hosts", "cri-pc", "modules", "easyeffects"), map[string]string{
+		"module.toml": "",
+		"home/.config/easyeffects/db/easyeffectsrc": "orphan preset",
+	})
+	orphan := filepath.Join(hostMod, "home", ".config", "easyeffects", "db", "easyeffectsrc")
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{orphan}, Home: home, Hostname: "cri-pc", DryRun: true,
+	}))
+	// Dry-run touched nothing: the host module.toml stays empty.
+	c, err := readFile(filepath.Join(hostMod, "module.toml"))
+	require.NoError(t, err)
+	require.Equal(t, "", c)
+
+	var out bytes.Buffer
+	o = &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{orphan}, Home: home, Hostname: "cri-pc",
+	}))
+
+	require.Contains(t, out.String(),
+		"adopted: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [host]",
+		"the notice names the file and its layer")
+
+	content, err := readFile(filepath.Join(hostMod, "module.toml"))
+	require.NoError(t, err)
+	t.Log(content)
+	require.Contains(t, content,
+		`"~/.config/easyeffects/db/easyeffectsrc" = { source = "home/.config/easyeffects/db/easyeffectsrc", mode = "symlink" }`)
+	require.NotContains(t, content, "hosts/cri-pc", "no garbage source derived from the profile path")
+	require.NotContains(t, content, profile, "no absolute profile paths leak into module.toml")
+
+	kept, err := readFile(orphan)
+	require.NoError(t, err)
+	require.Equal(t, "orphan preset", kept, "the module file itself is never copied over")
+
+	baseToml, err := readFile(filepath.Join(base, "module.toml"))
+	require.NoError(t, err)
+	require.NotContains(t, baseToml, "easyeffectsrc", "the adoption lands in the HOST layer, not base")
+
+	// A directed path that does not exist is an error, not a silent skip.
+	err = o.Run(onboard.Options{
+		ProfileRoot: profile,
+		Paths:       []string{filepath.Join(hostMod, "home", ".config", "gone.conf")},
+		Home:        home, Hostname: "cri-pc",
+	})
+	require.Error(t, err, "a missing module file cannot be adopted")
+}
+
+// The ancestor chain never claims a shared namespace root: with no
+// declarations bounding it, a deep orphan adopts its own subdirectory,
+// never ~/.config (the "would adopt: ~/.config" field report).
+func TestOnboard_adoptionNeverClaimsSharedRoots(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	sys := filepath.Join(t.TempDir(), "etc-thing") // system target: no nesting bound
+	require.NoError(t, writeFile(sys, "sys"))
+	mkModule(t, modDir(profile, "app"), map[string]string{
+		"module.toml":             "",
+		"home/.config/foo/bar.conf": "orphan",
+	})
+
+	var out bytes.Buffer
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{sys}, App: "app", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(modDir(profile, "app"), "module.toml"))
+	require.NoError(t, err)
+	t.Log(content)
+	require.Contains(t, content, `"~/.config/foo" = { source = "home/.config/foo", mode = "symlink" }`,
+		"the orphan's own subdirectory is the adoption unit")
+	require.NotContains(t, content, `"~/.config" =`, "never the shared ~/.config root")
+	require.NotContains(t, content, `"~" =`, "never the whole home")
+	require.Contains(t, out.String(), "adopted: ~/.config/foo (home/.config/foo) [base]")
 }

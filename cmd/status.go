@@ -11,7 +11,6 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
-	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -63,7 +62,7 @@ func (c *StatusCmd) Run() error {
 		opts.Verbose = errW
 	}
 	findings := drift.Check(context.Background(), plan, profileRoot, pr, opts)
-	findings = append(findings, drift.CheckOrphans(plan, statusModuleLayers(p, f))...)
+	findings = append(findings, drift.CheckOrphans(statusModuleLayers(p))...)
 
 	out := c.out
 	if out == nil {
@@ -129,22 +128,61 @@ func elevateProbes(pr drift.Probes) drift.Probes {
 	return pr
 }
 
-// statusModuleLayers lists every selected module's layer directories
-// (base, host, user) for the orphan scan: files there that no [dotfiles]
-// entry references are reported in the orphans section.
-func statusModuleLayers(p *profile.Profile, f *facts.Facts) []drift.ModuleLayer {
-	if p == nil {
+// statusModuleLayers lists EVERY module layer directory in the profile:
+// modules/*, hosts/*/modules/*, users/*/modules/*. Orphans are
+// profile-content drift, not live-system drift — a leftover under
+// another host's or user's overlay is visible from any machine, and a
+// module not selected here (when-filter) is still scanned. Reference
+// semantics live in drift.ReferencedPaths (layer declarations, all
+// views), so no plan or facts are needed here.
+func statusModuleLayers(p *profile.Profile) []drift.ModuleLayer {
+	if p == nil || p.Root == "" {
 		return nil
 	}
 	var layers []drift.ModuleLayer
-	for _, m := range p.Selected {
-		dir := filepath.Base(m.Path)
-		layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "base", Path: filepath.Join(p.Root, "modules", dir)})
-		if f.Hostname != "" {
-			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "host", Owner: f.Hostname, Path: filepath.Join(p.Root, "hosts", f.Hostname, "modules", dir)})
+	add := func(layer, owner, moduleDir string) {
+		layers = append(layers, drift.ModuleLayer{
+			Dir: filepath.Base(moduleDir), Layer: layer, Owner: owner, Path: moduleDir,
+		})
+	}
+	// moduleDirs lists the subdirectories of a modules/ root.
+	moduleDirs := func(root string) []string {
+		entries, err := os.ReadDir(root)
+		if err != nil {
+			return nil
 		}
-		if f.Username != "" {
-			layers = append(layers, drift.ModuleLayer{Dir: dir, Layer: "user", Owner: f.Username, Path: filepath.Join(p.Root, "users", f.Username, "modules", dir)})
+		var dirs []string
+		for _, e := range entries {
+			if e.IsDir() {
+				dirs = append(dirs, filepath.Join(root, e.Name()))
+			}
+		}
+		return dirs
+	}
+	for _, d := range moduleDirs(filepath.Join(p.Root, "modules")) {
+		add("base", "", d)
+	}
+	owners := func(kind string) []string {
+		entries, err := os.ReadDir(filepath.Join(p.Root, kind))
+		if err != nil {
+			return nil
+		}
+		var names []string
+		for _, e := range entries {
+			if e.IsDir() {
+				names = append(names, e.Name())
+			}
+		}
+		return names
+	}
+	for _, h := range owners("hosts") {
+		for _, d := range moduleDirs(filepath.Join(p.Root, "hosts", h, "modules")) {
+			add("host", h, d)
+		}
+	}
+	for _, u := range owners("users") {
+		for _, d := range moduleDirs(filepath.Join(p.Root, "users", u, "modules")) {
+			add("user", u, d)
 		}
 	}
 	return layers

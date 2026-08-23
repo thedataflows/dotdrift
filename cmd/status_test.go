@@ -171,6 +171,49 @@ func TestStatus_reportsOrphans(t *testing.T) {
 		"host-layer orphans group under the hosts/<hostname> heading")
 }
 
+// Orphans are profile-content drift: every host/user layer directory in
+// the profile is scanned from any machine, not just the current one's.
+func TestStatus_reportsOrphansForAllHostsAndUsers(t *testing.T) {
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	dir := t.TempDir()
+	writeStatusModule(t, dir, "modules/demo", `id = "demo"
+
+[dotfiles]
+"~/.demo" = { source = "demo.conf", mode = "symlink" }
+`, map[string]string{
+		"demo.conf": "managed",
+	})
+	// Another host's overlay: not selected on myhost, still checked.
+	writeStatusModule(t, dir, "hosts/other-pc/modules/demo", "", map[string]string{
+		"hook.sh": "orphan on another host",
+	})
+	// A module existing ONLY on another host: scanned too, its declared
+	// sources referenced, its extra file an orphan.
+	writeStatusModule(t, dir, "hosts/other-pc/modules/solo", `[dotfiles]
+"~/.solo" = { source = "solo.conf", mode = "symlink" }
+`, map[string]string{
+		"solo.conf":  "managed",
+		"stale.conf": "orphan",
+	})
+	// Another user's overlay.
+	writeStatusModule(t, dir, "users/alice/modules/demo", "", map[string]string{
+		"alice.sh": "orphan in another user's layer",
+	})
+
+	var buf bytes.Buffer
+	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
+	out := buf.String()
+	t.Log(out)
+	require.Contains(t, out, "  hosts/other-pc:\n    demo: hook.sh - not referenced by [dotfiles]",
+		"another host's overlay orphans show from this machine")
+	require.Contains(t, out, "    solo: stale.conf - not referenced by [dotfiles]",
+		"an other-host-only module is scanned; its declared sources are not flagged")
+	require.NotContains(t, out, "solo: solo.conf", "declared sources of the other-host module are referenced")
+	require.Contains(t, out, "  users/alice:\n    demo: alice.sh - not referenced by [dotfiles]",
+		"another user's overlay orphans show from this machine")
+}
+
 // [colors] overrides from dotdrift.toml reach the rendered report on a
 // TTY: the orphan hue is re-skinned end-to-end.
 func TestStatus_colorOverridesApply(t *testing.T) {

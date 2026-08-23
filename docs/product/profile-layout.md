@@ -461,26 +461,54 @@ profile load**, never at detection time:
 
 ### Referenced sources, orphans, and adoption
 
-A `[dotfiles]` entry's **reference set** decides which module files are
-doing work: the entry's `source` file, or — when the source is a
-directory — the **whole subtree** in the layer whose `module.toml`
-declares the entry (mise links/copies directory trees wholesale, so every
-nested file deploys; this covers `symlink-each` and whole-dir `symlink`/
-`copy` alike). Files inside a selected module's layer directory that no
-entry references (with `module.toml` itself excluded) are **orphans**:
-`dotdrift status` lists them under the layer-root heading they sit in.
+A `[dotfiles]` declaration's **reference set** decides which module files
+are doing work. References come from the layer declarations themselves —
+not from a resolved plan, which covers one machine's view — evaluated per
+host/user **view** (a view is one host's or user's overlay combination
+over base; entries merge whole-entry by precedence, user > host > base):
+
+- a declaration whose source is a **directory** references that whole
+  subtree **anchored to the declaring layer** (mise links/copies
+  directory trees wholesale, so every nested file deploys; this covers
+  `symlink-each` and whole-dir `symlink`/`copy` alike). An overlay
+  holding a dir at the same rel-path wins deployment, but the declaring
+  layer's tree stays the authored reference — extra overlay files remain
+  orphans;
+- a **file** source references the file each view resolves it to
+  (user > host > base, first existing): a base copy shadowed on every
+  host is dead content, a copy that still resolves for a host without an
+  overlay copy deploys there and stays referenced.
+
+Files inside a module's layer directory that no declaration references
+(`module.toml` itself excluded) are **orphans**. `dotdrift status` scans
+EVERY layer directory in the profile — `modules/*`,
+`hosts/*/modules/*`, `users/*/modules/*` — regardless of the current
+host, user, or when-filter selection: orphans are profile-content drift,
+so a leftover on another machine's overlay shows from anywhere, grouped
+under its layer-root heading.
 
 `dotdrift onboard` **adopts** orphans of the module it materializes
 (issue 0015): every invertible orphan — `home/<rel>` maps back to
 `~/<rel>`, `system/<rel>` to `/<rel>` — becomes a `[dotfiles]` entry in
 that module.toml with the run's `--mode` (default `symlink`). A
 directory whose entire content is orphaned collapses to ONE whole-dir
-entry, and the live counterpart, when present, is snapshotted over the
-stale module copy first (onboard snapshots live state), keeping the
-forced takeover apply lossless. Adoptions never duplicate or nest with an
-already-claimed target (a colliding or nesting unit is skipped and stays
-for `status` to report), and module-root files with no derivable target
-(hook scripts, notes) are never adopted. `--dry-run` prints the would-be
-adoptions (`would adopt: <target> (<source>)`) without touching anything;
-a real run prints `adopted:` lines and the adopted entries ride the same
-mise apply as the onboarded paths.
+entry, bounded by two rules (issue 0017): claims merge across ALL of the
+module's layers (a base `symlink-each` over `~/.config/app` keeps a
+stray overlay file from collapsing into an ancestor), and a dir unit
+never claims a shared namespace root (`~`, `~/.config`, `~/.local`,
+`~/.cache`, `/`, `/etc`, `/usr`, `/var`, `/opt`) — with nothing bounding
+the chain, a deep orphan adopts its own subdirectory instead. FILE units
+are blocked only by an exact target duplicate, so a stray file under
+another entry's subtree is still adoptable under its own path. The live
+counterpart, when present, is snapshotted over the stale module copy
+first (onboard snapshots live state), keeping the forced takeover apply
+lossless; module-root files with no derivable target (hook scripts,
+notes) are never adopted.
+
+Passing a path INSIDE a module layer directory (a module file itself) is
+a **directed adoption**: onboard adds the `[dotfiles]` entry for it in
+that layer's module.toml — the path names its corresponding level — with
+no copy and no live-path mapping. Notices name the layer:
+`would adopt: <target> (<source>) [base|host|user]` in `--dry-run`,
+`adopted: ...` in a real run, and the adopted entries ride the same mise
+apply as the onboarded paths.

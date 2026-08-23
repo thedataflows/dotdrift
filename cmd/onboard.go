@@ -54,5 +54,6 @@ func (c *OnboardCmd) Run() error {
 		DryRun:      c.DryRun,
 		Yes:         c.Yes,
 		Hostname:    f.Hostname,
+		Username:    f.Username,
 	})
 }

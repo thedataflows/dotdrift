@@ -12,9 +12,6 @@ import (
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/palette"
-	"github.com/thedataflows/dotdrift/internal/facts"
-	"github.com/thedataflows/dotdrift/internal/profile"
-	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 // Orphans: files inside a module's layer directories that no [dotfiles]
@@ -48,9 +45,8 @@ func TestCheckOrphans_userLayerAttribution(t *testing.T) {
 		"modules/shell/module.toml":       "",
 		"users/cri/modules/shell/local.sh": "orphan in the user overlay",
 	})
-	plan := &resolve.Plan{}
 
-	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	fs := drift.CheckOrphans(orphanLayers(root))
 	groups := orphanGroups(fs)
 	require.Equal(t, []string{"local.sh"}, groups["users/cri"]["shell"])
 }
@@ -58,18 +54,16 @@ func TestCheckOrphans_userLayerAttribution(t *testing.T) {
 func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml":     "",
+		"modules/shell/module.toml": `[dotfiles]
+"~/.bashrc" = { source = "bashrc", mode = "symlink" }
+`,
 		"modules/shell/bashrc":          "managed",
 		"modules/shell/notes.md":        "orphan",
 		"modules/shell/nested/deep.md":  "orphan",
 		"hosts/h/modules/shell/hook.sh": "orphan",
 	})
-	plan := &resolve.Plan{}
-	plan.Dotfiles.Entries = []resolve.DotfileEntry{
-		{Module: "shell", Source: filepath.Join(root, "modules", "shell", "bashrc"), Mode: "symlink"},
-	}
 
-	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	fs := drift.CheckOrphans(orphanLayers(root))
 	groups := orphanGroups(fs)
 	require.ElementsMatch(t, []string{"notes.md", "nested/deep.md"},
 		groups["base"]["shell"], "unreferenced base files are orphans")
@@ -88,17 +82,15 @@ func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
 func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml":       "",
-		"modules/shell/units/a.conf":      "direct child",
-		"modules/shell/units/db/b.conf":   "nested under a dir child",
+		"modules/shell/module.toml": `[dotfiles]
+"~/.config/units" = { source = "units", mode = "symlink-each" }
+`,
+		"modules/shell/units/a.conf":        "direct child",
+		"modules/shell/units/db/b.conf":     "nested under a dir child",
 		"modules/shell/units/db/sub/c.conf": "nested deeper",
 	})
-	plan := &resolve.Plan{}
-	plan.Dotfiles.Entries = []resolve.DotfileEntry{
-		{Module: "shell", Source: filepath.Join(root, "modules", "shell", "units"), Mode: "symlink-each"},
-	}
 
-	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	fs := drift.CheckOrphans(orphanLayers(root))
 	require.Empty(t, orphanGroups(fs), "the whole symlink-each source subtree is referenced")
 }
 
@@ -109,17 +101,15 @@ func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 func TestCheckOrphans_dirSourceSubtreeReferenced(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml":          "",
-		"modules/shell/home/app/a.conf":      "direct child",
-		"modules/shell/home/app/db/b.conf":   "nested",
+		"modules/shell/module.toml": `[dotfiles]
+"~/.config/app" = { source = "home/app", mode = "symlink" }
+`,
+		"modules/shell/home/app/a.conf":          "direct child",
+		"modules/shell/home/app/db/b.conf":       "nested",
 		"hosts/h/modules/shell/home/app/db/c.conf": "overlay file nothing references",
 	})
-	plan := &resolve.Plan{}
-	plan.Dotfiles.Entries = []resolve.DotfileEntry{
-		{Module: "shell", Layer: "base", Source: filepath.Join(root, "modules", "shell", "home", "app"), Mode: "symlink"},
-	}
 
-	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	fs := drift.CheckOrphans(orphanLayers(root))
 	groups := orphanGroups(fs)
 	require.Empty(t, groups["base"], "the whole dir-source subtree is referenced")
 	require.Equal(t, []string{"home/app/db/c.conf"}, groups["hosts/h"]["shell"],
@@ -132,21 +122,19 @@ func TestCheckOrphans_dirSourceSubtreeReferenced(t *testing.T) {
 func TestCheckOrphans_attributionPerModule(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml":   "",
-		"modules/shell/snippet.sh":    "referenced by edit template",
-		"modules/other/module.toml":   "",
-		"modules/other/other.conf":    "orphan of other",
+		"modules/shell/module.toml": `[dotfiles]
+"~/.zshrc/snippet" = { source = "snippet.sh", template = "tera" }
+`,
+		"modules/shell/snippet.sh":  "referenced by edit template",
+		"modules/other/module.toml": "",
+		"modules/other/other.conf":  "orphan of other",
 	})
-	plan := &resolve.Plan{}
-	plan.Dotfiles.Entries = []resolve.DotfileEntry{
-		{Module: "shell", Target: "~/.zshrc/snippet", Source: filepath.Join(root, "modules", "shell", "snippet.sh"), Template: "tera"},
-	}
 	layers := []drift.ModuleLayer{
 		{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")},
 		{Dir: "other", Layer: "base", Path: filepath.Join(root, "modules", "other")},
 	}
 
-	fs := drift.CheckOrphans(plan, layers)
+	fs := drift.CheckOrphans(layers)
 	groups := orphanGroups(fs)
 	require.Empty(t, groups["base"]["shell"], "template edit source is referenced")
 	require.Equal(t, []string{"other.conf"}, groups["base"]["other"])
@@ -157,15 +145,13 @@ func TestCheckOrphans_attributionPerModule(t *testing.T) {
 func TestCheckOrphans_cleanModuleOmitsSection(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml": "",
-		"modules/shell/bashrc":      "managed",
+		"modules/shell/module.toml": `[dotfiles]
+"~/.bashrc" = { source = "bashrc", mode = "symlink" }
+`,
+		"modules/shell/bashrc": "managed",
 	})
-	plan := &resolve.Plan{}
-	plan.Dotfiles.Entries = []resolve.DotfileEntry{
-		{Module: "shell", Source: filepath.Join(root, "modules", "shell", "bashrc"), Mode: "symlink"},
-	}
 
-	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	fs := drift.CheckOrphans(orphanLayers(root))
 	require.Empty(t, fs)
 
 	var b strings.Builder
@@ -256,11 +242,11 @@ func orphanGroups(fs []drift.Finding) map[string]map[string][]string {
 	return out
 }
 
-// The real stack (profile.Load + resolve.Resolve + CheckOrphans): a
-// symlink-each source's children must never be orphans, and neither must
-// the source file of a mode = "edit" entry — resolve consumes it into
-// an inline Block (Source=""), but the file is still the authored source.
-// Only genuinely unreferenced files are reported.
+// The declarations themselves drive the reference set (no resolved plan,
+// so every layer checks from any machine): a symlink-each source's
+// children are never orphans, and neither is the source file of a
+// mode = "edit" entry or a template edit. Only genuinely unreferenced
+// files are reported.
 func TestCheckOrphans_realStack(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
@@ -270,21 +256,15 @@ func TestCheckOrphans_realStack(t *testing.T) {
 "~/.zshrc/snippet" = { source = "snippets/snippet.tmpl", template = "tera" }
 "~/.bashrc" = { source = "home/.bashrc", mode = "symlink" }
 `,
-		"modules/shell/units/a.conf":         "deployed implicitly",
-		"modules/shell/units/b.conf":         "deployed implicitly",
-		"modules/shell/home/aliases.sh":      "edit source, consumed at resolve",
+		"modules/shell/units/a.conf":          "deployed implicitly",
+		"modules/shell/units/b.conf":          "deployed implicitly",
+		"modules/shell/home/aliases.sh":       "edit source, consumed at resolve",
 		"modules/shell/snippets/snippet.tmpl": "template edit source",
-		"modules/shell/home/.bashrc":         "whole-file source",
-		"modules/shell/NOTES.md":             "true orphan",
+		"modules/shell/home/.bashrc":          "whole-file source",
+		"modules/shell/NOTES.md":              "true orphan",
 	})
 
-	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"}
-	p, err := profile.Load(root, f)
-	require.NoError(t, err)
-	plan, err := resolve.Resolve(p, f)
-	require.NoError(t, err)
-
-	fs := drift.CheckOrphans(plan, []drift.ModuleLayer{{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")}})
+	fs := drift.CheckOrphans([]drift.ModuleLayer{{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")}})
 	groups := orphanGroups(fs)
 	require.Equal(t, []string{"NOTES.md"}, groups["base"]["shell"],
 		"only the true orphan; edit/symlink-each/template sources are referenced")
@@ -309,13 +289,7 @@ func TestCheckOrphans_realStackSymlinkEachSubtree(t *testing.T) {
 		"hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc": "overlay",
 	})
 
-	f := &facts.Facts{Hostname: "cri-pc", Username: "cri", OS: "linux"}
-	p, err := profile.Load(root, f)
-	require.NoError(t, err)
-	plan, err := resolve.Resolve(p, f)
-	require.NoError(t, err)
-
-	fs := drift.CheckOrphans(plan, []drift.ModuleLayer{
+	fs := drift.CheckOrphans([]drift.ModuleLayer{
 		{Dir: "easyeffects", Layer: "base", Path: filepath.Join(root, "modules", "easyeffects")},
 		{Dir: "easyeffects", Layer: "host", Owner: "cri-pc", Path: filepath.Join(root, "hosts", "cri-pc", "modules", "easyeffects")},
 	})
@@ -323,4 +297,65 @@ func TestCheckOrphans_realStackSymlinkEachSubtree(t *testing.T) {
 	require.Equal(t, []string{"home/.config/easyeffects/db/easyeffectsrc"}, groups["hosts/cri-pc"]["easyeffects"],
 		"the whole base symlink-each subtree is referenced; only the host-overlay file nothing references is an orphan")
 	require.Empty(t, groups["base"], "the whole base symlink-each subtree is referenced")
+}
+
+// A FILE source resolves per host/user view (user > host > base, first
+// existing): a base copy shadowed on every host is dead content (orphan),
+// but a copy that still resolves for a host without an overlay file
+// deploys there and stays referenced.
+func TestCheckOrphans_fileSourceResolvedPerView(t *testing.T) {
+	t.Run("shadowed everywhere", func(t *testing.T) {
+		root := t.TempDir()
+		writeTree(t, root, map[string]string{
+			"modules/shell/module.toml": `[dotfiles]
+"~/.x" = { source = "home/.x", mode = "symlink" }
+`,
+			"modules/shell/home/.x":         "base copy, shadowed on the only host",
+			"hosts/h/modules/shell/home/.x": "host copy, deploys on h",
+		})
+		fs := drift.CheckOrphans(orphanLayers(root))
+		groups := orphanGroups(fs)
+		require.Equal(t, []string{"home/.x"}, groups["base"]["shell"],
+			"the base copy nothing resolves (the host file wins everywhere) is an orphan")
+		require.Empty(t, groups["hosts/h"], "the host copy that deploys is referenced")
+	})
+	t.Run("still resolves for a second host", func(t *testing.T) {
+		root := t.TempDir()
+		writeTree(t, root, map[string]string{
+			"modules/shell/module.toml": `[dotfiles]
+"~/.x" = { source = "home/.x", mode = "symlink" }
+`,
+			"modules/shell/home/.x":         "base copy, deploys on hosts without an overlay",
+			"hosts/a/modules/shell/home/.x": "host a copy",
+			"hosts/b/modules/shell/keep":    "b has no overlay copy of home/.x",
+		})
+		fs := drift.CheckOrphans([]drift.ModuleLayer{
+			{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")},
+			{Dir: "shell", Layer: "host", Owner: "a", Path: filepath.Join(root, "hosts", "a", "modules", "shell")},
+			{Dir: "shell", Layer: "host", Owner: "b", Path: filepath.Join(root, "hosts", "b", "modules", "shell")},
+		})
+		groups := orphanGroups(fs)
+		require.Empty(t, groups["base"], "the base copy still deploys on host b")
+		require.Empty(t, groups["hosts/a"], "the host a copy deploys there")
+		require.Equal(t, []string{"keep"}, groups["hosts/b"]["shell"], "b's extra file is an orphan")
+	})
+}
+
+// An overlay-only module (no base layer) declares its own entries the
+// same way; its declared sources are referenced, extras are orphans.
+func TestCheckOrphans_overlayOnlyModule(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"hosts/other/modules/demo/module.toml": `[dotfiles]
+"~/.demo" = { source = "demo.conf", mode = "symlink" }
+`,
+		"hosts/other/modules/demo/demo.conf": "managed",
+		"hosts/other/modules/demo/stale.md":  "orphan",
+	})
+	fs := drift.CheckOrphans([]drift.ModuleLayer{
+		{Dir: "demo", Layer: "host", Owner: "other", Path: filepath.Join(root, "hosts", "other", "modules", "demo")},
+	})
+	groups := orphanGroups(fs)
+	require.Equal(t, []string{"stale.md"}, groups["hosts/other"]["demo"],
+		"an overlay-only module's declared sources are referenced; extras are orphans")
 }

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog/log"
+	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -33,6 +34,7 @@ type Options struct {
 	Yes         bool
 	Home        string
 	Hostname    string
+	Username    string
 }
 
 // Onboard materializes live paths into a module and applies them.
@@ -100,13 +102,52 @@ func (o *Onboard) Run(opts Options) error {
 	for i, p := range opts.Paths {
 		expanded[i] = expandPath(p, home)
 	}
-
-	app := opts.App
-	if app == "" {
-		app = inferApp(expanded, home)
+	profRoot, err := filepath.Abs(opts.ProfileRoot)
+	if err != nil {
+		profRoot = opts.ProfileRoot
 	}
-	if app == "" {
-		return fmt.Errorf("could not infer app from paths")
+
+	// A path inside a module layer directory of the profile IS a module
+	// file: onboard adopts it into that layer's module.toml instead of
+	// copying it like a live path (issue 0017). The path's own layer wins
+	// over --app/--host inference — it names the corresponding module.
+	var directed []adoption
+	var directedDir string
+	var live []string
+	for _, p := range expanded {
+		layerDir, rel, ok := moduleLayerPath(profRoot, p)
+		if ok {
+			if _, err := os.Stat(p); err != nil {
+				return fmt.Errorf("onboard: %s: %w", p, err)
+			}
+			target, invertible := invertTarget(rel)
+			if !invertible {
+				return fmt.Errorf("onboard: %s is inside module %s but not under home/ or system/; pass a module file or a live path", p, layerDir)
+			}
+			if directedDir != "" && directedDir != layerDir {
+				return fmt.Errorf("onboard: paths span multiple module layers (%s, %s); run them separately", directedDir, layerDir)
+			}
+			directedDir = layerDir
+			directed = append(directed, adoption{Rel: rel, Target: target})
+			continue
+		}
+		if containsPath(profRoot, p) {
+			return fmt.Errorf("onboard: %s is inside the profile but not a module file under modules/<app>[/hosts|users]/home|system; onboard takes live paths (a module file is adopted by passing it)", p)
+		}
+		live = append(live, p)
+	}
+
+	var app string
+	if directedDir != "" {
+		app = filepath.Base(directedDir)
+	} else {
+		app = opts.App
+		if app == "" {
+			app = inferApp(live, home)
+		}
+		if app == "" {
+			return fmt.Errorf("could not infer app from paths")
+		}
 	}
 
 	mode := opts.Mode
@@ -114,16 +155,48 @@ func (o *Onboard) Run(opts Options) error {
 		mode = "symlink"
 	}
 
-	moduleDir := filepath.Join(opts.ProfileRoot, "modules", app)
+	moduleDir := filepath.Join(profRoot, "modules", app)
 	if opts.Host {
 		if opts.Hostname == "" {
 			return fmt.Errorf("hostname required for host overlay")
 		}
-		moduleDir = filepath.Join(opts.ProfileRoot, "hosts", opts.Hostname, "modules", app)
+		moduleDir = filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app)
+	}
+	if directedDir != "" {
+		moduleDir = directedDir
+	}
+	level := layerLevel(profRoot, moduleDir)
+
+	// Claims: every [dotfiles] target the module already declares in any
+	// of its layers (base, this host, this user) bounds the adoption
+	// chain — a base symlink-each entry keeps a stray overlay file from
+	// collapsing into a giant ancestor unit (issue 0017).
+	hostOwner := opts.Hostname
+	if directedDir != "" && level == "host" {
+		hostOwner = filepath.Base(filepath.Dir(filepath.Dir(moduleDir)))
+	}
+	appLayers := []drift.ModuleLayer{
+		{Dir: app, Layer: "base", Path: filepath.Join(profRoot, "modules", app)},
+	}
+	if hostOwner != "" {
+		appLayers = append(appLayers, drift.ModuleLayer{
+			Dir: app, Layer: "host", Owner: hostOwner, Path: filepath.Join(profRoot, "hosts", hostOwner, "modules", app),
+		})
+	}
+	if opts.Username != "" {
+		appLayers = append(appLayers, drift.ModuleLayer{
+			Dir: app, Layer: "user", Owner: opts.Username, Path: filepath.Join(profRoot, "users", opts.Username, "modules", app),
+		})
+	}
+	declared := map[string]bool{}
+	for _, layer := range appLayers {
+		for t := range readExistingDotfiles(layer.Path) {
+			declared[t] = true
+		}
 	}
 
 	entries := make(map[string]dotfileEntry)
-	for _, p := range expanded {
+	for _, p := range live {
 		target, source, err := mapPath(p, home, moduleDir)
 		if err != nil {
 			return err
@@ -146,17 +219,65 @@ func (o *Onboard) Run(opts Options) error {
 		entries[target] = dotfileEntry{Source: filepath.ToSlash(relSource), Mode: mode}
 	}
 
-	// Orphan adoption (issue 0015): files in the module dir no merged
-	// [dotfiles] entry references are claimed as entries of their own.
-	merged := mergeEntries(readExistingDotfiles(moduleDir), entries)
-	adoptions := planAdoptions(moduleDir, merged)
+	// References: the same declaration-based set status orphans use, plus
+	// this run's own copies.
+	refs := drift.ReferencedPaths(appLayers)
+	// A run entry overriding a declared target strands the old source in
+	// every view: un-reference it so the orphan scan adopts it.
+	for _, layer := range appLayers {
+		declared := readExistingDotfiles(layer.Path)
+		for target, e := range entries {
+			old, ok := declared[target]
+			if !ok || old.Source == "" || old.Source == e.Source {
+				continue
+			}
+			unmarkTree(filepath.Join(layer.Path, filepath.FromSlash(old.Source)), refs)
+		}
+	}
+	for _, e := range entries {
+		markSourceTree(filepath.Join(moduleDir, filepath.FromSlash(e.Source)), refs)
+	}
+	for _, a := range directed {
+		refs[filepath.Join(moduleDir, filepath.FromSlash(a.Rel))] = true
+	}
+
+	// Directed adoptions first (the user named these files); then the
+	// orphan scan of the module dir.
+	claims := map[string]bool{}
+	for t := range declared {
+		claims[t] = true
+	}
+	for t := range entries {
+		claims[t] = true
+	}
 	out := o.Out
 	if out == nil {
 		out = io.Discard
 	}
+	notice := func(dry bool, a adoption) string {
+		if dry {
+			return fmt.Sprintf("would adopt: %s (%s) [%s]", a.Target, a.Rel, level)
+		}
+		return fmt.Sprintf("adopted: %s (%s) [%s]", a.Target, a.Rel, level)
+	}
+	skip := func(a adoption) {
+		fmt.Fprintf(out, "already declared: %s (skipped)\n", a.Target)
+	}
+	for _, a := range directed {
+		if declared[a.Target] {
+			skip(a)
+			continue
+		}
+		claims[a.Target] = true
+		if !opts.DryRun {
+			entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
+		}
+		fmt.Fprintln(out, notice(opts.DryRun, a))
+	}
+	adoptions := planAdoptions(moduleDir, refs, claims)
 	if opts.DryRun {
 		for _, a := range adoptions {
-			fmt.Fprintf(out, "would adopt: %s (%s)\n", a.Target, a.Rel)
+			fmt.Fprintln(out, notice(true, a))
 		}
 		return nil
 	}
@@ -168,14 +289,14 @@ func (o *Onboard) Run(opts Options) error {
 		// itself. Unreadable live paths (e.g. root-owned system files)
 		// drop just this adoption with a warning, not the whole run.
 		src := filepath.Join(moduleDir, filepath.FromSlash(a.Rel))
-		if live := liveTargetPath(a.Target, home); live != "" {
-			if err := snapshotLive(live, src); err != nil {
+		if livePath := liveTargetPath(a.Target, home); livePath != "" {
+			if err := snapshotLive(livePath, src); err != nil {
 				log.Warn().Err(err).Str("orphan", a.Rel).Msg("onboard: skip orphan adoption")
 				continue
 			}
 		}
 		entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
-		fmt.Fprintf(out, "adopted: %s (%s)\n", a.Target, a.Rel)
+		fmt.Fprintln(out, notice(false, a))
 	}
 
 	cfg := moduleConfig{
@@ -219,28 +340,30 @@ type adoption struct {
 	Target string
 }
 
-// planAdoptions finds the orphans of a module dir — files no merged entry
-// references (module.toml excluded) — and maps each to the entry it should
-// become. A directory whose entire content is orphaned collapses to ONE
-// whole-dir entry (what onboarding that directory would produce); the
-// candidate chain walks from the topmost fully-orphan ancestor down so a
-// claimed target (e.g. this run's own, nesting under "~") only narrows the
-// adoption instead of losing the files. Only home/ and system/ paths
-// invert back to a live target; module-root files (hook scripts, notes)
-// have none and are left for status to report. Targets are claimed
-// incrementally so adopted units never duplicate or nest each other;
-// ponytail: a target another MODULE already claims is not checked here —
-// resolve fails loudly on cross-module target conflicts instead.
-func planAdoptions(moduleDir string, merged map[string]dotfileEntry) []adoption {
-	// Reference set: every file under each entry's source tree (a source
-	// directory deploys its whole subtree — the same rule status orphans
-	// use, issue 0014).
-	referenced := map[string]bool{}
-	for _, e := range merged {
-		if e.Source == "" {
-			continue // inline edit: no on-disk source
-		}
-		markSourceTree(filepath.Join(moduleDir, filepath.FromSlash(e.Source)), referenced)
+// planAdoptions finds the orphans of a module dir — files nothing
+// references (module.toml excluded) — and maps each to the entry it
+// should become. A directory whose entire content is orphaned collapses
+// to ONE whole-dir entry (what onboarding that directory would produce);
+// the candidate chain walks from the topmost fully-orphan ancestor down.
+// A DIR unit never claims a target occupied by (or nesting with) a
+// declared claim and never claims a shared namespace root — claims merge
+// across ALL of the module's layers, so a base symlink-each entry keeps
+// a stray overlay file from collapsing into ~/.config (issue 0017). A
+// FILE unit is blocked only by an exact target duplicate: a stray file
+// under another entry's subtree is still adoptable under its own path.
+// Only home/ and system/ paths invert back to a live target; module-root
+// files (hook scripts, notes) have none and are left for status to
+// report. Targets are claimed incrementally so adopted units never
+// duplicate or nest each other; ponytail: a target another MODULE
+// already claims is not checked here — resolve fails loudly on
+// cross-module target conflicts instead.
+func planAdoptions(moduleDir string, referenced, claimed map[string]bool) []adoption {
+	// ponytail: shared namespace roots a dir unit must never claim, even
+	// with no declarations bounding the chain; upgrade path is
+	// configurability if real profiles ever need it.
+	blockedDirs := map[string]bool{
+		"~": true, "~/.config": true, "~/.local": true, "~/.cache": true,
+		"/": true, "/etc": true, "/usr": true, "/var": true, "/opt": true,
 	}
 
 	type counts struct{ total, orph int }
@@ -276,19 +399,26 @@ func planAdoptions(moduleDir string, merged map[string]dotfileEntry) []adoption 
 	})
 	sort.Strings(orphans)
 
-	claimed := make(map[string]bool, len(merged))
-	for t := range merged {
-		claimed[t] = true
-	}
-	claim := func(rel string) (adoption, bool) {
-		target, ok := invertTarget(rel)
-		if !ok {
-			return adoption{}, false
-		}
+	nests := func(target string) bool {
 		for t := range claimed {
 			if t == target || strings.HasPrefix(t, target+"/") || strings.HasPrefix(target, t+"/") {
-				return adoption{}, false
+				return true
 			}
+		}
+		return false
+	}
+	claimDir := func(rel string) (adoption, bool) {
+		target, ok := invertTarget(rel)
+		if !ok || blockedDirs[target] || nests(target) {
+			return adoption{}, false
+		}
+		claimed[target] = true
+		return adoption{Rel: rel, Target: target}, true
+	}
+	claimFile := func(rel string) (adoption, bool) {
+		target, ok := invertTarget(rel)
+		if !ok || claimed[target] {
+			return adoption{}, false
 		}
 		claimed[target] = true
 		return adoption{Rel: rel, Target: target}, true
@@ -306,7 +436,7 @@ func planAdoptions(moduleDir string, merged map[string]dotfileEntry) []adoption 
 				break
 			}
 			if c := dirs[dir]; c != nil && c.total == c.orph {
-				if u, ok := claim(dir); ok {
+				if u, ok := claimDir(dir); ok {
 					list = append(list, u)
 					seen[dir] = true
 					handled = true
@@ -315,7 +445,7 @@ func planAdoptions(moduleDir string, merged map[string]dotfileEntry) []adoption 
 			}
 		}
 		if !handled {
-			if u, ok := claim(f); ok {
+			if u, ok := claimFile(f); ok {
 				list = append(list, u)
 				seen[f] = true
 			}
@@ -324,10 +454,70 @@ func planAdoptions(moduleDir string, merged map[string]dotfileEntry) []adoption 
 	return list
 }
 
+// moduleLayerPath reports whether p is a file inside a module layer
+// directory of the profile (modules/<app>/..., hosts/<h>/modules/<app>/...,
+// users/<u>/modules/<app>/...), returning that layer directory and the
+// path relative to it (slash-separated, possibly empty for the module
+// dir itself).
+func moduleLayerPath(profRoot, p string) (layerDir, rel string, ok bool) {
+	r, err := filepath.Rel(profRoot, p)
+	if err != nil || r == "." || strings.HasPrefix(r, "..") {
+		return "", "", false
+	}
+	parts := strings.Split(filepath.ToSlash(r), "/")
+	switch {
+	case len(parts) >= 2 && parts[0] == "modules":
+		return filepath.Join(profRoot, "modules", parts[1]), strings.Join(parts[2:], "/"), true
+	case len(parts) >= 4 && (parts[0] == "hosts" || parts[0] == "users") && parts[2] == "modules":
+		return filepath.Join(profRoot, filepath.FromSlash(strings.Join(parts[:4], "/"))), strings.Join(parts[4:], "/"), true
+	default:
+		return "", "", false
+	}
+}
+
+// layerLevel names which module.toml a module directory belongs to:
+// "base", "host", or "user".
+func layerLevel(profRoot, moduleDir string) string {
+	r, err := filepath.Rel(profRoot, moduleDir)
+	if err != nil {
+		return "base"
+	}
+	parts := strings.Split(filepath.ToSlash(r), "/")
+	if len(parts) >= 2 && (parts[0] == "hosts" || parts[0] == "users") {
+		return parts[0][:4]
+	}
+	return "base"
+}
+
+// containsPath reports whether path is under dir.
+func containsPath(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// unmarkTree drops src, or every file in its subtree, from the reference
+// set (an overridden declaration's old source is stranded).
+func unmarkTree(src string, referenced map[string]bool) {
+	if !isDirPath(src) {
+		delete(referenced, src)
+		return
+	}
+	_ = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			delete(referenced, path)
+		}
+		return nil
+	})
+}
+
+func isDirPath(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
 // markSourceTree marks src, or — when src is a directory — every file in
 // its subtree, as referenced.
-func markSourceTree(src string, referenced map[string]bool) {
-	info, err := os.Stat(src)
+func markSourceTree(src string, referenced map[string]bool) {	info, err := os.Stat(src)
 	if err != nil || !info.IsDir() {
 		referenced[src] = true // missing/plain file: the exact path is the reference
 		return
@@ -410,18 +600,6 @@ func readExistingDotfiles(moduleDir string) map[string]dotfileEntry {
 		}
 	}
 	return out
-}
-
-// mergeEntries overlays override onto existing (same target key wins).
-func mergeEntries(existing, override map[string]dotfileEntry) map[string]dotfileEntry {
-	merged := make(map[string]dotfileEntry, len(existing)+len(override))
-	for k, v := range existing {
-		merged[k] = v
-	}
-	for k, v := range override {
-		merged[k] = v
-	}
-	return merged
 }
 
 // expandPath resolves an onboard path to an absolute filesystem path. "~"

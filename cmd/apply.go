@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/alecthomas/kong"
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/detect"
@@ -388,18 +389,39 @@ func defaultEnsureDir(ctx context.Context, dir string) error {
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
-	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
-	State   string    `help:"Path to state file" type:"path" default:""`
-	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
-	NoHooks bool      `help:"Skip pre/post hook commands (also DOTDRIFT_NO_HOOKS=1)" default:"false"`
-	Verbose bool      `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
-	Diff    string    `help:"Show diff for files whose content differs before applying; bare = internal diff, --diff=tool uses the named tool" default:""`
-	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
-	Out     io.Writer `kong:"-"`
+	Profile  string `help:"Path to profile directory" type:"existingdir" default:"."`
+	State    string `help:"Path to state file" type:"path" default:""`
+	Yes      bool   `help:"Answer yes to mise prompts" default:"false"`
+	Verbose  bool   `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
+	Diff     string `help:"Show diff for files whose content differs before applying; bare = internal diff, --diff=tool uses the named tool" default:""`
+	Modules  []string `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
+	Out      io.Writer `kong:"-"`
+
+	// Section flags: positives select exactly those sections, negatives
+	// (--no-<section>) subtract, no flags runs everything. Each maps to
+	// the same-named module.toml plan section. No default:"false" tag —
+	// an explicit default marks the flag Set in kong, which would defeat
+	// presence detection (positive vs negated vs absent).
+	Packages bool `help:"Apply only the packages section" negatable:""`
+	Tools    bool `help:"Apply only the tools section" negatable:""`
+	Dotfiles bool `help:"Apply only the dotfiles section (user + system)" negatable:""`
+	Mounts   bool `help:"Apply only the mounts section (units + services + destination dirs)" negatable:""`
+	Smb      bool `help:"Apply only the smb section" negatable:""`
+	Hooks    bool `help:"Run pre/post hook commands" negatable:""`
+
+	// onlySections overrides the flag resolution (programmatic callers,
+	// tests); nil = resolve from the parsed flags. kctx is captured by
+	// AfterApply so flag presence (Set, positive or negated) is readable.
+	onlySections []string
+	kctx         *kong.Context
 }
 
 // Run executes the apply pipeline with resume semantics.
 func (c *ApplyCmd) Run() error {
+	sections, err := c.resolveSections()
+	if err != nil {
+		return err
+	}
 	f, p, plan, err := loadAndResolve(c.Profile, c.Modules)
 	if err != nil {
 		return err
@@ -481,7 +503,7 @@ func (c *ApplyCmd) Run() error {
 		misePluginsDir = mise.PluginsDirFromEnv()
 	}
 
-	steps := c.buildSteps(plan, runner, f, profileRoot, out, misePluginsDir, map[string]string{
+	steps := c.buildSteps(plan, runner, f, profileRoot, out, misePluginsDir, sections, map[string]string{
 		"tools":    toolsConfigPath,
 		"dotfiles": dotfilesConfigPath,
 		"packages": packagesConfigPath,
@@ -502,15 +524,16 @@ func (c *ApplyCmd) Run() error {
 	return nil
 }
 
-// buildSteps assembles the apply pipeline from the resolved plan. It splits
-// dotfiles by scope, appends conditional steps (system files, mounts, smb,
-// hooks) based on plan contents and --no-hooks, and returns them in pipeline
-// order. paths maps logical names to generated mise.toml config paths.
+// buildSteps assembles the apply pipeline from the resolved plan, filtered
+// by the executed sections (--[no-]packages/tools/dotfiles/mounts/smb/hooks).
+// It splits dotfiles by scope, appends conditional steps (system files,
+// mounts, smb, hooks) based on plan contents and the section selection, and
+// returns them in pipeline order. paths maps logical names to generated
+// mise.toml config paths.
 func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 	f *facts.Facts, profileRoot string, out io.Writer, misePluginsDir string,
-	paths map[string]string,
+	sections sectionSet, paths map[string]string,
 ) []apply.Step {
-	hooksDisabled := c.NoHooks || os.Getenv("DOTDRIFT_NO_HOOKS") == "1"
 	backend := packagesFor(f.Backend)
 	setVerboseRunner(c.Verbose, backend)
 
@@ -520,34 +543,44 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 	// step is appended only when at least one system-scope entry exists.
 	userPlan := *plan
 	var userEntries, systemEntries []resolve.DotfileEntry
-	for _, e := range plan.Dotfiles.Entries {
-		if e.Scope == profile.ScopeSystem {
-			systemEntries = append(systemEntries, e)
-		} else {
-			userEntries = append(userEntries, e)
+	if sections.has("dotfiles") {
+		for _, e := range plan.Dotfiles.Entries {
+			if e.Scope == profile.ScopeSystem {
+				systemEntries = append(systemEntries, e)
+			} else {
+				userEntries = append(userEntries, e)
+			}
 		}
 	}
 	userPlan.Dotfiles.Entries = userEntries
 
+	// Mount destination dirs belong to the mounts section.
+	var mountDests []string
+	if sections.has("mounts") {
+		for _, e := range plan.Mounts.Entries {
+			mountDests = append(mountDests, e.Spec.Destination)
+		}
+	}
+
 	var steps []apply.Step
-	if !hooksDisabled && len(plan.Hooks.Pre) > 0 {
+	if sections.has("hooks") && len(plan.Hooks.Pre) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: paths["shared"],
 			Task: "hooks-pre", StepName: "hooks-pre",
 		})
 	}
-	steps = append(steps,
-		&packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: paths["packages"], misePluginsDir: misePluginsDir},
-		&mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"]},
-		&mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes},
-	)
+	if sections.has("packages") {
+		steps = append(steps, &packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: paths["packages"], misePluginsDir: misePluginsDir})
+	}
+	if sections.has("tools") {
+		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"]})
+	}
+	if sections.has("dotfiles") {
+		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes})
+	}
 	// System dotfiles + mount directories → systemFilesStep.
 	// Runs when there are system-scope dotfiles OR mount destinations (mkdir).
-	if len(systemEntries) > 0 || len(plan.Mounts.Entries) > 0 {
-		var mountDests []string
-		for _, e := range plan.Mounts.Entries {
-			mountDests = append(mountDests, e.Spec.Destination)
-		}
+	if len(systemEntries) > 0 || len(mountDests) > 0 {
 		homeDir, _ := os.UserHomeDir()
 		steps = append(steps, &systemFilesStep{
 			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
@@ -555,14 +588,14 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.
-	if len(plan.Mounts.Entries) > 0 {
+	if sections.has("mounts") && len(plan.Mounts.Entries) > 0 {
 		steps = append(steps, &mountsServicesStep{
 			runner: runner, entries: plan.Mounts.Entries, configPath: paths["mounts"],
 		})
 	}
 	// SMB accounts + services → mise bootstrap --only accounts,services,
 	// then interactive smbpasswd/testparm post-actions.
-	if len(plan.Smb.Modules) > 0 {
+	if sections.has("smb") && len(plan.Smb.Modules) > 0 {
 		sr := newSmbRunner()
 		setVerboseRunner(c.Verbose, sr)
 		steps = append(steps, &smbBootstrapStep{
@@ -570,7 +603,7 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 			smbRunner: sr, out: out,
 		})
 	}
-	if !hooksDisabled && len(plan.Hooks.Post) > 0 {
+	if sections.has("hooks") && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: paths["shared"],
 			Task: "hooks-post", StepName: "hooks-post",

@@ -25,3 +25,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0007](0007-when-expression-combinators.md) | when expression combinators and/or/not | done | medium |
 | [0008](0008-when-regex-entries.md) | Regex entries in when.packages and when.tools | done | medium |
 | [0009](0009-bootstrap-services-enabled-boolean.md) | bootstrap.services emits enabled as a string | done | high |
+| [0010](0010-apply-section-flags.md) | Per-section apply flags | done | medium |

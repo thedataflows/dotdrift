@@ -335,14 +335,17 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 }
 
 // --no-hooks suppresses both hooks steps: no mise task runs and the state
-// records only packages/tools/dotfiles.
+// records only packages/tools/dotfiles. Drives the section resolution
+// (all sections minus hooks); the flag spellings are covered in
+// sections_test.go.
 func TestApply_noHooksFlag(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	events, _ := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true, NoHooks: true}
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true,
+		onlySections: []string{"packages", "tools", "dotfiles", "mounts", "smb"}}
 	require.NoError(t, cmd.Run())
 
 	for _, e := range *events {
@@ -351,6 +354,66 @@ func TestApply_noHooksFlag(t *testing.T) {
 
 	_, statErr := os.Stat(statePath)
 	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
+}
+
+// --packages runs ONLY the packages step: no tools install, no dotfiles
+// apply, no hook tasks.
+func TestApply_onlyPackages(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true,
+		onlySections: []string{"packages"}}
+	require.NoError(t, cmd.Run())
+
+	requireOrder(t, *events, "packages:absent")
+	for _, e := range *events {
+		require.NotContains(t, e, "mise:run install", "tools must not run")
+		require.NotContains(t, e, "dotfiles apply", "dotfiles must not run")
+		require.NotContains(t, e, "hooks:", "hooks must not run")
+	}
+}
+
+// A positive combination runs exactly those sections: --tools --dotfiles
+// installs tools and applies dotfiles, no packages step, no hooks.
+func TestApply_onlyToolsAndDotfiles(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true,
+		onlySections: []string{"tools", "dotfiles"}}
+	require.NoError(t, cmd.Run())
+
+	requireOrder(t, *events, "mise:run install", "dotfiles apply")
+	for _, e := range *events {
+		require.NotContains(t, e, "packages:absent", "packages must not run")
+		require.NotContains(t, e, "packages:present", "packages must not run")
+		require.NotContains(t, e, "hooks:", "hooks must not run")
+	}
+}
+
+// Section flags drop the mounts machinery too: on the mounts fixture with
+// only dotfiles selected, no mount services bootstrap and no mount
+// destination mkdir happens.
+func TestApply_sectionFlagsSkipMounts(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true,
+		onlySections: []string{"dotfiles"}}
+	require.NoError(t, cmd.Run())
+
+	requireOrder(t, *events, "dotfiles apply")
+	for _, e := range *events {
+		require.NotContains(t, e, "services", "mounts services must not run")
+		require.NotContains(t, e, "ensure-dir", "mount mkdir must not run")
+	}
 }
 
 // DOTDRIFT_NO_HOOKS=1 suppresses hooks exactly like --no-hooks.

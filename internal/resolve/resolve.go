@@ -57,9 +57,14 @@ type DotfileEntry struct {
 	Block    string
 	Comment  string
 	Template string
-	Module   string
-	Layer    string
-	Scope    string
+	// EditSource is the resolved source path of a mode = "edit" entry —
+	// the file whose contents were inlined into Block at resolve time
+	// (Source is cleared downstream). Kept so status can attribute the
+	// authored file to this entry (orphan scan) instead of flagging it.
+	EditSource string
+	Module     string
+	Layer      string
+	Scope      string
 }
 
 // IsEdit reports whether the entry is a partial edit (line/block/template-edit)
@@ -420,6 +425,9 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 		// plan — sees a normal block edit. Unlike source+template (which mise
 		// renders at apply time), this reads at resolve time because mise has no
 		// raw-source block form — source alone is a whole-file entry.
+		// editSource keeps the resolved path of a mode = "edit" entry's
+		// source (contents inlined into Block below).
+		var editSource string
 		if df.Mode == "edit" {
 			if df.Source == "" {
 				return nil, fmt.Errorf("module %s: dotfile %q: mode = \"edit\" requires source", moduleID, target)
@@ -438,6 +446,7 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 			df.Block = string(data)
 			df.Source = ""
 			df.Mode = ""
+			editSource = editSrc
 		}
 		if df.IsEdit() {
 			if err := validateEditEntry(moduleID, target, df); err != nil {
@@ -454,7 +463,8 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 			return nil, fmt.Errorf("module %s: dotfile %q: unknown mode %q (valid: symlink, symlink-each, copy, template)", moduleID, target, df.Mode)
 		}
 		// Source is resolved for whole-file entries and template edits; inline
-		// line/block edits have no on-disk source.
+		// line/block edits have no on-disk source. A mode = "edit" entry keeps
+		// its consumed source path in EditSource for attribution (orphan scan).
 		var source string
 		if df.Source != "" {
 			var err error
@@ -464,16 +474,17 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 			}
 		}
 		entries = append(entries, DotfileEntry{
-			Target:   target,
-			Source:   source,
-			Mode:     df.Mode,
-			Line:     df.Line,
-			Block:    df.Block,
-			Comment:  df.Comment,
-			Template: df.Template,
-			Module:   moduleID,
-			Layer:    winner.layer,
-			Scope:    scope,
+			Target:     target,
+			Source:     source,
+			Mode:       df.Mode,
+			Line:       df.Line,
+			Block:      df.Block,
+			Comment:    df.Comment,
+			Template:   df.Template,
+			EditSource: editSource,
+			Module:     moduleID,
+			Layer:      winner.layer,
+			Scope:      scope,
 		})
 	}
 	return entries, nil

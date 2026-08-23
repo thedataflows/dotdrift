@@ -27,6 +27,7 @@ An **orphan** is a file inside a selected module's layer directory that the reso
 
 - not the `source` of any whole-file entry (symlink/copy/template),
 - not the `source` of a template edit entry,
+- not the **resolved source** of a `mode = "edit"` entry (its contents are inlined into the block at resolve time, but the file remains the authored source — the entry carries it as `EditSource` for exactly this attribution),
 - not a **direct child** of a `symlink-each` source directory (implicitly deployed), and
 - not `module.toml` (the manifest itself).
 
@@ -44,7 +45,7 @@ Implementation: `drift.CheckOrphans(plan, layers []ModuleLayer)` walks each prov
 ## Acceptance Criteria
 
 - [x] Unreferenced files in any layer of a selected module appear in `orphans:`, per module and layer.
-- [x] `module.toml`, entry sources, and symlink-each direct children are not orphans; nested files under a symlink-each source are.
+- [x] `module.toml`, entry sources (whole-file, template edit, and `mode = "edit"` resolved sources), and symlink-each direct children are not orphans; nested files under a symlink-each source are.
 - [x] No orphans → section omitted; pre-existing status output unchanged.
 - [x] Orphans render after the built-in sections and count in the drift summary.
 - [x] `go test ./...`, `go vet`, `golangci-lint` green.
@@ -57,4 +58,5 @@ Implementation: `drift.CheckOrphans(plan, layers []ModuleLayer)` walks each prov
 
 ## Notes
 
-- Tests: `internal/drift/orphans_test.go` (unreferenced per layer, symlink-each children referenced vs nested, per-module attribution, clean module omits section, render order), `cmd/status_test.go` `TestStatus_reportsOrphans` (end-to-end through the command).
+- **Follow-up fix (same day, dogfooding)**: the first cut flagged `mode = "edit"` source files as orphans — resolve inlines their contents into the block and clears `Source`, so the scan lost the reference. `resolve.DotfileEntry` gained `EditSource` (the resolved path of the consumed edit source, set during the mode translation in `mergeDotfiles`) and `referencedSources` counts it. Reproduced through the real stack (`profile.Load` → `resolve.Resolve` → `CheckOrphans`, `TestCheckOrphans_realStack`) — symlink-each children were already correct end-to-end; only edit sources leaked.
+- Tests: `internal/drift/orphans_test.go` (unreferenced per layer, symlink-each children referenced vs nested, per-module attribution, clean module omits section, render order, real-stack regression), `cmd/status_test.go` `TestStatus_reportsOrphans` (end-to-end through the command).

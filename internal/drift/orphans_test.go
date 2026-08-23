@@ -9,6 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -154,4 +156,38 @@ func orphanItems(fs []drift.Finding) map[string][]string {
 		sort.Strings(out[k])
 	}
 	return out
+}
+
+// The real stack (profile.Load + resolve.Resolve + CheckOrphans): a
+// symlink-each source's direct children must never be orphans, and neither
+// must the source file of a mode = "edit" entry — resolve consumes it into
+// an inline Block (Source=""), but the file is still the authored source.
+// Only genuinely unreferenced files are reported.
+func TestCheckOrphans_realStack(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"modules/shell/module.toml": `[dotfiles]
+"~/.config/units" = { source = "units", mode = "symlink-each" }
+"~/.profile/aliases" = { source = "home/aliases.sh", mode = "edit" }
+"~/.zshrc/snippet" = { source = "snippets/snippet.tmpl", template = "tera" }
+"~/.bashrc" = { source = "home/.bashrc", mode = "symlink" }
+`,
+		"modules/shell/units/a.conf":         "deployed implicitly",
+		"modules/shell/units/b.conf":         "deployed implicitly",
+		"modules/shell/home/aliases.sh":      "edit source, consumed at resolve",
+		"modules/shell/snippets/snippet.tmpl": "template edit source",
+		"modules/shell/home/.bashrc":         "whole-file source",
+		"modules/shell/NOTES.md":             "true orphan",
+	})
+
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"}
+	p, err := profile.Load(root, f)
+	require.NoError(t, err)
+	plan, err := resolve.Resolve(p, f)
+	require.NoError(t, err)
+
+	fs := drift.CheckOrphans(plan, []drift.ModuleLayer{{Dir: "shell", Layer: "base", Path: filepath.Join(root, "modules", "shell")}})
+	require.Equal(t, map[string][]string{
+		"shell [base]": {"NOTES.md"},
+	}, orphanItems(fs), "only the true orphan; edit/symlink-each/template sources are referenced")
 }

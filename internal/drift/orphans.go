@@ -88,6 +88,12 @@ func referencedSources(plan *resolve.Plan) map[string]bool {
 		return referenced
 	}
 	for _, e := range plan.Dotfiles.Entries {
+		// A mode = "edit" entry's source was consumed at resolve time
+		// (contents inlined into Block, Source cleared) — the file is still
+		// the authored source and must not be an orphan.
+		if e.EditSource != "" {
+			referenced[e.EditSource] = true
+		}
 		if e.Source == "" {
 			continue // inline line/block edit — no on-disk source
 		}

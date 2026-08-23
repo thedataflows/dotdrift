@@ -757,9 +757,10 @@ const (
 	ansiBold   = "\033[1m"
 	ansiFaint  = "\033[2m"
 	ansiRed    = "\033[31m"
-	ansiYellow = "\033[33m"
-	ansiOrange = "\033[38;5;208m"
 	ansiGreen  = "\033[32m"
+	ansiYellow = "\033[33m"
+	ansiMagenta = "\033[35m"
+	ansiOrange = "\033[38;5;208m"
 )
 
 // renderFinding writes one drift/unknown finding line. The owning module
@@ -793,6 +794,11 @@ func renderFinding(w io.Writer, f Finding, color bool) {
 // mismatch (exists but doesn't match desired state), orange for everything
 // else (missing, not enabled, still installed, etc.).
 func findingColor(f Finding) string {
+	// Orphans get a distinct shade (magenta): unreferenced module content
+	// is profile-side housekeeping, not live-system drift.
+	if f.Section == "orphans" {
+		return ansiMagenta
+	}
 	if f.Status == Unknown || strings.Contains(f.Detail, "not a symlink") {
 		return ansiRed
 	}

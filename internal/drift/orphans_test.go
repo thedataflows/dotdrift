@@ -1,6 +1,7 @@
 package drift_test
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -78,17 +80,17 @@ func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
 	}
 }
 
-// module.toml is the manifest, never an orphan; symlink-each source-dir
-// direct children are implicitly referenced; deeper files under the source
-// dir are NOT deployed by symlink-each (only direct children) and are
+// module.toml is the manifest, never an orphan; the WHOLE subtree of a
+// symlink-each source directory is referenced (mise links dir children,
+// so nested files deploy too) — only files outside any reference are
 // orphans.
 func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml":  "",
-		"modules/shell/units/a.conf": "managed implicitly",
-		"modules/shell/units/b.conf": "managed implicitly",
-		"modules/shell/units/nested/c.conf": "NOT deployed by symlink-each",
+		"modules/shell/module.toml":       "",
+		"modules/shell/units/a.conf":      "direct child",
+		"modules/shell/units/db/b.conf":   "nested under a dir child",
+		"modules/shell/units/db/sub/c.conf": "nested deeper",
 	})
 	plan := &resolve.Plan{}
 	plan.Dotfiles.Entries = []resolve.DotfileEntry{
@@ -96,10 +98,7 @@ func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 	}
 
 	fs := drift.CheckOrphans(plan, orphanLayers(root))
-	items := orphanItems(fs)
-	require.Empty(t, items["shell [host:h]"], "no host layer dir exists")
-	require.Equal(t, []string{"units/nested/c.conf"}, items["shell [base]"],
-		"direct children referenced; nested files are orphans")
+	require.Empty(t, orphanItems(fs), "the whole symlink-each source subtree is referenced")
 }
 
 // Sources of other modules do not mark this module's files; template edit
@@ -163,6 +162,25 @@ func TestRender_orphansSectionLast(t *testing.T) {
 	require.Contains(t, s, "m [base]: notes.md")
 }
 
+// On a TTY, orphan findings use a distinct shade (magenta) so they stand
+// apart from regular drift hues (orange/red/yellow); plain output is
+// unchanged.
+func TestRender_orphansDistinctColor(t *testing.T) {
+	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
+	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
+	executil.IsTerminal = func(io.Writer) bool { return true }
+	executil.NoColor = false
+
+	var b strings.Builder
+	drift.Render(&b, []drift.Finding{
+		{Section: "packages", Item: "jq", Status: drift.Drift, Detail: "missing", Module: "m"},
+		{Section: "orphans", Item: "notes.md", Status: drift.Drift, Detail: "not referenced by [dotfiles]", Module: "m [base]"},
+	})
+	s := b.String()
+	require.Contains(t, s, "\033[35m", "orphan line carries the magenta hue")
+	require.NotContains(t, strings.Split(s, "orphans:")[0], "\033[35m", "non-orphan sections keep their hues")
+}
+
 // orphanItems groups findings by the rendered module (layer-attributed).
 func orphanItems(fs []drift.Finding) map[string][]string {
 	out := map[string][]string{}
@@ -176,8 +194,8 @@ func orphanItems(fs []drift.Finding) map[string][]string {
 }
 
 // The real stack (profile.Load + resolve.Resolve + CheckOrphans): a
-// symlink-each source's direct children must never be orphans, and neither
-// must the source file of a mode = "edit" entry — resolve consumes it into
+// symlink-each source's children must never be orphans, and neither must
+// the source file of a mode = "edit" entry — resolve consumes it into
 // an inline Block (Source=""), but the file is still the authored source.
 // Only genuinely unreferenced files are reported.
 func TestCheckOrphans_realStack(t *testing.T) {
@@ -207,4 +225,39 @@ func TestCheckOrphans_realStack(t *testing.T) {
 	require.Equal(t, map[string][]string{
 		"shell [base]": {"NOTES.md"},
 	}, orphanItems(fs), "only the true orphan; edit/symlink-each/template sources are referenced")
+}
+
+// The real stack (profile.Load + resolve.Resolve + CheckOrphans), shaped
+// like the easyeffects case from the field report: a symlink-each source
+// dir with nested subdirectories (db/, input/) plus a same-path file in
+// the host overlay. Everything under the base symlink-each source is
+// referenced at ANY depth; the host overlay's unreferenced file is the
+// only orphan.
+func TestCheckOrphans_realStackSymlinkEachSubtree(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"modules/easyeffects/module.toml": `description = "PipeWire audio effects"
+[dotfiles]
+"~/.config/easyeffects" = { source = "home/.config/easyeffects", mode = "symlink-each" }
+`,
+		"modules/easyeffects/home/.config/easyeffects/db/bassEnhancerrc": "x",
+		"modules/easyeffects/home/.config/easyeffects/db/deesserrc":      "x",
+		"modules/easyeffects/home/.config/easyeffects/input/Noise Suppression.json": "x",
+		"hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc": "overlay",
+	})
+
+	f := &facts.Facts{Hostname: "cri-pc", Username: "cri", OS: "linux"}
+	p, err := profile.Load(root, f)
+	require.NoError(t, err)
+	plan, err := resolve.Resolve(p, f)
+	require.NoError(t, err)
+
+	fs := drift.CheckOrphans(plan, []drift.ModuleLayer{
+		{Dir: "easyeffects", Layer: "base", Path: filepath.Join(root, "modules", "easyeffects")},
+		{Dir: "easyeffects", Layer: "host", Owner: "cri-pc", Path: filepath.Join(root, "hosts", "cri-pc", "modules", "easyeffects")},
+	})
+	require.Equal(t, map[string][]string{
+		"easyeffects [host:cri-pc]": {"home/.config/easyeffects/db/easyeffectsrc"},
+	}, orphanItems(fs),
+		"the whole base symlink-each subtree is referenced; only the host-overlay file nothing references is an orphan")
 }

@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"sort"
 
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -37,14 +38,18 @@ const orphanDetail = "not referenced by [dotfiles]"
 
 // CheckOrphans reports files inside the given module layer directories that
 // no [dotfiles] entry of that module references — neither explicitly
-// (source = "...") nor implicitly (a direct child of a symlink-each source
-// directory). Findings land in the "orphans" section, attributed
-// "<dir> [<layer>]", so stale module content is visible per host/user/module.
-// module.toml is the manifest itself and never an orphan. Files shadowed by
-// a higher layer's source of the same name are orphans too — apply resolves
-// sources top-down and never reads them.
+// (source = "...") nor implicitly (the source subtree of a symlink-each
+// entry, attributed to the layer whose module.toml DECLARES the entry).
+// Findings land in the "orphans" section, attributed
+// "<dir> [base]" / "<dir> [host:<hostname>]" / "<dir> [user:<username>]",
+// so stale module content is visible per host/user/module. module.toml is
+// the manifest itself and never an orphan.
 func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
-	referenced := referencedSources(plan)
+	byKey := make(map[string]ModuleLayer, len(layers))
+	for _, ml := range layers {
+		byKey[ml.Dir+"/"+ml.Layer] = ml
+	}
+	referenced := referencedSources(plan, byKey)
 	var findings []Finding
 	for _, ml := range layers {
 		err := filepath.WalkDir(ml.Path, func(path string, d fs.DirEntry, err error) error {
@@ -90,11 +95,17 @@ func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
 }
 
 // referencedSources maps every absolute profile-side file the plan uses to
-// true: whole-file entry sources, template-edit sources, and the direct
-// file children of symlink-each source directories (what apply deploys).
-// Nested files under a symlink-each source are NOT deployed (only direct
-// children) and stay unreferenced.
-func referencedSources(plan *resolve.Plan) map[string]bool {
+// true. Whole-file/template/edit sources map to their resolved paths. A
+// symlink-each entry maps the WHOLE SUBTREE of its source directory in the
+// layer whose module.toml DECLARES the entry (e.Layer) — mise links
+// directory children wholesale, so every nested file deploys with the
+// entry and none of them is an orphan. The declaring layer is the anchor,
+// not the resolved source dir: resolve picks the highest-precedence layer
+// holding the source path, so an overlay that happens to contain a dir at
+// the same rel-path wins resolution — its tree is what apply deploys —
+// while the declaring layer's tree stays the authored reference and any
+// extra overlay files remain orphans.
+func referencedSources(plan *resolve.Plan, byKey map[string]ModuleLayer) map[string]bool {
 	referenced := map[string]bool{}
 	if plan == nil {
 		return referenced
@@ -110,18 +121,39 @@ func referencedSources(plan *resolve.Plan) map[string]bool {
 			continue // inline line/block edit — no on-disk source
 		}
 		if e.Mode == "symlink-each" {
-			children, err := os.ReadDir(e.Source)
-			if err != nil {
-				continue // missing dir already reported in the dotfiles section
-			}
-			for _, c := range children {
-				if !c.IsDir() {
-					referenced[filepath.Join(e.Source, c.Name())] = true
-				}
+			for _, src := range symlinkEachSourceTrees(e, byKey) {
+				_ = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+					if err == nil && !d.IsDir() {
+						referenced[path] = true
+					}
+					return nil // unreadable/missing dirs already reported in dotfiles
+				})
 			}
 			continue
 		}
 		referenced[e.Source] = true
 	}
 	return referenced
+}
+
+// symlinkEachSourceTrees returns the symlink-each source directories whose
+// subtrees count as referenced: the declaring layer's tree at the entry's
+// rel-path when it can be derived, falling back to the resolved source
+// dir. rel is derived by locating the layer whose path prefixes the
+// resolved Source.
+func symlinkEachSourceTrees(e resolve.DotfileEntry, byKey map[string]ModuleLayer) []string {
+	for _, ml := range byKey {
+		if ml.Path == "" || !strings.HasPrefix(e.Source, ml.Path+string(filepath.Separator)) {
+			continue
+		}
+		rel, err := filepath.Rel(ml.Path, e.Source)
+		if err != nil || rel == "." || strings.HasPrefix(rel, "..") {
+			break
+		}
+		if declaring, ok := byKey[e.Module+"/"+e.Layer]; ok && declaring.Path != "" {
+			return []string{filepath.Join(declaring.Path, rel)}
+		}
+		break
+	}
+	return []string{e.Source}
 }

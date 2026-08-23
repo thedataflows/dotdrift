@@ -102,16 +102,16 @@ func CheckOrphans(plan *resolve.Plan, layers []ModuleLayer) []Finding {
 }
 
 // referencedSources maps every absolute profile-side file the plan uses to
-// true. Whole-file/template/edit sources map to their resolved paths. A
-// symlink-each entry maps the WHOLE SUBTREE of its source directory in the
-// layer whose module.toml DECLARES the entry (e.Layer) — mise links
-// directory children wholesale, so every nested file deploys with the
-// entry and none of them is an orphan. The declaring layer is the anchor,
-// not the resolved source dir: resolve picks the highest-precedence layer
-// holding the source path, so an overlay that happens to contain a dir at
-// the same rel-path wins resolution — its tree is what apply deploys —
-// while the declaring layer's tree stays the authored reference and any
-// extra overlay files remain orphans.
+// true. An entry's reference set is its source file, or — when the source
+// is a directory — the WHOLE SUBTREE in the layer whose module.toml
+// DECLARES the entry (e.Layer): mise links/copies directory trees
+// wholesale, so every nested file deploys with the entry and none of them
+// is an orphan. The declaring layer is the anchor, not the resolved source
+// dir: resolve picks the highest-precedence layer holding the source path,
+// so an overlay that happens to contain a dir at the same rel-path wins
+// resolution — its tree is what apply deploys — while the declaring
+// layer's tree stays the authored reference and any extra overlay files
+// remain orphans.
 func referencedSources(plan *resolve.Plan, byKey map[string]ModuleLayer) map[string]bool {
 	referenced := map[string]bool{}
 	if plan == nil {
@@ -127,28 +127,30 @@ func referencedSources(plan *resolve.Plan, byKey map[string]ModuleLayer) map[str
 		if e.Source == "" {
 			continue // inline line/block edit — no on-disk source
 		}
-		if e.Mode == "symlink-each" {
-			for _, src := range symlinkEachSourceTrees(e, byKey) {
-				_ = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-					if err == nil && !d.IsDir() {
-						referenced[path] = true
-					}
-					return nil // unreadable/missing dirs already reported in dotfiles
-				})
-			}
+		src := declaringSourceTree(e, byKey)
+		info, err := os.Stat(src)
+		if err != nil || !info.IsDir() {
+			// Missing or a plain file: the exact path is the reference.
+			// (Missing sources are already reported in the dotfiles
+			// section; an unreadable anchored dir resolves here too.)
+			referenced[src] = true
 			continue
 		}
-		referenced[e.Source] = true
+		_ = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				referenced[path] = true
+			}
+			return nil // unreadable/missing dirs already reported in dotfiles
+		})
 	}
 	return referenced
 }
 
-// symlinkEachSourceTrees returns the symlink-each source directories whose
-// subtrees count as referenced: the declaring layer's tree at the entry's
-// rel-path when it can be derived, falling back to the resolved source
-// dir. rel is derived by locating the layer whose path prefixes the
-// resolved Source.
-func symlinkEachSourceTrees(e resolve.DotfileEntry, byKey map[string]ModuleLayer) []string {
+// declaringSourceTree returns the source path whose subtree counts as
+// referenced: the declaring layer's tree at the entry's rel-path when it
+// can be derived, falling back to the resolved source dir. rel is derived
+// by locating the layer whose path prefixes the resolved Source.
+func declaringSourceTree(e resolve.DotfileEntry, byKey map[string]ModuleLayer) string {
 	for _, ml := range byKey {
 		if ml.Path == "" || !strings.HasPrefix(e.Source, ml.Path+string(filepath.Separator)) {
 			continue
@@ -158,9 +160,9 @@ func symlinkEachSourceTrees(e resolve.DotfileEntry, byKey map[string]ModuleLayer
 			break
 		}
 		if declaring, ok := byKey[e.Module+"/"+e.Layer]; ok && declaring.Path != "" {
-			return []string{filepath.Join(declaring.Path, rel)}
+			return filepath.Join(declaring.Path, rel)
 		}
 		break
 	}
-	return []string{e.Source}
+	return e.Source
 }

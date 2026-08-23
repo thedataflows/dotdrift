@@ -5,11 +5,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -36,6 +38,9 @@ type Options struct {
 // Onboard materializes live paths into a module and applies them.
 type Onboard struct {
 	Mise mise.Runner
+	// Out receives adoption notices (adopted:/would adopt: lines); nil
+	// discards them.
+	Out io.Writer
 }
 
 // PackageEntry is one declared distro package. Description, when set, is
@@ -141,8 +146,36 @@ func (o *Onboard) Run(opts Options) error {
 		entries[target] = dotfileEntry{Source: filepath.ToSlash(relSource), Mode: mode}
 	}
 
+	// Orphan adoption (issue 0015): files in the module dir no merged
+	// [dotfiles] entry references are claimed as entries of their own.
+	merged := mergeEntries(readExistingDotfiles(moduleDir), entries)
+	adoptions := planAdoptions(moduleDir, merged)
+	out := o.Out
+	if out == nil {
+		out = io.Discard
+	}
 	if opts.DryRun {
+		for _, a := range adoptions {
+			fmt.Fprintf(out, "would adopt: %s (%s)\n", a.Target, a.Rel)
+		}
 		return nil
+	}
+	for _, a := range adoptions {
+		// The live counterpart, when present, wins over the stale module
+		// copy: onboard snapshots live state, so the forced takeover apply
+		// below stays lossless. A live path resolving to the module source
+		// itself (already-deployed symlink) is skipped, not copied onto
+		// itself. Unreadable live paths (e.g. root-owned system files)
+		// drop just this adoption with a warning, not the whole run.
+		src := filepath.Join(moduleDir, filepath.FromSlash(a.Rel))
+		if live := liveTargetPath(a.Target, home); live != "" {
+			if err := snapshotLive(live, src); err != nil {
+				log.Warn().Err(err).Str("orphan", a.Rel).Msg("onboard: skip orphan adoption")
+				continue
+			}
+		}
+		entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
+		fmt.Fprintf(out, "adopted: %s (%s)\n", a.Target, a.Rel)
 	}
 
 	cfg := moduleConfig{
@@ -176,6 +209,219 @@ func (o *Onboard) Run(opts Options) error {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil
+}
+
+// adoption is one orphan claimed as a [dotfiles] entry: Rel is the
+// module-dir-relative source (slash-separated), Target the live path it
+// manages.
+type adoption struct {
+	Rel    string
+	Target string
+}
+
+// planAdoptions finds the orphans of a module dir — files no merged entry
+// references (module.toml excluded) — and maps each to the entry it should
+// become. A directory whose entire content is orphaned collapses to ONE
+// whole-dir entry (what onboarding that directory would produce); the
+// candidate chain walks from the topmost fully-orphan ancestor down so a
+// claimed target (e.g. this run's own, nesting under "~") only narrows the
+// adoption instead of losing the files. Only home/ and system/ paths
+// invert back to a live target; module-root files (hook scripts, notes)
+// have none and are left for status to report. Targets are claimed
+// incrementally so adopted units never duplicate or nest each other;
+// ponytail: a target another MODULE already claims is not checked here —
+// resolve fails loudly on cross-module target conflicts instead.
+func planAdoptions(moduleDir string, merged map[string]dotfileEntry) []adoption {
+	// Reference set: every file under each entry's source tree (a source
+	// directory deploys its whole subtree — the same rule status orphans
+	// use, issue 0014).
+	referenced := map[string]bool{}
+	for _, e := range merged {
+		if e.Source == "" {
+			continue // inline edit: no on-disk source
+		}
+		markSourceTree(filepath.Join(moduleDir, filepath.FromSlash(e.Source)), referenced)
+	}
+
+	type counts struct{ total, orph int }
+	dirs := map[string]*counts{}
+	var orphans []string
+	_ = filepath.WalkDir(moduleDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || d.Name() == "module.toml" {
+			return nil // absent/unreadable module dir: nothing to adopt
+		}
+		rel, rerr := filepath.Rel(moduleDir, path)
+		if rerr != nil {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		orphan := !referenced[path]
+		parts := strings.Split(rel, "/")
+		for i := 1; i < len(parts); i++ {
+			dir := strings.Join(parts[:i], "/")
+			c := dirs[dir]
+			if c == nil {
+				c = &counts{}
+				dirs[dir] = c
+			}
+			c.total++
+			if orphan {
+				c.orph++
+			}
+		}
+		if orphan {
+			orphans = append(orphans, rel)
+		}
+		return nil
+	})
+	sort.Strings(orphans)
+
+	claimed := make(map[string]bool, len(merged))
+	for t := range merged {
+		claimed[t] = true
+	}
+	claim := func(rel string) (adoption, bool) {
+		target, ok := invertTarget(rel)
+		if !ok {
+			return adoption{}, false
+		}
+		for t := range claimed {
+			if t == target || strings.HasPrefix(t, target+"/") || strings.HasPrefix(target, t+"/") {
+				return adoption{}, false
+			}
+		}
+		claimed[target] = true
+		return adoption{Rel: rel, Target: target}, true
+	}
+
+	var list []adoption
+	seen := map[string]bool{}
+	for _, f := range orphans {
+		parts := strings.Split(f, "/")
+		handled := false
+		for i := 1; i < len(parts); i++ {
+			dir := strings.Join(parts[:i], "/")
+			if seen[dir] {
+				handled = true // covered by an earlier dir unit
+				break
+			}
+			if c := dirs[dir]; c != nil && c.total == c.orph {
+				if u, ok := claim(dir); ok {
+					list = append(list, u)
+					seen[dir] = true
+					handled = true
+					break
+				}
+			}
+		}
+		if !handled {
+			if u, ok := claim(f); ok {
+				list = append(list, u)
+				seen[f] = true
+			}
+		}
+	}
+	return list
+}
+
+// markSourceTree marks src, or — when src is a directory — every file in
+// its subtree, as referenced.
+func markSourceTree(src string, referenced map[string]bool) {
+	info, err := os.Stat(src)
+	if err != nil || !info.IsDir() {
+		referenced[src] = true // missing/plain file: the exact path is the reference
+		return
+	}
+	_ = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			referenced[path] = true
+		}
+		return nil
+	})
+}
+
+// invertTarget maps a module-dir-relative source back to the live path it
+// manages — the inverse of mapPath. Only home/ and system/ are invertible.
+func invertTarget(rel string) (string, bool) {
+	switch {
+	case rel == "home":
+		return "~", true
+	case strings.HasPrefix(rel, "home/"):
+		return "~/" + strings.TrimPrefix(rel, "home/"), true
+	case rel == "system":
+		return "/", true
+	case strings.HasPrefix(rel, "system/"):
+		return "/" + strings.TrimPrefix(rel, "system/"), true
+	default:
+		return "", false
+	}
+}
+
+// liveTargetPath expands an entry target to its live filesystem path.
+func liveTargetPath(target, home string) string {
+	switch {
+	case target == "~":
+		return home
+	case strings.HasPrefix(target, "~/"):
+		return filepath.Join(home, strings.TrimPrefix(target, "~/"))
+	case strings.HasPrefix(target, "/"):
+		return target
+	default:
+		return ""
+	}
+}
+
+// snapshotLive refreshes the module source from its live counterpart. No
+// counterpart: the module copy stands. A counterpart resolving to the
+// source itself (an already-deployed symlink): skipped, never copied onto
+// itself.
+func snapshotLive(live, src string) error {
+	ls, lerr := os.Stat(live) // follows symlinks
+	if lerr != nil {
+		return nil
+	}
+	if ss, serr := os.Stat(src); serr == nil && os.SameFile(ls, ss) {
+		return nil
+	}
+	if err := os.RemoveAll(src); err != nil {
+		return err
+	}
+	return copyPath(live, src)
+}
+
+// readExistingDotfiles decodes the module's current module.toml entries.
+// A missing or undecodable file yields nil — mergeModuleTOML re-decodes
+// and surfaces decode errors loudly.
+func readExistingDotfiles(moduleDir string) map[string]dotfileEntry {
+	path := filepath.Join(moduleDir, "module.toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	var pc profile.ModuleConfig
+	if err := profile.DecodeModuleTOML(path, data, &pc); err != nil {
+		return nil
+	}
+	out := make(map[string]dotfileEntry, len(pc.Dotfiles))
+	for k, v := range pc.Dotfiles {
+		out[k] = dotfileEntry{
+			Source: v.Source, Mode: v.Mode,
+			Line: v.Line, Block: v.Block, Comment: v.Comment, Template: v.Template,
+		}
+	}
+	return out
+}
+
+// mergeEntries overlays override onto existing (same target key wins).
+func mergeEntries(existing, override map[string]dotfileEntry) map[string]dotfileEntry {
+	merged := make(map[string]dotfileEntry, len(existing)+len(override))
+	for k, v := range existing {
+		merged[k] = v
+	}
+	for k, v := range override {
+		merged[k] = v
+	}
+	return merged
 }
 
 // expandPath resolves an onboard path to an absolute filesystem path. "~"

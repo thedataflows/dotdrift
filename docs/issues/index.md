@@ -29,3 +29,5 @@ use, plus emergent features and chores. Planned work lives in
 | [0011](0011-status-symlink-source-validity.md) | Status misses invalid symlink sources | done | high |
 | [0012](0012-status-orphans-section.md) | Status orphans section | done | medium |
 | [0013](0013-configurable-color-palette.md) | Configurable status color palette | done | low |
+| [0014](0014-dir-source-subtree-orphan-false-positive.md) | Directory sources flag their own subtree as orphans | done | high |
+| [0015](0015-onboard-adopts-orphans.md) | Onboard adopts orphaned module files | done | medium |

@@ -102,6 +102,30 @@ func TestCheckOrphans_symlinkEachChildrenReferenced(t *testing.T) {
 	require.Empty(t, orphanGroups(fs), "the whole symlink-each source subtree is referenced")
 }
 
+// A whole-file entry whose source is a DIRECTORY (symlink/copy mode,
+// the shape onboard produces) deploys the whole subtree; none of its
+// files is an orphan, at any depth. Same declaring-layer anchor as
+// symlink-each: the subtree counts where the entry is declared.
+func TestCheckOrphans_dirSourceSubtreeReferenced(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"modules/shell/module.toml":          "",
+		"modules/shell/home/app/a.conf":      "direct child",
+		"modules/shell/home/app/db/b.conf":   "nested",
+		"hosts/h/modules/shell/home/app/db/c.conf": "overlay file nothing references",
+	})
+	plan := &resolve.Plan{}
+	plan.Dotfiles.Entries = []resolve.DotfileEntry{
+		{Module: "shell", Layer: "base", Source: filepath.Join(root, "modules", "shell", "home", "app"), Mode: "symlink"},
+	}
+
+	fs := drift.CheckOrphans(plan, orphanLayers(root))
+	groups := orphanGroups(fs)
+	require.Empty(t, groups["base"], "the whole dir-source subtree is referenced")
+	require.Equal(t, []string{"home/app/db/c.conf"}, groups["hosts/h"]["shell"],
+		"overlay files at the same rel-path that nothing references stay orphans")
+}
+
 // Sources of other modules do not mark this module's files; template edit
 // sources are referenced; mode="edit" sources were consumed at resolve
 // time (Block content), leaving no reference to flag.

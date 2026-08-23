@@ -458,3 +458,29 @@ profile load**, never at detection time:
   (unknown backend, package-manager failure, missing mise), simply fails
   its leaf — fail-open, same as an empty kernel fact. Selection depends
   on it; load never does.
+
+### Referenced sources, orphans, and adoption
+
+A `[dotfiles]` entry's **reference set** decides which module files are
+doing work: the entry's `source` file, or — when the source is a
+directory — the **whole subtree** in the layer whose `module.toml`
+declares the entry (mise links/copies directory trees wholesale, so every
+nested file deploys; this covers `symlink-each` and whole-dir `symlink`/
+`copy` alike). Files inside a selected module's layer directory that no
+entry references (with `module.toml` itself excluded) are **orphans**:
+`dotdrift status` lists them under the layer-root heading they sit in.
+
+`dotdrift onboard` **adopts** orphans of the module it materializes
+(issue 0015): every invertible orphan — `home/<rel>` maps back to
+`~/<rel>`, `system/<rel>` to `/<rel>` — becomes a `[dotfiles]` entry in
+that module.toml with the run's `--mode` (default `symlink`). A
+directory whose entire content is orphaned collapses to ONE whole-dir
+entry, and the live counterpart, when present, is snapshotted over the
+stale module copy first (onboard snapshots live state), keeping the
+forced takeover apply lossless. Adoptions never duplicate or nest with an
+already-claimed target (a colliding or nesting unit is skipped and stays
+for `status` to report), and module-root files with no derivable target
+(hook scripts, notes) are never adopted. `--dry-run` prints the would-be
+adoptions (`would adopt: <target> (<source>)`) without touching anything;
+a real run prints `adopted:` lines and the adopted entries ride the same
+mise apply as the onboarded paths.

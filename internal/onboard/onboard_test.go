@@ -1,6 +1,7 @@
 package onboard_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -722,4 +723,235 @@ func TestOnboard_ctxPropagatesToMiseRunner(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, rr.ctx)
 	require.Equal(t, "marker", rr.ctx.Value(ctxTestKey{}))
+}
+
+// --- Orphan adoption (issue 0015) ---
+//
+// Orphaned files in the onboarded module dir (unreferenced by any
+// [dotfiles] entry, module.toml excluded) are adopted: each invertible
+// orphan (home/<rel> -> ~/<rel>, system/<rel> -> /<rel>) gains a
+// [dotfiles] entry with the run's mode. A fully-orphaned directory
+// collapses to ONE whole-dir entry. The live target, when present, is
+// snapshotted over the module source first (onboard snapshots live
+// state), keeping the forced takeover apply lossless.
+
+// mkModule pre-creates a module dir with files and returns its path.
+func mkModule(t *testing.T, profile, app string, files map[string]string) string {
+	t.Helper()
+	dir := filepath.Join(profile, "modules", app)
+	for rel, content := range files {
+		p := filepath.Join(dir, rel)
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o644))
+	}
+	return dir
+}
+
+func TestOnboard_adoptsOrphans(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	// Live counterpart of one orphan: live content must win over the
+	// stale module copy before apply.
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config"), 0o755))
+	require.NoError(t, writeFile(filepath.Join(home, ".config", "stray.toml"), "live fresh"))
+
+	live := filepath.Join(home, ".config", "app", "keep.toml")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
+	require.NoError(t, writeFile(live, "keep"))
+	mkModule(t, profile, "app", map[string]string{
+		// module.toml declares nothing yet (empty file).
+		"module.toml": "",
+		// Orphan file with a live counterpart (stale copy).
+		"home/.config/stray.toml":      "stale copy",
+		// Fully-orphaned dir: collapses to ONE entry.
+		"home/.config/legacy/a.conf":   "a",
+		"home/.config/legacy/sub/b.sh": "b",
+		// Module-root junk: no derivable target, never adopted.
+		"notes.md": "root junk",
+	})
+
+	var out bytes.Buffer
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
+	require.NoError(t, err)
+	t.Log(content)
+	require.Contains(t, content,
+		`"~/.config/app/keep.toml" = { source = "home/.config/app/keep.toml", mode = "symlink" }`)
+	require.Contains(t, content,
+		`"~/.config/stray.toml" = { source = "home/.config/stray.toml", mode = "symlink" }`)
+	require.Contains(t, content,
+		`"~/.config/legacy" = { source = "home/.config/legacy", mode = "symlink" }`,
+		"a fully-orphaned dir collapses to one whole-dir entry")
+	require.NotContains(t, content, "legacy/a.conf", "no per-file entries for the collapsed dir")
+	require.NotContains(t, content, "notes.md", "module-root junk has no derivable target")
+
+	// Live snapshot: the module copy was refreshed from the live file.
+	snapshotted, err := readFile(filepath.Join(profile, "modules", "app", "home", ".config", "stray.toml"))
+	require.NoError(t, err)
+	require.Equal(t, "live fresh", snapshotted, "live content wins over the stale orphan copy")
+
+	require.Contains(t, out.String(), "adopted: ~/.config/stray.toml")
+	require.Contains(t, out.String(), "adopted: ~/.config/legacy")
+}
+
+// Files under a directory source are already deployed by that entry
+// (issue 0014): adoption must not explode them into file entries.
+func TestOnboard_adoptionSkipsReferencedSubtrees(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	live := filepath.Join(home, ".config", "app", "new.toml")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
+	require.NoError(t, writeFile(live, "new"))
+	mkModule(t, profile, "app", map[string]string{
+		"module.toml": `[dotfiles]
+"~/.config/app" = { source = "home/.config/app", mode = "symlink" }
+`,
+		"home/.config/app/existing.toml": "deployed via the dir entry",
+		"home/.config/app/nested/x.conf": "deployed too",
+	})
+
+	var out bytes.Buffer
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
+	require.NoError(t, err)
+	t.Log(content)
+	require.Contains(t, content, `"~/.config/app" = { source = "home/.config/app", mode = "symlink" }`)
+	require.NotContains(t, content, "existing.toml\" =", "dir-source subtree is not re-adopted per file")
+	require.NotContains(t, content, "nested", "dir-source subtree is not re-adopted per file")
+	require.NotContains(t, out.String(), "adopted:")
+}
+
+// Re-onboarding an entry whose source path changed must not strand the
+// old source as a new orphan: it is adopted under its own target.
+func TestOnboard_reOnboardChangedSourceAdoptsOld(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	liveDir := filepath.Join(home, ".config", "app")
+	require.NoError(t, os.MkdirAll(liveDir, 0o755))
+	require.NoError(t, writeFile(filepath.Join(liveDir, "config.toml"), "cfg"))
+	mkModule(t, profile, "app", map[string]string{
+		"module.toml": `[dotfiles]
+"~/.config/app" = { source = "home/custom", mode = "symlink" }
+`,
+		"home/custom": "old source",
+	})
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{liveDir}, App: "app", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
+	require.NoError(t, err)
+	t.Log(content)
+	require.Contains(t, content, `"~/.config/app" = { source = "home/.config/app", mode = "symlink" }`)
+	require.Contains(t, content, `"~/custom" = { source = "home/custom", mode = "symlink" }`,
+		"the stranded old source is adopted under its own target")
+}
+
+// An orphan whose derived target is already claimed by an existing entry
+// is skipped, never double-claimed (entries are keyed by target).
+func TestOnboard_adoptionSkipsClaimedTargets(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	live := filepath.Join(home, ".config", "app", "new.toml")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
+	require.NoError(t, writeFile(live, "new"))
+	mkModule(t, profile, "app", map[string]string{
+		"module.toml": `[dotfiles]
+"~/.config/dup" = { source = "home/claimed", mode = "symlink" }
+`,
+		"home/claimed": "the referenced source",
+		"home/.config/dup": "orphan deriving an already-claimed target",
+	})
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
+	require.NoError(t, err)
+	t.Log(content)
+	require.Contains(t, content, `"~/.config/dup" = { source = "home/claimed"`,
+		"the existing entry for the claimed target is untouched")
+}
+
+// A live target that is a symlink INTO the module (previously deployed)
+// must not trick the snapshot into copying the source onto itself.
+func TestOnboard_adoptionSelfCopyGuard(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	mod := mkModule(t, profile, "app", map[string]string{
+		"module.toml":         "",
+		"home/.config/orph":   "precious",
+	})
+	// Live target symlinks at the module source.
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config"), 0o755))
+	require.NoError(t, os.Symlink(
+		filepath.Join(mod, "home", ".config", "orph"),
+		filepath.Join(home, ".config", "orph")))
+
+	live := filepath.Join(home, ".config", "app", "keep.toml")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
+	require.NoError(t, writeFile(live, "keep"))
+
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+	}))
+
+	content, err := readFile(filepath.Join(mod, "home", ".config", "orph"))
+	require.NoError(t, err)
+	require.Equal(t, "precious", content, "self-copy through the live symlink must not wipe the source")
+}
+
+// --dry-run lists the would-be adoptions and touches nothing.
+func TestOnboard_dryRunListsAdoptions(t *testing.T) {
+	home := t.TempDir()
+	profile := t.TempDir()
+	isolateState(t)
+
+	live := filepath.Join(home, ".config", "app", "keep.toml")
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
+	require.NoError(t, writeFile(live, "keep"))
+	mkModule(t, profile, "app", map[string]string{
+		"module.toml":                 "",
+		"home/.config/legacy/orph.conf": "orphan until adopted",
+	})
+
+	var out bytes.Buffer
+	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+	require.NoError(t, o.Run(onboard.Options{
+		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home, DryRun: true,
+	}))
+
+	require.Contains(t, out.String(), "would adopt: ~/.config/legacy")
+	require.NotContains(t, out.String(), "would adopt: ~ (home)",
+		"the whole-home unit is narrowed: it would nest under this run's target")
+	// Dry-run writes nothing: module.toml stays empty, the orphan stays.
+	c, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
+	require.NoError(t, err)
+	require.Equal(t, "", c, "dry-run writes no adoption entries")
+	kept, err := readFile(filepath.Join(profile, "modules", "app", "home", ".config", "legacy", "orph.conf"))
+	require.NoError(t, err)
+	require.Equal(t, "orphan until adopted", kept)
 }

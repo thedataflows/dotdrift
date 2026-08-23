@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/onboard"
@@ -37,7 +38,7 @@ func (c *OnboardCmd) Run() error {
 		m.Verbose = c.Verbose
 		runner = mise.NewExecMise(m)
 	}
-	o := &onboard.Onboard{Mise: runner}
+	o := &onboard.Onboard{Mise: runner, Out: os.Stdout}
 	pkgs, err := onboard.ParsePackages(c.Packages)
 	if err != nil {
 		return fmt.Errorf("parse packages: %w", err)

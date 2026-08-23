@@ -30,6 +30,7 @@ type Options struct {
 	Packages    []PackageEntry
 	Tools       []string
 	Host        bool
+	User        bool
 	DryRun      bool
 	Yes         bool
 	Home        string
@@ -155,17 +156,38 @@ func (o *Onboard) Run(opts Options) error {
 		mode = "symlink"
 	}
 
-	moduleDir := filepath.Join(profRoot, "modules", app)
-	if opts.Host {
+	// Target layers: which module directories this run writes. No flag
+	// means base; --host/--user select their overlay(s); both together
+	// onboard into BOTH layers. A directed (module-file) path ignores the
+	// flags — its own layer is the target.
+	var targets []string
+	switch {
+	case directedDir != "":
+		targets = []string{directedDir}
+	case opts.Host && opts.User:
 		if opts.Hostname == "" {
 			return fmt.Errorf("hostname required for host overlay")
 		}
-		moduleDir = filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app)
+		if opts.Username == "" {
+			return fmt.Errorf("username required for user overlay")
+		}
+		targets = []string{
+			filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app),
+			filepath.Join(profRoot, "users", opts.Username, "modules", app),
+		}
+	case opts.Host:
+		if opts.Hostname == "" {
+			return fmt.Errorf("hostname required for host overlay")
+		}
+		targets = []string{filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app)}
+	case opts.User:
+		if opts.Username == "" {
+			return fmt.Errorf("username required for user overlay")
+		}
+		targets = []string{filepath.Join(profRoot, "users", opts.Username, "modules", app)}
+	default:
+		targets = []string{filepath.Join(profRoot, "modules", app)}
 	}
-	if directedDir != "" {
-		moduleDir = directedDir
-	}
-	label := layerLabel(profRoot, moduleDir)
 
 	// Claims: every [dotfiles] target the module already declares in any
 	// of its layers (base, this host, this user) bounds the adoption
@@ -173,7 +195,7 @@ func (o *Onboard) Run(opts Options) error {
 	// collapsing into a giant ancestor unit (issue 0017).
 	hostOwner := opts.Hostname
 	if directedDir != "" {
-		if owner, ok := strings.CutPrefix(label, "hosts/"); ok {
+		if owner, ok := strings.CutPrefix(layerLabel(profRoot, directedDir), "hosts/"); ok {
 			hostOwner = owner
 		}
 	}
@@ -197,124 +219,136 @@ func (o *Onboard) Run(opts Options) error {
 		}
 	}
 
-	entries := make(map[string]dotfileEntry)
-	for _, p := range live {
-		target, source, err := mapPath(p, home, moduleDir)
-		if err != nil {
-			return err
-		}
-		if !opts.DryRun {
-			// Re-onboarding refreshes the module copy from the live path: a
-			// directory is replaced wholesale so deleted files disappear, a
-			// file is overwritten in place. There is no conflict error —
-			// onboard snapshots live state, so updating is the default.
-			if _, err := os.Stat(source); err == nil {
-				if err := os.RemoveAll(source); err != nil {
-					return fmt.Errorf("replace %s: %w", source, err)
-				}
-			}
-			if err := copyPath(p, source); err != nil {
-				return fmt.Errorf("copy %s: %w", p, err)
-			}
-		}
-		relSource, _ := filepath.Rel(moduleDir, source)
-		entries[target] = dotfileEntry{Source: filepath.ToSlash(relSource), Mode: mode}
-	}
-
-	// References: the same declaration-based set status orphans use, plus
-	// this run's own copies.
-	refs := drift.ReferencedPaths(appLayers)
-	// A run entry overriding a declared target strands the old source in
-	// every view: un-reference it so the orphan scan adopts it.
-	for _, layer := range appLayers {
-		declared := readExistingDotfiles(layer.Path)
-		for target, e := range entries {
-			old, ok := declared[target]
-			if !ok || old.Source == "" || old.Source == e.Source {
-				continue
-			}
-			unmarkTree(filepath.Join(layer.Path, filepath.FromSlash(old.Source)), refs)
-		}
-	}
-	for _, e := range entries {
-		markSourceTree(filepath.Join(moduleDir, filepath.FromSlash(e.Source)), refs)
-	}
-	for _, a := range directed {
-		refs[filepath.Join(moduleDir, filepath.FromSlash(a.Rel))] = true
-	}
-
-	// Directed adoptions first (the user named these files); then the
-	// orphan scan of the module dir.
-	claims := map[string]bool{}
-	for t := range declared {
-		claims[t] = true
-	}
-	for t := range entries {
-		claims[t] = true
-	}
 	out := o.Out
 	if out == nil {
 		out = io.Discard
 	}
-	notice := func(dry bool, a adoption) string {
+	notice := func(dry bool, a adoption, label string) string {
 		if dry {
 			return fmt.Sprintf("would adopt: %s (%s) [%s]", a.Target, a.Rel, label)
 		}
 		return fmt.Sprintf("adopted: %s (%s) [%s]", a.Target, a.Rel, label)
 	}
-	skip := func(a adoption) {
-		fmt.Fprintf(out, "already declared: %s (skipped)\n", a.Target)
-	}
-	for _, a := range directed {
-		if declared[a.Target] {
-			skip(a)
-			continue
+
+	// Process each target layer: copy the live paths, run the adoption
+	// sweep, merge module.toml. entries are layer-local (sources are
+	// relative to that layer's dir); the LAST target (highest
+	// precedence) feeds the mise config below.
+	var lastEntries map[string]dotfileEntry
+	var lastDir string
+	for _, moduleDir := range targets {
+		label := layerLabel(profRoot, moduleDir)
+		entries := make(map[string]dotfileEntry)
+		for _, p := range live {
+			target, source, err := mapPath(p, home, moduleDir)
+			if err != nil {
+				return err
+			}
+			if !opts.DryRun {
+				// Re-onboarding refreshes the module copy from the live path: a
+				// directory is replaced wholesale so deleted files disappear, a
+				// file is overwritten in place. There is no conflict error —
+				// onboard snapshots live state, so updating is the default.
+				if _, err := os.Stat(source); err == nil {
+					if err := os.RemoveAll(source); err != nil {
+						return fmt.Errorf("replace %s: %w", source, err)
+					}
+				}
+				if err := copyPath(p, source); err != nil {
+					return fmt.Errorf("copy %s: %w", p, err)
+				}
+			}
+			relSource, _ := filepath.Rel(moduleDir, source)
+			entries[target] = dotfileEntry{Source: filepath.ToSlash(relSource), Mode: mode}
 		}
-		claims[a.Target] = true
-		if !opts.DryRun {
-			entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
-		}
-		fmt.Fprintln(out, notice(opts.DryRun, a))
-	}
-	adoptions := planAdoptions(moduleDir, refs, claims)
-	if opts.DryRun {
-		for _, a := range adoptions {
-			fmt.Fprintln(out, notice(true, a))
-		}
-		return nil
-	}
-	for _, a := range adoptions {
-		// The live counterpart, when present, wins over the stale module
-		// copy: onboard snapshots live state, so the forced takeover apply
-		// below stays lossless. A live path resolving to the module source
-		// itself (already-deployed symlink) is skipped, not copied onto
-		// itself. Unreadable live paths (e.g. root-owned system files)
-		// drop just this adoption with a warning, not the whole run.
-		src := filepath.Join(moduleDir, filepath.FromSlash(a.Rel))
-		if livePath := liveTargetPath(a.Target, home); livePath != "" {
-			if err := snapshotLive(livePath, src); err != nil {
-				log.Warn().Err(err).Str("orphan", a.Rel).Msg("onboard: skip orphan adoption")
-				continue
+
+		// References: the same declaration-based set status orphans use,
+		// plus this run's copies in THIS layer.
+		refs := drift.ReferencedPaths(appLayers)
+		// A run entry overriding a declared target strands the old source
+		// in every view: un-reference it so the orphan scan adopts it.
+		for _, layer := range appLayers {
+			layerDeclared := readExistingDotfiles(layer.Path)
+			for target, e := range entries {
+				old, ok := layerDeclared[target]
+				if !ok || old.Source == "" || old.Source == e.Source {
+					continue
+				}
+				unmarkTree(filepath.Join(layer.Path, filepath.FromSlash(old.Source)), refs)
 			}
 		}
-		entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
-		fmt.Fprintln(out, notice(false, a))
-	}
+		for _, e := range entries {
+			markSourceTree(filepath.Join(moduleDir, filepath.FromSlash(e.Source)), refs)
+		}
+		for _, a := range directed {
+			refs[filepath.Join(moduleDir, filepath.FromSlash(a.Rel))] = true
+		}
 
-	cfg := moduleConfig{
-		Packages: packagesConfig{Present: opts.Packages},
-		Tools:    toolsMap(opts.Tools),
-		Dotfiles: entries,
+		// Directed adoptions first (the user named these files); then the
+		// orphan scan of the module dir.
+		claims := map[string]bool{}
+		for t := range declared {
+			claims[t] = true
+		}
+		for t := range entries {
+			claims[t] = true
+		}
+		for _, a := range directed {
+			if declared[a.Target] {
+				fmt.Fprintf(out, "already declared: %s (skipped)\n", a.Target)
+				continue
+			}
+			claims[a.Target] = true
+			if !opts.DryRun {
+				entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
+			}
+			fmt.Fprintln(out, notice(opts.DryRun, a, label))
+		}
+		adoptions := planAdoptions(moduleDir, refs, claims)
+		if opts.DryRun {
+			for _, a := range adoptions {
+				fmt.Fprintln(out, notice(true, a, label))
+			}
+			continue
+		}
+		for _, a := range adoptions {
+			// The live counterpart, when present, wins over the stale module
+			// copy: onboard snapshots live state, so the forced takeover apply
+			// below stays lossless. A live path resolving to the module source
+			// itself (already-deployed symlink) is skipped, not copied onto
+			// itself. Unreadable live paths (e.g. root-owned system files)
+			// drop just this adoption with a warning, not the whole run.
+			src := filepath.Join(moduleDir, filepath.FromSlash(a.Rel))
+			if livePath := liveTargetPath(a.Target, home); livePath != "" {
+				if err := snapshotLive(livePath, src); err != nil {
+					log.Warn().Err(err).Str("orphan", a.Rel).Msg("onboard: skip orphan adoption")
+					continue
+				}
+			}
+			entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
+			fmt.Fprintln(out, notice(false, a, label))
+		}
+
+		cfg := moduleConfig{
+			Packages: packagesConfig{Present: opts.Packages},
+			Tools:    toolsMap(opts.Tools),
+			Dotfiles: entries,
+		}
+		if err := mergeModuleTOML(moduleDir, cfg); err != nil {
+			return err
+		}
+		lastEntries = entries
+		lastDir = moduleDir
 	}
-	if err := mergeModuleTOML(moduleDir, cfg); err != nil {
-		return err
+	if opts.DryRun {
+		return nil
 	}
 
 	if o.Mise == nil {
 		return fmt.Errorf("no mise runner configured")
 	}
 
-	configPath, err := writeMiseConfig(opts.ProfileRoot, moduleDir, entries)
+	configPath, err := writeMiseConfig(opts.ProfileRoot, lastDir, lastEntries)
 	if err != nil {
 		return err
 	}

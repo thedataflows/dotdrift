@@ -173,7 +173,9 @@ dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 | `--mode symlink\|copy\|template` | symlink | Apps that rewrite configs → copy |
 | `--packages P` | none | Declare distro packages in module.toml; each entry is a bare name or `name="description"` (the description becomes a TOML comment) |
 | `--tools T` | none | Declare mise tool (comma-separated or repeated for several) |
-| `--host` | base module files | Host overlay only |
+| `--host` | base module files | Host overlay (`hosts/<hostname>/modules/...`) |
+| `--user` | base module files | User overlay (`users/<username>/modules/...`) |
+| `--host --user` | base module files | Both overlays in one run: content copied and declared in each layer |
 | `--dry-run` | false | Preview only |
 | `-v`, `--verbose` | false | Stream the mise install/dotfiles output live instead of capture-and-discard, echoing each command line `set -x`-style (`+ <argv>`) to stderr before it runs (also `DD_VERBOSE=1`) |
 

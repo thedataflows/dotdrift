@@ -1074,3 +1074,67 @@ func TestOnboard_adoptionNeverClaimsSharedRoots(t *testing.T) {
 	require.NotContains(t, content, `"~" =`, "never the whole home")
 	require.Contains(t, out.String(), "adopted: ~/.config/foo (home/.config/foo) [base]")
 }
+
+// --user targets the users/<username> overlay like --host targets
+// hosts/<hostname>; --host --user together onboard into BOTH layers.
+func TestOnboard_userAndHostOverlays(t *testing.T) {
+	newRun := func() (string, string) {
+		home := t.TempDir()
+		profile := t.TempDir()
+		isolateState(t)
+		require.NoError(t, os.MkdirAll(filepath.Join(home, ".config", "app"), 0o755))
+		require.NoError(t, writeFile(filepath.Join(home, ".config", "app", "c.toml"), "c"))
+		return home, profile
+	}
+	entry := `"~/.config/app/c.toml" = { source = "home/.config/app/c.toml", mode = "symlink" }`
+
+	t.Run("user only", func(t *testing.T) {
+		home, profile := newRun()
+		var out bytes.Buffer
+		o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+		require.NoError(t, o.Run(onboard.Options{
+			ProfileRoot: profile, Paths: []string{filepath.Join(home, ".config", "app", "c.toml")},
+			App: "app", Home: home, User: true, Username: "cri",
+		}))
+		modToml := filepath.Join(profile, "users", "cri", "modules", "app", "module.toml")
+		c, err := readFile(modToml)
+		require.NoError(t, err)
+		require.Contains(t, c, entry)
+		require.NoDirExists(t, filepath.Join(profile, "modules", "app"),
+			"--user does not touch the base layer")
+		require.NoDirExists(t, filepath.Join(profile, "hosts", "cri-pc", "modules", "app"),
+			"--user does not touch host layers")
+	})
+
+	t.Run("host and user together", func(t *testing.T) {
+		home, profile := newRun()
+		var out bytes.Buffer
+		o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
+		require.NoError(t, o.Run(onboard.Options{
+			ProfileRoot: profile, Paths: []string{filepath.Join(home, ".config", "app", "c.toml")},
+			App: "app", Home: home, Host: true, User: true, Hostname: "cri-pc", Username: "cri",
+		}))
+		for _, mod := range []string{
+			filepath.Join(profile, "hosts", "cri-pc", "modules", "app"),
+			filepath.Join(profile, "users", "cri", "modules", "app"),
+		} {
+			c, err := readFile(filepath.Join(mod, "module.toml"))
+			require.NoError(t, err)
+			require.Contains(t, c, entry, "both overlays declare the entry")
+			require.FileExists(t, filepath.Join(mod, "home", ".config", "app", "c.toml"),
+				"both overlays hold the copied content")
+		}
+		require.NoDirExists(t, filepath.Join(profile, "modules", "app"),
+			"host+user does not touch the base layer")
+	})
+
+	t.Run("user without a username errors", func(t *testing.T) {
+		home, profile := newRun()
+		o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
+		err := o.Run(onboard.Options{
+			ProfileRoot: profile, Paths: []string{filepath.Join(home, ".config", "app", "c.toml")},
+			App: "app", Home: home, User: true,
+		})
+		require.ErrorContains(t, err, "username required")
+	})
+}

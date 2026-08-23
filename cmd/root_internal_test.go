@@ -48,6 +48,17 @@ func TestKong_addAliasRoutesToOnboard(t *testing.T) {
 	require.Equal(t, "foo", cli.Onboard.App)
 }
 
+// onboard's --host and --user overlay flags parse, alone and together.
+func TestKong_onboardOverlayFlags(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--host", "--user"})
+	require.NoError(t, err)
+	require.True(t, cli.Onboard.Host)
+	require.True(t, cli.Onboard.User)
+}
+
 // --verbose parses on apply and onboard (and only there).
 func TestKong_verboseFlagParses(t *testing.T) {
 	var cli CLI

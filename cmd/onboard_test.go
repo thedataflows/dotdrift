@@ -35,7 +35,7 @@ func TestOnboard_mapsCommandFieldsToOptions(t *testing.T) {
 		Mode:     "copy",
 		Packages: []string{"ripgrep"},
 		Tools:    []string{"node=20"},
-		Host:     overlayFlag{Set: true},
+		Host:     "testhost",
 		Yes:      true,
 		Mise:     fake,
 	}

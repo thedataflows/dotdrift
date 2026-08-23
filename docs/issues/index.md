@@ -37,3 +37,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0019](0019-adopt-alias-and-readme-section.md) | adopt alias for onboard; README onboarding/adopting section | done | low |
 | [0020](0020-onboard-user-flag.md) | onboard --user flag; --host --user together | done | medium |
 | [0021](0021-onboard-overlay-flag-values.md) | onboard --host/--user take an optional value | done | medium |
+| [0022](0022-simplify-onboard-overlay-flags.md) | Simplify onboard --host/--user to plain string flags | done | medium |

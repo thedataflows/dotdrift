@@ -40,3 +40,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0022](0022-simplify-onboard-overlay-flags.md) | Simplify onboard --host/--user to plain string flags | done | medium |
 | [0023](0023-overlay-flag-empty-value-means-current.md) | onboard --host=/--user= (empty value) means the current host/user | done | medium |
 | [0024](0024-restore-overlay-bool-with-value.md) | Restore bool-like --host/--user (bare flags must compose) | done | medium |
+| [0025](0025-apply-backup-copy-mode-destinations.md) | apply --backup: snapshot copy-mode destinations before overwrite | done | medium |

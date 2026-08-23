@@ -8,11 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
+	"github.com/thedataflows/dotdrift/internal/backup"
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
@@ -389,13 +392,14 @@ func defaultEnsureDir(ctx context.Context, dir string) error {
 
 // ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
-	Profile  string `help:"Path to profile directory" type:"existingdir" default:"."`
-	State    string `help:"Path to state file" type:"path" default:""`
-	Yes      bool   `help:"Answer yes to mise prompts" default:"false"`
-	Verbose  bool   `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
-	Diff     string `help:"Show diff for files whose content differs before applying; bare = internal diff, --diff=tool uses the named tool" default:""`
-	Modules  []string `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
-	Out      io.Writer `kong:"-"`
+	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
+	State   string    `help:"Path to state file" type:"path" default:""`
+	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
+	Verbose bool      `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
+	Diff    string    `help:"Show diff for files whose content differs before applying; bare = internal diff, --diff=tool uses the named tool" default:""`
+	Backup  bool      `help:"Back up existing copy-mode destinations into the declaring module's backups/<timestamp>/ before applying; copy is the only mode whose apply overwrites destination content" default:"false"`
+	Modules []string  `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`
+	Out     io.Writer `kong:"-"`
 
 	// Section flags: positives select exactly those sections, negatives
 	// (--no-<section>) subtract, no flags runs everything. Each maps to
@@ -463,6 +467,17 @@ func (c *ApplyCmd) Run() error {
 		}
 	}
 
+	// Back up copy-mode destinations before the pipeline can overwrite
+	// them. Runs after the plan/diff output and before mise touches
+	// anything; a failure aborts the apply — a safety flag must not fail
+	// open. Skipped when the dotfiles section is deselected (no copy step
+	// runs, so there is nothing to safeguard).
+	if c.Backup && sections.has("dotfiles") {
+		if err := backupCopyTargets(plan, profileRoot, f, out); err != nil {
+			return fmt.Errorf("backup: %w", err)
+		}
+	}
+
 	m := defaultMise()
 	m.Verbose = c.Verbose
 	path, err := m.Ensure()
@@ -523,6 +538,64 @@ func (c *ApplyCmd) Run() error {
 		return fmt.Errorf("remove state file: %w", err)
 	}
 	return nil
+}
+
+// backupCopyTargets snapshots every existing copy-mode destination of the
+// resolved plan into the declaring module's backups/<generation>/ tree
+// (issue 0025). Copy is the only mode whose apply overwrites destination
+// content (symlinks are recreated as links, edits are marker-scoped). The
+// declaring layer names the receiving module directory — base entries back
+// up under modules/<m>, host winners under hosts/<h>/modules/<m>, user
+// winners under users/<u>/modules/<m> — so each backup sits next to the
+// profile files that replace it. One generation (timestamp) is shared by
+// every module in the run. Only modules that received a backup are
+// reported, one line each.
+func backupCopyTargets(plan *resolve.Plan, profileRoot string, f *facts.Facts, out io.Writer) error {
+	home, _ := os.UserHomeDir()
+	gen := time.Now().Format("20060102-150405")
+
+	filesByDir := map[string][]backup.File{}
+	var dirs []string
+	for _, e := range plan.Dotfiles.Entries {
+		if e.IsEdit() || e.Mode != "copy" {
+			continue
+		}
+		target := e.Target
+		if strings.HasPrefix(target, "~/") {
+			target = filepath.Join(home, target[2:])
+		}
+		dir := moduleLayerDir(profileRoot, e, f)
+		if _, seen := filesByDir[dir]; !seen {
+			dirs = append(dirs, dir)
+		}
+		filesByDir[dir] = append(filesByDir[dir], backup.File{Target: target, ModuleDir: dir})
+	}
+	sort.Strings(dirs)
+	for _, dir := range dirs {
+		n, err := backup.Run(filesByDir[dir], gen)
+		if err != nil {
+			return err
+		}
+		if n > 0 {
+			fmt.Fprintf(out, "backup: %d path(s) -> %s\n", n, filepath.Join(dir, "backups", gen))
+		}
+	}
+	return nil
+}
+
+// moduleLayerDir reconstructs the module layer directory that declared a
+// dotfile entry: the entry's Layer label plus the run's facts reproduce the
+// same path resolve keyed the overlay to (a single host/user overlay per
+// resolve, so the reconstruction is exact).
+func moduleLayerDir(profileRoot string, e resolve.DotfileEntry, f *facts.Facts) string {
+	switch e.Layer {
+	case "host":
+		return filepath.Join(profileRoot, "hosts", f.Hostname, "modules", e.Module)
+	case "user":
+		return filepath.Join(profileRoot, "users", f.Username, "modules", e.Module)
+	default:
+		return filepath.Join(profileRoot, "modules", e.Module)
+	}
 }
 
 // buildSteps assembles the apply pipeline from the resolved plan, filtered

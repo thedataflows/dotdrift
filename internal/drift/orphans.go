@@ -62,6 +62,13 @@ func CheckOrphans(layers []ModuleLayer) []Finding {
 				return err
 			}
 			if d.IsDir() {
+				// A backups/ directory directly under the module layer root
+				// is dotdrift's runtime output (apply --backup, issue 0025),
+				// not profile content. Deeper backups dirs are still
+				// content: only the module-root one is machine-written.
+				if d.Name() == "backups" && filepath.Dir(path) == ml.Path {
+					return filepath.SkipDir
+				}
 				return nil
 			}
 			if d.Name() == "module.toml" {

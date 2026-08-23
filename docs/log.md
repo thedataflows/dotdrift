@@ -1,6 +1,10 @@
 # Directory Update Log
 
 
+## 2026-08-24
+
+* **Added (apply --backup — issue [0025](issues/0025-apply-backup-copy-mode-destinations.md))**: `dotdrift apply --backup` snapshots every existing `copy`-mode destination into the profile before the pipeline runs — copy is the only mode whose apply overwrites destination content. New `internal/backup` package (`Run`): targets copy into the declaring module layer directory's `backups/<generation>/` tree, mirroring absolute target paths (layer-aware: a host-won entry backs up under `hosts/<h>/modules/<m>/backups/`); directories recurse, symlinks follow to their resolved content, modes are preserved, missing targets skip, and an unreadable target aborts the apply (a safety flag must not fail open). One timestamp generation per run, one `backup: N path(s) -> <dir>` summary line per module. Wiring in `cmd/apply.go` after the `--diff` output and before the pipeline, skipped when the dotfiles section is deselected. A module-level `backups/` dir is runtime output, not profile content: the status orphan scan skips it (issue 0016 walk) and onboard never adopts from it (non-inverting paths — pinned by a test). TDD: `internal/backup` (mirror layout, mode preservation, recursion, symlink follow, fail-closed), `cmd` wiring end-to-end (base + host layer, symlink target untouched, default-off, section skip), orphan-skip, adoption-pinned. Docs: contract #20, cli-surface apply row, profile-layout "Backups" section, README apply row.
+
 ## 2026-08-23
 
 * **Docs (onboard --host/--user wording aligned with the in-code help)**: the flags' help text was clarified in code ("no value = current host, --host=<name> = explicit, flag omitted = base layer"); the same three states are now spelled with that vocabulary everywhere — cli-surface flag rows, README onboarding line, and the overlay_flag/test comments. Semantics untouched (verified by the existing spelling-matrix and end-to-end layer tests).

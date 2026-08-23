@@ -42,7 +42,7 @@ func orphanLayers(root string) []drift.ModuleLayer {
 func TestCheckOrphans_userLayerAttribution(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"modules/shell/module.toml":       "",
+		"modules/shell/module.toml":        "",
 		"users/cri/modules/shell/local.sh": "orphan in the user overlay",
 	})
 
@@ -75,6 +75,25 @@ func TestCheckOrphans_reportsUnreferencedFiles(t *testing.T) {
 	}
 }
 
+// A backups/ directory directly under a module layer root is dotdrift's
+// runtime output (apply --backup, issue 0025), not profile content: the
+// orphan scan must skip it, or every backup report lights up as orphans.
+// A user-authored backups dir deeper inside the module is still content.
+func TestCheckOrphans_skipsModuleBackupsDir(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"modules/shell/module.toml": `[dotfiles]
+"~/.bashrc" = { source = "bashrc", mode = "symlink" }
+`,
+		"modules/shell/bashrc": "managed",
+		"modules/shell/backups/20260824-120000/home/cri/.bashrc": "backup of the live file",
+		"modules/shell/backups/20260824-120000/etc/x.conf":       "backup of a system file",
+	})
+
+	fs := drift.CheckOrphans(orphanLayers(root))
+	require.Empty(t, orphanGroups(fs), "module-level backups/ is runtime output, not orphans")
+}
+
 // module.toml is the manifest, never an orphan; the WHOLE subtree of a
 // symlink-each source directory is referenced (mise links dir children,
 // so nested files deploy too) — only files outside any reference are
@@ -104,8 +123,8 @@ func TestCheckOrphans_dirSourceSubtreeReferenced(t *testing.T) {
 		"modules/shell/module.toml": `[dotfiles]
 "~/.config/app" = { source = "home/app", mode = "symlink" }
 `,
-		"modules/shell/home/app/a.conf":          "direct child",
-		"modules/shell/home/app/db/b.conf":       "nested",
+		"modules/shell/home/app/a.conf":            "direct child",
+		"modules/shell/home/app/db/b.conf":         "nested",
 		"hosts/h/modules/shell/home/app/db/c.conf": "overlay file nothing references",
 	})
 
@@ -283,9 +302,9 @@ func TestCheckOrphans_realStackSymlinkEachSubtree(t *testing.T) {
 [dotfiles]
 "~/.config/easyeffects" = { source = "home/.config/easyeffects", mode = "symlink-each" }
 `,
-		"modules/easyeffects/home/.config/easyeffects/db/bassEnhancerrc": "x",
-		"modules/easyeffects/home/.config/easyeffects/db/deesserrc":      "x",
-		"modules/easyeffects/home/.config/easyeffects/input/Noise Suppression.json": "x",
+		"modules/easyeffects/home/.config/easyeffects/db/bassEnhancerrc":             "x",
+		"modules/easyeffects/home/.config/easyeffects/db/deesserrc":                  "x",
+		"modules/easyeffects/home/.config/easyeffects/input/Noise Suppression.json":  "x",
 		"hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc": "overlay",
 	})
 

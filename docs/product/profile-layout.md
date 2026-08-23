@@ -512,3 +512,32 @@ no copy and no live-path mapping. Notices name the layer:
 `would adopt: <target> (<source>) [base|hosts/<hostname>|users/<username>]` in `--dry-run`,
 `adopted: ...` in a real run, and the adopted entries ride the same mise
 apply as the onboarded paths.
+
+### Backups (`apply --backup`)
+
+Copy is the only dotfile mode whose apply overwrites destination content
+(symlinks are recreated as links, edit entries are marker-scoped).
+`dotdrift apply --backup` snapshots every existing copy-mode destination
+into the profile before the pipeline runs (issue 0025): each target —
+user or system scope, directories recursively, symlinks followed — is
+copied into the module layer directory that declared the entry, under
+`backups/<generation>/`, mirroring the absolute target path:
+
+```
+modules/easyeffects/backups/20260824-153000/home/cri/.config/easyeffects/db/easyeffectsrc
+hosts/cri-pc/modules/demo/backups/20260824-153000/etc/demo.conf
+```
+
+One timestamp generation is shared by every module in the run, so a
+generation is coherent across modules; restoring is a plain copy back
+along the mirrored path. All existing targets are backed up, not only
+differing ones; missing targets are skipped; an unreadable target aborts
+the apply (the flag must not fail open). Nothing is written without the
+flag, and nothing when the dotfiles section is deselected.
+
+A `backups/` directory directly under a module layer root is dotdrift
+runtime output, not profile content: the status orphan scan skips it, and
+onboard never adopts from it (its paths do not invert to live targets).
+Deeper `backups` directories are ordinary content. Generations are never
+pruned automatically — clean them by hand, and consider gitignoring
+`backups/` in the profile repository.

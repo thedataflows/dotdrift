@@ -17,8 +17,8 @@ type OnboardCmd struct {
 	Mode     string   `help:"Dotfile mode" enum:"symlink,symlink-each,copy,template" default:"symlink"`
 	Packages []string `help:"Distro packages to declare; each entry is a bare name or name=\"description\" (the description becomes a TOML comment)"`
 	Tools    []string `help:"Mise tools to declare"`
-	Host     bool     `help:"Host overlay"`
-	User     bool     `help:"User overlay"`
+	Host     overlayFlag `help:"Host overlay; bare = current host, --host=<hostname> = explicit"`
+	User     overlayFlag `help:"User overlay; bare = current user, --user=<username> = explicit"`
 	DryRun   bool     `help:"Preview only"`
 	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
 	Verbose  bool     `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
@@ -51,11 +51,11 @@ func (c *OnboardCmd) Run() error {
 		Mode:        c.Mode,
 		Packages:    pkgs,
 		Tools:       c.Tools,
-		Host:        c.Host,
-		User:        c.User,
+		Host:        c.Host.Set,
+		Hostname:    overlayOwner(c.Host, f.Hostname),
+		User:        c.User.Set,
+		Username:    overlayOwner(c.User, f.Username),
 		DryRun:      c.DryRun,
 		Yes:         c.Yes,
-		Hostname:    f.Hostname,
-		Username:    f.Username,
 	})
 }

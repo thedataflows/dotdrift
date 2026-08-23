@@ -1,0 +1,113 @@
+package cmd
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/alecthomas/kong"
+	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/mise"
+)
+
+// --host/--user are bool-like flags with an optional =value: bare selects
+// the current host/user, --host=<name> an explicit one. The value binds
+// only through the = form (bool-like flags never eat the next token, so
+// a bare --host before a path cannot swallow it).
+func TestKong_onboardOverlayOptionalValues(t *testing.T) {
+	parse := func(t *testing.T, args ...string) OnboardCmd {
+		t.Helper()
+		var cli CLI
+		parser, err := kong.New(&cli, kong.Name(appName))
+		require.NoError(t, err)
+		_, err = parser.Parse(append([]string{"onboard"}, args...))
+		require.NoError(t, err)
+		return cli.Onboard
+	}
+
+	t.Run("bare host selects current", func(t *testing.T) {
+		c := parse(t, "~/.bashrc", "--host")
+		require.True(t, c.Host.Set)
+		require.Equal(t, "", c.Host.Value)
+		require.Equal(t, []string{"~/.bashrc"}, c.Paths, "bare --host must not eat the path")
+	})
+	t.Run("host with explicit value", func(t *testing.T) {
+		c := parse(t, "--host=cri-pc", "~/.bashrc")
+		require.True(t, c.Host.Set)
+		require.Equal(t, "cri-pc", c.Host.Value)
+	})
+	t.Run("bare user selects current", func(t *testing.T) {
+		c := parse(t, "--user", "~/.bashrc")
+		require.True(t, c.User.Set)
+		require.Equal(t, "", c.User.Value)
+		require.Equal(t, []string{"~/.bashrc"}, c.Paths)
+	})
+	t.Run("user with explicit value", func(t *testing.T) {
+		c := parse(t, "--user=alice", "~/.bashrc")
+		require.True(t, c.User.Set)
+		require.Equal(t, "alice", c.User.Value)
+	})
+	t.Run("both explicit together", func(t *testing.T) {
+		c := parse(t, "--host=h2", "--user=u2", "~/.bashrc")
+		require.Equal(t, "h2", c.Host.Value)
+		require.Equal(t, "u2", c.User.Value)
+	})
+	t.Run("absent stays unset", func(t *testing.T) {
+		c := parse(t, "~/.bashrc")
+		require.False(t, c.Host.Set)
+		require.False(t, c.User.Set)
+	})
+}
+
+// Bare flag falls back to the detected fact; an explicit value wins.
+func TestOnboard_overlayFlagResolution(t *testing.T) {
+	require.Equal(t, "detected-host", overlayOwner(overlayFlag{Set: true}, "detected-host"))
+	require.Equal(t, "other-host", overlayOwner(overlayFlag{Set: true, Value: "other-host"}, "detected-host"))
+	require.Equal(t, "detected-user", overlayOwner(overlayFlag{}, "detected-user"),
+		"absent flag keeps the detected value for the base-layer path")
+}
+
+// End to end through the command: bare --host lands in the DETECTED
+// host's overlay; --host=<name> lands in the EXPLICIT one even though
+// detection says otherwise.
+func TestOnboard_overlayFlagsChooseLayers(t *testing.T) {
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	orig := detectFacts
+	detectFacts = func() (*facts.Facts, error) {
+		return &facts.Facts{Hostname: "testhost", Username: "testuser"}, nil
+	}
+	t.Cleanup(func() { detectFacts = orig })
+
+	run := func(t *testing.T, host, user overlayFlag) string {
+		t.Helper()
+		prof := t.TempDir()
+		live := filepath.Join(t.TempDir(), "live.conf")
+		require.NoError(t, os.WriteFile(live, []byte("x\n"), 0o644))
+		cmd := &OnboardCmd{
+			Paths: []string{live}, Profile: prof, App: "app",
+			Host: host, User: user, Mise: &mise.FakeRunner{},
+		}
+		require.NoError(t, cmd.Run())
+		return prof
+	}
+
+	t.Run("bare host uses detected hostname", func(t *testing.T) {
+		prof := run(t, overlayFlag{Set: true}, overlayFlag{})
+		require.FileExists(t, filepath.Join(prof, "hosts", "testhost", "modules", "app", "module.toml"))
+		require.NoDirExists(t, filepath.Join(prof, "modules", "app"))
+	})
+	t.Run("explicit host wins over detection", func(t *testing.T) {
+		prof := run(t, overlayFlag{Set: true, Value: "lab-pc"}, overlayFlag{})
+		require.FileExists(t, filepath.Join(prof, "hosts", "lab-pc", "modules", "app", "module.toml"))
+		require.NoDirExists(t, filepath.Join(prof, "hosts", "testhost"))
+	})
+	t.Run("bare user uses detected username", func(t *testing.T) {
+		prof := run(t, overlayFlag{}, overlayFlag{Set: true})
+		require.FileExists(t, filepath.Join(prof, "users", "testuser", "modules", "app", "module.toml"))
+	})
+	t.Run("explicit user wins over detection", func(t *testing.T) {
+		prof := run(t, overlayFlag{}, overlayFlag{Set: true, Value: "alice"})
+		require.FileExists(t, filepath.Join(prof, "users", "alice", "modules", "app", "module.toml"))
+	})
+}

@@ -36,3 +36,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0018](0018-adoption-notice-layer-labels.md) | Adoption notices spell layer labels like status headings | done | low |
 | [0019](0019-adopt-alias-and-readme-section.md) | adopt alias for onboard; README onboarding/adopting section | done | low |
 | [0020](0020-onboard-user-flag.md) | onboard --user flag; --host --user together | done | medium |
+| [0021](0021-onboard-overlay-flag-values.md) | onboard --host/--user take an optional value | done | medium |

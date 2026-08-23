@@ -11,11 +11,12 @@ import (
 	"github.com/thedataflows/dotdrift/internal/mise"
 )
 
-// --host/--user are bool-like flags with an optional =value: bare selects
-// the current host/user, --host=<name> an explicit one, omitted means the
-// base layer. Bool-like flags bind values ONLY via =, so a bare --host
-// never eats the next token and `--host --user` composes (plain string
-// flags would error: "--host: expected string value").
+// --host/--user are bool-like flags with an optional =value: no value
+// selects the current host/user, --host=<name> an explicit one, an
+// omitted flag means the base layer. Bool-like flags bind values ONLY
+// via =, so a valueless --host never eats the next token and
+// `--host --user` composes (plain string flags would error:
+// "--host: expected string value").
 func TestKong_onboardOverlayValues(t *testing.T) {
 	parse := func(t *testing.T, args ...string) OnboardCmd {
 		t.Helper()

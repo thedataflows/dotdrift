@@ -17,8 +17,8 @@ type OnboardCmd struct {
 	Mode     string   `help:"Dotfile mode" enum:"symlink,symlink-each,copy,template" default:"symlink"`
 	Packages []string `help:"Distro packages to declare; each entry is a bare name or name=\"description\" (the description becomes a TOML comment)"`
 	Tools    []string `help:"Mise tools to declare"`
-	Host     overlayFlag `help:"Onboard into hosts/<hostname>; bare = current host, --host=<name> = explicit, omitted = base layer"`
-	User     overlayFlag `help:"Onboard into users/<username>; bare = current user, --user=<name> = explicit, omitted = base layer"`
+	Host     overlayFlag `help:"Onboard into hosts/<hostname>; no value = current host, --host=<name> = explicit, flag omitted = base layer"`
+	User     overlayFlag `help:"Onboard into users/<username>; no value = current user, --user=<name> = explicit, flag omitted = base layer"`
 	DryRun   bool     `help:"Preview only"`
 	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
 	Verbose  bool     `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`

@@ -173,8 +173,8 @@ dotdrift generate smb --share media=/srv/media --share data=/mnt/data --no-avahi
 | `--mode symlink\|copy\|template` | symlink | Apps that rewrite configs → copy |
 | `--packages P` | none | Declare distro packages in module.toml; each entry is a bare name or `name="description"` (the description becomes a TOML comment) |
 | `--tools T` | none | Declare mise tool (comma-separated or repeated for several) |
-| `--host[=<hostname>]` | base layer | Onboard into `hosts/<hostname>/modules/...`; bare `--host` = current host, `--host=<hostname>` = explicit, omitted = base layer. Bool-like with optional value: bare flags compose (`--host --user`) and never eat the next token |
-| `--user[=<username>]` | base layer | Onboard into `users/<username>/modules/...`; bare `--user` = current user, `--user=<username>` = explicit, omitted = base layer |
+| `--host[=<hostname>]` | base layer | Onboard into `hosts/<hostname>/modules/...`; no value = current host, `--host=<hostname>` = explicit, flag omitted = base layer. Bool-like with optional value: valueless flags compose (`--host --user`) and never eat the next token |
+| `--user[=<username>]` | base layer | Onboard into `users/<username>/modules/...`; no value = current user, `--user=<username>` = explicit, flag omitted = base layer |
 | `--host` + `--user` (any spelling) | base layer | Both layers in one run: content copied and declared in each |
 | `--dry-run` | false | Preview only |
 | `-v`, `--verbose` | false | Stream the mise install/dotfiles output live instead of capture-and-discard, echoing each command line `set -x`-style (`+ <argv>`) to stderr before it runs (also `DD_VERBOSE=1`) |

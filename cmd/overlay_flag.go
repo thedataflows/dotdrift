@@ -5,8 +5,9 @@ import (
 )
 
 // overlayFlag is a bool-like flag with an optional value, for onboard's
-// --host/--user: bare `--host` selects the CURRENT host, `--host=<name>`
-// an explicit one (`--host=` also means current). Implementing kong's
+// --host/--user: `--host` with no value selects the CURRENT host,
+// `--host=<name>` an explicit one (`--host=` also means current).
+// Implementing kong's
 // BoolMapperValue (Decode + IsBool) makes the flag accept both spellings;
 // bool-like flags bind values ONLY through the = form, so a bare --host
 // before a positional path can never swallow it — and `--host --user`

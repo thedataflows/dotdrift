@@ -64,12 +64,14 @@ type Probes struct {
 	HomeDir     string
 	Readlink    func(path string) (string, error)
 	ReadFile    func(path string) ([]byte, error)
-	StatDir     func(path string) (bool, error) // exists and is a directory
+	StatDir     func(path string) (bool, error)  // exists and is a directory
+	Stat        func(path string) (bool, error)  // exists (file or dir) — source validity
+	ListDir     func(path string) ([]string, error) // direct child names — stale symlink-each scan
 }
 
 // DefaultProbes returns OS-backed probes for Run, Readlink, ReadFile, StatDir,
-// and HomeDir. IsInstalled and ToolCurrent are left nil — wire them to a
-// package backend and mise before calling Check.
+// Stat, ListDir, and HomeDir. IsInstalled and ToolCurrent are left nil — wire
+// them to a package backend and mise before calling Check.
 func DefaultProbes() Probes {
 	home, _ := os.UserHomeDir()
 	return Probes{
@@ -78,6 +80,8 @@ func DefaultProbes() Probes {
 		Readlink: os.Readlink,
 		ReadFile: os.ReadFile,
 		StatDir:  defaultStatDir,
+		Stat:     defaultStat,
+		ListDir:  defaultListDir,
 	}
 }
 
@@ -100,8 +104,9 @@ func defaultStatDir(path string) (bool, error) {
 	return info.IsDir(), nil
 }
 
-// sectionOrder is the fixed display order for report sections.
-var sectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb"}
+// sectionOrder is the fixed display order for report sections; orphans
+// (unreferenced module content) renders last.
+var sectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb", "orphans"}
 
 // CheckOptions controls how Check runs its probes.
 type CheckOptions struct {
@@ -284,8 +289,70 @@ func checkDotfiles(plan *resolve.Plan, profileRoot string, pr Probes) []probeTas
 				},
 			})
 		}
+		// symlink-each also scans the TARGET directory for stale children:
+		// symlinks pointing into the source dir whose source file was
+		// removed. Expansion probes only live source children, so a removed
+		// source would otherwise silence its leftover target link entirely.
+		// The scan is eager (like ResolveBootstrapFiles' dir listing) and
+		// emits one finding per stale child — a clean directory adds none.
+		if e.Mode == "symlink-each" && pr.ListDir != nil {
+			tgtDir := expandHome(e.Target, pr.HomeDir)
+			srcDir := e.Source
+			if !filepath.IsAbs(srcDir) {
+				srcDir = filepath.Join(profileRoot, srcDir)
+			}
+			for _, f := range staleChildren(tgtDir, srcDir, pr) {
+				finding := f
+				tasks = append(tasks, probeTask{
+					section: "dotfiles",
+					module:  e.Module,
+					item:    finding.Item,
+					run: func(ctx context.Context) Finding {
+						return finding
+					},
+				})
+			}
+		}
 	}
 	return tasks
+}
+
+// staleChildren returns a finding for each target-dir symlink that points
+// into srcDir at a source path that no longer exists. Links elsewhere (user
+// files, other modules) are not this module's. A clean directory returns
+// nil.
+func staleChildren(tgtDir, srcDir string, pr Probes) []Finding {
+	children, err := pr.ListDir(tgtDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // missing dir already reported per child
+		}
+		return []Finding{{"dotfiles", tgtDir, Unknown, err.Error(), ""}}
+	}
+	prefix := srcDir + string(filepath.Separator)
+	var stale []Finding
+	for _, name := range children {
+		child := filepath.Join(tgtDir, name)
+		link, err := pr.Readlink(child)
+		if err != nil {
+			continue // not a symlink — not module-managed
+		}
+		if !strings.HasPrefix(link, prefix) {
+			continue // points outside our source dir
+		}
+		if pr.Stat == nil {
+			continue
+		}
+		exists, err := pr.Stat(link)
+		if err != nil {
+			stale = append(stale, Finding{"dotfiles", child, Unknown, err.Error(), ""})
+			continue
+		}
+		if !exists {
+			stale = append(stale, Finding{"dotfiles", child, Drift, "stale link: source removed", ""})
+		}
+	}
+	return stale
 }
 
 func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
@@ -298,10 +365,22 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 			}
 			return Finding{"dotfiles", f.Target, Drift, "not a symlink", ""}
 		}
-		if target == f.Source {
-			return Finding{"dotfiles", f.Target, OK, "", ""}
+		if target != f.Source {
+			return Finding{"dotfiles", f.Target, Drift, fmt.Sprintf("points to %s", target), ""}
 		}
-		return Finding{"dotfiles", f.Target, Drift, fmt.Sprintf("points to %s", target), ""}
+		// The link points at the right path — validate the source still
+		// exists: a deleted source leaves a dangling link that would
+		// otherwise report OK.
+		if pr.Stat != nil {
+			exists, err := pr.Stat(f.Source)
+			if err != nil {
+				return Finding{"dotfiles", f.Target, Unknown, err.Error(), ""}
+			}
+			if !exists {
+				return Finding{"dotfiles", f.Target, Drift, "source missing (dangling link)", ""}
+			}
+		}
+		return Finding{"dotfiles", f.Target, OK, "", ""}
 	case "copy":
 		src, err := pr.ReadFile(f.Source)
 		if err != nil {

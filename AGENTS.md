@@ -11,6 +11,7 @@ On top of the global rules:
    `docs/`, milestones, tasks, or examples must update them before finishing.
    Keep `docs/log.md` current with completed milestones and tasks.
 3. MUST follow OKF format: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+4. Any codebase change must have at least one corresponding issue in docs/issues
 
 When in doubt, prefer deletion, simplicity, and the documented project conventions
 in `docs/`.

@@ -39,6 +39,7 @@ func (b *recordingBackend) Absent(_ context.Context, pkgs []string) error {
 }
 
 func (b *recordingBackend) IsInstalled(context.Context, string) (bool, error) { return false, nil }
+func (b *recordingBackend) Installed(context.Context) ([]string, error)      { return nil, nil }
 
 func (b *recordingBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
 

@@ -112,6 +112,13 @@ and = [
 
 A module whose expression fails is skipped with reason `when filter` (shown by `dotdrift modules`); an empty or omitted `[when]` always selects. Malformed expressions (bad kernel constraint, empty `not`/`or`/`and`) are load-time errors naming the module. Full grammar, validation table, and probing rules: [profile layout — the `[when]` filter](docs/product/profile-layout.md#the-when-filter). A runnable example ships at `examples/simple/modules/conditional/`.
 
+`packages`/`tools` entries also accept regexes — matched against installed names, anchored to the full name:
+
+```toml
+[when]
+packages = ["apollo.*"]   # matches apollo AND apollo-cuda-git
+```
+
 ## Hooks
 
 A module may declare shell commands to run around the apply pipeline:

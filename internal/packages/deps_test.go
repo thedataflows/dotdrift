@@ -122,6 +122,7 @@ func newTreeBackend(deps map[string][]string) *treeBackend {
 func (b *treeBackend) Present(context.Context, []string) error      { return nil }
 func (b *treeBackend) Absent(context.Context, []string) error       { return nil }
 func (b *treeBackend) IsInstalled(context.Context, string) (bool, error) { return false, nil }
+func (b *treeBackend) Installed(context.Context) ([]string, error)  { return nil, nil }
 
 func (b *treeBackend) DirectDeps(_ context.Context, pkg string) ([]string, error) {
 	b.calls[pkg]++

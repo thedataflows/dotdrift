@@ -292,8 +292,8 @@ is ignored (empty list = "any", empty scalar = "any").
 | `os` | list of strings | detected os (`linux`, …) | any-of list |
 | `gpu` | **single string** | detected gpu (`nvidia`/`amd`/`intel`/`unknown`) | not a list |
 | `kernel` | **single string** | running kernel release, `"<op> <version>"` | see below |
-| `packages` | list of strings | installed **system packages** | all must be installed; probed |
-| `tools` | list of strings | installed **mise-managed tools** | all must be installed; probed |
+| `packages` | list of strings | installed **system packages** | all must be installed; probed; **each entry is an exact name or an anchored regex** |
+| `tools` | list of strings | installed **mise-managed tools** | all must be installed; probed; **each entry is an exact name or an anchored regex** |
 
 `kernel` holds exactly one `"<op> <version>"` constraint (`<`, `<=`, `>`,
 `>=`, `==`, `!=`), compared numerically per dotted segment against the
@@ -305,11 +305,21 @@ iteration is ignored). An empty kernel fact (detection failed) never
 matches a non-empty constraint; a malformed constraint is a load-time
 error (see [Validation](#validation)).
 
-`packages`/`tools` names are matched **exactly as written** — no
+`packages`/`tools` entries are matched **exact-first**: an installed
+name exactly equal to the entry satisfies it (found by lookup, never
+re-interpreted as a pattern). An entry containing regex metacharacters
+(`. + * ? ( ) | [ ] { } ^ $ \`) that has no exact hit is matched as an
+**anchored full-name regex** (`^(?:entry)$`) against the installed set —
+`packages = ["apollo.*"]` matches both `apollo` and `apollo-cuda-git`
+but not `xapollo`; `apollo.+` does not match bare `apollo`.
+Metachar-free entries keep pure exact-match semantics. Every entry must
+be a valid regex: a syntax error is a load-time error (see
+[Validation](#validation)); write regex-special literals escaped —
+`"g\\+\\+"` matches the package `g++`. Names are matched as written — no
 `aur/`-marker or `manager:`-prefix normalization; write the name the
 same way on both sides or the filter will not match. A name that is
 absent or indeterminable fails its leaf (fail-open) but is never a
-load-time error — any list of strings is well-formed.
+load-time error for a well-formed entry.
 
 ### Combinators
 
@@ -347,6 +357,10 @@ Both TOML spellings decode identically: inline tables
 [when]
 kernel = ">= 7"
 not = { packages = ["somepackage"] }
+
+# Regex entries: matches apollo OR apollo-cuda-git (any apollo-* package):
+[when]
+packages = ["apollo.*"]
 
 # Any-of over hardware or installed state:
 [when]
@@ -390,6 +404,7 @@ the strict-schema rule above.)
 | Violation | Why it errors |
 |---|---|
 | malformed `kernel` constraint (any depth) | a typo must fail loudly, not silently never-match |
+| invalid regex in a `packages`/`tools` entry (any depth) | a pattern that cannot compile would silently never-match |
 | `not = {}` (empty table) | negates nothing — meaningless |
 | `or = []` / `and = []` (explicit empty list) | `or` can never match; `and` carries no meaning |
 | empty `or`/`and` element (e.g. `or = [{}]`) | the empty element would vacuously match, silently making the whole `or` always-true |
@@ -404,13 +419,21 @@ Installed status for `packages`/`tools` leaves is probed **lazily at
 profile load**, never at detection time:
 
 - `packages` — one query per distinct name via the detected package
-  backend (`paru`/`apt`/`dnf`, from the distro fact).
+  backend (`paru`/`apt`/`dnf`, from the distro fact). When any regex
+  entry exists anywhere in the profile, this becomes **one installed-list
+  query** (`pacman -Qq` / `dpkg-query -W -f ${Package}` /
+  `rpm -qa --qf %{NAME}`) — a list answers plain entries too, so a mixed
+  profile still costs one subprocess. If the list is unavailable
+  (unknown backend, query failure), plain entries fall back to exact
+  per-name probes and regex entries fail open.
 - `tools` — one query per distinct name via `mise current <tool>`
   (presence only, the version is ignored; no mise binary on PATH ⇒
-  nothing matches).
+  nothing matches). Regex tool entries switch this to **one
+  `mise ls --json`** call (its output is an object keyed by tool name),
+  same list-vs-exact strategy and fallback as packages.
 - Names are collected from **the whole expression tree** — leaves inside
-  `or`/`and`/`not` probed like top-level leaves — and deduplicated
-  across all modules.
+  `or`/`and`/`not` probed like top-level leaves, partitioned into plain
+  and regex entries — and deduplicated across all modules.
 - A profile declaring no `when.packages`/`when.tools` anywhere probes
   nothing: existing profiles cost zero extra subprocesses.
 - A name that is not installed, or whose status cannot be determined

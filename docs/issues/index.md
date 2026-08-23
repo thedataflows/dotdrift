@@ -23,3 +23,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0005](0005-apply-diff-flag.md) | Apply --diff flag | done | medium |
 | [0006](0006-when-packages-condition.md) | when.packages / when.tools installed-state conditions | done | medium |
 | [0007](0007-when-expression-combinators.md) | when expression combinators and/or/not | done | medium |
+| [0008](0008-when-regex-entries.md) | Regex entries in when.packages and when.tools | done | medium |

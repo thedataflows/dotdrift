@@ -24,6 +24,11 @@ type Backend interface {
 	IsInstalled(ctx context.Context, pkg string) (bool, error)
 	// DirectDeps returns the names of pkg's direct runtime dependencies.
 	DirectDeps(ctx context.Context, pkg string) ([]string, error)
+	// Installed returns the names of ALL installed packages (one list
+	// query). Powers regex entries in when.packages: a pattern like
+	// "apollo.*" cannot be answered by IsInstalled(name). An error means
+	// the list is unavailable — callers fail the filter open.
+	Installed(ctx context.Context) ([]string, error)
 }
 
 // Runner runs a command and returns stdout; cancelling ctx kills the child process.
@@ -157,6 +162,15 @@ func (p *Paru) IsInstalled(ctx context.Context, pkg string) (bool, error) {
 	return false, err
 }
 
+// Installed lists every installed package name via `pacman -Qq`.
+func (p *Paru) Installed(ctx context.Context) ([]string, error) {
+	out, err := p.Runner.Run(ctx, "pacman", "-Qq")
+	if err != nil {
+		return nil, fmt.Errorf("pacman list installed: %w", err)
+	}
+	return strings.Fields(out), nil
+}
+
 func uniqueSorted(in []string) []string {
 	seen := make(map[string]struct{}, len(in))
 	out := make([]string, 0, len(in))
@@ -239,5 +253,7 @@ func (n *noop) Absent(context.Context, []string) error  { return n.err() }
 func (n *noop) IsInstalled(context.Context, string) (bool, error) {
 	return false, n.err()
 }
+
+func (n *noop) Installed(context.Context) ([]string, error) { return nil, n.err() }
 
 func (n *noop) DirectDeps(context.Context, string) ([]string, error) { return nil, n.err() }

@@ -259,6 +259,16 @@ func validateWhen(id string, w When) error {
 			return fmt.Errorf("module %s: %w", id, err)
 		}
 	}
+	for _, entry := range w.Packages {
+		if _, err := anchoredRegex(entry); err != nil {
+			return fmt.Errorf("module %s: invalid regex in when.packages %q: %w", id, entry, err)
+		}
+	}
+	for _, entry := range w.Tools {
+		if _, err := anchoredRegex(entry); err != nil {
+			return fmt.Errorf("module %s: invalid regex in when.tools %q: %w", id, entry, err)
+		}
+	}
 	for i := range w.And {
 		if err := validateWhenChild(id, fmt.Sprintf("and[%d]", i), w.And[i]); err != nil {
 			return err
@@ -447,12 +457,12 @@ func (w When) eval(f *facts.Facts) bool {
 		}
 	}
 	for _, name := range w.Packages {
-		if !f.InstalledPackages[name] {
+		if !installedMatch(name, f.InstalledPackages) {
 			return false
 		}
 	}
 	for _, name := range w.Tools {
-		if !f.InstalledTools[name] {
+		if !installedMatch(name, f.InstalledTools) {
 			return false
 		}
 	}
@@ -482,6 +492,32 @@ func (w When) eval(f *facts.Facts) bool {
 func contains(list []string, s string) bool {
 	for _, item := range list {
 		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
+// installedMatch reports whether one when.packages/when.tools entry is
+// satisfied by the installed set: an exact name hit wins (entries like
+// "c++" are found by name, never re-read as a pattern); an entry with
+// regex metacharacters then matches as an anchored full-name pattern —
+// "apollo.*" matches "apollo" and "apollo-cuda-git". Patterns are
+// validated at load (validateWhen), so a compile error here (unreachable)
+// simply fails the leaf.
+func installedMatch(entry string, installed map[string]bool) bool {
+	if installed[entry] {
+		return true
+	}
+	if !isRegexEntry(entry) {
+		return false
+	}
+	re, err := anchoredRegex(entry)
+	if err != nil {
+		return false
+	}
+	for name, ok := range installed {
+		if ok && re.MatchString(name) {
 			return true
 		}
 	}

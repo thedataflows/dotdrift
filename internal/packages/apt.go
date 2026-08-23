@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // Apt is the Debian/Ubuntu backend skeleton.
@@ -64,6 +65,15 @@ func (a *Apt) IsInstalled(ctx context.Context, pkg string) (bool, error) {
 	return false, err
 }
 
+// Installed lists every installed package name via dpkg-query.
+func (a *Apt) Installed(ctx context.Context) ([]string, error) {
+	out, err := a.Runner.Run(ctx, "dpkg-query", "-W", "-f", "${Package}\n")
+	if err != nil {
+		return nil, fmt.Errorf("dpkg list installed: %w", err)
+	}
+	return strings.Fields(out), nil
+}
+
 // Dnf is the Fedora/RHEL backend skeleton.
 type Dnf struct {
 	Runner Runner
@@ -114,4 +124,13 @@ func (d *Dnf) IsInstalled(ctx context.Context, pkg string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+// Installed lists every installed package name via rpm.
+func (d *Dnf) Installed(ctx context.Context) ([]string, error) {
+	out, err := d.Runner.Run(ctx, "rpm", "-qa", "--qf", "%{NAME}\n")
+	if err != nil {
+		return nil, fmt.Errorf("rpm list installed: %w", err)
+	}
+	return strings.Fields(out), nil
 }

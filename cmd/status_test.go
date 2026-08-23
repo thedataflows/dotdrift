@@ -25,6 +25,7 @@ var _ packages.Backend = allInstalledBackend{}
 func (allInstalledBackend) Present(context.Context, []string) error              { return nil }
 func (allInstalledBackend) Absent(context.Context, []string) error               { return nil }
 func (allInstalledBackend) IsInstalled(context.Context, string) (bool, error)    { return true, nil }
+func (allInstalledBackend) Installed(context.Context) ([]string, error)          { return nil, nil }
 func (allInstalledBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
 
 // statusMinimalProfile writes a temp profile with one module that installs a

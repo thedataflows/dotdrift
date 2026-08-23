@@ -24,6 +24,7 @@ var _ packages.Backend = (*depsBackend)(nil)
 func (b *depsBackend) Present(context.Context, []string) error          { return nil }
 func (b *depsBackend) Absent(context.Context, []string) error           { return nil }
 func (b *depsBackend) IsInstalled(context.Context, string) (bool, error) { return false, nil }
+func (b *depsBackend) Installed(context.Context) ([]string, error)      { return nil, nil }
 
 func (b *depsBackend) DirectDeps(_ context.Context, pkg string) ([]string, error) {
 	if err := b.err[pkg]; err != nil {

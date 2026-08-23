@@ -9,32 +9,54 @@ import (
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
 
-// swapProbe replaces both installed-state probe seams for one test and
-// restores them afterwards. The fakes record every probed name and answer
-// from the given sets, so tests observe exactly which packages/tools Load
-// queried.
+// swapProbe replaces all four installed-state probe seams for one test:
+// per-name exact probes and the installed-list probes (regex support).
+// The fakes record every probed name and answer from the given sets, so
+// tests observe exactly which packages/tools Load queried and via which
+// path.
 func swapProbe(t *testing.T, answer map[string]bool) *probeRecorder {
 	t.Helper()
 	rec := &probeRecorder{answer: answer}
 	origPkg, origTool := probeInstalledPackages, probeInstalledTools
+	origPkgList, origToolList := probeInstalledPackageList, probeInstalledToolList
 	probeInstalledPackages = func(backend string, names []string) map[string]bool {
 		rec.backend = backend
 		rec.pkgNames = append(rec.pkgNames, names...)
+		rec.pkgExactCalls++
 		return answer
 	}
 	probeInstalledTools = func(names []string) map[string]bool {
 		rec.toolNames = append(rec.toolNames, names...)
+		rec.toolExactCalls++
 		return answer
 	}
-	t.Cleanup(func() { probeInstalledPackages, probeInstalledTools = origPkg, origTool })
+	probeInstalledPackageList = func(backend string) map[string]bool {
+		rec.backend = backend
+		rec.pkgListCalls++
+		return rec.pkgListAnswer
+	}
+	probeInstalledToolList = func() map[string]bool {
+		rec.toolListCalls++
+		return rec.toolListAnswer
+	}
+	t.Cleanup(func() {
+		probeInstalledPackages, probeInstalledTools = origPkg, origTool
+		probeInstalledPackageList, probeInstalledToolList = origPkgList, origToolList
+	})
 	return rec
 }
 
 type probeRecorder struct {
-	answer    map[string]bool
-	backend   string
-	pkgNames  []string
-	toolNames []string
+	answer        map[string]bool
+	backend       string
+	pkgNames      []string
+	toolNames     []string
+	pkgExactCalls int
+	toolExactCalls int
+	pkgListCalls  int
+	toolListCalls int
+	pkgListAnswer map[string]bool
+	toolListAnswer map[string]bool
 }
 
 // when.packages and when.tools are the only triggers for probing: Load asks
@@ -116,6 +138,80 @@ or = [{ packages = ["p2"] }]
 	require.ElementsMatch(t, []string{"p1", "p2"}, rec.pkgNames)
 	require.Equal(t, []string{"t1"}, rec.toolNames)
 	require.Len(t, p.Selected, 1)
+}
+
+// A regex entry (regex metacharacters present) switches the probe from
+// per-name exact queries to ONE installed-list query — a regex cannot be
+// answered by IsInstalled(name). Plain-only profiles keep the exact path.
+func TestLoad_regexEntriesUseListProbe(t *testing.T) {
+	t.Run("packages regex triggers list, not exact", func(t *testing.T) {
+		root := t.TempDir()
+		writeModuleInternal(t, root, "modules/m", `[when]
+packages = ["apollo.*"]
+`)
+		rec := swapProbe(t, nil)
+		rec.pkgListAnswer = map[string]bool{"apollo-cuda-git": true}
+		p, err := Load(root, &facts.Facts{Backend: "paru"})
+		require.NoError(t, err)
+		require.Equal(t, 1, rec.pkgListCalls)
+		require.Zero(t, rec.pkgExactCalls)
+		require.Equal(t, "paru", rec.backend)
+		require.Len(t, p.Selected, 1)
+	})
+
+	t.Run("plain-only keeps exact probes", func(t *testing.T) {
+		root := t.TempDir()
+		writeModuleInternal(t, root, "modules/m", `[when]
+packages = ["vim"]
+`)
+		rec := swapProbe(t, map[string]bool{"vim": true})
+		_, err := Load(root, &facts.Facts{Backend: "paru"})
+		require.NoError(t, err)
+		require.Zero(t, rec.pkgListCalls)
+		require.Equal(t, 1, rec.pkgExactCalls)
+	})
+
+	t.Run("mixed: one list query answers plain and regex entries", func(t *testing.T) {
+		root := t.TempDir()
+		writeModuleInternal(t, root, "modules/m", `[when]
+packages = ["vim", "apollo.*"]
+`)
+		rec := swapProbe(t, nil)
+		rec.pkgListAnswer = map[string]bool{"vim": true, "apollo": true}
+		p, err := Load(root, &facts.Facts{})
+		require.NoError(t, err)
+		require.Equal(t, 1, rec.pkgListCalls, "list covers plain entries too")
+		require.Zero(t, rec.pkgExactCalls, "no per-name queries when the list answered")
+		require.Len(t, p.Selected, 1)
+	})
+
+	t.Run("list failure falls back to exact probes for plain entries", func(t *testing.T) {
+		root := t.TempDir()
+		writeModuleInternal(t, root, "modules/m", `[when]
+packages = ["vim", "apollo.*"]
+`)
+		rec := swapProbe(t, map[string]bool{"vim": true})
+		rec.pkgListAnswer = nil // e.g. unsupported backend: regex fails open
+		p, err := Load(root, &facts.Facts{Backend: "unknown"})
+		require.NoError(t, err)
+		require.Equal(t, 1, rec.pkgListCalls)
+		require.Equal(t, 1, rec.pkgExactCalls, "plain entries still exact-probed")
+		require.Empty(t, p.Selected, "regex entry unanswered -> fail open")
+	})
+
+	t.Run("tools regex triggers tool list", func(t *testing.T) {
+		root := t.TempDir()
+		writeModuleInternal(t, root, "modules/m", `[when]
+tools = ["go.*"]
+`)
+		rec := swapProbe(t, nil)
+		rec.toolListAnswer = map[string]bool{"golangci-lint": true}
+		p, err := Load(root, &facts.Facts{})
+		require.NoError(t, err)
+		require.Equal(t, 1, rec.toolListCalls)
+		require.Zero(t, rec.toolExactCalls)
+		require.Len(t, p.Selected, 1)
+	})
 }
 
 func selectedIDsInternal(p *Profile) []string {

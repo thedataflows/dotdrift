@@ -29,12 +29,20 @@ func TestKong_applyPositionalModules(t *testing.T) {
 }
 
 // "dotdrift add" is an alias for "dotdrift onboard": it parses onto the
-// same OnboardCmd and carries the same flags.
+// same OnboardCmd and carries the same flags. So is "dotdrift adopt".
 func TestKong_addAliasRoutesToOnboard(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
 	_, err = parser.Parse([]string{"add", "/tmp/x", "--app", "foo"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"/tmp/x"}, cli.Onboard.Paths)
+	require.Equal(t, "foo", cli.Onboard.App)
+
+	cli = CLI{}
+	parser, err = kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"adopt", "/tmp/x", "--app", "foo"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"/tmp/x"}, cli.Onboard.Paths)
 	require.Equal(t, "foo", cli.Onboard.App)

@@ -43,7 +43,7 @@ type CLI struct {
 	Plan     PlanCmd     `cmd:"" help:"Print the effective plan"`
 	Apply    ApplyCmd    `cmd:"" help:"Apply the profile"`
 	Status   StatusCmd   `cmd:"" help:"Show status"`
-	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module" aliases:"add"`
+	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module" aliases:"add,adopt"`
 	Generate GenerateCmd `cmd:"" help:"Generate mounts/smb modules"`
 	Paru     ParuCmd     `cmd:"" help:"paru mise plugin backend (internal)"`
 	Version  VersionCmd  `cmd:"" help:"Show version information"`

@@ -185,6 +185,38 @@ A `[dotfiles]` entry can be a partial edit to a file something else owns — key
 
 See `docs/product/profile-layout.md` for the full validation rules and `examples/simple/` for a worked block-edit example.
 
+## Onboarding and adopting
+
+`dotdrift onboard` (aliases: `add`, `adopt`) turns live paths into managed module content. Onboarding a path copies it into the module, writes the `[dotfiles]` entry, and applies immediately; orphans — module files no entry references — are adopted along the way. A few scenarios:
+
+**Onboard a live path.** Copies `~/.config/nvim` into `modules/nvim/home/.config/nvim` and links it back:
+
+```bash
+dotdrift onboard ~/.config/nvim
+```
+
+Re-running **updates**: the module copy is refreshed from the live path (directories replaced wholesale, so deletions propagate) and `module.toml` is merged — existing entries and unmanaged sections survive.
+
+**Adopt an orphaned module file.** A file sitting in the profile that no `[dotfiles]` entry references (status lists it under `orphans:`) is declared by passing the module file itself — no copy, the entry lands in that layer's `module.toml`:
+
+```bash
+dotdrift adopt ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc
+# adopted: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [hosts/cri-pc]
+```
+
+The path names its level: a `modules/<app>/...` file adopts into `[base]`, a `hosts/<h>/...` file into `[hosts/<h>]`, a `users/<u>/...` file into `[users/<u>]`.
+
+**Preview first.** `--dry-run` lists what would be onboarded and adopted, touching nothing:
+
+```bash
+dotdrift adopt --dry-run ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc
+# would adopt: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [hosts/cri-pc]
+```
+
+**Orphans ride any onboard.** Onboarding a live path also sweeps the module: unreferenced files become entries (a fully-orphaned directory collapses to one whole-dir entry, never a shared root like `~/.config`; a live counterpart wins over a stale module copy), and a re-onboard whose source path changed adopts the stranded old source instead of leaving a new orphan. Files with no derivable target (hook scripts, notes) stay for `status` to report.
+
+Reference rules and adoption bounds live in [profile layout](docs/product/profile-layout.md); `status` scans every host/user layer of the profile, so orphans on other machines show anywhere.
+
 ## Generate
 
 `dotdrift generate` renders a derived module from declarations in `module.toml`:
@@ -215,7 +247,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
 | `dotdrift apply [--yes] [--verbose] [--diff[=tool]] [--[no-]packages\|--tools\|--dotfiles\|--mounts\|--smb\|--hooks ...] [modules...]` | Run the full pipeline and resume from the last successful step (the cursor file is deleted on completion; optionally limited to the listed modules). Section flags restrict the run: positives (`--packages --tools`) execute exactly those sections, negated (`--no-hooks`) skip that one, any combination composes; no flags runs everything. `--diff` shows colored unified diffs for differing `copy`-mode dotfiles before applying; bare = internal diff, `--diff=delta` uses the named tool with `<target> <source>` args. |
 | `dotdrift status [-v] [-j N] [--diff[=tool]] [modules...]` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Symlink sources are validated (dangling links, stale symlink-each children), and an `orphans` section lists unreferenced files per module/layer (every host/user layer in the profile is scanned, not just the current machine's). Colored hues are overridable via `[colors]` in `dotdrift.toml`. Probes run concurrently (`-j N` workers; default: CPUs); `-v` streams per-probe progress to stderr; `--diff` shows colored unified diffs after the report. Exits 0 even when drift is found. |
-| `dotdrift onboard [--verbose] <path>...` | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). Orphaned module files (unreferenced by `[dotfiles]`) are adopted as entries with the run's mode — a fully-orphaned directory collapses to one entry (never a shared root like `~/.config`) and the live counterpart is snapshotted first; passing a module file path adopts it into its own layer's module.toml; `--dry-run` lists the would-be adoptions. |
+| `dotdrift onboard [--verbose] <path>...` (aliases: `add`, `adopt`) | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). Orphaned module files (unreferenced by `[dotfiles]`) are adopted as entries with the run's mode — a fully-orphaned directory collapses to one entry (never a shared root like `~/.config`) and the live counterpart is snapshotted first; passing a module file path adopts it into its own layer's module.toml; `--dry-run` lists the would-be adoptions. |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 
 -v / --verbose (also DD_VERBOSE=1) streams package manager and mise output live on apply and onboard, echoing each command line set -x-style to stderr immediately before it runs — e.g. + paru -S --needed --noconfirm jq — and runs mise itself in verbose mode (MISE_VERBOSE=1) so its DEBUG logging streams alongside; without it child-process output is captured and only surfaced in errors.

@@ -21,7 +21,7 @@ import (
 // PlanCmd prints the resolved plan without side effects.
 type PlanCmd struct {
 	Profile   string       `help:"Path to profile directory" type:"existingdir" default:"."`
-	JSON      bool         `help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
+	JSON      bool         `short:"j" help:"Print the plan as a single JSON object (suppresses the text rendering and warnings)"`
 	Deps      bool         `help:"Show dependency tree for packages in the install list"`
 	DepsDepth int          `default:"1" help:"Dependency recursion depth (requires --deps)"`
 	Modules   []string     `arg:"" optional:"" name:"modules" help:"Limit scope to these modules (space or comma separated)"`

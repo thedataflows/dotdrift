@@ -96,9 +96,10 @@ func TestStatus_showsCursor(t *testing.T) {
 	require.Contains(t, buf.String(), `resume: last completed "packages" - next apply resumes after it`)
 }
 
-// On a TTY the resume line carries a role hue: ok (green) when clean,
-// warn (yellow) when a cursor is pending. Piped output stays plain
-// (covered by every other status test).
+// On a TTY the resume line's MESSAGE carries a role hue (the literal
+// `resume: ` prefix stays plain): ok (green) when clean, warn (yellow)
+// when a cursor is pending. Piped output stays plain (covered by every
+// other status test).
 func TestStatus_resumeLineColored(t *testing.T) {
 	origTerminal, origNoColor := executil.IsTerminal, executil.NoColor
 	t.Cleanup(func() { executil.IsTerminal, executil.NoColor = origTerminal, origNoColor })
@@ -111,15 +112,19 @@ func TestStatus_resumeLineColored(t *testing.T) {
 
 	var buf bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: profile, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
-	require.Contains(t, buf.String(), "\033[32mresume: clean - next apply starts from the beginning",
-		"clean resume line wraps in the ok hue")
+	out := buf.String()
+	require.Contains(t, out, "resume: \033[32mclean - next apply starts from the beginning\033[0m",
+		"clean resume message wraps in the ok hue")
+	require.NotContains(t, out, "\033[32mresume:", "the resume: prefix stays plain")
 
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
 	buf.Reset()
 	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, out: &buf}).Run())
-	require.Contains(t, buf.String(), "\033[33mresume: last completed",
-		"pending-cursor resume line wraps in the warn hue")
+	out = buf.String()
+	require.Contains(t, out, "resume: \033[33mlast completed \"packages\" - next apply resumes after it\033[0m",
+		"pending-cursor resume message wraps in the warn hue")
+	require.NotContains(t, out, "\033[33mresume:", "the resume: prefix stays plain")
 }
 
 func TestStatus_reportsDrift(t *testing.T) {

@@ -43,3 +43,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0025](0025-apply-backup-copy-mode-destinations.md) | apply --backup: snapshot copy-mode destinations before overwrite | done | medium |
 | [0026](0026-restore-command.md) | restore command: copy backed-up copy-mode targets back to their live paths | done | medium |
 | [0027](0027-readme-backup-restore-examples.md) | README: backup/restore usage examples | done | low |
+| [0028](0028-apply-mise-prompts-unanswerable-stdin.md) | apply: mise confirmation prompts can never be answered (stdin is the null device) | done | high |

@@ -93,6 +93,21 @@ func DefaultMise() *Mise {
 	}
 }
 
+// opStdin returns os.Stdin when it is a terminal so an interactive child
+// can actually be answered: mise asks before changing files (files: apply
+// <target>?) and without wiring, the prompt reads the null device,
+// resolves as "No", and skips the change while still exiting 0 — the
+// pipeline then records the step complete and the drift persists (issue
+// 0028). Non-terminal stdin keeps the null device so nothing blocks on
+// input nobody will provide. A package var so tests can swap it (the gate
+// is the same executil.IsStdinTerminal seam hook interactivity uses).
+var opStdin = func() *os.File {
+	if executil.IsStdinTerminal() {
+		return os.Stdin
+	}
+	return nil
+}
+
 // defaultRunContext executes a command, cancelling it with ctx. On failure the
 // trimmed combined output is appended so callers surface mise's own message.
 func defaultRunContext(ctx context.Context, name string, args ...string) (string, error) {
@@ -104,6 +119,7 @@ func defaultRunContext(ctx context.Context, name string, args ...string) (string
 // one, so callers can override (merged) variables.
 func runContextEnv(ctx context.Context, env []string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = opStdin()
 	// Cancel must kill the whole process group: the default Cancel kills only
 	// the direct child, and a shell wrapper (sh -c) may fork — surviving
 	// grandchildren keep the output pipes open and Wait hangs until they exit
@@ -206,6 +222,7 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 		env = append(env, "MISE_VERBOSE=1")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
+	cmd.Stdin = opStdin()
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}

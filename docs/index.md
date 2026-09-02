@@ -21,6 +21,12 @@ Progressive disclosure for agents implementing [dotdrift](product/contract.md).
 * [Package layout](engineering/package-layout.md) - Go module structure
 * [Definition of done](engineering/definition-of-done.md) - v0.1.0 exit criteria
 
+# Diagrams
+
+* [Component architecture](diagrams/architecture.html) - Multi-figure set: profile loading, resolve, apply pipeline, package backends, drift probes
+* [Command flow](diagrams/command-flow.html) - CLI routing and the shared detect → load → resolve chain
+* [Apply pipeline](diagrams/apply-pipeline.html) - The eight-step convergence pipeline and its resume cursor
+
 # Milestones
 
 * [Milestones](milestones/) - Ordered delivery slices M0–M10

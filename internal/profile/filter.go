@@ -32,13 +32,22 @@ func ParseModuleFilter(args []string) []string {
 }
 
 // LimitTo restricts the selection to the listed module ids. An empty list is
-// a no-op. Every id must name a discovered module, and the filter never
+// a no-op. Every id must name a discovered module or a skip-listed one (a
+// superuser overlay of another account, issue 0029), and the filter never
 // resurrects modules skipped for their own reason (disabled, when filter):
-// naming one is an error carrying that reason. Selected modules not in ids
-// move to Skipped with reason "module filter", preserving order.
+// naming one is an error carrying that reason. An id that is currently
+// selected passes even when it is also skip-listed — a skip entry for the
+// same id describes another account's overlay copy, not this view's
+// selection (issue 0032). Selected modules not in ids move to Skipped with
+// reason "module filter", preserving order.
 func (p *Profile) LimitTo(ids []string) error {
 	if len(ids) == 0 {
 		return nil
+	}
+
+	skipReasons := make(map[string]string, len(p.Skipped))
+	for _, s := range p.Skipped {
+		skipReasons[s.Module.ID] = s.Reason
 	}
 
 	known := make(map[string]struct{}, len(p.Modules))
@@ -49,21 +58,28 @@ func (p *Profile) LimitTo(ids []string) error {
 	}
 	var unknown []string
 	for _, id := range ids {
-		if _, ok := known[id]; !ok {
-			unknown = append(unknown, id)
+		if _, ok := known[id]; ok {
+			continue
 		}
+		if _, skipped := skipReasons[id]; skipped {
+			continue // exists but unselectable in this view; reported below with its reason (issue 0032)
+		}
+		unknown = append(unknown, id)
 	}
 	if len(unknown) > 0 {
 		return fmt.Errorf("unknown module(s): %s (valid modules: %s)",
 			strings.Join(unknown, ", "), strings.Join(valid, ", "))
 	}
 
-	skipReasons := make(map[string]string, len(p.Skipped))
-	for _, s := range p.Skipped {
-		skipReasons[s.Module.ID] = s.Reason
+	selectedIDs := make(map[string]struct{}, len(p.Selected))
+	for _, m := range p.Selected {
+		selectedIDs[m.ID] = struct{}{}
 	}
 	var notSelected []string
 	for _, id := range ids {
+		if _, sel := selectedIDs[id]; sel {
+			continue
+		}
 		if reason, skipped := skipReasons[id]; skipped {
 			notSelected = append(notSelected, fmt.Sprintf("%s (%s)", id, reason))
 		}

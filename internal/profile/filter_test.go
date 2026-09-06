@@ -108,3 +108,37 @@ func TestProfile_LimitTo_emptyNoop(t *testing.T) {
 	require.Len(t, p.Selected, 2)
 	require.Empty(t, p.Skipped)
 }
+
+// A module that is selected AND superuser-skip-listed (its id collides with
+// another account's overlay copy, issue 0032) passes the filter: the skip
+// entry describes the overlay copy, not this view's selection.
+func TestProfile_LimitTo_selectedPlusSuperuserSkippedPasses(t *testing.T) {
+	m := profile.Module{ID: "micro"}
+	p := &profile.Profile{
+		Modules:  []profile.Module{m},
+		Selected: []profile.Module{m},
+		Skipped:  []profile.Skip{{Module: m, Reason: profile.ReasonSuperuserOverlay}},
+	}
+
+	require.NoError(t, p.LimitTo([]string{"micro"}))
+
+	require.Len(t, p.Selected, 1)
+	require.Equal(t, "micro", p.Selected[0].ID)
+}
+
+// A module that exists ONLY in another account's superuser overlay is not
+// "unknown" — it errors with its skip reason, which is the actionable one.
+func TestProfile_LimitTo_overlayOnlySuperuserModuleErrorsWithReason(t *testing.T) {
+	p := &profile.Profile{
+		Modules:  []profile.Module{{ID: "base"}},
+		Selected: []profile.Module{{ID: "base"}},
+		Skipped:  []profile.Skip{{Module: profile.Module{ID: "rootonly"}, Reason: profile.ReasonSuperuserOverlay}},
+	}
+
+	err := p.LimitTo([]string{"rootonly"})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rootonly")
+	require.Contains(t, err.Error(), "requires root")
+	require.NotContains(t, err.Error(), "unknown module", "the module exists; the reason must be the skip, not unknown")
+	t.Logf("error: %v", err)
+}

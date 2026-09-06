@@ -33,7 +33,12 @@ mix, duplicates collapse, whitespace is trimmed). Semantics:
   nothing runs.
 - Id naming a module that exists but is not selected (`[modules] disable` or
   `when` filter) → error naming it and its existing skip reason. The filter
-  never resurrects skipped modules.
+  never resurrects skipped modules. The same applies to an id that exists
+  only in another account's superuser overlay (it errors "not selected" with
+  the `requires root` reason, never "unknown"); but an id that is selected in
+  this view passes even when another account's overlay copy of it is
+  skip-listed — the skip entry describes the overlay copy, not this view's
+  selection (issue 0032).
 - Otherwise the command's scope shrinks to the listed modules; excluded
   selected modules are reported as skipped with reason `module filter`.
 

@@ -544,3 +544,38 @@ func TestExecMise_Current_notInstalledWrapsSentinel(t *testing.T) {
 	_, err := mise.NewExecMise(m).Current(context.Background(), "github.com/foo/bar")
 	require.ErrorIs(t, err, mise.ErrNotInstalled)
 }
+
+// Global-state probes run from a neutral working directory (issue 0039): a
+// stray or broken mise.toml above the process cwd must not reach the probe.
+// The fake binary reports its working directory via pwd.
+func TestExecMise_Current_neutralCwd(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "mise")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\npwd\n"), 0o755))
+	m := &mise.Mise{LookPath: func(string) (string, error) { return script, nil }}
+
+	out, err := mise.NewExecMise(m).Current(context.Background(), "node")
+	require.NoError(t, err)
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	want, _ := filepath.EvalSymlinks(home)
+	got, _ := filepath.EvalSymlinks(out)
+	require.Equal(t, want, got, "the probe runs from the user's home, not the process cwd")
+}
+
+func TestExecMise_Current_probeDirOverride(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "mise")
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\npwd\n"), 0o755))
+	probeDir := t.TempDir()
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return script, nil },
+		ProbeDir: probeDir,
+	}
+
+	out, err := mise.NewExecMise(m).Current(context.Background(), "node")
+	require.NoError(t, err)
+	want, _ := filepath.EvalSymlinks(probeDir)
+	got, _ := filepath.EvalSymlinks(out)
+	require.Equal(t, want, got)
+}

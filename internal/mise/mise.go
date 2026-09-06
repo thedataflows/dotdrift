@@ -64,6 +64,12 @@ type Mise struct {
 	// environment on the real exec path; fakes (Run/RunContext) bypass it.
 	Env []string
 
+	// ProbeDir pins the working directory for global-state probes (Current);
+	// empty defaults to the user's home. Global probes must not see the
+	// process cwd's project configs — a stray or broken mise.toml anywhere
+	// above the cwd would break them (issue 0039). Fakes bypass it like Env.
+	ProbeDir string
+
 	// Verbose streams operation subprocesses (install/dotfiles/tasks) live to
 	// Out/Err and echoes each command line set -x-style ("+ argv") to Err
 	// before it runs. Interactive applies (both Out and Err are terminals)
@@ -655,11 +661,46 @@ func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
-	out, err := e.mise.runner()(ctx, path, "current", tool)
+	out, err := e.mise.runProbe(ctx, path, "current", tool)
 	if err != nil && strings.Contains(err.Error(), "not installed") {
 		return "", fmt.Errorf("%w: %v", ErrNotInstalled, err)
 	}
 	return strings.TrimSpace(out), err
+}
+
+// runProbe runs a global-state probe in a neutral working directory: the
+// process cwd's project configs must not leak into it — a stray or broken
+// mise.toml anywhere above the cwd would otherwise break it (issue 0039).
+// The Run/RunContext test seams keep their shape and argv; the real path
+// sets the command's Dir to ProbeDir (default: the user's home, mise's
+// global-config view) and appends captured stderr to a failure error.
+func (m *Mise) runProbe(ctx context.Context, name string, args ...string) (string, error) {
+	if m.Run != nil || m.RunContext != nil {
+		return m.runner()(ctx, name, args...)
+	}
+	cmd := exec.CommandContext(ctx, name, args...)
+	if dir := m.probeDir(); dir != "" {
+		cmd.Dir = dir
+	}
+	out, err := cmd.Output()
+	var ee *exec.ExitError
+	if err != nil && errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		return strings.TrimSpace(string(out)), fmt.Errorf("%w: %s", err, strings.TrimSpace(string(ee.Stderr)))
+	}
+	return strings.TrimSpace(string(out)), err
+}
+
+// probeDir resolves the neutral probe working directory: ProbeDir when set,
+// else the user's home (mise's global-config view).
+func (m *Mise) probeDir() string {
+	if m.ProbeDir != "" {
+		return m.ProbeDir
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home
 }
 
 type Runner interface {

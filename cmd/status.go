@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,11 +11,9 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
-	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/profile"
-	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
@@ -65,10 +62,6 @@ func (c *StatusCmd) Run() error {
 		opts.Verbose = errW
 	}
 	findings := drift.Check(context.Background(), plan, profileRoot, pr, opts)
-	shown := make(map[string]bool, len(findings))
-	for _, fd := range findings {
-		shown[findingKey(fd)] = true
-	}
 	findings = append(findings, drift.CheckOrphans(statusModuleLayers(p))...)
 
 	out := c.out
@@ -102,77 +95,32 @@ func (c *StatusCmd) Run() error {
 		}
 	}
 
-	// Multi-account reporting (issue 0030, ADR-0005): one section per other
-	// account owning a user layer. Apply stays single-account — this is
-	// read-only reporting, so per-account failures degrade to unknown/note
-	// lines rather than failing the run.
+	// Configuration notice for other accounts (issue 0038, ADR-0006): no
+	// per-account probing — per-account drift sections proved too noisy
+	// (sudo-dependent, cwd-sensitive). Just name each existing account that
+	// has configuration on this machine and the apply command for it.
 	others, err := otherAccounts(p.Root, f)
 	if err != nil {
 		return fmt.Errorf("list other accounts: %w", err)
 	}
 	if len(others) > 0 {
-		misePath := ""
-		if m := defaultMise(); m.LookPath != nil {
-			misePath, _ = m.LookPath("mise")
-		} else if mp, lerr := exec.LookPath("mise"); lerr == nil {
-			misePath = mp
-		}
+		fmt.Fprintln(out, "note: configuration exists for other accounts on this machine:")
 		for _, acct := range others {
-			c.reportAccount(out, profileRoot, acct, f, pr, opts, misePath, shown, pal)
+			fmt.Fprintf(out, "  users/%s — apply with: %s\n", acct.Name, applyCommandFor(acct))
 		}
+		fmt.Fprintln(out, "  (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system scope)")
 	}
 	return nil
 }
 
-// reportAccount prints one "users/<name>:" section for another account's
-// drift view. The account's plan resolves for real (facts cloned with its
-// username; Probes.HomeDir set to its home); findings identical to ones
-// already shown in the main report are not repeated. Tools probe through the
-// invoking account's mise binary as the target account; any failure reports
-// unknown, never an error.
-func (c *StatusCmd) reportAccount(out io.Writer, profileRoot string, acct profile.Account, f *facts.Facts, pr drift.Probes, opts drift.CheckOptions, misePath string, shown map[string]bool, pal *palette.Palette) {
-	fmt.Fprintf(out, "users/%s:\n", acct.Name)
-	f2 := *f
-	f2.Username = acct.Name
-	p2, err := profileLoad(c.Profile, &f2)
-	if err == nil {
-		err = p2.LimitTo(profile.ParseModuleFilter(c.Modules))
+// applyCommandFor is the per-account apply instruction in the status notice:
+// the uid-0 account converges with plain sudo; any other account needs a
+// login shell so its own PATH applies (issue 0038).
+func applyCommandFor(acct profile.Account) string {
+	if acct.Uid == "0" {
+		return "sudo dotdrift apply"
 	}
-	var plan2 *resolve.Plan
-	if err == nil {
-		plan2, err = resolvePlan(p2, &f2)
-	}
-	if err != nil {
-		fmt.Fprintf(out, "  unknown: %v\n\n", err)
-		return
-	}
-	pr2 := pr
-	pr2.HomeDir = acct.Home
-	pr2.ToolCurrent = func(ctx context.Context, tool string) (string, error) {
-		if misePath == "" {
-			return "", errors.New("no mise binary resolved for the invoking account")
-		}
-		o, err := runAsAccount(acct.Name, misePath, "current", tool)
-		return strings.TrimSpace(string(o)), err
-	}
-	var fresh []drift.Finding
-	for _, fd := range drift.Check(context.Background(), plan2, profileRoot, pr2, opts) {
-		if shown[findingKey(fd)] {
-			continue
-		}
-		fresh = append(fresh, fd)
-	}
-	drift.Render(out, fresh, drift.WithPalette(pal))
-	if _, err := runAsAccount(acct.Name, "sh", "-lc", "command -v dotdrift"); err != nil {
-		fmt.Fprintf(out, "note: could not confirm dotdrift is runnable by %s — install dotdrift system-wide (e.g. via mise, system scope) so that account can apply\n", acct.Name)
-	}
-}
-
-// findingKey identifies a finding for cross-account dedup: section, item,
-// detail, and status. Module attribution is deliberately excluded — a package
-// declared by different modules in two account views is the same drift.
-func findingKey(fd drift.Finding) string {
-	return fd.Section + "|" + fd.Item + "|" + fd.Detail + "|" + fd.Status.String()
+	return "sudo -iu " + acct.Name + " dotdrift apply"
 }
 
 // sudoRead executes `sudo <name> <args>` and returns stdout. A test seam so
@@ -181,28 +129,9 @@ var sudoRead = func(name string, args ...string) ([]byte, error) {
 	return exec.Command("sudo", append([]string{name}, args...)...).Output()
 }
 
-// otherAccounts lists the other OS accounts owning user layers in the
+// otherAccounts lists the other OS accounts with configuration in the
 // profile; a test seam (tests cannot reach profile's unexported lookup seam).
 var otherAccounts = profile.OtherAccounts
-
-// runAsAccount executes a command as another OS account with that account's
-// home directory (sudo -u <name> -H). A test seam.
-var runAsAccount = func(name string, argv ...string) ([]byte, error) {
-	return outputErr(exec.Command("sudo", append([]string{"-u", name, "-H"}, argv...)...))
-}
-
-// outputErr runs cmd, and on a non-zero exit appends the captured stderr
-// (Output populates ExitError.Stderr when Cmd.Stderr is nil), so per-account
-// probe failures carry the real reason — "sudo: a terminal is required",
-// mise's own ERROR line — instead of a bare "exit status 1" (issue 0036).
-func outputErr(cmd *exec.Cmd) ([]byte, error) {
-	out, err := cmd.Output()
-	var ee *exec.ExitError
-	if err != nil && errors.As(err, &ee) && len(ee.Stderr) > 0 {
-		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(ee.Stderr)))
-	}
-	return out, err
-}
 
 // elevateProbes wraps the file-access probes (Readlink, ReadFile, StatDir) so
 // each retries elevated via sudo when the OS denies access. Only permission

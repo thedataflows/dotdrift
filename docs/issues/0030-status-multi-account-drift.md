@@ -74,6 +74,8 @@ Decisions (wayfinder session 2026-09-06, all recommendations user-accepted):
 
 ## Notes
 
+**Superseded by [0038](0038-status-account-notice.md)** (ADR-0006): the per-account drift sections built here proved too noisy in real use; status now shows a configuration notice with per-account apply commands instead.
+
 TDD: `internal/profile` account listing (existing-with-modules listed,
 nonexistent account skipped, current account excluded, module-less layer
 excluded, no-users-dir tolerated) and `cmd/status` (section rendered with the

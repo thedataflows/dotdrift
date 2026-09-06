@@ -2,10 +2,7 @@ package cmd
 
 import (
 	"bytes"
-	"errors"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,72 +10,49 @@ import (
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
-// multiAccountProfile writes a temp profile with one base module (package
-// demo-pkg) and one users/root overlay module (package root-pkg), so shared
-// and per-account drift are distinguishable in the report.
-func multiAccountProfile(t *testing.T) string {
-	t.Helper()
-	dir := statusMinimalProfile(t) // modules/demo → demo-pkg
-	modDir := filepath.Join(dir, "users", "root", "modules", "rootsvc")
-	require.NoError(t, os.MkdirAll(modDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "rootsvc"
+// Multi-account status (issue 0038, ADR-0006): no per-account drift sections,
+// no probing of other accounts — just a notice naming each existing account
+// with configuration and its apply command.
 
-[packages]
-present = ["root-pkg"]
-`), 0o644))
-	return dir
-}
-
-func stubAccountSeams(t *testing.T, accts []profile.Account, runErr error) {
+func stubOtherAccounts(t *testing.T, accts []profile.Account) {
 	t.Helper()
-	origOA, origRA := otherAccounts, runAsAccount
-	t.Cleanup(func() { otherAccounts, runAsAccount = origOA, origRA })
+	orig := otherAccounts
+	t.Cleanup(func() { otherAccounts = orig })
 	otherAccounts = func(string, *facts.Facts) ([]profile.Account, error) { return accts, nil }
-	runAsAccount = func(string, ...string) ([]byte, error) { return nil, runErr }
 }
 
-func TestStatus_otherAccountSectionDedupAndNote(t *testing.T) {
+func TestStatus_otherAccountsNotice(t *testing.T) {
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	// recordingBackend.IsInstalled reports everything absent → drift in both views.
-	stubStatusDeps(t, f, &recordingBackend{events: &[]string{}}, fakeMiseNoOp)
-	// root exists as an "account"; every sudo-as-account call fails (no
-	// credentials): the install note must print, and status still exits 0.
-	stubAccountSeams(t, []profile.Account{{Name: "root", Home: "/root"}},
-		errors.New("sudo: a terminal is required"))
-	dir := multiAccountProfile(t)
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	stubOtherAccounts(t, []profile.Account{
+		{Name: "alice", Uid: "1000", Home: "/home/alice"},
+		{Name: "root", Uid: "0", Home: "/root"},
+	})
+	dir := statusMinimalProfile(t)
 
 	var buf bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
 	out := buf.String()
 	t.Log(out)
 
-	require.Contains(t, out, "users/root:")
-	require.Contains(t, out, "root-pkg", "the other account's own drift must surface")
-	require.Equal(t, 1, strings.Count(out, "demo-pkg"),
-		"shared-layer drift must not repeat under the account section")
-	require.Contains(t, out, "system-wide",
-		"an account that cannot run dotdrift gets the install recommendation")
+	require.Contains(t, out, "configuration exists for other accounts")
+	require.Contains(t, out, "users/root")
+	require.Contains(t, out, "apply with: sudo dotdrift apply",
+		"the uid-0 account gets the plain sudo form")
+	require.Contains(t, out, "users/alice")
+	require.Contains(t, out, "apply with: sudo -iu alice dotdrift apply",
+		"other accounts get a login-shell sudo so their own PATH applies")
+	require.NotContains(t, out, "users/root:\n", "no per-account drift sections anymore")
+	require.NotContains(t, out, "could not confirm", "no visibility probing noise")
 }
 
-func TestStatus_otherAccountToolsUnknownWithoutCreds(t *testing.T) {
+func TestStatus_noOtherAccountsNoNotice(t *testing.T) {
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubStatusDeps(t, f, &recordingBackend{events: &[]string{}}, fakeMiseNoOp)
-	stubAccountSeams(t, []profile.Account{{Name: "root", Home: "/root"}},
-		errors.New("sudo: a terminal is required"))
-	dir := multiAccountProfile(t)
-	// root's overlay also declares a tool; with every sudo call failing it
-	// must report unknown, never fail the run.
-	modToml := filepath.Join(dir, "users", "root", "modules", "rootsvc", "module.toml")
-	b, err := os.ReadFile(modToml)
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(modToml, append(b, []byte("\n[tools]\ngo = \"1.24\"\n")...), 0o644))
+	stubStatusDeps(t, f, allInstalledBackend{}, fakeMiseNoOp)
+	stubOtherAccounts(t, nil)
+	dir := statusMinimalProfile(t)
 
 	var buf bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: dir, State: filepath.Join(t.TempDir(), "state.json"), out: &buf}).Run())
-	out := buf.String()
-	t.Log(out)
-
-	require.Contains(t, out, "users/root:")
-	require.Contains(t, out, "go")
-	require.Contains(t, out, "(?)", "unprobeable per-account tool reports unknown")
+	require.NotContains(t, buf.String(), "configuration exists for other accounts")
 }

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"bytes"
-	"os/exec"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -63,17 +62,4 @@ func TestWarnMisplacedModules_silentWithoutMisplacedSkips(t *testing.T) {
 		{Module: profile.Module{ID: "sup"}, Reason: profile.ReasonSuperuserOverlay},
 	}})
 	require.Empty(t, buf.String())
-}
-
-func TestOutputErr_appendsStderr(t *testing.T) {
-	_, err := outputErr(exec.Command("sh", "-c", "echo oops >&2; exit 1"))
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "exit status 1")
-	require.Contains(t, err.Error(), "oops", "stderr must ride along — it carries the real reason")
-}
-
-func TestOutputErr_cleanRunPassesOutputThrough(t *testing.T) {
-	out, err := outputErr(exec.Command("sh", "-c", "echo fine"))
-	require.NoError(t, err)
-	require.Equal(t, "fine\n", string(out))
 }

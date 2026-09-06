@@ -1,5 +1,10 @@
 # Status reports drift for other existing accounts; apply stays single-account
 
+> **Superseded by [ADR-0006](0006-status-account-notice.md)** — per-account
+> drift sections proved too noisy in real use (sudo-dependent, cwd-sensitive
+> probes; screens of unactionable findings). Status now shows a configuration
+> notice instead. This ADR's apply half (apply stays single-account) stands.
+
 The first field report of a `users/root/` overlay ("I see nothing") surfaced
 a product question: who may converge another account's configuration? Two
 directions were on the table:

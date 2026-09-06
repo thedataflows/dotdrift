@@ -9,24 +9,25 @@ import (
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
 
-// Account is another OS account that owns a user layer (users/<name>/) in the
-// profile: the account exists on this system and at least one module under
-// users/<name>/modules/ carries a module.toml. Used by multi-account status
-// reporting (issue 0030); selection never consults it — user layers are
-// selected only for the current account.
+// Account is another OS account that owns configuration in the profile: the
+// account exists on this system and users/<name>/ holds at least one module
+// or a dotdrift.toml (a config-only overlay is still configuration for that
+// account). Used by status's multi-account notice (issue 0038); selection
+// never consults it — user layers are selected only for the current account.
 type Account struct {
 	Name string
+	Uid  string
 	Home string
 }
 
-// lookupAccount resolves an OS account name to its home directory; ok=false
-// when the account does not exist. A test seam.
-var lookupAccount = func(name string) (string, bool) {
+// lookupAccount resolves an OS account name to its uid and home directory;
+// ok=false when the account does not exist. A test seam.
+var lookupAccount = func(name string) (string, string, bool) {
 	u, err := user.Lookup(name)
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
-	return u.HomeDir, true
+	return u.Uid, u.HomeDir, true
 }
 
 // OtherAccounts lists the OS accounts owning user layers, for multi-account
@@ -49,16 +50,24 @@ func OtherAccounts(root string, f *facts.Facts) ([]Account, error) {
 		if !entry.IsDir() || name == f.Username {
 			continue
 		}
-		home, ok := lookupAccount(name)
+		uid, home, ok := lookupAccount(name)
 		if !ok {
 			continue
 		}
-		has, err := hasModules(filepath.Join(root, "users", name, "modules"))
+		accountDir := filepath.Join(root, "users", name)
+		has, err := hasModules(filepath.Join(accountDir, "modules"))
 		if err != nil {
 			return nil, err
 		}
+		if !has {
+			// A config-only overlay (dotdrift.toml, no modules) is still
+			// configuration for the account (issue 0038).
+			if _, err := os.Stat(filepath.Join(accountDir, "dotdrift.toml")); err == nil {
+				has = true
+			}
+		}
 		if has {
-			accts = append(accts, Account{Name: name, Home: home})
+			accts = append(accts, Account{Name: name, Uid: uid, Home: home})
 		}
 	}
 	sort.Slice(accts, func(i, j int) bool { return accts[i].Name < accts[j].Name })

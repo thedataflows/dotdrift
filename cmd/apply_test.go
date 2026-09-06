@@ -615,6 +615,7 @@ func (r *verboseSmbRunner) SetVerbose(v bool) { r.verbose = v }
 func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, sr *verboseSmbRunner) {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // tools activation fragment (issue 0037)
 	events := &[]string{}
 	backend = &verboseRecordingBackend{recordingBackend: &recordingBackend{events: events}}
 	sr = &verboseSmbRunner{recordingSmbRunner: &recordingSmbRunner{events: events}}

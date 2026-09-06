@@ -16,6 +16,7 @@ import (
 // never consults it — user layers are selected only for the current account.
 type Account struct {
 	Name string
+	//nolint:staticcheck
 	Uid  string
 	Home string
 }

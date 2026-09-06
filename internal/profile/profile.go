@@ -227,6 +227,9 @@ func Load(root string, f *facts.Facts) (*Profile, error) {
 	if err := p.markSuperuserOverlays(root, f); err != nil {
 		return nil, err
 	}
+	if err := p.markMisplacedModules(root); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 

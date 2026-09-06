@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
@@ -72,6 +73,14 @@ func CheckOrphans(layers []ModuleLayer) []Finding {
 				return nil
 			}
 			if d.Name() == "module.toml" {
+				return nil
+			}
+			// A symlinked directory that declarations reference through is a
+			// container for referenced content, not content: WalkDir never
+			// descends into it, while markTree marks the paths beneath it
+			// (issue 0034). Dangling links and links nothing references
+			// through fall through and are flagged.
+			if d.Type()&fs.ModeSymlink != 0 && referencedThrough(referenced, path) {
 				return nil
 			}
 			if referenced[path] {
@@ -282,6 +291,24 @@ func readLayerDeclarations(dir string) (*profile.ModuleConfig, error) {
 		return nil, err
 	}
 	return &cfg, nil
+}
+
+// referencedThrough reports whether a symlinked directory is a container for
+// referenced content: the orphan walk sees the link as a file (WalkDir does
+// not descend into it), while declarations referencing through it mark paths
+// beneath it.
+func referencedThrough(referenced map[string]bool, path string) bool {
+	info, err := os.Stat(path) // follows the link
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	prefix := path + string(os.PathSeparator)
+	for rp := range referenced {
+		if strings.HasPrefix(rp, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // markTree marks root, or — when root is a directory — every file in its

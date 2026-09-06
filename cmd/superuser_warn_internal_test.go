@@ -41,3 +41,25 @@ func TestWarnSuperuserOverlays_silentWithoutSuperuserSkips(t *testing.T) {
 	}})
 	require.Empty(t, buf.String())
 }
+
+func TestWarnMisplacedModules_emitsOnceWithCount(t *testing.T) {
+	buf := captureLogs(t)
+	p := &profile.Profile{Skipped: []profile.Skip{
+		{Module: profile.Module{ID: "loose"}, Reason: profile.ReasonMisplacedModule + ": module belongs at users/root/modules/loose"},
+		{Module: profile.Module{ID: "sup"}, Reason: profile.ReasonSuperuserOverlay},
+	}}
+
+	warnMisplacedModules(p)
+
+	out := buf.String()
+	require.Contains(t, out, "misplaced")
+	require.Contains(t, out, "1")
+}
+
+func TestWarnMisplacedModules_silentWithoutMisplacedSkips(t *testing.T) {
+	buf := captureLogs(t)
+	warnMisplacedModules(&profile.Profile{Skipped: []profile.Skip{
+		{Module: profile.Module{ID: "sup"}, Reason: profile.ReasonSuperuserOverlay},
+	}})
+	require.Empty(t, buf.String())
+}

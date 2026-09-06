@@ -32,7 +32,10 @@ profile/
   `users/<username>/modules/<id>` are selected by presence too, so a module
   existing only in a host or user layer (an overlay-only module) is managed
   like a base module. A host/user directory with the same name as a base
-  module is that module's overlay, not a second module.
+  module is that module's overlay, not a second module. A `module.toml`
+  placed directly under `hosts/<hostname>/` or `users/<username>/` — missing
+  the `modules/` level — is never discovered; dotdrift reports it as skipped
+  with a `misplaced:` reason naming the expected path (issue 0033).
 - `id` is the directory name unless overridden by `id` in `module.toml`.
 - `app` defaults to `id` unless overridden.
 

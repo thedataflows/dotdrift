@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -387,6 +388,16 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 		}
 		return Finding{"dotfiles", f.Target, OK, "", "", ""}
 	case "copy":
+		// A directory source copies a whole tree (issue 0035): compare every
+		// source file against its target counterpart instead of reading the
+		// source as a single file (which fails with "is a directory").
+		if pr.StatDir != nil {
+			if isDir, err := pr.StatDir(f.Source); err != nil {
+				return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
+			} else if isDir {
+				return checkCopyDir(f, pr)
+			}
+		}
 		src, err := pr.ReadFile(f.Source)
 		if err != nil {
 			return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
@@ -412,6 +423,64 @@ func checkDotfileFile(f mise.BootstrapFile, pr Probes) Finding {
 		return Finding{"dotfiles", f.Target, OK, "", "", ""}
 	}
 	return Finding{"dotfiles", f.Target, Unknown, fmt.Sprintf("unrecognized mode %q", f.Mode), "", ""}
+}
+
+// checkCopyDir probes a whole-directory copy target: every file in the
+// source tree must exist at the target with identical content. The source
+// tree is profile-side (always readable by the invoking user); target files
+// read through the (possibly elevated) ReadFile probe. Extra target-only
+// files are not drift — copy never deletes.
+func checkCopyDir(f mise.BootstrapFile, pr Probes) Finding {
+	isDir, err := pr.StatDir(f.Target)
+	if err != nil {
+		return Finding{"dotfiles", f.Target, Unknown, err.Error(), "", ""}
+	}
+	if !isDir {
+		return Finding{"dotfiles", f.Target, Drift, "missing", "", ""}
+	}
+	var missing, differ int
+	walkErr := filepath.WalkDir(f.Source, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(f.Source, path)
+		if err != nil {
+			return err
+		}
+		src, err := pr.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		tgt, err := pr.ReadFile(filepath.Join(f.Target, rel))
+		if err != nil {
+			if os.IsNotExist(err) {
+				missing++
+				return nil
+			}
+			return err
+		}
+		if !bytes.Equal(src, tgt) {
+			differ++
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return Finding{"dotfiles", f.Target, Unknown, walkErr.Error(), "", ""}
+	}
+	if missing == 0 && differ == 0 {
+		return Finding{"dotfiles", f.Target, OK, "", "", ""}
+	}
+	var parts []string
+	if missing > 0 {
+		parts = append(parts, fmt.Sprintf("%d file(s) missing", missing))
+	}
+	if differ > 0 {
+		parts = append(parts, fmt.Sprintf("%d file(s) differ", differ))
+	}
+	return Finding{"dotfiles", f.Target, Drift, strings.Join(parts, ", "), "", ""}
 }
 
 // checkDotfileEdit probes an edit entry (line/block/template) against the live

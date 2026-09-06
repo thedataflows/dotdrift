@@ -1,13 +1,13 @@
 # ISSUE 0037: Installed tools are not activated globally
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [apply, tools, mise]
 - **Assignee**: none
 - **Related**: [issue 0036](0036-tool-status-vague-reason.md), [mise bootstrap](../product/mise-bootstrap.md)
 - **Related code**: [`internal/mise/step.go`](../../internal/mise/step.go), [`cmd/apply.go`](../../cmd/apply.go)
-- **Closing commits**: none
+- **Closing commits**: HEAD
 
 ## Summary
 

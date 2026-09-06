@@ -1,13 +1,13 @@
 # ISSUE 0030: Status reports drift for other existing accounts
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, multi-account, ux]
 - **Assignee**: none
 - **Related**: [ADR-0005](../adr/0005-status-reports-other-accounts.md), [issue 0029](0029-superuser-user-overlay-visibility.md), [contract invariant 17](../product/contract.md)
 - **Related code**: [`cmd/status.go`](../../cmd/status.go), [`internal/drift/`](../../internal/drift/), [`internal/profile/`](../../internal/profile/)
-- **Closing commits**: none
+- **Closing commits**: 11296dd
 
 ## Summary
 

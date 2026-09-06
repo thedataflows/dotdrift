@@ -1,13 +1,13 @@
 # ISSUE 0036: Tool status reports a vague catch-all instead of the real reason
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, drift, tools]
 - **Assignee**: none
 - **Related**: [issue 0030](0030-status-multi-account-drift.md), [contract invariant 17](../product/contract.md)
 - **Related code**: [`internal/drift/drift.go`](../../internal/drift/drift.go), [`internal/mise/mise.go`](../../internal/mise/mise.go)
-- **Closing commits**: none
+- **Closing commits**: bbe5d84
 
 ## Summary
 

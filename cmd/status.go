@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,9 +12,11 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
 
@@ -62,6 +65,10 @@ func (c *StatusCmd) Run() error {
 		opts.Verbose = errW
 	}
 	findings := drift.Check(context.Background(), plan, profileRoot, pr, opts)
+	shown := make(map[string]bool, len(findings))
+	for _, fd := range findings {
+		shown[findingKey(fd)] = true
+	}
 	findings = append(findings, drift.CheckOrphans(statusModuleLayers(p))...)
 
 	out := c.out
@@ -94,13 +101,94 @@ func (c *StatusCmd) Run() error {
 			return err
 		}
 	}
+
+	// Multi-account reporting (issue 0030, ADR-0005): one section per other
+	// account owning a user layer. Apply stays single-account — this is
+	// read-only reporting, so per-account failures degrade to unknown/note
+	// lines rather than failing the run.
+	others, err := otherAccounts(p.Root, f)
+	if err != nil {
+		return fmt.Errorf("list other accounts: %w", err)
+	}
+	if len(others) > 0 {
+		misePath := ""
+		if m := defaultMise(); m.LookPath != nil {
+			misePath, _ = m.LookPath("mise")
+		} else if mp, lerr := exec.LookPath("mise"); lerr == nil {
+			misePath = mp
+		}
+		for _, acct := range others {
+			c.reportAccount(out, profileRoot, acct, f, pr, opts, misePath, shown, pal)
+		}
+	}
 	return nil
+}
+
+// reportAccount prints one "users/<name>:" section for another account's
+// drift view. The account's plan resolves for real (facts cloned with its
+// username; Probes.HomeDir set to its home); findings identical to ones
+// already shown in the main report are not repeated. Tools probe through the
+// invoking account's mise binary as the target account; any failure reports
+// unknown, never an error.
+func (c *StatusCmd) reportAccount(out io.Writer, profileRoot string, acct profile.Account, f *facts.Facts, pr drift.Probes, opts drift.CheckOptions, misePath string, shown map[string]bool, pal *palette.Palette) {
+	fmt.Fprintf(out, "users/%s:\n", acct.Name)
+	f2 := *f
+	f2.Username = acct.Name
+	p2, err := profileLoad(c.Profile, &f2)
+	if err == nil {
+		err = p2.LimitTo(profile.ParseModuleFilter(c.Modules))
+	}
+	var plan2 *resolve.Plan
+	if err == nil {
+		plan2, err = resolvePlan(p2, &f2)
+	}
+	if err != nil {
+		fmt.Fprintf(out, "  unknown: %v\n\n", err)
+		return
+	}
+	pr2 := pr
+	pr2.HomeDir = acct.Home
+	pr2.ToolCurrent = func(ctx context.Context, tool string) (string, error) {
+		if misePath == "" {
+			return "", errors.New("no mise binary resolved for the invoking account")
+		}
+		o, err := runAsAccount(acct.Name, misePath, "current", tool)
+		return strings.TrimSpace(string(o)), err
+	}
+	var fresh []drift.Finding
+	for _, fd := range drift.Check(context.Background(), plan2, profileRoot, pr2, opts) {
+		if shown[findingKey(fd)] {
+			continue
+		}
+		fresh = append(fresh, fd)
+	}
+	drift.Render(out, fresh, drift.WithPalette(pal))
+	if _, err := runAsAccount(acct.Name, "sh", "-lc", "command -v dotdrift"); err != nil {
+		fmt.Fprintf(out, "note: could not confirm dotdrift is runnable by %s — install dotdrift system-wide (e.g. via mise, system scope) so that account can apply\n", acct.Name)
+	}
+}
+
+// findingKey identifies a finding for cross-account dedup: section, item,
+// detail, and status. Module attribution is deliberately excluded — a package
+// declared by different modules in two account views is the same drift.
+func findingKey(fd drift.Finding) string {
+	return fd.Section + "|" + fd.Item + "|" + fd.Detail + "|" + fd.Status.String()
 }
 
 // sudoRead executes `sudo <name> <args>` and returns stdout. A test seam so
 // status tests can assert elevation behavior without running real sudo.
 var sudoRead = func(name string, args ...string) ([]byte, error) {
 	return exec.Command("sudo", append([]string{name}, args...)...).Output()
+}
+
+// otherAccounts lists the other OS accounts owning user layers in the
+// profile; a test seam (tests cannot reach profile's unexported lookup seam).
+var otherAccounts = profile.OtherAccounts
+
+// runAsAccount executes a command as another OS account with that account's
+// home directory (sudo -u <name> -H). A test seam.
+var runAsAccount = func(name string, argv ...string) ([]byte, error) {
+	return exec.Command("sudo", append([]string{"-u", name, "-H"}, argv...)...).Output()
 }
 
 // elevateProbes wraps the file-access probes (Readlink, ReadFile, StatDir) so

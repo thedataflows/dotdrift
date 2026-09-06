@@ -1,13 +1,13 @@
 # ISSUE 0029: Surface superuser-owned user overlays when running unprivileged
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [profile, selection, ux]
 - **Assignee**: none
 - **Related**: [merge rules](../product/merge-rules.md), [contract invariant 17](../product/contract.md)
 - **Related code**: [`internal/profile/`](../../internal/profile/), [`cmd/`](../../cmd/)
-- **Closing commits**: none
+- **Closing commits**: 37533fa
 
 ## Summary
 

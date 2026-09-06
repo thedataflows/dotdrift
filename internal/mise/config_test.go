@@ -23,6 +23,22 @@ func TestGenerateTools(t *testing.T) {
 	require.Contains(t, out, `rust = "stable"`)
 }
 
+// Tool ids with registry prefixes (github:owner/repo, npm:@scope/pkg)
+// contain ":" and "/" — TOML bare keys allow only letters, digits, "-"
+// and "_", so the key MUST be emitted as a quoted basic string (same
+// rule GenerateDotfiles already follows for targets).
+func TestGenerateTools_quotesNonBareKeys(t *testing.T) {
+	out := mise.GenerateTools(map[string]string{
+		"github:nklmilojevic/sofka": "latest",
+		"npm:@antfu/ni":             "1.0.0",
+		"node":                      "20",
+	})
+	require.Contains(t, out, `"github:nklmilojevic/sofka" = "latest"`)
+	require.Contains(t, out, `"npm:@antfu/ni" = "1.0.0"`)
+	// bare-safe keys stay unquoted, matching mise's own style
+	require.Contains(t, out, `node = "20"`)
+}
+
 // dotdrift's mode vocabulary is exactly mise's (symlink, symlink-each, copy,
 // template), so GenerateDotfiles emits modes unchanged.
 func TestGenerateDotfiles(t *testing.T) {

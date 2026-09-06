@@ -651,7 +651,7 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 		steps = append(steps, &packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: paths["packages"], misePluginsDir: misePluginsDir})
 	}
 	if sections.has("tools") {
-		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"]})
+		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"], FragmentPath: mise.ToolsFragmentPath()})
 	}
 	if sections.has("dotfiles") {
 		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes})

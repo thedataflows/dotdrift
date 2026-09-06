@@ -73,9 +73,9 @@ mount's destination, but no derivation or coupling exists between the two.
 Putting a config file where the system expects it (placement) is a
 different act from making the system use it (activation). Placement is
 declarative and diffable; activation is a side effect (reloading a daemon,
-enabling a unit, restarting a service). The two are never conflated:
-generated content is placed like any other module content, and activation
-happens afterwards, idempotently.
+enabling a unit, restarting a service, activating a mise-managed tool
+globally). The two are never conflated: generated content is placed like any
+other module content, and activation happens afterwards, idempotently.
 
 ### Verbose
 

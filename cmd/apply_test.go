@@ -88,8 +88,11 @@ func (r *recordingSmbRunner) RunInteractive(_ context.Context, name string, args
 func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) {
 	t.Helper()
 	// Contain plugin source/link writes (paru.EnsureInstalled) to temp — the
-	// packages step otherwise writes under the real $XDG_DATA_HOME.
+	// packages step otherwise writes under the real $XDG_DATA_HOME. Same for
+	// the tools step's global activation fragment under $XDG_CONFIG_HOME
+	// (issue 0037).
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	events := &[]string{}
 	backend := &recordingBackend{events: events}
 

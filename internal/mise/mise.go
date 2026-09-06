@@ -706,6 +706,33 @@ func tomlEscape(s string) string {
 // chars — a literal newline would end the value early).
 var tomlEscaper = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\t", `\t`, "\r", `\r`)
 
+// bareTomlKey reports whether s is a valid TOML bare key: non-empty,
+// only letters, digits, "-" and "_". Registry-prefixed tool ids
+// (github:owner/repo, npm:@scope/pkg) are not — they must be emitted
+// as quoted basic strings or mise rejects the file.
+func bareTomlKey(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// tomlKey emits s as a bare key when legal (mise's own style) and as a
+// quoted basic string otherwise.
+func tomlKey(s string) string {
+	if bareTomlKey(s) {
+		return s
+	}
+	return `"` + tomlEscape(s) + `"`
+}
+
 // GenerateTools emits a mise.toml [tools] section from the resolved plan.
 func GenerateTools(versions map[string]string) string {
 	if len(versions) == 0 {
@@ -719,7 +746,7 @@ func GenerateTools(versions map[string]string) string {
 	}
 	sort.Strings(keys)
 	for _, k := range keys {
-		fmt.Fprintf(&b, "%s = \"%s\"\n", k, tomlEscape(versions[k]))
+		fmt.Fprintf(&b, "%s = \"%s\"\n", tomlKey(k), tomlEscape(versions[k]))
 	}
 	return b.String()
 }

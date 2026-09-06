@@ -192,6 +192,13 @@ public = false
   setting `disabled = true` in a host or user overlay disables the base module;
   an overlay setting `disabled = false` does not un-disable (any disable sticks).
 - `packages.absent` cancels a `present` entry from a lower layer.
+- `tools` installs the listed tools via mise AND activates them globally:
+  apply writes the resolved `[tools]` into `~/.config/mise/conf.d/dotdrift.toml`
+  (mise loads `conf.d/*.toml` as global config, XDG_CONFIG_HOME respected),
+  so installed tools resolve on PATH in every shell. The fragment is
+  dotdrift-owned and regenerated wholesale per apply — hand edits are lost;
+  `config.toml` itself is never touched. A run whose plan has no tools
+  removes a stale fragment (issue 0037).
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a
     target path (absolute or `~/...`); the value is a table with:

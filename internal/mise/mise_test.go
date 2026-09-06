@@ -521,3 +521,26 @@ func TestExecMise_Current_runFailurePropagates(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "no such tool")
 }
+
+// Failure classification sentinels (issue 0036): status maps ErrUnavailable
+// to "mise not available" (unknown) and ErrNotInstalled to "not installed"
+// (drift — apply installs the tool).
+func TestExecMise_Current_lookPathFailureWrapsUnavailable(t *testing.T) {
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "", errors.New("not on PATH") },
+	}
+	_, err := mise.NewExecMise(m).Current(context.Background(), "node")
+	require.ErrorIs(t, err, mise.ErrUnavailable)
+	require.Contains(t, err.Error(), "not on PATH", "the underlying reason survives the wrap")
+}
+
+func TestExecMise_Current_notInstalledWrapsSentinel(t *testing.T) {
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/usr/bin/mise", nil },
+		Run: func(string, ...string) (string, error) {
+			return "", errors.New("run mise: exit status 1\nmise ERROR Plugin github.com/foo/bar is not installed")
+		},
+	}
+	_, err := mise.NewExecMise(m).Current(context.Background(), "github.com/foo/bar")
+	require.ErrorIs(t, err, mise.ErrNotInstalled)
+}

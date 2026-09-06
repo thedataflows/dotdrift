@@ -638,6 +638,14 @@ func (e *ExecMise) Bootstrap(ctx context.Context, configPath string, yes bool, o
 // Probe-only: resolves the binary via LookPath (never installs) and runs
 // through the probe runner (never streamed/echoed). Any failure is an
 // error; callers report the tool as unknown.
+// Failure sentinels from Current, so status can classify (issue 0036):
+// ErrUnavailable — no mise binary resolves (unknown: "mise not available");
+// ErrNotInstalled — mise answered "not installed" (drift: apply installs it).
+var (
+	ErrUnavailable  = errors.New("mise not available")
+	ErrNotInstalled = errors.New("tool not installed in mise")
+)
+
 func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
 	lookPath := e.mise.LookPath
 	if lookPath == nil {
@@ -645,9 +653,12 @@ func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
 	}
 	path, err := lookPath("mise")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	out, err := e.mise.runner()(ctx, path, "current", tool)
+	if err != nil && strings.Contains(err.Error(), "not installed") {
+		return "", fmt.Errorf("%w: %v", ErrNotInstalled, err)
+	}
 	return strings.TrimSpace(out), err
 }
 

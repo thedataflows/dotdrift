@@ -5,6 +5,7 @@ package drift
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -244,8 +245,20 @@ func checkTools(plan *resolve.Plan, pr Probes) []probeTask {
 			item:    name,
 			run: func(ctx context.Context) Finding {
 				got, err := pr.ToolCurrent(ctx, name)
-				if err != nil || got == "" {
-					return Finding{"tools", name, Unknown, "mise not available or tool not installed", "", ""}
+				// Failure classification (issue 0036): every failure carries
+				// its real reason — never a catch-all. Not-installed is
+				// actionable drift (apply installs the tool); unavailable,
+				// empty, and broken probes are unknown.
+				switch {
+				case err == nil && got == "":
+					return Finding{"tools", name, Unknown, "mise returned no version", "", ""}
+				case errors.Is(err, mise.ErrNotInstalled):
+					return Finding{"tools", name, Drift, "not installed", "", ""}
+				case errors.Is(err, mise.ErrUnavailable):
+					return Finding{"tools", name, Unknown, "mise not available", "", ""}
+				case err != nil:
+					reason, _, _ := strings.Cut(err.Error(), "\n")
+					return Finding{"tools", name, Unknown, "mise current failed: " + reason, "", ""}
 				}
 				if got == want || strings.HasPrefix(got, want+".") {
 					return Finding{"tools", name, OK, "", "", ""}

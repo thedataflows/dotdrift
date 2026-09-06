@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
@@ -160,7 +162,10 @@ func TestCheck_toolsMismatch(t *testing.T) {
 
 func TestCheck_toolsMiseMissing(t *testing.T) {
 	pr := fakeProbes()
-	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) { return "", errors.New("mise: not found") }
+	// The real ExecMise.Current wraps lookup failures with ErrUnavailable.
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) {
+		return "", fmt.Errorf("%w: %s", mise.ErrUnavailable, "mise: not found")
+	}
 	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
 	f := findByItem(t, check(context.Background(), plan, pr), "node")
 	require.Equal(t, drift.Unknown, f.Status)
@@ -942,4 +947,39 @@ func TestRender_shadesFollowIssueType(t *testing.T) {
 	require.Contains(t, out, "\033[1m\033[33mnode\033[0m", "version drift → bold yellow item")
 	require.Contains(t, out, "\033[2m\033[38;5;208mnas\033[0m", "other drift → faint orange module")
 	require.Contains(t, out, "\033[1m\033[38;5;208m/mnt/data\033[0m", "other drift → bold orange item")
+}
+
+// Tool-probe classification (issue 0036): not-installed is actionable drift,
+// unavailable/empty/broken probes are unknown — and every failure carries its
+// real reason, never a catch-all.
+
+func TestCheck_toolsNotInstalledIsDrift(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(context.Context, string) (string, error) {
+		return "", fmt.Errorf("%w: %s", mise.ErrNotInstalled, "github.com/foo/bar")
+	}
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"github.com/foo/bar": "latest"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "github.com/foo/bar")
+	require.Equal(t, drift.Drift, f.Status)
+	require.Equal(t, "not installed", f.Detail)
+}
+
+func TestCheck_toolsProbeFailureCarriesReason(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(context.Context, string) (string, error) {
+		return "", errors.New("boom: socket timeout")
+	}
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "node")
+	require.Equal(t, drift.Unknown, f.Status)
+	require.Equal(t, "mise current failed: boom: socket timeout", f.Detail)
+}
+
+func TestCheck_toolsEmptyVersionUnknown(t *testing.T) {
+	pr := fakeProbes()
+	pr.ToolCurrent = func(context.Context, string) (string, error) { return "", nil }
+	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
+	f := findByItem(t, check(context.Background(), plan, pr), "node")
+	require.Equal(t, drift.Unknown, f.Status)
+	require.Equal(t, "mise returned no version", f.Detail)
 }

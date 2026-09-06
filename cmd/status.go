@@ -188,7 +188,20 @@ var otherAccounts = profile.OtherAccounts
 // runAsAccount executes a command as another OS account with that account's
 // home directory (sudo -u <name> -H). A test seam.
 var runAsAccount = func(name string, argv ...string) ([]byte, error) {
-	return exec.Command("sudo", append([]string{"-u", name, "-H"}, argv...)...).Output()
+	return outputErr(exec.Command("sudo", append([]string{"-u", name, "-H"}, argv...)...))
+}
+
+// outputErr runs cmd, and on a non-zero exit appends the captured stderr
+// (Output populates ExitError.Stderr when Cmd.Stderr is nil), so per-account
+// probe failures carry the real reason — "sudo: a terminal is required",
+// mise's own ERROR line — instead of a bare "exit status 1" (issue 0036).
+func outputErr(cmd *exec.Cmd) ([]byte, error) {
+	out, err := cmd.Output()
+	var ee *exec.ExitError
+	if err != nil && errors.As(err, &ee) && len(ee.Stderr) > 0 {
+		return nil, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(ee.Stderr)))
+	}
+	return out, err
 }
 
 // elevateProbes wraps the file-access probes (Readlink, ReadFile, StatDir) so

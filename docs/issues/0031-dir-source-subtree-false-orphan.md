@@ -1,13 +1,13 @@
 # ISSUE 0031: Base dir-source subtree falsely orphaned when an overlay redeclares the target
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, orphans, layers]
 - **Assignee**: none
 - **Related**: [issue 0030](0030-status-multi-account-drift.md), [contract invariant 17](../product/contract.md)
 - **Related code**: [`internal/drift/orphans.go`](../../internal/drift/orphans.go)
-- **Closing commits**: none
+- **Closing commits**: 2029b3d
 
 ## Summary
 

@@ -118,10 +118,12 @@ func CheckOrphans(layers []ModuleLayer) []Finding {
 //     is stranded in that view, exactly like resolve.
 //   - A declaration whose source is a DIRECTORY at the declaring layer
 //     references that whole subtree (mise links/copies directory trees
-//     wholesale). The declaring layer is the anchor, not whichever layer
-//     resolves first: an overlay holding a dir at the same rel-path wins
-//     deployment, but the declaring layer's tree stays the authored
-//     reference and extra overlay files remain orphans.
+//     wholesale), marked at declaration time, not per view: an overlay
+//     redeclaring the target wins deployment in its own views, but the
+//     declaring layer's tree stays the authored reference — an account
+//     with no user layer resolves the bare-base view the enumeration
+//     cannot see and still deploys that tree (issue 0031). Extra overlay
+//     files at the same rel-path that nothing declares remain orphans.
 //   - A FILE source references the file the view resolves it to (user >
 //     host > base, first existing). A base copy shadowed on every host is
 //     dead content (orphan); one that still resolves for a host without
@@ -171,8 +173,18 @@ func ReferencedPaths(layers []ModuleLayer) map[string]bool {
 			}
 			decls := map[string]declaration{}
 			for target, df := range cfg.Dotfiles {
-				if df.Source != "" {
-					decls[target] = declaration{layer: ml, rel: df.Source}
+				if df.Source == "" {
+					continue
+				}
+				decls[target] = declaration{layer: ml, rel: df.Source}
+				// Directory sources anchor to the declaring layer and deploy
+				// their whole subtree, so the tree is referenced no matter
+				// which view's whole-entry override wins deployment (issue
+				// 0031): bare-base accounts are invisible to the view
+				// enumeration, and they still resolve this declaration.
+				declared := filepath.Join(ml.Path, filepath.FromSlash(df.Source))
+				if isDir(declared) {
+					markTree(declared, referenced)
 				}
 			}
 			layerDecls[ml.Path] = decls
@@ -189,8 +201,7 @@ func ReferencedPaths(layers []ModuleLayer) map[string]bool {
 			for _, d := range effective {
 				declared := filepath.Join(d.layer.Path, filepath.FromSlash(d.rel))
 				if isDir(declared) {
-					markTree(declared, referenced)
-					continue
+					continue // dir trees were marked at declaration time; never resolved per view
 				}
 				resolved := v.resolve(d.rel)
 				if resolved == "" {

@@ -1,13 +1,13 @@
 # ISSUE 0032: Module filter rejects a selected module that also has a superuser skip entry
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [profile, filter, selection]
 - **Assignee**: none
 - **Related**: [issue 0029](0029-superuser-user-overlay-visibility.md), [issue 0030](0030-status-multi-account-drift.md)
 - **Related code**: [`internal/profile/filter.go`](../../internal/profile/filter.go)
-- **Closing commits**: none
+- **Closing commits**: b77472e
 
 ## Summary
 

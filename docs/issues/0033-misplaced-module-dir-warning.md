@@ -1,13 +1,13 @@
 # ISSUE 0033: Warn on misplaced module dirs (module.toml outside the modules/ level)
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [profile, ux]
 - **Assignee**: none
 - **Related**: [issue 0029](0029-superuser-user-overlay-visibility.md), [profile layout](../product/profile-layout.md)
 - **Related code**: [`internal/profile/`](../../internal/profile/), [`cmd/`](../../cmd/)
-- **Closing commits**: none
+- **Closing commits**: 6c15c9a
 
 ## Summary
 

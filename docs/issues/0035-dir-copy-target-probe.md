@@ -1,13 +1,13 @@
 # ISSUE 0035: Whole-directory copy targets probe as unknown ("is a directory")
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, drift, dotfiles]
 - **Assignee**: none
 - **Related**: [issue 0030](0030-status-multi-account-drift.md), [contract invariant 17](../product/contract.md)
 - **Related code**: [`internal/drift/drift.go`](../../internal/drift/drift.go)
-- **Closing commits**: none
+- **Closing commits**: 6c15c9a
 
 ## Summary
 

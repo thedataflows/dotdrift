@@ -1,13 +1,13 @@
 # ISSUE 0034: Orphan scan flags a referenced-through symlinked directory
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [status, orphans]
 - **Assignee**: none
 - **Related**: [issue 0031](0031-dir-source-subtree-false-orphan.md), [contract invariant 17](../product/contract.md)
 - **Related code**: [`internal/drift/orphans.go`](../../internal/drift/orphans.go)
-- **Closing commits**: none
+- **Closing commits**: 6c15c9a
 
 ## Summary
 

@@ -7,7 +7,7 @@
 - **Assignee**: none
 - **Related**: [issue 0036](0036-tool-status-vague-reason.md), [mise bootstrap](../product/mise-bootstrap.md)
 - **Related code**: [`internal/mise/step.go`](../../internal/mise/step.go), [`cmd/apply.go`](../../cmd/apply.go)
-- **Closing commits**: HEAD
+- **Closing commits**: 756bcbc
 
 ## Summary
 

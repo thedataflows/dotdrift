@@ -1,13 +1,13 @@
 # ISSUE 0039: Tool probes are cwd-sensitive — a stray project mise.toml breaks status
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, drift, tools, mise]
 - **Assignee**: none
 - **Related**: [issue 0036](0036-tool-status-vague-reason.md)
 - **Related code**: [`internal/mise/mise.go`](../../internal/mise/mise.go)
-- **Closing commits**: none
+- **Closing commits**: e506377
 
 ## Summary
 

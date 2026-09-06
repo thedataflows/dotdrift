@@ -1,13 +1,13 @@
 # ISSUE 0038: Replace per-account drift sections with a configuration notice
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, multi-account, ux]
 - **Assignee**: none
 - **Related**: [issue 0030](0030-status-multi-account-drift.md), [ADR-0005](../adr/0005-status-reports-other-accounts.md), [ADR-0006](../adr/0006-status-account-notice.md)
 - **Related code**: [`cmd/status.go`](../../cmd/status.go), [`internal/profile/accounts.go`](../../internal/profile/accounts.go)
-- **Closing commits**: none
+- **Closing commits**: e506377
 
 ## Summary
 

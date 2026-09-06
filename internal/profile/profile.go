@@ -224,6 +224,9 @@ func Load(root string, f *facts.Facts) (*Profile, error) {
 	}
 	f = enrichProbes(f, p.Modules)
 	p.Select(f)
+	if err := p.markSuperuserOverlays(root, f); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 

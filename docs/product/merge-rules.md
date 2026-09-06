@@ -14,7 +14,10 @@ timestamp: 2026-07-14T00:00:00Z
 
 `<username>` is the OS account name (`os/user.Current()`), never `$USER`.
 Under `sudo dotdrift apply` the process account is root, so **root's overlays
-are selected**, not the invoking user's.
+are selected**, not the invoking user's. Running unprivileged, a user overlay
+owned by a uid-0 account is not selectable; its modules surface as skipped
+with reason `requires root (run with sudo)` in the `modules` listing, and
+`plan`/`status`/`apply` emit one warning naming the count (issue 0029).
 
 # Rules
 

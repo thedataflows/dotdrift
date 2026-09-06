@@ -20,6 +20,14 @@ user) or `system` (with root privileges). Scope is about *who owns the
 target path*, not *who the config applies to* — that is Layer. The two are
 independent: a host-layer module can be system-scoped.
 
+### Superuser overlay
+
+A user layer (`users/<username>/`) whose owning OS account is the superuser
+(uid 0 — the account's uid, never its group; root-group membership does not
+qualify). Only an invocation running as that account selects it; any other
+invocation surfaces it as skipped with an actionable reason rather than
+omitting it silently.
+
 ### Module
 
 A directory of related configuration plus a `module.toml` describing it.

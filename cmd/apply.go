@@ -71,6 +71,9 @@ func loadAndResolvePlan(profilePath string, modules []string, f *facts.Facts) (*
 	if err != nil {
 		return nil, nil, fmt.Errorf("load profile: %w", err)
 	}
+	// Warn before LimitTo: a superuser-overlay module id passed as a filter
+	// errors as unknown, and this nudge explains why (issue 0029).
+	warnSuperuserOverlays(p)
 	if err := p.LimitTo(profile.ParseModuleFilter(modules)); err != nil {
 		return nil, nil, err
 	}

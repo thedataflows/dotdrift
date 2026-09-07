@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [mise bootstrap alignment A4](../product/mise-bootstrap-alignment.md), [0045](0045-delete-paru-plugin-after-aur-release.md)
 - **Related code**: [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go), [`internal/paru/`](../../internal/paru/), [`cmd/paru.go`](../../cmd/paru.go)
-- **Closing commits**: TBD
+- **Closing commits**: 973e683
 
 ## Summary
 

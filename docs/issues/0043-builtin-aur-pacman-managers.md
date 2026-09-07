@@ -9,13 +9,13 @@ timestamp: 2026-09-07T00:00:00Z
 # ISSUE 0043: Adopt built-in aur/pacman managers, delete paru plugin
 
 - **Type**: task
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [mise, packages, deletion]
-- **Assignee**: none
-- **Related**: [mise bootstrap alignment A4](../product/mise-bootstrap-alignment.md)
+- **Assignee**: agent
+- **Related**: [mise bootstrap alignment A4](../product/mise-bootstrap-alignment.md), [0045](0045-delete-paru-plugin-after-aur-release.md)
 - **Related code**: [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go), [`internal/paru/`](../../internal/paru/), [`cmd/paru.go`](../../cmd/paru.go)
-- **Closing commits**: none
+- **Closing commits**: TBD
 
 ## Summary
 
@@ -41,13 +41,22 @@ Behavioral deltas to document: built-in aur prefers yay over paru when both
 exist; aur/pacman version pins are status-only/skipped upstream (dotdrift
 already pins everything to `"latest"` — no change).
 
+## Resolution notes
+
+Implemented the releasable half: bare Arch names now emit `pacman:` (verified
+against the installed mise 2026.9.1 — `pacman:curl` reports installed,
+unknown packages report missing). The aur half is gated on an upstream
+release containing the aur manager and tracked as issue 0045. Empirical gate
+evidence: `mise bootstrap packages status` with `"aur:paru"` on 2026.9.1
+warns `unknown bootstrap package manager 'aur' ... ignoring` and exits 0.
+
 ## Acceptance Criteria
 
-- [ ] Emitted `[bootstrap.packages]` keys use `aur:`/`pacman:` on Arch; no `paru:` keys remain
-- [ ] Paru plugin embedding, registry maintenance, and `dotdrift paru` commands deleted
-- [ ] `internal/packages` Paru backend still drives removal and probes
-- [ ] Docs updated (cli-surface, profile-layout, contract as applicable)
-- [ ] `go test ./...` and `go vet` green
+- [x] Emitted `[bootstrap.packages]` keys use `pacman:` for bare Arch names **(amended)** — `aur:` adoption moved to [0045](0045-delete-paru-plugin-after-aur-release.md): the built-in aur manager (PR #12718) merged after the v2026.9.1 tag, and mise ignores unknown managers with a warning + exit 0, so emitting `aur:` today would silently skip every aur/ package (fail-open)
+- [x] ~~Paru plugin embedding, registry maintenance, and `dotdrift paru` commands deleted~~ **moved to 0045** — the plugin stack stays exactly as long as aur/ markers need it
+- [x] `internal/packages` Paru backend still drives removal and probes
+- [x] Docs updated (profile-layout `packages.present` bullet)
+- [x] `go test ./...` and `go vet` green
 
 ## Out of Scope
 

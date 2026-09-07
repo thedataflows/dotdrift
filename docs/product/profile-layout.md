@@ -192,6 +192,12 @@ public = false
   setting `disabled = true` in a host or user overlay disables the base module;
   an overlay setting `disabled = false` does not un-disable (any disable sticks).
 - `packages.absent` cancels a `present` entry from a lower layer.
+- `packages.present` uses mise's `manager:pkg` vocabulary. A bare name
+  installs through the detected distro backend's built-in manager (`pacman`
+  on Arch — issue 0043; `apt` on Debian; `dnf` on Fedora). An `aur/<pkg>`
+  marker targets the AUR through the paru plugin, with the marker stripped
+  (until mise ships its built-in `aur` manager — issue 0045). An explicit
+  `manager:<pkg>` passes through unchanged.
 - `tools` installs the listed tools via mise AND activates them globally:
   apply writes the resolved `[tools]` into `~/.config/mise/conf.d/dotdrift.toml`
   (mise loads `conf.d/*.toml` as global config, XDG_CONFIG_HOME respected),

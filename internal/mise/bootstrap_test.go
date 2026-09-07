@@ -8,9 +8,13 @@ import (
 	"github.com/thedataflows/dotdrift/internal/mise"
 )
 
-func TestPrefixedPackages_bareGetsBackendPrefix(t *testing.T) {
+// Bare names on the paru (Arch) backend map to mise's built-in pacman
+// manager, not the paru plugin (issue 0043): official-repo packages are
+// pacman's domain; the plugin survives only for aur/ markers until mise
+// ships its built-in aur manager (issue 0045).
+func TestPrefixedPackages_bareOnArchGetsPacmanPrefix(t *testing.T) {
 	got := mise.PrefixedPackages([]string{"neovim", "ripgrep"}, "paru")
-	require.Equal(t, []string{"paru:neovim", "paru:ripgrep"}, got)
+	require.Equal(t, []string{"pacman:neovim", "pacman:ripgrep"}, got)
 }
 
 func TestPrefixedPackages_aptBackend(t *testing.T) {
@@ -20,7 +24,7 @@ func TestPrefixedPackages_aptBackend(t *testing.T) {
 
 func TestPrefixedPackages_explicitPrefixPassesThrough(t *testing.T) {
 	got := mise.PrefixedPackages([]string{"pacman:foo", "neovim"}, "paru")
-	require.Equal(t, []string{"pacman:foo", "paru:neovim"}, got)
+	require.Equal(t, []string{"pacman:foo", "pacman:neovim"}, got)
 }
 
 func TestPrefixedPackages_empty(t *testing.T) {
@@ -51,14 +55,14 @@ func TestPrefixedPackages_aurMarkerStripsEvenOnNonArchBackend(t *testing.T) {
 
 func TestPrefixedPackages_mixedAurBareExplicit(t *testing.T) {
 	got := mise.PrefixedPackages([]string{"aur/fresh-editor-bin", "ripgrep", "pacman:base-devel"}, "paru")
-	require.Equal(t, []string{"paru:fresh-editor-bin", "paru:ripgrep", "pacman:base-devel"}, got)
+	require.Equal(t, []string{"paru:fresh-editor-bin", "pacman:ripgrep", "pacman:base-devel"}, got)
 }
 
 func TestGenerateBootstrapPackages_emitsSection(t *testing.T) {
 	got := mise.GenerateBootstrapPackages([]string{"neovim", "ripgrep"}, "paru")
 	require.Contains(t, got, "[bootstrap.packages]")
-	require.Contains(t, got, `"paru:neovim" = "latest"`)
-	require.Contains(t, got, `"paru:ripgrep" = "latest"`)
+	require.Contains(t, got, `"pacman:neovim" = "latest"`)
+	require.Contains(t, got, `"pacman:ripgrep" = "latest"`)
 }
 
 func TestGenerateBootstrapPackages_deterministicOrder(t *testing.T) {
@@ -78,5 +82,5 @@ func TestGenerateBootstrapPackages_emptyReturnsEmpty(t *testing.T) {
 func TestGenerateBootstrapPackages_prefixedPassesThrough(t *testing.T) {
 	got := mise.GenerateBootstrapPackages([]string{"pacman:foo", "neovim"}, "paru")
 	require.Contains(t, got, `"pacman:foo" = "latest"`)
-	require.Contains(t, got, `"paru:neovim" = "latest"`)
+	require.Contains(t, got, `"pacman:neovim" = "latest"`)
 }

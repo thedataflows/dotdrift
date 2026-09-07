@@ -14,22 +14,28 @@ import (
 
 // PrefixedPackages translates package specs into mise `manager:pkg` keys.
 //
-// Rules (issue 0003): an explicit `manager:pkg` spec (anything containing a
-// colon) passes through unchanged — mise's built-in managers (pacman, apt, dnf)
-// and other plugins are respected. An `aur/<pkg>` spec is dotdrift's AUR
-// marker; it always maps to the paru plugin (the only AUR-capable manager),
-// with the marker stripped so pacman -Q / paru -S see the real package name.
-// A bare name (no colon, no aur/) gets the detected backend's manager prefix
-// (paru on Arch, apt on Debian, dnf on Fedora). On Arch that means bare names
-// default to paru — not mise's built-in pacman, which has no AUR support.
+// Rules (issues 0003, 0043): an explicit `manager:pkg` spec (anything
+// containing a colon) passes through unchanged — mise's built-in managers
+// (pacman, apt, dnf) and other plugins are respected. An `aur/<pkg>` spec is
+// dotdrift's AUR marker; it maps to the paru plugin (the only AUR-capable
+// manager until mise ships its built-in aur manager — see issue 0045), with
+// the marker stripped so pacman -Q / paru -S see the real package name. A
+// bare name (no colon, no aur/) gets the detected backend's manager prefix —
+// except on Arch, where bare names map to mise's built-in `pacman` manager
+// (issue 0043): official-repo packages are pacman's domain, and routing them
+// through the plugin would rebuild nothing but shadow pacman's own status
+// reporting. apt/dnf bare names keep their backend prefix.
 func PrefixedPackages(names []string, backend string) []string {
+	if backend == "paru" {
+		backend = "pacman" // Arch bare names → built-in pacman (issue 0043)
+	}
 	out := make([]string, len(names))
 	for i, n := range names {
 		switch {
 		case strings.Contains(n, ":"):
 			out[i] = n // explicit manager prefix — pass through
 		case strings.HasPrefix(n, "aur/"):
-			out[i] = "paru:" + strings.TrimPrefix(n, "aur/") // AUR marker → paru plugin
+			out[i] = "paru:" + strings.TrimPrefix(n, "aur/") // AUR marker → paru plugin (until 0045)
 		default:
 			out[i] = backend + ":" + n // bare name → detected backend
 		}

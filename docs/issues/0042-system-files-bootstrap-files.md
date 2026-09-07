@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [mise bootstrap alignment A3](../product/mise-bootstrap-alignment.md)
 - **Related code**: [`cmd/apply.go`](../../cmd/apply.go), [`internal/mise/mise.go`](../../internal/mise/mise.go), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
-- **Closing commits**: TBD
+- **Closing commits**: 0bed6ed
 
 ## Summary
 

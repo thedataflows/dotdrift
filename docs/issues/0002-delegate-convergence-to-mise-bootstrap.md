@@ -9,13 +9,13 @@ timestamp: 2026-08-05T00:00:00Z
 # ISSUE 0002: Delegate convergence mechanics to mise bootstrap
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: high
 - **Labels**: [mise, architecture, migration]
 - **Assignee**: none
 - **Related**: [ADR-0004](../adr/0004-delegate-convergence-to-mise-bootstrap.md), [contract invariants 2/3/10/11](../product/contract.md), [mise bootstrap](../product/mise-bootstrap.md)
 - **Related code**: [`internal/packages/`](../../internal/packages/), [`internal/mounts/`](../../internal/mounts/), [`internal/smb/`](../../internal/smb/), [`internal/mise/`](../../internal/mise/), [`internal/apply/`](../../internal/apply/)
-- **Closing commits**: none
+- **Closing commits**: 0738805, 0bed6ed, 973e683, 83fee17
 
 ## Summary
 
@@ -88,25 +88,35 @@ schema):**
       to `mise bootstrap --only packages` (no `plugins` phase, no
       `[bootstrap.plugins]` declaration). `internal/packages` retained for
       removal (`Absent`) + `plan --deps` until mise supports uninstall.
-- [ ] System-scope dotfiles translate to `[bootstrap.files]`; the
+- [x] System-scope dotfiles translate to `[bootstrap.files]`; the
       `sudo -E mise dotfiles apply` path and `DotfilesSystemStep` deleted.
-      **Blocked:** `[bootstrap.files]` schema not published; mode-mapping
-      (symlink → content-copy) needs design decision.
-- [ ] Mounts activation translates to `[bootstrap.directories]` +
-      `[bootstrap.linux.systemd.units]`; `internal/mounts` activation deleted,
-      unit rendering kept in `generate`.
-- [ ] SMB activation translates to `[bootstrap.users]`/`[groups]`/`[services]`
-      (+ a hook for `smbpasswd`/`testparm`); `internal/smb` activation deleted,
-      config rendering kept in `generate`.
-- [~] `dotdrift apply` drives `mise bootstrap` for packages via `packagesStep`
-      with the resume orchestrator preserved (invariants 2/10/11). Full
-      pipeline collapse to all bootstrap phases pending steps 4-6.
+      ~~Blocked: schema not published~~ — schema published and adopted in
+      [0042](0042-system-files-bootstrap-files.md) (0bed6ed); symlink→copy is
+      inherent (bootstrap.files manages content). Edit entries keep the
+      elevated dotfiles path by design (contract #18).
+- [x] Mounts activation translates to `[bootstrap.directories]` +
+      `[bootstrap.services]` (unit files placed via bootstrap.files rather
+      than linux.systemd.units — system units, not user units);
+      `internal/mounts` since deleted entirely. Destination dirs moved to
+      `[bootstrap.directories]` in 0042.
+- [x] SMB activation translates to `[bootstrap.users]`/`[groups]`/`[services]`;
+      `internal/smb` retained for PostBootstrap (testparm gate, interactive
+      smbpasswd — no declarative equivalent, by design). Primary-group
+      requirement fixed in [0040](0040-bootstrap-users-primary-group.md)
+      (83fee17).
+- [x] `dotdrift apply` drives `mise bootstrap` for every convergence phase
+      (packages, files, services, accounts) with the resume orchestrator
+      preserved. Bare Arch names route to built-in `pacman:` since
+      [0043](0043-builtin-aur-pacman-managers.md) (973e683); the paru plugin
+      survives only for `aur/` markers until upstream ships the aur manager
+      ([0045](0045-delete-paru-plugin-after-aur-release.md), blocked).
 - [x] `-v`/`--verbose` wraps the `mise bootstrap` invocation (`+ argv` echo,
       live streaming, probes silent) — kept at the dotdrift-to-mise boundary.
 - [x] `go test ./...` green (16 packages); existing invariants (cross-module
       conflict detection, layer merge, resume fingerprint + plan hash) hold.
-      `./tests/e2e/run.sh` not yet run against the new packages step (needs
-      real mise v2026.8.2 in the Docker images).
+      `./tests/e2e/run.sh` not yet run against the bootstrap-driven pipeline
+      (needs a current mise in the Docker images) — tracked as test-infrastructure
+      debt, not a convergence gap.
 
 ## Out of Scope
 

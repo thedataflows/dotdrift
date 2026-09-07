@@ -20,8 +20,9 @@ func scopeFixture(t *testing.T) string {
 }
 
 // A profile with system-scope modules gains a dotfiles-system step that runs
-// after dotfiles, applies only the system entries via mise dotfiles apply from
-// its own config dir, and is recorded in resume state.
+// after dotfiles, converges whole-file system entries via mise bootstrap
+// --only files from its own config dir (issue 0042), and is recorded in
+// resume state.
 func TestApply_dotfilesSystemStep(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -31,10 +32,10 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	cmd := &ApplyCmd{Profile: scopeFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// User and system dotfiles both use mise dotfiles apply, each from their
-	// own config dir; the system step runs after the user step.
+	// User dotfiles use mise dotfiles apply; system whole-file entries use
+	// mise bootstrap --only files; the system step runs after the user step.
 	userApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "dotfiles")
-	systemApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "system")
+	systemApply := "bootstrap --cd " + filepath.Join(dir, "mise", "system")
 	userIdx := -1
 	for i, e := range *events {
 		if strings.Contains(e, userApply) {
@@ -56,10 +57,12 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	require.Contains(t, string(userCfg), "~/.bashrc")
 	require.NotContains(t, string(userCfg), "/etc/demo.conf")
 
+	// Whole-file system entries are [bootstrap.files], not [dotfiles].
 	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(sysCfg), "[dotfiles]")
+	require.Contains(t, string(sysCfg), "[bootstrap.files]")
 	require.Contains(t, string(sysCfg), "/etc/demo.conf")
+	require.NotContains(t, string(sysCfg), "[dotfiles]")
 
 	// The pre-pipeline full config (D8a crash snapshot) still contains everything.
 	full, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
@@ -93,10 +96,9 @@ func TestApply_noSystemEntriesSkipsDotfilesSystem(t *testing.T) {
 	require.True(t, os.IsNotExist(err), "no dotfiles-system config dir must be created")
 }
 
-// System-scope edit entries (line/block/template) apply via the same unified
-// dotfiles apply path as whole-file entries — the system step writes a single
-// [dotfiles] config and invokes mise dotfiles apply. When the OS denies access
-// (permission denied), the step retries elevated via DotfilesApplySudo.
+// System-scope edit entries (line/block/template) have no bootstrap.files
+// equivalent (contract #18): they keep the elevated [dotfiles] path, from
+// their own system-edits config dir (issue 0042).
 func TestApply_systemEditEntriesUseDotfilesApply(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -116,25 +118,28 @@ scope = "system"
 	cmd := &ApplyCmd{Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// The system edit runs as `mise dotfiles apply` from the system/ config dir.
+	// The system edit runs as `mise dotfiles apply` from the system-edits/
+	// config dir; no bootstrap files phase runs for an edits-only plan.
 	var foundApply bool
 	for _, e := range *events {
-		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system")) {
+		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system-edits")) {
 			foundApply = true
 		}
+		require.NotContains(t, e, filepath.Join("mise", "system "), "no bootstrap system config for edits-only: %v", e)
 	}
 	require.True(t, foundApply, "system edit entries must reach dotfiles apply, events: %v", *events)
 
-	// The system config carries a [dotfiles] section (not [bootstrap.files]).
-	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
+	// The edits config carries a [dotfiles] section (not [bootstrap.files]).
+	editCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system-edits", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(sysCfg), "[dotfiles]")
-	require.Contains(t, string(sysCfg), `line = "127.0.0.1 dev.local"`)
-	require.NotContains(t, string(sysCfg), "[bootstrap.files]")
+	require.Contains(t, string(editCfg), "[dotfiles]")
+	require.Contains(t, string(editCfg), `line = "127.0.0.1 dev.local"`)
+	require.NotContains(t, string(editCfg), "[bootstrap.files]")
 }
 
-// System-scope whole-file and edit entries coexist in one system step:
-// both apply via a single [dotfiles] config and one mise dotfiles apply call.
+// System-scope whole-file and edit entries split across two configs in one
+// system step: whole-file entries converge via [bootstrap.files] +
+// `bootstrap --only files`, edits via [dotfiles] + `dotfiles apply`.
 func TestApply_systemWholeFileAndEditBothApply(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -155,29 +160,43 @@ scope = "system"
 	cmd := &ApplyCmd{Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// Both whole-file and edit entries reach the same dotfiles apply call.
+	// Whole-file entries reach bootstrap --only files from system/.
+	var foundBootstrap bool
+	for _, e := range *events {
+		if strings.Contains(e, "bootstrap") && strings.Contains(e, filepath.Join("mise", "system")) && strings.Contains(e, "--only files") {
+			foundBootstrap = true
+		}
+	}
+	require.True(t, foundBootstrap, "whole-file system entries must reach bootstrap --only files, events: %v", *events)
+
+	// Edits reach dotfiles apply from system-edits/.
 	var foundApply bool
 	for _, e := range *events {
-		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system")) {
+		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system-edits")) {
 			foundApply = true
 		}
 	}
-	require.True(t, foundApply, "system entries must reach dotfiles apply, events: %v", *events)
+	require.True(t, foundApply, "system edit entries must reach dotfiles apply, events: %v", *events)
 
-	// The unified config has both entries in [dotfiles].
+	// The configs are partitioned: bootstrap.files holds the whole-file entry,
+	// dotfiles holds the edit.
 	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
 	require.NoError(t, err)
+	require.Contains(t, string(sysCfg), "[bootstrap.files]")
 	require.Contains(t, string(sysCfg), "/etc/demo.conf")
-	require.Contains(t, string(sysCfg), `line = "127.0.0.1 dev.local"`)
+	require.NotContains(t, string(sysCfg), "127.0.0.1 dev.local")
+
+	editCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system-edits", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(editCfg), `line = "127.0.0.1 dev.local"`)
+	require.NotContains(t, string(editCfg), "/etc/demo.conf")
 }
 
-// A system target the current user can't write (e.g. under /etc) converges
-// elevated in a single sudo pass: the writability pre-flight chooses sudo up
-// front instead of a failing user attempt followed by a retry (the old path
-// inspected mise's captured stderr for "Permission denied", but runOp now
-// streams straight to the terminal to keep mise's color, so it can't read
-// stderr back).
-func TestSystemFilesStep_convergesElevatedWhenTargetNotUserWritable(t *testing.T) {
+// Whole-file system entries converge via mise bootstrap --only files and
+// dotdrift never elevates them itself (issue 0042): mise tries as the current
+// user and retries the remaining changes in one privileged batch — the old
+// dotdrift-side writability pre-flight + sudo pass is gone for whole files.
+func TestSystemFilesStep_wholeFilesViaBootstrapNeverSudo(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("elevation test requires a non-root user")
 	}
@@ -205,19 +224,23 @@ func TestSystemFilesStep_convergesElevatedWhenTargetNotUserWritable(t *testing.T
 		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
 		yes:        true,
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	require.Equal(t, []string{"sudo"}, names,
-		"a non-writable system target must converge elevated directly, with no user attempt")
+	require.Equal(t, []string{"/fake/mise"}, names,
+		"whole-file entries converge through mise bootstrap; dotdrift never invokes sudo for them")
+
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "[bootstrap.files]")
+	require.Contains(t, string(cfg), `"/etc/test.conf" = { source = "/fake/profile/test.conf" }`)
 }
 
-// A system target the current user CAN write (e.g. under a user-owned dir)
-// converges as the user — no sudo — and a non-permission failure propagates
-// verbatim; the writability pre-flight only elevates when a target is not
-// user-writable.
-func TestSystemFilesStep_userWritableTargetStaysUserAndPropagatesError(t *testing.T) {
+// A bootstrap failure propagates verbatim — no dotdrift-side retry or
+// elevation second-guessing (mise already self-elevated or failed loud).
+func TestSystemFilesStep_bootstrapFailurePropagates(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
 
@@ -242,18 +265,109 @@ func TestSystemFilesStep_userWritableTargetStaysUserAndPropagatesError(t *testin
 		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
 		yes:        true,
 	}
 
 	err := step.Run(context.Background())
 	require.Error(t, err)
-	require.NotContains(t, names, "sudo", "a user-writable target must not elevate")
+	require.NotContains(t, names, "sudo")
 	require.Contains(t, err.Error(), "config parse error")
+}
+
+// System-scope EDIT entries keep the elevated [dotfiles] path: a
+// non-writable edit target still converges via DotfilesApplySudo (contract
+// #18 — bootstrap.files has no edit concept).
+func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("elevation test requires a non-root user")
+	}
+	dir := t.TempDir()
+
+	var names []string
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			names = append(names, name)
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: "/etc/hosts/dev", Line: "127.0.0.1 dev.local"},
+		},
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
+		configPath: filepath.Join(dir, "system", "mise.toml"),
+		editsPath:  editsPath,
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	require.Equal(t, []string{"sudo"}, names,
+		"a non-writable edit target converges elevated in one sudo pass")
+
+	cfg, err := os.ReadFile(editsPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "[dotfiles]")
+	require.Contains(t, string(cfg), `line = "127.0.0.1 dev.local"`)
+
+	// No whole-file entries and no dirs → no bootstrap config is written.
+	_, statErr := os.Stat(filepath.Join(dir, "system", "mise.toml"))
+	require.True(t, os.IsNotExist(statErr), "edits-only step writes no bootstrap config")
+}
+
+// Mount destination directories are emitted as [bootstrap.directories] in the
+// same system config and converge in the same bootstrap --only files call —
+// no dotdrift-side mkdir/ensureDir (issue 0042).
+func TestSystemFilesStep_mountDirsViaBootstrapDirectories(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	var names []string
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			names = append(names, name)
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec:       em,
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
+		dirs:       []string{"/mnt/data", "/mnt/backup"},
+		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	require.Equal(t, []string{"/fake/mise"}, names)
+
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "[bootstrap.directories]")
+	require.Contains(t, string(cfg), "/mnt/data")
+	require.Contains(t, string(cfg), "/mnt/backup")
 }
 
 // pathUserWritable walks up to the nearest existing ancestor and checks the
 // write-access bit: a new file under a user-owned dir is writable; under a
-// read-only dir (or root-owned /etc) it is not.
+// read-only dir (or root-owned /etc) it is not. Only the edit-entry elevation
+// pre-flight uses this (issue 0042).
 func TestPathUserWritable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("writability test requires a non-root user")
@@ -272,9 +386,10 @@ func TestPathUserWritable(t *testing.T) {
 		"a path under root-owned /etc is not user-writable")
 }
 
-// System-scope entries declared as symlink are translated to copy mode in the
-// generated [dotfiles] config — a symlink from /etc into the user's profile is
-// fragile. symlink-each entries are expanded to individual copy entries.
+// System-scope entries declared as symlink carry no mode into
+// [bootstrap.files]: mise's system files manage content (an inherent
+// symlink→copy), so no symlink mode can leak into the emitted config.
+// symlink-each entries are expanded to individual file entries.
 func TestSystemFilesStep_symlinkTranslatedToCopy(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
@@ -298,14 +413,15 @@ func TestSystemFilesStep_symlinkTranslatedToCopy(t *testing.T) {
 		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
 		yes:        true,
 	}
 
 	require.NoError(t, step.Run(context.Background()))
 	cfg, err := os.ReadFile(configPath)
 	require.NoError(t, err)
-	require.Contains(t, string(cfg), `mode = "copy"`,
-		"system symlink entries must be translated to copy mode")
-	require.NotContains(t, string(cfg), `mode = "symlink"`,
-		"system symlink entries must NOT keep symlink mode")
+	require.Contains(t, string(cfg), "[bootstrap.files]")
+	require.Contains(t, string(cfg), `"/etc/symlinked.conf" = { source = "/fake/profile/files/symlinked.conf" }`)
+	require.NotContains(t, string(cfg), "mode = ",
+		"bootstrap.files manages content — no mode vocabulary may leak")
 }

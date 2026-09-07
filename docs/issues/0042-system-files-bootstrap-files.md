@@ -9,13 +9,13 @@ timestamp: 2026-09-07T00:00:00Z
 # ISSUE 0042: System files via [bootstrap.files], delete hand-rolled sudo
 
 - **Type**: task
-- **Status**: open
+- **Status**: done
 - **Priority**: high
 - **Labels**: [mise, bootstrap, deletion]
-- **Assignee**: none
+- **Assignee**: agent
 - **Related**: [mise bootstrap alignment A3](../product/mise-bootstrap-alignment.md)
 - **Related code**: [`cmd/apply.go`](../../cmd/apply.go), [`internal/mise/mise.go`](../../internal/mise/mise.go), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
-- **Closing commits**: none
+- **Closing commits**: TBD
 
 ## Summary
 
@@ -46,11 +46,11 @@ this issue.
 
 ## Acceptance Criteria
 
-- [ ] System-scope whole-file dotfiles converge via `[bootstrap.files]` + `mise bootstrap --only files`
-- [ ] Edit entries still pass through `[dotfiles]` as today (bootstrap.files has no edit concept)
-- [ ] `DotfilesApplySudo`/`dotfilesApplyArgv` and the sudo retry path are deleted
-- [ ] Elevation failures surface mise's own actionable error
-- [ ] `go test ./...` and `go vet` green
+- [x] System-scope whole-file dotfiles converge via `[bootstrap.files]` + `mise bootstrap --only files`
+- [x] Edit entries still pass through `[dotfiles]` as today (bootstrap.files has no edit concept)
+- [x] ~~`DotfilesApplySudo`/`dotfilesApplyArgv` and the sudo retry path are deleted~~ **amended**: the whole-file sudo retry path, the writability pre-flight over whole-file targets, and `ensureDir` are deleted; `DotfilesApplySudo`/`dotfilesApplyArgv` survive — system EDIT entries have no bootstrap.files equivalent and still elevate through them (contract #18). `DotfilesSystemStep` and `SystemDotfileEntries` (dead after the move) were deleted instead
+- [x] Elevation failures surface mise's own actionable error (verified empirically against mise 2026.9.1: `sudo requires a password but no TTY is available. Run manually: sudo /usr/bin/mise --no-config ... bootstrap __apply-system-plan`)
+- [x] `go test ./...` and `go vet` green
 
 ## Out of Scope
 
@@ -63,3 +63,15 @@ this issue.
 mise escalates interactively (sudo prompt on a terminal; exact-command error
 when non-interactive without passwordless sudo) — that matches dotdrift's
 fail-loud posture better than the current whole-run sudo retry.
+
+## Resolution notes
+
+- The August revert (dfb5745: "hidden sudo helpers needing a TTY mise could
+  not reach") no longer applies: mise's `src/system/sudo.rs` policy (TTY →
+  interactive prompt; no TTY → `sudo -n` fail-fast with the exact command)
+  plus dotdrift's `opStdin` wiring cover both cases. Verified empirically
+  against the installed mise 2026.9.1 (user-writable target, EACCES target,
+  template rendering, `--only files` covering `[bootstrap.directories]`).
+- Mount destination directories moved from the `ensureDir` try/retry seam to
+  `[bootstrap.directories]` in the same `--only files` call (still
+  section-gated: no mounts section ⇒ no directories in the config).

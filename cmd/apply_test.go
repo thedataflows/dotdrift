@@ -98,11 +98,9 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 
 	origDetect, origLoad, origResolve, origMise, origFor := detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor
 	origSmbRunner := newSmbRunner
-	origEnsureDir := ensureDir
 	t.Cleanup(func() {
 		detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor = origDetect, origLoad, origResolve, origMise, origFor
 		newSmbRunner = origSmbRunner
-		ensureDir = origEnsureDir
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
@@ -117,7 +115,6 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	defaultMise = func() *mise.Mise { return fakeMise(events) }
 	packagesFor = func(string) packages.Backend { return backend }
 	newSmbRunner = func() smb.Runner { return &recordingSmbRunner{events: events} }
-	ensureDir = func(_ context.Context, _ string) error { return nil }
 	return events, backend
 }
 
@@ -400,8 +397,8 @@ func TestApply_onlyToolsAndDotfiles(t *testing.T) {
 }
 
 // Section flags drop the mounts machinery too: on the mounts fixture with
-// only dotfiles selected, no mount services bootstrap and no mount
-// destination mkdir happens.
+// only dotfiles selected, no mount services bootstrap runs and the system
+// files config carries no [bootstrap.directories] (issue 0042).
 func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -412,11 +409,16 @@ func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 		onlySections: []string{"dotfiles"}}
 	require.NoError(t, cmd.Run())
 
-	requireOrder(t, *events, "dotfiles apply")
+	// The fixture's system-scope unit files still converge via bootstrap
+	// --only files; mount services must not.
+	requireOrder(t, *events, "--only files")
 	for _, e := range *events {
 		require.NotContains(t, e, "services", "mounts services must not run")
-		require.NotContains(t, e, "ensure-dir", "mount mkdir must not run")
 	}
+	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
+	require.NoError(t, err)
+	require.NotContains(t, string(cfg), "[bootstrap.directories]",
+		"mount destinations are section-gated out of the system files config")
 }
 
 // DOTDRIFT_NO_HOOKS=1 suppresses hooks exactly like --no-hooks.
@@ -466,13 +468,13 @@ func TestApply_mountsStepConditional(t *testing.T) {
 	require.NoError(t, cmd.Run())
 
 	requireOrder(t, *events,
-		"mise:run run",       // hooks:pre
-		"mise:run bootstrap", // packages
-		"dotfiles apply",     // system files (user path when writable, sudo -E when not)
-		"mise:run bootstrap", // mounts services
-		"mise:run bootstrap", // smb accounts+services
-		"smb:run",            // PostBootstrap testparm
-		"mise:run run",       // hooks:post
+		"mise:run run",    // hooks:pre
+		"--only packages", // packages
+		"--only files",    // system files + mount destination dirs (issue 0042)
+		"--only services", // mounts services
+		"--only accounts", // smb accounts (+services)
+		"smb:run",         // PostBootstrap testparm
+		"mise:run run",    // hooks:post
 	)
 
 	_, statErr := os.Stat(statePath)
@@ -623,18 +625,15 @@ func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, bac
 	var captured *mise.Mise
 	origDetect, origMise, origFor := detectFacts, defaultMise, packagesFor
 	origSmbRunner := newSmbRunner
-	origEnsureDir := ensureDir
 	t.Cleanup(func() {
 		detectFacts, defaultMise, packagesFor = origDetect, origMise, origFor
 		newSmbRunner = origSmbRunner
-		ensureDir = origEnsureDir
 	})
 
 	detectFacts = func() (*facts.Facts, error) { return f, nil }
 	defaultMise = func() *mise.Mise { captured = fakeMise(events); return captured }
 	packagesFor = func(string) packages.Backend { return backend }
 	newSmbRunner = func() smb.Runner { return sr }
-	ensureDir = func(_ context.Context, _ string) error { return nil }
 	return &captured, backend, sr
 }
 

@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [mise bootstrap alignment B-secrets](../product/mise-bootstrap-alignment.md), [0042](0042-system-files-bootstrap-files.md)
 - **Related code**: [`internal/profile/profile.go`](../../internal/profile/profile.go), [`internal/resolve/`](../../internal/resolve/), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
-- **Closing commits**: TBD
+- **Closing commits**: 73142db
 
 ## Summary
 

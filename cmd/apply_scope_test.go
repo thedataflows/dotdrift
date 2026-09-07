@@ -66,7 +66,7 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	require.NotContains(t, string(sysCfg), "[dotfiles]")
 
 	// The pre-pipeline full config (D8a crash snapshot) still contains everything.
-	full, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
+	full, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
 	require.NoError(t, err)
 	require.Contains(t, string(full), "/etc/demo.conf")
 	require.Contains(t, string(full), "~/.bashrc")

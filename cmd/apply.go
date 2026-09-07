@@ -523,9 +523,14 @@ func (c *ApplyCmd) Run() error {
 	// [dotfiles] + [tasks]) before the pipeline starts. The tools/dotfiles steps later
 	// rewrite this file section-by-section, so if apply crashes or fails
 	// before them, the on-disk config still mirrors the whole resolved plan
-	// for crash recovery and manual mise runs.
+	// for crash recovery and manual mise runs. The snapshot lives in its OWN
+	// shared/ subtree (issue 0053): mise --cd config discovery walks UP and
+	// merges any ancestor mise.toml, so a snapshot at <state>/mise/mise.toml
+	// would smuggle the full user+system plan into every per-step config one
+	// level below (system entries leaking into the user dotfiles step —
+	// fresh-system EACCES before the elevating step ever runs).
 	configDir := filepath.Join(filepath.Dir(statePath), "mise")
-	configPath := filepath.Join(configDir, "mise.toml")
+	configPath := filepath.Join(configDir, "shared", "mise.toml")
 	if err := writeBootstrapConfig(configPath, mise.GenerateApplyConfig(plan, profileRoot, f, stdinIsTerminal())); err != nil {
 		return fmt.Errorf("write mise config: %w", err)
 	}
@@ -535,7 +540,8 @@ func (c *ApplyCmd) Run() error {
 	// so `mise --cd` still discovers it as mise.toml — keeps the shared
 	// full config (and its [tasks] hook definitions) intact for the hooks
 	// steps; otherwise hooks-post would run `mise run` against a config
-	// with no tasks.
+	// with no tasks. Step configs are siblings of shared/, never nested
+	// under it (issue 0053).
 	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
 	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
 	packagesConfigPath := filepath.Join(configDir, "packages", "mise.toml")

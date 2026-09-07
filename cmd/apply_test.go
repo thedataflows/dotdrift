@@ -163,12 +163,12 @@ func TestApply_happyPath(t *testing.T) {
 		"load",
 		"resolve",
 		"mise:ensure",
-		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks-pre-0",
+		"mise:run run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-pre-0",
 		"packages:absent",
 		"mise:run bootstrap",
 		"mise:run install",
 		"mise:run dotfiles apply",
-		"mise:run run --cd "+filepath.Join(dir, "mise")+" hooks-post-0",
+		"mise:run run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-post-0",
 	)
 	requireOrder(t, *events, "mise:run bootstrap")
 	require.Contains(t, *events, "packages:absent emacs,nano")
@@ -217,7 +217,7 @@ func TestApply_hookTaskInteractiveReflectsStdinTTY(t *testing.T) {
 		stubApplyDeps(t, f)
 		stdinIsTerminal = func() bool { return tty }
 		require.NoError(t, (&ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
-		cfg, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
+		cfg, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
 		require.NoError(t, err)
 		return string(cfg)
 	}
@@ -243,7 +243,7 @@ func TestApply_stepsDoNotClobberSharedMiseConfig(t *testing.T) {
 	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	shared, err := os.ReadFile(filepath.Join(dir, "mise", "mise.toml"))
+	shared, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
 	require.NoError(t, err)
 	require.Contains(t, string(shared), `[tasks."hooks-post-0"]`, "shared config must keep hook tasks after the pipeline")
 	require.Contains(t, string(shared), "[dotfiles]")
@@ -318,7 +318,7 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	s := loadStateFile(t, statePath)
 	require.Equal(t, "hooks-pre", s.LastCompleted, "cursor must name the last step that succeeded")
 
-	configPath := filepath.Join(dir, "mise", "mise.toml")
+	configPath := filepath.Join(dir, "mise", "shared", "mise.toml")
 	data, err := os.ReadFile(configPath)
 	require.NoError(t, err, "pre-pipeline full mise config must exist after a crash")
 	cfg := string(data)
@@ -806,6 +806,42 @@ func TestApply_noForceByDefault(t *testing.T) {
 	for _, e := range *events {
 		if strings.Contains(e, "dotfiles apply") {
 			require.NotContains(t, e, "--force", "no --force without the flag: %q", e)
+		}
+	}
+}
+
+// Layout invariant (issue 0053): mise --cd config discovery walks UP and
+// merges any ancestor mise.toml, so no per-step config may have one below
+// the state root — a parent full-plan snapshot would smuggle system-scope
+// entries into the user dotfiles step (fresh-system EACCES, no sudo, since
+// the elevating step never runs).
+func TestApply_stepConfigsHaveNoAncestorMiseToml(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: scopeFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	configRoot := filepath.Join(dir, "mise")
+	var stepConfigs []string
+	entries, err := os.ReadDir(configRoot)
+	require.NoError(t, err)
+	for _, e := range entries {
+		if e.IsDir() {
+			if _, err := os.Stat(filepath.Join(configRoot, e.Name(), "mise.toml")); err == nil {
+				stepConfigs = append(stepConfigs, e.Name())
+			}
+		}
+	}
+	require.NotEmpty(t, stepConfigs, "expected per-step configs under %s", configRoot)
+	for _, step := range stepConfigs {
+		for ancestor := configRoot; ancestor != dir && ancestor != filepath.Dir(dir); ancestor = filepath.Dir(ancestor) {
+			candidate := filepath.Join(ancestor, "mise.toml")
+			_, err := os.Stat(candidate)
+			require.True(t, os.IsNotExist(err),
+				"step config %s/mise.toml must have no ancestor mise.toml, found %s (issue 0053)", step, candidate)
 		}
 	}
 }

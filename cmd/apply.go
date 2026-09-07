@@ -551,9 +551,10 @@ func (c *ApplyCmd) Run() error {
 	mountsConfigPath := filepath.Join(configDir, "mounts", "mise.toml")
 	smbConfigPath := filepath.Join(configDir, "smb", "mise.toml")
 
-	// Arch backends install through the dotdrift paru mise plugin (mise's pacman
-	// built-in has no AUR support, issue 0003). dotdrift copies it into mise's
-	// plugin registry (hash-gated) — real files, no symlink, no declaration.
+	// Arch backends install through the dotdrift paru mise plugin — bare names
+	// and aur/ markers alike (issues 0003, 0054). dotdrift copies it into
+	// mise's plugin registry (hash-gated) — real files, no symlink, no
+	// declaration.
 	var misePluginsDir string
 	if f.Backend == "paru" {
 		misePluginsDir = mise.PluginsDirFromEnv()

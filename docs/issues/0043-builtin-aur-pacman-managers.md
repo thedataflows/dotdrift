@@ -43,6 +43,11 @@ already pins everything to `"latest"` — no change).
 
 ## Resolution notes
 
+**Partially superseded by [0054](0054-bare-arch-packages-via-paru.md)**: the
+bare-name half below was reverted on user decision — bare Arch names emit
+`paru:` again (paru self-prompts sudo). What survives here: the analysis, and
+the aur-side gate tracked by 0045.
+
 Implemented the releasable half: bare Arch names now emit `pacman:` (verified
 against the installed mise 2026.9.1 — `pacman:curl` reports installed,
 unknown packages report missing). The aur half is gated on an upstream

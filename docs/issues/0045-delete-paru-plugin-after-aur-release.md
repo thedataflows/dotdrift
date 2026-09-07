@@ -1,31 +1,36 @@
 ---
 type: Issue
-title: Delete paru plugin once mise ships built-in aur
-description: The aur manager (mise PR #12718) merged after v2026.9.1; when a release contains it, aur/ markers map to aur: and the embedded paru plugin, its registry maintenance, and the dotdrift paru commands are deleted.
-tags: [issue, mise, packages, deletion]
+title: Switch aur/ markers to built-in aur once mise ships it
+description: The aur manager (mise PR #12718) merged after v2026.9.1; when a release contains it, aur/ markers map to aur:. The embedded paru plugin is NO LONGER deleted — bare Arch names route through paru: permanently (0054).
+tags: [issue, mise, packages]
 timestamp: 2026-09-07T00:00:00Z
 ---
 
-# ISSUE 0045: Delete paru plugin once mise ships built-in aur
+# ISSUE 0045: Switch aur/ markers to built-in aur once mise ships it
 
 - **Type**: task
 - **Status**: blocked
 - **Priority**: medium
-- **Labels**: [mise, packages, deletion]
+- **Labels**: [mise, packages]
 - **Assignee**: none
-- **Related**: [0043](0043-builtin-aur-pacman-managers.md), [0003](0003-paru-mise-package-plugin.md), [mise bootstrap alignment A4](../product/mise-bootstrap-alignment.md)
-- **Related code**: [`internal/paru/`](../../internal/paru/), [`cmd/paru.go`](../../cmd/paru.go), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
+- **Related**: [0043](0043-builtin-aur-pacman-managers.md), [0054](0054-bare-arch-packages-via-paru.md) (keeps the plugin alive), [0003](0003-paru-mise-package-plugin.md), [mise bootstrap alignment A4](../product/mise-bootstrap-alignment.md)
+- **Related code**: [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
 - **Closing commits**: none
 
 ## Summary
 
-0043 adopted mise's built-in `pacman` manager for bare Arch package names.
+**Scope amended by [0054](0054-bare-arch-packages-via-paru.md)**: this issue
+originally also deleted the embedded paru plugin, its registry maintenance,
+and the `dotdrift paru` commands. 0054 routed bare Arch names back to `paru:`,
+so the plugin stack is permanent and deletion is off the table. What remains
+here is only the marker switch.
+
 The built-in `aur` manager (yay preferred, paru fallback) merged upstream as
 PR #12718 **after** the v2026.9.1 tag — no released mise contains it, and mise
 ignores unknown managers with a warning + exit 0 (fail-open), so emitting
 `aur:` today would silently skip every `aur/` package in a real profile (the
 dogfood profile declares ~a dozen). When a mise release ≥ the one containing
-#12718 is out, switch `aur/` → `aur:` and delete the plugin stack.
+#12718 is out, switch `aur/` → `aur:` and bump `MinMiseVersion`.
 
 ## Details
 
@@ -38,17 +43,15 @@ mise bootstrap packages status   # with [bootstrap.packages] "aur:paru" = "lates
 
 Then:
 
-1. `PrefixedPackages`: `aur/<pkg>` → `aur:<pkg>` (drop the paru mapping);
-   update `MinMiseVersion` to the release containing the aur manager.
-2. Delete: `internal/paru/` (embedded plugin, `WritePlugin`/`EnsureInstalled`,
-   `PluginVersion`), `cmd/paru.go` (the plugin's hooks shell out to
-   `dotdrift paru installed|install` — nothing else consumes them),
-   `ParuCmd` registration in `cmd/root.go`, the `misePluginsDir` maintenance
-   block in `packagesStep.Run`, `MisePluginsDir`/`PluginsDirFromEnv` if
-   otherwise unused, and the plugin tests.
-3. Keep: `internal/packages` Paru backend (removal + `when.packages` probes).
-4. Docs: profile-layout `packages.present` bullet, cli-surface paru row
-   (delete), 0003 notes the supersession.
+1. `PrefixedPackages`: `aur/<pkg>` → `aur:<pkg>` (drop that one mapping; bare
+   names stay `paru:` per 0054); update `MinMiseVersion` to the release
+   containing the aur manager.
+2. Keep everything else: `internal/paru/`, `cmd/paru.go`, and the plugin
+   registry maintenance in `packagesStep.Run` (bare Arch names need them —
+   0054), plus `internal/packages` Paru backend (removal + `when.packages`
+   probes).
+3. Docs: profile-layout `packages.present` bullet, 0003 notes the marker
+   supersession.
 
 Behavioral deltas to document: built-in aur prefers **yay** over paru when
 both exist; aur pins are status-only (dotdrift pins `"latest"` — no change).
@@ -56,13 +59,14 @@ both exist; aur pins are status-only (dotdrift pins `"latest"` — no change).
 ## Acceptance Criteria
 
 - [ ] Installed/required mise recognizes the `aur` manager (no unknown-manager warning)
-- [ ] `aur/<pkg>` emits `aur:<pkg>`; no `paru:` keys remain in generated configs
-- [ ] `internal/paru`, `cmd/paru.go`, plugin maintenance, and cli-surface row deleted
+- [ ] `aur/<pkg>` emits `aur:<pkg>`; bare Arch names still emit `paru:`
 - [ ] `MinMiseVersion` bumped to the aur-containing release
+- [ ] Plugin stack (`internal/paru`, `cmd/paru.go`, registry maintenance) untouched
 - [ ] `go test ./...` and `go vet` green
 
 ## Out of Scope
 
+- Deleting the paru plugin stack (permanent per 0054).
 - Package version pins (alignment A5).
 - `state = "absent"` pacman entries (own-backend removal stays).
 

@@ -77,6 +77,12 @@ through dotdrift's own backends as best-effort removal; pacman entries could
 instead emit `{ state = "absent" }` and gain status/drift integration (apt/dnf
 have no absent support in mise — keep the own-backend path for them).
 
+**Status update (issue [0054](../issues/0054-bare-arch-packages-via-paru.md))**:
+the bare-name → `pacman:` adoption (0043) was **reverted** on user decision —
+paru self-prompts sudo and covers repo+AUR in one manager, so bare Arch names
+emit `paru:` permanently and the plugin stack stays. Only the `aur/` → `aur:`
+marker switch remains adoptable (blocked [0045](../issues/0045-delete-paru-plugin-after-aur-release.md)).
+
 ## A5. Package version pins forced to `"latest"`
 
 `GenerateBootstrapPackages` pins everything to `"latest"`. mise supports native
@@ -118,7 +124,7 @@ reporting `version mismatch`. Adopting pins is a module.toml schema addition
 1. **A1** — emit primary `group` in `[bootstrap.users]` (bug: smb users fail). → **done: [0040](../issues/0040-bootstrap-users-primary-group.md)**
 2. **A2** — pin cwd for all mise invocations, not just probes (extends 0039). → **done: [0041](../issues/0041-mise-invocation-cwd-pinning.md)**
 3. **A3** — move system files to `[bootstrap.files]`, delete sudo machinery. → **done: [0042](../issues/0042-system-files-bootstrap-files.md)** (sudo survives for edit entries only)
-4. **A4** — adopt built-in `aur`/`pacman`, delete paru plugin + commands. → **pacman done: [0043](../issues/0043-builtin-aur-pacman-managers.md); aur + deletion gated on upstream release: [0045](../issues/0045-delete-paru-plugin-after-aur-release.md)**
+4. **A4** — adopt built-in `aur`/`pacman`, delete paru plugin + commands. → **pacman half reverted: [0054](../issues/0054-bare-arch-packages-via-paru.md) (bare Arch names stay `paru:`, plugin permanent); `aur/` marker switch gated on upstream release: [0045](../issues/0045-delete-paru-plugin-after-aur-release.md)**
 5. **B-secrets** — `[bootstrap.secrets]` + template `secret()` support. → **done: [0044](../issues/0044-bootstrap-secrets-templates.md)**
 6. **B-systemd-units** — `[systemd]` user units/timers module section.
 7. **A5 / B-pins** — package version pins for apt/dnf.

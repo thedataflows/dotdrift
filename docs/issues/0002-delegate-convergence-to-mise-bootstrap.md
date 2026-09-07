@@ -106,9 +106,10 @@ schema):**
       (83fee17).
 - [x] `dotdrift apply` drives `mise bootstrap` for every convergence phase
       (packages, files, services, accounts) with the resume orchestrator
-      preserved. Bare Arch names route to built-in `pacman:` since
-      [0043](0043-builtin-aur-pacman-managers.md) (973e683); the paru plugin
-      survives only for `aur/` markers until upstream ships the aur manager
+      preserved. All Arch packages — bare names and `aur/` markers — route
+      through the paru plugin ([0054](0054-bare-arch-packages-via-paru.md),
+      reversing 0043's bare-name → `pacman:` mapping); the `aur/` → `aur:`
+      switch waits on upstream shipping the aur manager
       ([0045](0045-delete-paru-plugin-after-aur-release.md), blocked).
 - [x] `-v`/`--verbose` wraps the `mise bootstrap` invocation (`+ argv` echo,
       live streaming, probes silent) — kept at the dotdrift-to-mise boundary.

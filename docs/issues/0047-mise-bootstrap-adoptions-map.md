@@ -42,9 +42,9 @@ or consciously ruled out of scope with the reason recorded.
 - [0040: Bootstrap users missing required primary group](0040-bootstrap-users-primary-group.md): smb group emitted as both primary and supplementary.
 - [0041: Pin working directory for all mise invocations](0041-mise-invocation-cwd-pinning.md): `Mise.WorkDir` pins every real subprocess, default home.
 - [0042: System files via bootstrap.files](0042-system-files-bootstrap-files.md): whole-file entries + mount dirs via `--only files`; sudo survives for edit entries only.
-- [0043: Adopt built-in aur/pacman managers](0043-builtin-aur-pacman-managers.md): bare Arch names → `pacman:`; aur half split out (below).
+- [0043: Adopt built-in aur/pacman managers](0043-builtin-aur-pacman-managers.md): bare Arch names → `pacman:` — **reverted by [0054](0054-bare-arch-packages-via-paru.md)** (paru self-prompts sudo; bare names → `paru:` permanently); aur half split out (below).
 - [0044: Adopt mise bootstrap secrets for templates](0044-bootstrap-secrets-templates.md): `[secrets]` schema + `[bootstrap.secrets]` emission, system-files templates only.
-- [0045: Delete paru plugin once mise ships built-in aur](0045-delete-paru-plugin-after-aur-release.md): **blocked** — aur manager merged upstream after v2026.9.1; unknown managers are warn-and-ignore (fail-open), so no `aur:` emission until a release contains it.
+- [0045: Switch aur/ markers to built-in aur once mise ships it](0045-delete-paru-plugin-after-aur-release.md): **blocked** — aur manager merged upstream after v2026.9.1; unknown managers are warn-and-ignore (fail-open), so no `aur:` emission until a release contains it. Plugin deletion removed from scope (0054).
 - [0046: apply --force](0046-apply-force-flag.md): forwards `--force` to every `mise dotfiles apply`; default stays refusal.
 - [0048: systemd user units and timers module section](0048-systemd-user-units-section.md): `[systemd.units.<name>]` passthrough, user-scope only, own apply step + section flag; mediamtx migration offered as a diff.
 

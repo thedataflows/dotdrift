@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [contract invariant 3](../product/contract.md)
 - **Related code**: [`cmd/apply.go`](../../cmd/apply.go), [`internal/mise/step.go`](../../internal/mise/step.go), [`internal/mise/mise.go`](../../internal/mise/mise.go)
-- **Closing commits**: TBD
+- **Closing commits**: 09cdd5c
 
 ## Summary
 

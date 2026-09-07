@@ -115,11 +115,11 @@ reporting `version mismatch`. Adopting pins is a module.toml schema addition
 
 # D. Candidate issues, in priority order
 
-1. **A1** — emit primary `group` in `[bootstrap.users]` (bug: smb users fail).
-2. **A2** — pin cwd for all mise invocations, not just probes (extends 0039).
-3. **A3** — move system files to `[bootstrap.files]`, delete sudo machinery.
-4. **A4** — adopt built-in `aur`/`pacman`, delete paru plugin + commands.
-5. **B-secrets** — `[bootstrap.secrets]` + template `secret()` support.
+1. **A1** — emit primary `group` in `[bootstrap.users]` (bug: smb users fail). → **done: [0040](../issues/0040-bootstrap-users-primary-group.md)**
+2. **A2** — pin cwd for all mise invocations, not just probes (extends 0039). → **done: [0041](../issues/0041-mise-invocation-cwd-pinning.md)**
+3. **A3** — move system files to `[bootstrap.files]`, delete sudo machinery. → **done: [0042](../issues/0042-system-files-bootstrap-files.md)** (sudo survives for edit entries only)
+4. **A4** — adopt built-in `aur`/`pacman`, delete paru plugin + commands. → **pacman done: [0043](../issues/0043-builtin-aur-pacman-managers.md); aur + deletion gated on upstream release: [0045](../issues/0045-delete-paru-plugin-after-aur-release.md)**
+5. **B-secrets** — `[bootstrap.secrets]` + template `secret()` support. → **done: [0044](../issues/0044-bootstrap-secrets-templates.md)**
 6. **B-systemd-units** — `[systemd]` user units/timers module section.
 7. **A5 / B-pins** — package version pins for apt/dnf.
 8. **B-notify** — service `notify`/`on_change`/`masked`.

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -570,7 +571,7 @@ func TestExecMise_Current_probeDirOverride(t *testing.T) {
 	probeDir := t.TempDir()
 	m := &mise.Mise{
 		LookPath: func(string) (string, error) { return script, nil },
-		ProbeDir: probeDir,
+		WorkDir:  probeDir,
 	}
 
 	out, err := mise.NewExecMise(m).Current(context.Background(), "node")
@@ -578,4 +579,67 @@ func TestExecMise_Current_probeDirOverride(t *testing.T) {
 	want, _ := filepath.EvalSymlinks(probeDir)
 	got, _ := filepath.EvalSymlinks(out)
 	require.Equal(t, want, got)
+}
+
+// Every real mise subprocess — not just probes — runs from the neutral
+// working directory (issue 0041): the caller's cwd configs load additively
+// even with --cd, so a stray/broken mise.toml above the cwd would otherwise
+// break apply. The fake binary records "<first-arg> <pwd>" per invocation.
+func TestExecMise_operationsNeutralCwd(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	script := filepath.Join(dir, "mise")
+	fake := "#!/bin/sh\n" +
+		"echo \"$1 $(pwd)\" >> " + marker + "\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.9.1; fi\n"
+	require.NoError(t, os.WriteFile(script, []byte(fake), 0o755))
+	m := &mise.Mise{LookPath: func(string) (string, error) { return script, nil }}
+	e := mise.NewExecMise(m)
+	ctx := context.Background()
+	configPath := filepath.Join(dir, "mise.toml")
+
+	require.NoError(t, e.EnsureAndInstall(ctx, configPath))
+	require.NoError(t, e.DotfilesApply(ctx, configPath, true, false))
+	require.NoError(t, e.Bootstrap(ctx, configPath, true, "packages"))
+	require.NoError(t, e.RunTask(ctx, configPath, "hooks-pre-0"))
+
+	data, err := os.ReadFile(marker)
+	require.NoError(t, err)
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	want, _ := filepath.EvalSymlinks(home)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	require.Len(t, lines, 5, "version probe + four operations: %v", lines)
+	for _, l := range lines {
+		parts := strings.SplitN(l, " ", 2)
+		require.Len(t, parts, 2)
+		got, _ := filepath.EvalSymlinks(parts[1])
+		require.Equal(t, want, got, "invocation %q ran from the wrong cwd", parts[0])
+	}
+}
+
+// The WorkDir override applies to operations too, not just probes.
+func TestExecMise_operationsWorkDirOverride(t *testing.T) {
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "marker")
+	script := filepath.Join(dir, "mise")
+	fake := "#!/bin/sh\n" +
+		"echo \"$(pwd)\" >> " + marker + "\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.9.1; fi\n"
+	require.NoError(t, os.WriteFile(script, []byte(fake), 0o755))
+	workDir := t.TempDir()
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return script, nil },
+		WorkDir:  workDir,
+	}
+	e := mise.NewExecMise(m)
+	require.NoError(t, e.Bootstrap(context.Background(), filepath.Join(dir, "mise.toml"), true, "packages"))
+
+	data, err := os.ReadFile(marker)
+	require.NoError(t, err)
+	want, _ := filepath.EvalSymlinks(workDir)
+	for _, l := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		got, _ := filepath.EvalSymlinks(strings.TrimSpace(l))
+		require.Equal(t, want, got)
+	}
 }

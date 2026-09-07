@@ -64,11 +64,13 @@ type Mise struct {
 	// environment on the real exec path; fakes (Run/RunContext) bypass it.
 	Env []string
 
-	// ProbeDir pins the working directory for global-state probes (Current);
-	// empty defaults to the user's home. Global probes must not see the
-	// process cwd's project configs — a stray or broken mise.toml anywhere
-	// above the cwd would break them (issue 0039). Fakes bypass it like Env.
-	ProbeDir string
+	// WorkDir pins the working directory for every real mise subprocess —
+	// probes (issue 0039) and operations alike (issue 0041); empty defaults
+	// to the user's home. mise loads configs from the cwd upward additively
+	// (--cd does not suppress them), so a stray or broken mise.toml anywhere
+	// above the caller's cwd would otherwise leak into probes and break
+	// apply phases. Fakes (Run/RunContext) bypass it like Env.
+	WorkDir string
 
 	// Verbose streams operation subprocesses (install/dotfiles/tasks) live to
 	// Out/Err and echoes each command line set -x-style ("+ argv") to Err
@@ -114,17 +116,17 @@ var opStdin = func() *os.File {
 	return nil
 }
 
-// defaultRunContext executes a command, cancelling it with ctx. On failure the
-// trimmed combined output is appended so callers surface mise's own message.
-func defaultRunContext(ctx context.Context, name string, args ...string) (string, error) {
-	return runContextEnv(ctx, nil, name, args...)
-}
-
-// runContextEnv is defaultRunContext with extra environment entries appended
+// runContextEnv executes a command with extra environment entries appended
 // to the inherited environment; a later duplicate key wins over an inherited
-// one, so callers can override (merged) variables.
-func runContextEnv(ctx context.Context, env []string, name string, args ...string) (string, error) {
+// one, so callers can override (merged) variables. dir pins the working
+// directory when non-empty (see Mise.WorkDir). It cancels with ctx; on
+// failure the trimmed combined output is appended so callers surface mise's
+// own message.
+func runContextEnv(ctx context.Context, env []string, dir, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
 	cmd.Stdin = opStdin()
 	// Cancel must kill the whole process group: the default Cancel kills only
 	// the direct child, and a shell wrapper (sh -c) may fork — surviving
@@ -151,8 +153,8 @@ func runContextEnv(ctx context.Context, env []string, name string, args ...strin
 	return string(out), nil
 }
 
-// runner resolves the ctx-aware runner: RunContext wins, then legacy Run,
-// then the real exec implementation (which honors Env).
+// runner resolves the ctx-aware runner: RunContext wins, then legacy Run.
+// The real exec paths pin the working directory (Mise.WorkDir) and honor Env.
 func (m *Mise) runner() func(context.Context, string, ...string) (string, error) {
 	if m.RunContext != nil {
 		return m.RunContext
@@ -163,24 +165,28 @@ func (m *Mise) runner() func(context.Context, string, ...string) (string, error)
 			return run(name, args...)
 		}
 	}
+	dir := m.workDir()
 	if len(m.Env) > 0 {
 		env := m.Env
 		return func(ctx context.Context, name string, args ...string) (string, error) {
-			return runContextEnv(ctx, env, name, args...)
+			return runContextEnv(ctx, env, dir, name, args...)
 		}
 	}
-	return defaultRunContext
+	return func(ctx context.Context, name string, args ...string) (string, error) {
+		return runContextEnv(ctx, nil, dir, name, args...)
+	}
 }
 
 // runWithEnv executes one command with per-call extra environment merged
 // after Env. Shared struct state is never mutated, so concurrent callers are
-// race-free. Fakes (Run/RunContext) cannot receive env and are called as-is.
+// race-free. The real exec path pins the working directory; fakes
+// (Run/RunContext) receive neither env nor Dir and are called as-is.
 func (m *Mise) runWithEnv(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
-	if m.RunContext == nil && m.Run == nil && (len(m.Env) > 0 || len(extraEnv) > 0) {
+	if m.RunContext == nil && m.Run == nil {
 		env := make([]string, 0, len(m.Env)+len(extraEnv))
 		env = append(env, m.Env...)
 		env = append(env, extraEnv...)
-		return runContextEnv(ctx, env, name, args...)
+		return runContextEnv(ctx, env, m.workDir(), name, args...)
 	}
 	return m.runner()(ctx, name, args...)
 }
@@ -229,6 +235,9 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = opStdin()
+	if dir := m.workDir(); dir != "" {
+		cmd.Dir = dir
+	}
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
@@ -668,18 +677,15 @@ func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
 	return strings.TrimSpace(out), err
 }
 
-// runProbe runs a global-state probe in a neutral working directory: the
-// process cwd's project configs must not leak into it — a stray or broken
-// mise.toml anywhere above the cwd would otherwise break it (issue 0039).
-// The Run/RunContext test seams keep their shape and argv; the real path
-// sets the command's Dir to ProbeDir (default: the user's home, mise's
-// global-config view) and appends captured stderr to a failure error.
+// runProbe runs a global-state probe in the neutral working directory (see
+// Mise.WorkDir). The Run/RunContext test seams keep their shape and argv; the
+// real path appends captured stderr to a failure error.
 func (m *Mise) runProbe(ctx context.Context, name string, args ...string) (string, error) {
 	if m.Run != nil || m.RunContext != nil {
 		return m.runner()(ctx, name, args...)
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	if dir := m.probeDir(); dir != "" {
+	if dir := m.workDir(); dir != "" {
 		cmd.Dir = dir
 	}
 	out, err := cmd.Output()
@@ -690,11 +696,11 @@ func (m *Mise) runProbe(ctx context.Context, name string, args ...string) (strin
 	return strings.TrimSpace(string(out)), err
 }
 
-// probeDir resolves the neutral probe working directory: ProbeDir when set,
-// else the user's home (mise's global-config view).
-func (m *Mise) probeDir() string {
-	if m.ProbeDir != "" {
-		return m.ProbeDir
+// workDir resolves the neutral working directory for mise subprocesses:
+// WorkDir when set, else the user's home (mise's global-config view).
+func (m *Mise) workDir() string {
+	if m.WorkDir != "" {
+		return m.WorkDir
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

@@ -16,21 +16,21 @@ import (
 	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
-func TestDefaultRunContext_errorIncludesOutput(t *testing.T) {
-	_, err := defaultRunContext(context.Background(), "sh", "-c", "echo boom-output; exit 1")
+func TestRunContextEnv_errorIncludesOutput(t *testing.T) {
+	_, err := runContextEnv(context.Background(), nil, "", "sh", "-c", "echo boom-output; exit 1")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "exit status 1")
 	require.Contains(t, err.Error(), "boom-output")
 }
 
-func TestDefaultRunContext_ctxCancelKillsProcess(t *testing.T) {
+func TestRunContextEnv_ctxCancelKillsProcess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		cancel()
 	}()
 	start := time.Now()
-	_, err := defaultRunContext(ctx, "sh", "-c", "sleep 30")
+	_, err := runContextEnv(ctx, nil, "", "sh", "-c", "sleep 30")
 	require.Error(t, err)
 	require.Less(t, time.Since(start), 5*time.Second, "cancelled ctx must kill the process promptly")
 }

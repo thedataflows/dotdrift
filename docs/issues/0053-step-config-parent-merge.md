@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [0042](0042-system-files-bootstrap-files.md), [0046](0046-apply-force-flag.md)
 - **Related code**: [`cmd/apply.go`](../../cmd/apply.go)
-- **Closing commits**: TBD
+- **Closing commits**: f82ba97
 
 ## Summary
 

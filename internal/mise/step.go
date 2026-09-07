@@ -68,6 +68,12 @@ type DotfilesStep struct {
 	Plan       *resolve.Plan
 	ConfigPath string
 	Yes        bool
+	// Force maps to dotdrift apply --force (issue 0046): replace pre-existing
+	// regular files at managed targets (e.g. an app-written file where a
+	// symlink should go) instead of aborting with mise's "refusing to
+	// overwrite existing files". Default off — refusal is the safety;
+	// onboard is the deliberate takeover path.
+	Force bool
 }
 
 var _ apply.Step = (*DotfilesStep)(nil)
@@ -88,9 +94,10 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	if err := writeConfig(s.ConfigPath, cfg); err != nil {
 		return fmt.Errorf("write dotfiles mise config: %w", err)
 	}
-	// Not forced: apply must refuse to clobber pre-existing files it does not
-	// own (mise errors naming them; onboard is the takeover path).
-	if err := s.Runner.DotfilesApply(ctx, s.ConfigPath, s.Yes, false); err != nil {
+	// Force comes from dotdrift apply --force (issue 0046). Default off:
+	// apply must refuse to clobber pre-existing files it does not own (mise
+	// errors naming them; onboard is the takeover path).
+	if err := s.Runner.DotfilesApply(ctx, s.ConfigPath, s.Yes, s.Force); err != nil {
 		return fmt.Errorf("mise dotfiles apply: %w", err)
 	}
 	return nil

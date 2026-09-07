@@ -768,3 +768,44 @@ func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "'nonexistent-diff-tool-xyz'")
 }
+
+// apply --force (issue 0046): the flag reaches the user dotfiles apply as
+// --force, so a regular file sitting at a managed symlink target (app-written
+// live config) is replaced by the symlink instead of aborting the whole
+// pipeline with mise's "refusing to overwrite existing files".
+func TestApply_forceFlagReachesDotfilesApply(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true, Force: true}
+	require.NoError(t, cmd.Run())
+
+	var found bool
+	for _, e := range *events {
+		if strings.Contains(e, "dotfiles apply") {
+			found = true
+			require.Contains(t, e, "--force", "every dotfiles apply must carry --force: %q", e)
+		}
+	}
+	require.True(t, found, "no dotfiles apply ran: %v", *events)
+}
+
+// Default (no --force): argv stays without it — refusal to clobber files mise
+// does not own remains the default safety (onboard is the takeover path).
+func TestApply_noForceByDefault(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	events, _ := stubApplyDeps(t, f)
+
+	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	require.NoError(t, cmd.Run())
+
+	for _, e := range *events {
+		if strings.Contains(e, "dotfiles apply") {
+			require.NotContains(t, e, "--force", "no --force without the flag: %q", e)
+		}
+	}
+}

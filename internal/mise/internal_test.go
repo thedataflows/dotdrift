@@ -193,7 +193,7 @@ func TestExecMise_verboseStreamsOperationOutput(t *testing.T) {
 			return em.DotfilesApply(ctx, cfg, true, false)
 		}, "dotfiles"},
 		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApplySudo(ctx, cfg, true)
+			return em.DotfilesApplySudo(ctx, cfg, true, false)
 		}, "dotfiles"},
 		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.RunTask(ctx, cfg, "hooks:pre")
@@ -290,7 +290,7 @@ func TestExecMise_verboseEchoesCommandLine(t *testing.T) {
 			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
 		}},
 		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApplySudo(ctx, cfg, true)
+			return em.DotfilesApplySudo(ctx, cfg, true, false)
 		}, func(script, cfgDir string) []string {
 			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
 		}},

@@ -23,20 +23,29 @@ func swapEUID(t *testing.T, euid int) {
 // Non-root: system dotfiles apply goes through sudo -E (preserving the
 // MISE_TRUSTED_CONFIG_PATHS env the trust plumbing sets on the child).
 func TestDotfilesApplyArgv_nonRootUsesSudo(t *testing.T) {
-	argv := dotfilesApplyArgv(1000, "/fake/mise", "/cfg/mise.toml", true)
+	argv := dotfilesApplyArgv(1000, "/fake/mise", "/cfg/mise.toml", true, false)
 	require.Equal(t, []string{"sudo", "-E", "/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}, argv)
 }
 
 // Root (e.g. containers): apply directly, no sudo invocation.
 func TestDotfilesApplyArgv_rootSkipsSudo(t *testing.T) {
-	argv := dotfilesApplyArgv(0, "/fake/mise", "/cfg/mise.toml", true)
+	argv := dotfilesApplyArgv(0, "/fake/mise", "/cfg/mise.toml", true, false)
 	require.Equal(t, []string{"/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}, argv)
 }
 
 // --yes is only appended when requested.
 func TestDotfilesApplyArgv_yesOmitted(t *testing.T) {
-	argv := dotfilesApplyArgv(1000, "/fake/mise", "/cfg/mise.toml", false)
+	argv := dotfilesApplyArgv(1000, "/fake/mise", "/cfg/mise.toml", false, false)
 	require.Equal(t, []string{"sudo", "-E", "/fake/mise", "dotfiles", "apply", "--cd", "/cfg"}, argv)
+}
+
+// dotdrift apply --force (issue 0046) appends --force after --yes, on the
+// elevated path too (system edit entries).
+func TestDotfilesApplyArgv_forceAppended(t *testing.T) {
+	argv := dotfilesApplyArgv(1000, "/fake/mise", "/cfg/mise.toml", true, true)
+	require.Equal(t, []string{"sudo", "-E", "/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes", "--force"}, argv)
+	argv = dotfilesApplyArgv(0, "/fake/mise", "/cfg/mise.toml", true, true)
+	require.Equal(t, []string{"/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes", "--force"}, argv)
 }
 
 // DotfilesApplySudo drives the argv decision off the live euid seam: sudo
@@ -68,7 +77,7 @@ func TestExecMise_dotfilesApplySudo_invocationArgv(t *testing.T) {
 				},
 			})
 
-			require.NoError(t, em.DotfilesApplySudo(context.Background(), "/cfg/mise.toml", true))
+			require.NoError(t, em.DotfilesApplySudo(context.Background(), "/cfg/mise.toml", true, false))
 			require.Equal(t, tc.wantName, gotName)
 			require.Equal(t, tc.wantArgs, gotArgs)
 		})
@@ -84,7 +93,7 @@ func TestExecMise_dotfilesApplySudo_trustsGeneratedConfigDir(t *testing.T) {
 	em := realExecMise(t, fakeMiseScript(t, capture))
 	cfgDir, cfg := generatedConfig(t)
 
-	require.NoError(t, em.DotfilesApplySudo(context.Background(), cfg, false))
+	require.NoError(t, em.DotfilesApplySudo(context.Background(), cfg, false, false))
 
 	lines := captureLines(t, capture)
 	require.Equal(t, "TRUSTED="+cfgDir, lines[0],

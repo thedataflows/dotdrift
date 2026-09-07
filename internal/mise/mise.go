@@ -596,10 +596,13 @@ var geteuid = os.Geteuid
 // preserves the MISE_TRUSTED_CONFIG_PATHS entry the trust plumbing sets on
 // the sudo child environment, so the trust handling keeps working through
 // the elevation.
-func dotfilesApplyArgv(euid int, misePath, configPath string, yes bool) []string {
+func dotfilesApplyArgv(euid int, misePath, configPath string, yes, force bool) []string {
 	args := []string{"dotfiles", "apply", "--cd", filepath.Dir(configPath)}
 	if yes {
 		args = append(args, "--yes")
+	}
+	if force {
+		args = append(args, "--force")
 	}
 	if euid == 0 {
 		return append([]string{misePath}, args...)
@@ -609,13 +612,15 @@ func dotfilesApplyArgv(euid int, misePath, configPath string, yes bool) []string
 
 // DotfilesApplySudo applies system-scope dotfiles with root privileges. When
 // the process is not already root it invokes sudo (failing loudly if sudo is
-// missing or authentication fails); as root it applies directly.
-func (e *ExecMise) DotfilesApplySudo(ctx context.Context, configPath string, yes bool) error {
+// missing or authentication fails); as root it applies directly. force maps
+// to dotdrift apply --force (issue 0046): replace pre-existing files at
+// managed targets instead of refusing.
+func (e *ExecMise) DotfilesApplySudo(ctx context.Context, configPath string, yes, force bool) error {
 	path, err := e.mise.EnsureContext(ctx)
 	if err != nil {
 		return err
 	}
-	argv := dotfilesApplyArgv(geteuid(), path, configPath, yes)
+	argv := dotfilesApplyArgv(geteuid(), path, configPath, yes, force)
 	_, err = e.mise.runOp(ctx, trustEnv(configPath), argv[0], argv[1:]...)
 	return err
 }

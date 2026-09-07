@@ -222,3 +222,17 @@ func TestGenerateDotfiles_editBlockMultilineRoundTrip(t *testing.T) {
 		"multi-line block must round-trip byte-identical")
 	require.Equal(t, "#", decoded.Dotfiles["~/.zshrc/aliases"].Comment)
 }
+
+// dotdrift apply --force (issue 0046): DotfilesStep forwards Force to
+// DotfilesApply so a pre-existing regular file at a managed target (e.g. an
+// app-written file where a symlink should go) is replaced instead of
+// aborting the run with "refusing to overwrite existing files".
+func TestDotfilesStep_forcePropagates(t *testing.T) {
+	fr := &mise.FakeRunner{}
+	plan := &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
+		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
+	}}}
+	step := &mise.DotfilesStep{Runner: fr, Plan: plan, ConfigPath: "/tmp/mise-dotfiles.toml", Yes: true, Force: true}
+	require.NoError(t, step.Run(context.Background()))
+	require.True(t, fr.Force, "step Force must reach DotfilesApply")
+}

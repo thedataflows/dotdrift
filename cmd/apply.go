@@ -184,6 +184,7 @@ type systemFilesStep struct {
 	configPath string   // [bootstrap.files] + [bootstrap.directories] + [bootstrap.secrets]
 	editsPath  string   // [dotfiles] for edit entries
 	yes        bool
+	force      bool                      // dotdrift apply --force → --force on the edits dotfiles apply (issue 0046)
 	secrets    map[string]profile.Secret // declared secret inputs → [bootstrap.secrets]
 }
 
@@ -240,11 +241,11 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		// streams the child's fds straight to the terminal (preserving mise's
 		// color), so a "Permission denied" can't be read back from stderr.
 		if os.Geteuid() != 0 && !systemTargetsUserWritable(edit, s.homeDir) {
-			if err := s.exec.DotfilesApplySudo(ctx, s.editsPath, s.yes); err != nil {
+			if err := s.exec.DotfilesApplySudo(ctx, s.editsPath, s.yes, s.force); err != nil {
 				return fmt.Errorf("system edits (elevated): %w", err)
 			}
 		} else {
-			if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, false); err != nil {
+			if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, s.force); err != nil {
 				return fmt.Errorf("system edits: %w", err)
 			}
 		}
@@ -393,6 +394,7 @@ type ApplyCmd struct {
 	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
 	State   string    `help:"Path to state file" type:"path" default:""`
 	Yes     bool      `help:"Answer yes to mise prompts" default:"false"`
+	Force   bool      `help:"Pass --force to mise dotfiles apply: replace pre-existing files at managed targets (e.g. app-written files where a symlink should go) instead of refusing; copy mode overwrites freely without it" default:"false"`
 	Verbose bool      `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
 	Diff    string    `help:"Show diff for files whose content differs before applying; bare = internal diff, --diff=tool uses the named tool" default:""`
 	Backup  bool      `help:"Back up existing copy-mode destinations into the declaring module's backups/<timestamp>/ before applying; copy is the only mode whose apply overwrites destination content" default:"false"`
@@ -650,7 +652,7 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"], FragmentPath: mise.ToolsFragmentPath()})
 	}
 	if sections.has("dotfiles") {
-		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes})
+		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes, Force: c.Force})
 	}
 	// System dotfiles + mount directories → systemFilesStep.
 	// Runs when there are system-scope dotfiles OR mount destinations.
@@ -659,7 +661,7 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 		steps = append(steps, &systemFilesStep{
 			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
 			homeDir: homeDir, dirs: mountDests, configPath: paths["system"],
-			editsPath: paths["system-edits"], yes: c.Yes, secrets: plan.Secrets,
+			editsPath: paths["system-edits"], yes: c.Yes, force: c.Force, secrets: plan.Secrets,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.

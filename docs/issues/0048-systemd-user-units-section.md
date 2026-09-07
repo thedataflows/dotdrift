@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [map 0047](0047-mise-bootstrap-adoptions-map.md), [alignment B-systemd-units](../product/mise-bootstrap-alignment.md)
 - **Related code**: [`internal/profile/profile.go`](../../internal/profile/profile.go), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
-- **Closing commits**: TBD
+- **Closing commits**: d9e4c7d
 
 ## Question
 

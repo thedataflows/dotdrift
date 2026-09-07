@@ -246,7 +246,9 @@ func GenerateBootstrapServices(services []BootstrapService) string {
 // --- SMB accounts → [bootstrap.groups] + [bootstrap.users] ---
 
 // GenerateBootstrapAccounts emits [bootstrap.groups] and [bootstrap.users]
-// for the samba group and its users.
+// for the samba group and its users. mise requires an explicit primary
+// `group` on every present user (issue 0040) — the smb group serves as both
+// primary and supplementary group for these accounts.
 func GenerateBootstrapAccounts(group string, users []string) string {
 	if group == "" {
 		return ""
@@ -260,7 +262,7 @@ func GenerateBootstrapAccounts(group string, users []string) string {
 		sort.Strings(sortedUsers)
 		b.WriteString("\n[bootstrap.users]\n")
 		for _, u := range sortedUsers {
-			fmt.Fprintf(&b, "%q = { groups = [%q], state = \"present\" }\n", u, group)
+			fmt.Fprintf(&b, "%q = { group = %q, groups = [%q], state = \"present\" }\n", u, group, group)
 		}
 	}
 	return b.String()

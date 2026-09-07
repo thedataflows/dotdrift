@@ -170,8 +170,10 @@ func TestGenerateBootstrapAccounts_groupAndUsers(t *testing.T) {
 	require.Contains(t, got, "[bootstrap.groups]")
 	require.Contains(t, got, `"smb" = { state = "present" }`)
 	require.Contains(t, got, "[bootstrap.users]")
-	require.Contains(t, got, `"cri" = { groups = ["smb"], state = "present" }`)
-	require.Contains(t, got, `"media" = { groups = ["smb"], state = "present" }`)
+	// mise requires an explicit primary group on present users (issue 0040);
+	// the smb group is both primary and supplementary for these accounts.
+	require.Contains(t, got, `"cri" = { group = "smb", groups = ["smb"], state = "present" }`)
+	require.Contains(t, got, `"media" = { group = "smb", groups = ["smb"], state = "present" }`)
 }
 
 func TestGenerateBootstrapAccounts_emptyGroup(t *testing.T) {

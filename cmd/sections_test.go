@@ -21,7 +21,7 @@ func mustSections(t *testing.T, names ...string) sectionSet {
 func TestResolveSections_noFlagsSelectsAll(t *testing.T) {
 	got, err := resolveSections(nil)
 	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "mounts", "smb", "hooks"), got)
+	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "mounts", "smb", "hooks"), got)
 }
 
 func TestResolveSections_positiveOnly(t *testing.T) {
@@ -39,7 +39,7 @@ func TestResolveSections_multiplePositives(t *testing.T) {
 func TestResolveSections_negatedSubtractsFromAll(t *testing.T) {
 	got, err := resolveSections(map[string]bool{"hooks": false})
 	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "mounts", "smb"), got)
+	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "mounts", "smb"), got)
 }
 
 func TestResolveSections_mixedPositiveAndNegative(t *testing.T) {
@@ -53,7 +53,7 @@ func TestResolveSections_mixedPositiveAndNegative(t *testing.T) {
 
 func TestResolveSections_emptySelectionErrors(t *testing.T) {
 	allNegated := map[string]bool{
-		"packages": false, "tools": false, "dotfiles": false,
+		"packages": false, "tools": false, "dotfiles": false, "systemd": false,
 		"mounts": false, "smb": false, "hooks": false,
 	}
 	_, err := resolveSections(allNegated)
@@ -106,7 +106,7 @@ func TestApplyCmd_resolveSectionsFromKong(t *testing.T) {
 	require.NoError(t, err)
 	got, err = cli.Apply.resolveSections()
 	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "mounts", "smb", "hooks"), got)
+	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "mounts", "smb", "hooks"), got)
 }
 
 // DOTDRIFT_NO_HOOKS=1 subtracts hooks exactly like --no-hooks, on top of

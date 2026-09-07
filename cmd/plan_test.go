@@ -38,6 +38,11 @@ type planJSON struct {
 		Pre  []planJSONHook `json:"pre"`
 		Post []planJSONHook `json:"post"`
 	} `json:"hooks"`
+	Systemd []struct {
+		Module string `json:"module"`
+		Name   string `json:"name"`
+		Kind   string `json:"kind"`
+	} `json:"systemd"`
 	Mounts []struct {
 		Module      string   `json:"module"`
 		Name        string   `json:"name"`
@@ -527,4 +532,58 @@ func TestCLI_plan_editEntryJSON(t *testing.T) {
 	for _, d := range byTarget {
 		require.Empty(t, d.Mode)
 	}
+}
+
+// The systemd section lists each unit as `module: name (kind) [layer]`,
+// omitted when the profile declares none (issue 0048).
+func TestCLI_plan_systemdSection(t *testing.T) {
+	profileDir := t.TempDir()
+	modDir := filepath.Join(profileDir, "modules", "syncer")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+[systemd.units.my-sync]
+exec_start = "~/.local/bin/my-sync --watch"
+
+[systemd.units.tick]
+on_calendar = "daily"
+`), 0o644))
+
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: profileDir,
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		Out:     &buf,
+	}
+	require.NoError(t, c.Run())
+
+	out := buf.String()
+	require.Contains(t, out, "systemd:\n")
+	require.Contains(t, out, "  syncer: my-sync (service) [base]\n")
+	require.Contains(t, out, "  syncer: tick (timer) [base]\n")
+}
+
+func TestCLI_plan_jsonSystemd(t *testing.T) {
+	profileDir := t.TempDir()
+	modDir := filepath.Join(profileDir, "modules", "syncer")
+	require.NoError(t, os.MkdirAll(modDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`
+[systemd.units.my-sync]
+exec_start = "~/.local/bin/my-sync --watch"
+`), 0o644))
+
+	var buf bytes.Buffer
+	c := &cmd.PlanCmd{
+		Profile: profileDir,
+		Facts:   &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"},
+		JSON:    true,
+		Out:     &buf,
+	}
+	require.NoError(t, c.Run())
+
+	var doc planJSON
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &doc))
+	require.Len(t, doc.Systemd, 1)
+	require.Equal(t, "my-sync", doc.Systemd[0].Name)
+	require.Equal(t, "service", doc.Systemd[0].Kind)
+	require.Equal(t, "syncer", doc.Systemd[0].Module)
 }

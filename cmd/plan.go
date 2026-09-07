@@ -144,8 +144,17 @@ type planJSONDoc struct {
 		Pre  []planJSONHook `json:"pre"`
 		Post []planJSONHook `json:"post"`
 	} `json:"hooks"`
-	Mounts []planJSONMount `json:"mounts"`
-	Smb    []planJSONSmb   `json:"smb"`
+	Systemd []planJSONSystemdUnit `json:"systemd"`
+	Mounts  []planJSONMount       `json:"mounts"`
+	Smb     []planJSONSmb         `json:"smb"`
+}
+
+// planJSONSystemdUnit is one declarative systemd user unit in the JSON plan.
+type planJSONSystemdUnit struct {
+	Module string `json:"module"`
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`
+	Layer  string `json:"layer"`
 }
 
 // printPlanJSON renders the plan as one JSON object. The no-modules warning is
@@ -178,6 +187,12 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 			Module:   e.Module,
 			Layer:    e.Layer,
 			Scope:    e.Scope,
+		})
+	}
+	doc.Systemd = make([]planJSONSystemdUnit, 0, len(plan.Systemd.Units))
+	for _, u := range plan.Systemd.Units {
+		doc.Systemd = append(doc.Systemd, planJSONSystemdUnit{
+			Module: u.Module, Name: u.Name, Kind: u.Kind, Layer: u.Layer,
 		})
 	}
 	doc.Mounts = make([]planJSONMount, 0, len(plan.Mounts.Entries))
@@ -313,8 +328,14 @@ func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.F
 	for _, c := range plan.Hooks.Post {
 		fmt.Fprintf(out, "    - %s%s\n", c.Command, optionalMarker(c.Optional))
 	}
-	// Mounts and smb sections render last and are omitted entirely when the
-	// profile declares neither, keeping output for other profiles stable.
+	// systemd/mounts/smb sections render last and are omitted entirely when
+	// the profile declares none, keeping output for other profiles stable.
+	if len(plan.Systemd.Units) > 0 {
+		fmt.Fprintln(out, "systemd:")
+		for _, u := range plan.Systemd.Units {
+			fmt.Fprintf(out, "  %s: %s (%s) [%s]\n", u.Module, u.Name, u.Kind, u.Layer)
+		}
+	}
 	if len(plan.Mounts.Entries) > 0 {
 		fmt.Fprintln(out, "mounts:")
 		for _, e := range plan.Mounts.Entries {

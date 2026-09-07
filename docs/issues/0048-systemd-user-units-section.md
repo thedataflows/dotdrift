@@ -9,13 +9,13 @@ timestamp: 2026-09-07T00:00:00Z
 # ISSUE 0048: TICKET — systemd user units and timers module section
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [wayfinder:grilling, mise, systemd]
-- **Assignee**: none
+- **Assignee**: agent
 - **Related**: [map 0047](0047-mise-bootstrap-adoptions-map.md), [alignment B-systemd-units](../product/mise-bootstrap-alignment.md)
 - **Related code**: [`internal/profile/profile.go`](../../internal/profile/profile.go), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
-- **Closing commits**: none
+- **Closing commits**: TBD
 
 ## Question
 
@@ -43,3 +43,26 @@ Open decisions:
 
 Verify against the installed mise before locking: 2026.9.1 ships the
 `linux systemd-units` subcommand per `src/cli/bootstrap.rs`.
+
+## Resolution
+
+All five decisions accepted by the user:
+
+1. **Passthrough schema** — `[systemd.units.<name>]` carries any directive
+   key mise supports; dotdrift validates structure only (name charset, kind
+   derivation, `exec_start` on services, trigger on timers, service-only
+   key rejection — mirroring `src/system/systemd.rs`), mise owns semantics.
+   Strict mode (contract #19) gained a scoped passthrough filter for
+   BurntSushi's any-map Undecoded quirk.
+2. **`[systemd.units.<name>]`** — mirrors the emitted section 1:1.
+3. **User-scope only** — `scope = "system"` + units is a resolve-time error.
+4. **Own `systemd` step** after dotfiles, `mise bootstrap --only
+   linux-systemd-units` from `mise/systemd/mise.toml`; no euid branching —
+   mise's own skip-under-sudo semantics handle root applies. New
+   `--[no-]systemd` section flag; plan renders `systemd:` (text) and
+   `systemd[]` (JSON).
+5. **mediamtx migration** — offered to the user as a diff, not applied
+   silently.
+
+Status drift-probing of units is deliberately out (own consideration, like
+the parked status-engine question).

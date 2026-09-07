@@ -22,6 +22,7 @@ type Plan struct {
 	Hooks    HooksStep
 	Mounts   MountsStep
 	Smb      SmbStep
+	Systemd  SystemdStep
 }
 
 // PackagesStep lists packages that should be present or removed from the system.
@@ -219,6 +220,12 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		if contributed {
 			plan.Smb.Modules = append(plan.Smb.Modules, SmbModuleSpec{Module: dir, Spec: smb})
 		}
+
+		units, err := mergeSystemd(base, host, user, m.ID, scope)
+		if err != nil {
+			return nil, err
+		}
+		plan.Systemd.Units = append(plan.Systemd.Units, units...)
 	}
 
 	if err := checkPackageConflicts(presentIn, absentIn); err != nil {
@@ -236,6 +243,7 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 	sortEntries(plan.Dotfiles.Entries)
 	sortMountEntries(plan.Mounts.Entries)
 	sortSmbModules(plan.Smb.Modules)
+	sortSystemdUnits(plan.Systemd.Units)
 
 	// Module attribution for status/drift display (not convergence-relevant).
 	plan.Packages.PresentModules = presentIn

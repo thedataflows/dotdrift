@@ -1,5 +1,19 @@
 package profile
 
+// SystemdSpec is the [systemd] table of a module.toml: declarative systemd
+// USER units (services and timers), emitted as
+// [bootstrap.linux.systemd.units] (issue 0048). Directive tables are
+// passthrough — dotdrift validates structure only (kind derivation, required
+// keys, name charset; see internal/resolve); mise owns directive semantics,
+// so new mise directives work without a dotdrift schema change.
+type SystemdSpec struct {
+	Units map[string]SystemdUnit `toml:"units"`
+}
+
+// SystemdUnit is one user unit's passthrough directive table. Values keep
+// their TOML types (string, bool, int64, []any, map[string]any).
+type SystemdUnit map[string]any
+
 // MountSpec describes a single filesystem attachment declared in
 // module.toml under [mounts.<name>]. Resolve validates structure only
 // (non-empty source/destination/type, known state); Type is never checked

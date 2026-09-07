@@ -46,6 +46,7 @@ or consciously ruled out of scope with the reason recorded.
 - [0044: Adopt mise bootstrap secrets for templates](0044-bootstrap-secrets-templates.md): `[secrets]` schema + `[bootstrap.secrets]` emission, system-files templates only.
 - [0045: Delete paru plugin once mise ships built-in aur](0045-delete-paru-plugin-after-aur-release.md): **blocked** — aur manager merged upstream after v2026.9.1; unknown managers are warn-and-ignore (fail-open), so no `aur:` emission until a release contains it.
 - [0046: apply --force](0046-apply-force-flag.md): forwards `--force` to every `mise dotfiles apply`; default stays refusal.
+- [0048: systemd user units and timers module section](0048-systemd-user-units-section.md): `[systemd.units.<name>]` passthrough, user-scope only, own apply step + section flag; mediamtx migration offered as a diff.
 
 ## Not yet specified
 

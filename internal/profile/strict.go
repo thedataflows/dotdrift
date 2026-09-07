@@ -42,10 +42,28 @@ func DecodeModuleTOML(path string, data []byte, cfg *ModuleConfig) error {
 	if err != nil {
 		return decodeError(path, data, err)
 	}
-	if undecoded := md.Undecoded(); len(undecoded) > 0 {
+	if undecoded := withoutPassthroughKeys(md.Undecoded()); len(undecoded) > 0 {
 		return unknownKeysError(path, data, undecoded)
 	}
 	return nil
+}
+
+// withoutPassthroughKeys drops Undecoded entries that live inside a
+// passthrough directive map ([systemd.units.<name>].…): BurntSushi decodes
+// any-valued map subtrees correctly but still reports their inner keys as
+// undecoded (verified: environment = { PATH = ... } decodes AND appears in
+// Undecoded). The first three segments (systemd.units.<name>) are real
+// schema — only deeper keys are passthrough.
+func withoutPassthroughKeys(keys []toml.Key) []toml.Key {
+	out := keys[:0]
+	for _, key := range keys {
+		pieces := []string(key)
+		if len(pieces) > 3 && pieces[0] == "systemd" && pieces[1] == "units" {
+			continue
+		}
+		out = append(out, key)
+	}
+	return out
 }
 
 // unifyErrRe extracts line and message from BurntSushi's unify (type-mismatch)

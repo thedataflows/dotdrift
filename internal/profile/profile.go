@@ -50,6 +50,7 @@ type ModuleConfig struct {
 	Hooks       Hooks                `toml:"hooks"`
 	Mounts      map[string]MountSpec `toml:"mounts"`
 	Smb         SmbSpec              `toml:"smb"`
+	Systemd     SystemdSpec          `toml:"systemd"`
 }
 
 // ScopeOrDefault returns the module's dotfile scope, defaulting to user when

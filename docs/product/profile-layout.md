@@ -155,6 +155,19 @@ db_password = { env = "DB_PASSWORD", description = "prod db", allow_empty = true
 pre = ["echo about to apply", { command = "echo warm best-effort cache", optional = true }]
 post = ["echo apply finished"]
 
+[systemd.units.my-sync]
+# systemd USER units (services + timers), passthrough directive tables.
+description = "sync files"
+exec_start = "~/.local/bin/my-sync --watch"
+after = ["network-online.target"]
+restart = "on-failure"
+
+[systemd.units.my-sync-timer]
+# An entry with a timer key renders as a .timer.
+on_calendar = "daily"
+persistent = true
+unit = "my-sync"
+
 [mounts.data]
 source = "UUID=abcd-1234"
 destination = "/mnt/data"
@@ -224,6 +237,25 @@ public = false
   system-scope whole-file templates (the `[bootstrap.files]` path) — mise's
   `[dotfiles]` template engine has no `secret` function, so user-scope
   templates cannot consume secrets.
+- `systemd.units` declares systemd **user** units (issue 0048) emitted as
+  `[bootstrap.linux.systemd.units]` and converged by a dedicated `systemd`
+  apply step (`mise bootstrap --only linux-systemd-units`): mise writes
+  `~/.config/systemd/user/dev.mise.<name>.{service,timer}`, enables per
+  `wanted_by` (default `default.target`/`timers.target`), and starts/stops
+  per `start` (default `true`). Directive tables are **passthrough** — any
+  key mise supports (`exec_start`, `after`, `wants`, `environment`,
+  `on_calendar`, `wanted_by`, `start`, …) works without a dotdrift schema
+  change; dotdrift validates structure only: unit names follow systemd's
+  charset (letters, numbers, `.`, `_`, `-`, `@`), a service needs a
+  non-empty `exec_start`, an entry containing a timer key (`on_boot_sec`,
+  `on_unit_active_sec`, `on_unit_inactive_sec`, `on_calendar`,
+  `randomized_delay_sec`, `accuracy_sec`, `persistent`, `unit`) is a timer
+  and needs at least one of the four triggers, and timers reject
+  service-only directives (`exec_start`, `environment`, `restart`, …).
+  Units merge whole-entry by name across layers. They are **user-scope
+  only**: a `scope = "system"` module declaring units is a resolve-time
+  error (mise skips user units under sudo, so the declaration would
+  silently no-op).
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a
     target path (absolute or `~/...`); the value is a table with:

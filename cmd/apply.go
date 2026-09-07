@@ -291,6 +291,37 @@ func pathUserWritable(path string) bool {
 	}
 }
 
+// systemdUnitsStep converges declarative systemd USER units (services and
+// timers) via [bootstrap.linux.systemd.units] and
+// `mise bootstrap --only linux-systemd-units` (issue 0048). mise writes the
+// dev.mise.<name> unit files, daemon-reloads, enables per wanted_by, and
+// starts/stops per start; under sudo mise skips user units with a warning
+// (wrong user manager) — no dotdrift-side euid branching.
+type systemdUnitsStep struct {
+	runner     mise.Runner
+	units      []resolve.SystemdUnitEntry
+	configPath string
+	yes        bool
+}
+
+var _ apply.Step = (*systemdUnitsStep)(nil)
+
+func (s *systemdUnitsStep) Name() string { return "systemd" }
+
+func (s *systemdUnitsStep) Run(ctx context.Context) error {
+	if len(s.units) == 0 {
+		return nil
+	}
+	content, err := mise.GenerateBootstrapSystemdUnits(s.units)
+	if err != nil {
+		return fmt.Errorf("generate systemd units config: %w", err)
+	}
+	if err := writeBootstrapConfig(s.configPath, content); err != nil {
+		return fmt.Errorf("write systemd units config: %w", err)
+	}
+	return s.runner.Bootstrap(ctx, s.configPath, s.yes, "linux-systemd-units")
+}
+
 // mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for
 // each mount unit (+ timer if startat) and converges via
 // `mise bootstrap --only services`. Directory creation moved to systemFilesStep.
@@ -410,6 +441,7 @@ type ApplyCmd struct {
 	Packages bool `group:"Section flags" help:"Apply only the packages section" negatable:""`
 	Tools    bool `group:"Section flags" help:"Apply only the tools section" negatable:""`
 	Dotfiles bool `group:"Section flags" help:"Apply only the dotfiles section (user + system)" negatable:""`
+	Systemd  bool `group:"Section flags" help:"Apply only the systemd user units section" negatable:""`
 	Mounts   bool `group:"Section flags" help:"Apply only the mounts section (units + services + destination dirs)" negatable:""`
 	Smb      bool `group:"Section flags" help:"Apply only the smb section" negatable:""`
 	Hooks    bool `group:"Section flags" help:"Run pre/post hook commands" negatable:""`
@@ -507,6 +539,7 @@ func (c *ApplyCmd) Run() error {
 	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
 	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
 	packagesConfigPath := filepath.Join(configDir, "packages", "mise.toml")
+	systemdConfigPath := filepath.Join(configDir, "systemd", "mise.toml")
 	systemConfigPath := filepath.Join(configDir, "system", "mise.toml")
 	systemEditsConfigPath := filepath.Join(configDir, "system-edits", "mise.toml")
 	mountsConfigPath := filepath.Join(configDir, "mounts", "mise.toml")
@@ -522,6 +555,7 @@ func (c *ApplyCmd) Run() error {
 
 	steps := c.buildSteps(plan, runner, f, profileRoot, out, misePluginsDir, sections, map[string]string{
 		"tools":        toolsConfigPath,
+		"systemd":      systemdConfigPath,
 		"dotfiles":     dotfilesConfigPath,
 		"packages":     packagesConfigPath,
 		"system":       systemConfigPath,
@@ -653,6 +687,12 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 	}
 	if sections.has("dotfiles") {
 		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes, Force: c.Force})
+	}
+	// systemd user units → mise bootstrap --only linux-systemd-units.
+	if sections.has("systemd") && len(plan.Systemd.Units) > 0 {
+		steps = append(steps, &systemdUnitsStep{
+			runner: runner, units: plan.Systemd.Units, configPath: paths["systemd"], yes: c.Yes,
+		})
 	}
 	// System dotfiles + mount directories → systemFilesStep.
 	// Runs when there are system-scope dotfiles OR mount destinations.

@@ -252,8 +252,84 @@ func GenerateBootstrapAccounts(group string, users []string) string {
 	return b.String()
 }
 
-// --- Secrets → [bootstrap.secrets] ---
+// --- systemd user units → [bootstrap.linux.systemd.units] ---
 
+// GenerateBootstrapSystemdUnits emits one
+// [bootstrap.linux.systemd.units.<name>] table per unit (issue 0048).
+// Directive tables pass through with their TOML types; units render sorted
+// by name for deterministic configs. A value dotdrift cannot represent in
+// TOML is an error naming the unit, never a silent drop.
+func GenerateBootstrapSystemdUnits(units []resolve.SystemdUnitEntry) (string, error) {
+	if len(units) == 0 {
+		return "", nil
+	}
+	sorted := make([]resolve.SystemdUnitEntry, len(units))
+	copy(sorted, units)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	var b strings.Builder
+	for _, u := range sorted {
+		fmt.Fprintf(&b, "[bootstrap.linux.systemd.units.%s]\n", tomlKey(u.Name))
+		keys := make([]string, 0, len(u.Directives))
+		for k := range u.Directives {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			v, err := tomlSystemdValue(u.Name, k, u.Directives[k])
+			if err != nil {
+				return "", err
+			}
+			fmt.Fprintf(&b, "%s = %s\n", tomlKey(k), v)
+		}
+		b.WriteString("\n")
+	}
+	return b.String(), nil
+}
+
+// tomlSystemdValue renders one directive value as TOML, preserving the
+// decoded type: strings quoted+escaped, bools/numbers bare, arrays and
+// inline tables recursive (sorted keys).
+func tomlSystemdValue(unit, key string, v any) (string, error) {
+	switch val := v.(type) {
+	case string:
+		return `"` + tomlEscape(val) + `"`, nil
+	case bool:
+		return fmt.Sprintf("%t", val), nil
+	case int64:
+		return fmt.Sprintf("%d", val), nil
+	case float64:
+		return fmt.Sprintf("%g", val), nil
+	case []any:
+		parts := make([]string, len(val))
+		for i, item := range val {
+			s, err := tomlSystemdValue(unit, key, item)
+			if err != nil {
+				return "", err
+			}
+			parts[i] = s
+		}
+		return "[" + strings.Join(parts, ", ") + "]", nil
+	case map[string]any:
+		keys := make([]string, 0, len(val))
+		for k := range val {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		parts := make([]string, len(keys))
+		for i, k := range keys {
+			s, err := tomlSystemdValue(unit, key, val[k])
+			if err != nil {
+				return "", err
+			}
+			parts[i] = tomlKey(k) + " = " + s
+		}
+		return "{ " + strings.Join(parts, ", ") + " }", nil
+	default:
+		return "", fmt.Errorf("systemd unit %q directive %q: unsupported value type %T", unit, key, v)
+	}
+}
+
+// --- Secrets → [bootstrap.secrets] ---
 // GenerateBootstrapSecrets emits a [bootstrap.secrets] section (issue 0044).
 // Entries with only an env var use the short form; description or
 // allow_empty force the table form. Sorted by logical name. Returns "" when

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -247,6 +248,41 @@ func GenerateBootstrapAccounts(group string, users []string) string {
 		for _, u := range sortedUsers {
 			fmt.Fprintf(&b, "%q = { group = %q, groups = [%q], state = \"present\" }\n", u, group, group)
 		}
+	}
+	return b.String()
+}
+
+// --- Secrets → [bootstrap.secrets] ---
+
+// GenerateBootstrapSecrets emits a [bootstrap.secrets] section (issue 0044).
+// Entries with only an env var use the short form; description or
+// allow_empty force the table form. Sorted by logical name. Returns "" when
+// no secrets are declared.
+func GenerateBootstrapSecrets(secrets map[string]profile.Secret) string {
+	if len(secrets) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(secrets))
+	for n := range secrets {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	var b strings.Builder
+	b.WriteString("[bootstrap.secrets]\n")
+	for _, n := range names {
+		s := secrets[n]
+		if s.Description == "" && !s.AllowEmpty {
+			fmt.Fprintf(&b, "%s = %q\n", tomlKey(n), s.Env)
+			continue
+		}
+		fmt.Fprintf(&b, "%s = { env = %q", tomlKey(n), s.Env)
+		if s.Description != "" {
+			fmt.Fprintf(&b, ", description = %q", s.Description)
+		}
+		if s.AllowEmpty {
+			b.WriteString(", allow_empty = true")
+		}
+		b.WriteString(" }\n")
 	}
 	return b.String()
 }

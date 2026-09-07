@@ -158,6 +158,10 @@ absent = ["nano"]
 [tools]
 node = "20"
 
+[secrets]
+cache_token = "MISE_CACHE_TOKEN"
+db_password = { env = "DB_PASSWORD", description = "prod db", allow_empty = true }
+
 [dotfiles]
 "~/.bashrc" = { source = ".bashrc", mode = "symlink" }
 "~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }
@@ -198,6 +202,8 @@ public = false
 	require.Equal(t, "MyApp", m.App)
 	require.Equal(t, "system", m.Config.Scope)
 	require.True(t, m.Config.Hooks.Post[0].Optional)
+	require.Equal(t, profile.Secret{Env: "MISE_CACHE_TOKEN"}, m.Config.Secrets["cache_token"])
+	require.Equal(t, profile.Secret{Env: "DB_PASSWORD", Description: "prod db", AllowEmpty: true}, m.Config.Secrets["db_password"])
 }
 
 func TestLoadModuleConfigStrict_unknownKey(t *testing.T) {

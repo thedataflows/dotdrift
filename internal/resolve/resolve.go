@@ -17,6 +17,7 @@ import (
 type Plan struct {
 	Packages PackagesStep
 	Tools    ToolsStep
+	Secrets  map[string]profile.Secret
 	Dotfiles DotfilesStep
 	Hooks    HooksStep
 	Mounts   MountsStep
@@ -106,6 +107,7 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 	plan := &Plan{
 		Packages: PackagesStep{},
 		Tools:    ToolsStep{Versions: make(map[string]string)},
+		Secrets:  make(map[string]profile.Secret),
 		Dotfiles: DotfilesStep{},
 	}
 
@@ -175,6 +177,12 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		for k, v := range mergeTools(base.cfg.Tools, host.cfg.Tools, user.cfg.Tools) {
 			plan.Tools.Versions[k] = v
 			toolIn[k] = append(toolIn[k], m.ID)
+		}
+
+		// Secrets merge like tools: unioned by logical name, nearer layer
+		// (user > host > base) replacing a same-name entry (issue 0044).
+		for k, v := range mergeSecrets(base.cfg.Secrets, host.cfg.Secrets, user.cfg.Secrets) {
+			plan.Secrets[k] = v
 		}
 
 		entries, err := mergeDotfiles(base, host, user, scope)
@@ -312,6 +320,22 @@ func mergePackages(base, host, user profile.Packages) (present []string, absent 
 
 func mergeTools(base, host, user map[string]string) map[string]string {
 	result := make(map[string]string)
+	for k, v := range base {
+		result[k] = v
+	}
+	for k, v := range host {
+		result[k] = v
+	}
+	for k, v := range user {
+		result[k] = v
+	}
+	return result
+}
+
+// mergeSecrets unions secret declarations across layers with the same
+// nearer-wins-per-name semantics as tools (issue 0044).
+func mergeSecrets(base, host, user map[string]profile.Secret) map[string]profile.Secret {
+	result := make(map[string]profile.Secret)
 	for k, v := range base {
 		result[k] = v
 	}

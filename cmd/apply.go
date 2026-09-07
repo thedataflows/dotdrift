@@ -181,9 +181,10 @@ type systemFilesStep struct {
 	sourceRoot string
 	homeDir    string
 	dirs       []string // mount destinations → [bootstrap.directories]
-	configPath string   // [bootstrap.files] + [bootstrap.directories]
+	configPath string   // [bootstrap.files] + [bootstrap.directories] + [bootstrap.secrets]
 	editsPath  string   // [dotfiles] for edit entries
 	yes        bool
+	secrets    map[string]profile.Secret // declared secret inputs → [bootstrap.secrets]
 }
 
 var _ apply.Step = (*systemFilesStep)(nil)
@@ -214,6 +215,11 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 			content = mise.GenerateBootstrapFiles(files)
 		}
 		content += mise.GenerateBootstrapDirectories(s.dirs)
+		// Declared secret inputs ride the same config: the system files
+		// template path is the only one where mise resolves secret()
+		// ([dotfiles] templates have no secret function — verified against
+		// mise 2026.9.1, issue 0044).
+		content += mise.GenerateBootstrapSecrets(s.secrets)
 		if err := writeBootstrapConfig(s.configPath, content); err != nil {
 			return fmt.Errorf("write system files config: %w", err)
 		}
@@ -653,7 +659,7 @@ func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
 		steps = append(steps, &systemFilesStep{
 			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
 			homeDir: homeDir, dirs: mountDests, configPath: paths["system"],
-			editsPath: paths["system-edits"], yes: c.Yes,
+			editsPath: paths["system-edits"], yes: c.Yes, secrets: plan.Secrets,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.

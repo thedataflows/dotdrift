@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -424,4 +425,80 @@ func TestSystemFilesStep_symlinkTranslatedToCopy(t *testing.T) {
 	require.Contains(t, string(cfg), `"/etc/symlinked.conf" = { source = "/fake/profile/files/symlinked.conf" }`)
 	require.NotContains(t, string(cfg), "mode = ",
 		"bootstrap.files manages content — no mode vocabulary may leak")
+}
+
+// Declared secrets are emitted as [bootstrap.secrets] into the system files
+// config alongside [bootstrap.files] (issue 0044) — the only template path
+// where mise resolves secret() ([dotfiles] templates have no secret
+// function, verified against mise 2026.9.1).
+func TestSystemFilesStep_includesSecrets(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: "/etc/svc.env", Source: "svc.env", Mode: "template"},
+		},
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
+		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+		secrets: map[string]profile.Secret{
+			"cache_token": {Env: "MISE_CACHE_TOKEN"},
+		},
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "[bootstrap.secrets]")
+	require.Contains(t, string(cfg), `cache_token = "MISE_CACHE_TOKEN"`)
+	require.Contains(t, string(cfg), "template = true")
+}
+
+// No declared secrets → no [bootstrap.secrets] section.
+func TestSystemFilesStep_noSecretsNoSection(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + "\n", nil
+			}
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
+		},
+		sourceRoot: "/fake/profile",
+		homeDir:    "/home/test",
+		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.NotContains(t, string(cfg), "[bootstrap.secrets]")
 }

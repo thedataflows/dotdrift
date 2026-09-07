@@ -133,6 +133,11 @@ absent = ["nano"]
 node = "20"
 python = "3.12"
 
+[secrets]
+# Sensitive inputs for templates — values come from the environment, never git.
+cache_token = "MISE_CACHE_TOKEN"
+db_password = { env = "DB_PASSWORD", description = "prod db", allow_empty = true }
+
 [dotfiles]
 # Whole-file entries: source + mode.
 "~/.bashrc" = { source = ".bashrc", mode = "symlink" }
@@ -205,6 +210,20 @@ public = false
   dotdrift-owned and regenerated wholesale per apply — hand edits are lost;
   `config.toml` itself is never touched. A run whose plan has no tools
   removes a stale fragment (issue 0037).
+- `secrets` declares sensitive inputs a module's templates need, without
+  storing values in git (issue 0044). Each entry maps a logical name to the
+  environment variable that supplies the value at apply time (via fnox, CI,
+  systemd, or a shell): the short form is `name = "ENV_VAR"`; the table form
+  adds `description` and `allow_empty = true` (empty values are otherwise
+  rejected). Entries merge like tools: unioned across modules and layers,
+  the nearer layer replacing a same-name entry. Templates reference a
+  declared input with mise's `{{ secret(name="...") }}`; apply emits the
+  resolved declarations as `[bootstrap.secrets]` and mise resolves, fails
+  loud on a missing variable (naming the secret and how to supply it), and
+  redacts values from all output. **Boundary**: `secret()` exists only in
+  system-scope whole-file templates (the `[bootstrap.files]` path) — mise's
+  `[dotfiles]` template engine has no `secret` function, so user-scope
+  templates cannot consume secrets.
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a
     target path (absolute or `~/...`); the value is a table with:

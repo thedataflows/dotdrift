@@ -9,13 +9,13 @@ timestamp: 2026-09-07T00:00:00Z
 # ISSUE 0044: Adopt mise bootstrap secrets for templates
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [mise, secrets, templates]
-- **Assignee**: none
+- **Assignee**: agent
 - **Related**: [mise bootstrap alignment B-secrets](../product/mise-bootstrap-alignment.md), [0042](0042-system-files-bootstrap-files.md)
 - **Related code**: [`internal/profile/profile.go`](../../internal/profile/profile.go), [`internal/resolve/`](../../internal/resolve/), [`internal/mise/bootstrap.go`](../../internal/mise/bootstrap.go)
-- **Closing commits**: none
+- **Closing commits**: TBD
 
 ## Summary
 
@@ -44,11 +44,21 @@ Design (minimal, aligned with mise's spec):
 
 ## Acceptance Criteria
 
-- [ ] `[secrets]` parses in both short and table form, strict-mode clean (unknown keys rejected)
-- [ ] Layered merge: nearer layer replaces same-name entries
-- [ ] `[bootstrap.secrets]` emitted alongside template-carrying configs; absent when no secrets declared
-- [ ] Docs: profile-layout secrets section, contract touchpoint if user-facing behavior changes
-- [ ] `go test ./...` and `go vet` green
+- [x] `[secrets]` parses in both short and table form, strict-mode clean (unknown keys rejected)
+- [x] Layered merge: nearer layer replaces same-name entries
+- [x] `[bootstrap.secrets]` emitted alongside template-carrying configs; absent when no secrets declared
+- [x] Docs: profile-layout secrets section, contract touchpoint if user-facing behavior changes
+- [x] `go test ./...` and `go vet` green
+
+## Resolution notes
+
+- Empirically verified against mise 2026.9.1: `secret()` renders in
+  `[bootstrap.files]` templates; a missing env var fails loud naming the
+  secret, the variable, and remediation; `[dotfiles]` templates have no
+  `secret` function — emission therefore targets the system files config
+  only, and the boundary is documented in profile-layout.
+- `dotdrift plan` does not list secrets (names are visible in module.toml
+  and the generated config; values never appear anywhere).
 
 ## Out of Scope
 

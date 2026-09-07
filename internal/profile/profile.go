@@ -45,6 +45,7 @@ type ModuleConfig struct {
 	When        When                 `toml:"when"`
 	Packages    Packages             `toml:"packages"`
 	Tools       map[string]string    `toml:"tools"`
+	Secrets     map[string]Secret    `toml:"secrets"`
 	Dotfiles    map[string]Dotfile   `toml:"dotfiles"`
 	Hooks       Hooks                `toml:"hooks"`
 	Mounts      map[string]MountSpec `toml:"mounts"`
@@ -158,6 +159,62 @@ func (h *HookCommand) UnmarshalTOML(v any) error {
 	}
 	if h.Command == "" {
 		return fmt.Errorf("hook entry missing command")
+	}
+	return nil
+}
+
+// unknownSecretKeyError flags a key outside the {env, description,
+// allow_empty} secret schema. Secret tables bypass strict-mode Undecoded
+// detection (the custom unmarshaler consumes the subtree), so the check
+// lives here — same contract as structured hooks.
+type unknownSecretKeyError struct{ key string }
+
+func (e *unknownSecretKeyError) Error() string {
+	return fmt.Sprintf("unknown key %q in secret entry (valid keys: env, description, allow_empty)", e.key)
+}
+
+// Secret is one declared sensitive input (issue 0044): a logical name mapped
+// to an environment variable that supplies the value at apply time (fnox,
+// CI, systemd, a shell — never the profile's git history). File templates
+// reference it with mise's `{{ secret(name="...") }}`; mise resolves,
+// requires it by default (allow_empty opts out), and redacts it from all
+// output. dotdrift only declares and emits — resolution is mise's domain.
+//
+// Two TOML spellings decode into the same value: the short form maps the
+// name straight to the variable (`cache_token = "MISE_CACHE_TOKEN"`), the
+// table form adds description and allow_empty. Env is required in both.
+type Secret struct {
+	Env         string `toml:"env"`
+	Description string `toml:"description"`
+	AllowEmpty  bool   `toml:"allow_empty"`
+}
+
+// UnmarshalTOML accepts both spellings: a bare string (the env var) or a
+// table with env/description/allow_empty.
+func (s *Secret) UnmarshalTOML(v any) error {
+	switch val := v.(type) {
+	case string:
+		s.Env = val
+	case map[string]any:
+		for k := range val {
+			if k != "env" && k != "description" && k != "allow_empty" {
+				return &unknownSecretKeyError{key: k}
+			}
+		}
+		if env, ok := val["env"].(string); ok {
+			s.Env = env
+		}
+		if desc, ok := val["description"].(string); ok {
+			s.Description = desc
+		}
+		if allow, ok := val["allow_empty"].(bool); ok {
+			s.AllowEmpty = allow
+		}
+	default:
+		return fmt.Errorf("secret entry must be an env var string or a table with env/description/allow_empty")
+	}
+	if s.Env == "" {
+		return fmt.Errorf("secret entry missing env")
 	}
 	return nil
 }

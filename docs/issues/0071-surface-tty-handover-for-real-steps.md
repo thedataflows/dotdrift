@@ -9,7 +9,7 @@ timestamp: 2026-09-12T00:00:00Z
 # ISSUE 0071: Surface TTY handover for real steps
 
 - **Type**: task
-- **Status**: in progress
+- **Status**: in-progress
 - **Priority**: high
 - **Labels**: [implementation]
 - **Assignee**: dev

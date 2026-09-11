@@ -422,3 +422,22 @@ func TestHooksStep_interactiveRoutesThroughHandover(t *testing.T) {
 	step.Interactive = false
 	require.Empty(t, step.RequiresTTY())
 }
+
+// Interactive set without a handover callback fails loud (contract 13):
+// classifying NeedsTTY and then piping an interactive command would lie.
+func TestHooksStep_interactiveWithoutHandoverFailsLoud(t *testing.T) {
+	var calls [][]string
+	runner := mise.NewExecMise(recordingRunMise(&calls, nil))
+	step := &mise.HooksStep{
+		Exec:        runner,
+		Commands:    []profile.HookCommand{{Command: "sudo chown"}},
+		ConfigPath:  "/state/mise/mise.toml",
+		Task:        "hooks-pre",
+		StepName:    "hooks-pre",
+		Interactive: true,
+	}
+
+	err := step.Run(context.Background())
+	require.ErrorContains(t, err, "handover", "interactive hooks must fail loud without a handover callback")
+	require.Empty(t, calls, "no task may run when the handover contract cannot be honored")
+}

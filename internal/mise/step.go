@@ -161,6 +161,11 @@ func (s *HooksStep) Run(ctx context.Context) error {
 	if s.Exec == nil {
 		return fmt.Errorf("no mise exec configured")
 	}
+	// Interactive with no handover fails loud (contract 13): the step just
+	// classified NeedsTTY — piping an interactive command would lie.
+	if s.Interactive && s.Handover == nil {
+		return fmt.Errorf("interactive hooks require a handover callback")
+	}
 	for i, c := range s.Commands {
 		task := fmt.Sprintf("%s-%d", s.Task, i)
 		sub := apply.SubStep{Index: i, Total: len(s.Commands), Command: c.Command}
@@ -168,9 +173,9 @@ func (s *HooksStep) Run(ctx context.Context) error {
 			s.obs.HookStarted(s.StepName, sub)
 		}
 		var err error
-		if s.Interactive && s.Handover != nil {
+		if s.Interactive {
 			var cmd *exec.Cmd
-			cmd, err = s.Exec.RunTaskSpec(ctx, s.ConfigPath, task)
+			cmd, err = s.Exec.RunTaskCmd(ctx, s.ConfigPath, task)
 			if err == nil {
 				err = s.Handover(cmd)
 			}

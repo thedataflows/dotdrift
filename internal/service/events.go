@@ -87,10 +87,11 @@ type StepFinished struct {
 
 func (StepFinished) event() {}
 
-// StepFailed marks a failed step. The session ends Failed right after;
-// the cursor names the last completed step. A non-nil Sub reports a
-// failing command inside a hook step (the step-level failure follows
-// with Sub nil).
+// StepFailed marks a failure. A step-level failure (Sub nil) ends the
+// session Failed right after; the cursor names the last completed step.
+// A non-nil Sub reports one failing command inside a hook step: required
+// hooks are followed by the step-level failure, optional ones only by
+// the sequence continuing.
 type StepFailed struct {
 	Name string
 	Err  *StepError

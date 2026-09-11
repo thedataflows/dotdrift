@@ -49,7 +49,7 @@ func TestDotfilesApplyArgv_forceAppended(t *testing.T) {
 	require.Equal(t, []string{"/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes", "--force"}, argv)
 }
 
-// DotfilesApplySudoSpec drives the argv decision off the live euid seam:
+// DotfilesApplySudoCmd drives the argv decision off the live euid seam:
 // sudo -E when non-root, direct when root (issue 0071 handover source).
 func TestExecMise_dotfilesApplySudoSpec_argv(t *testing.T) {
 	cases := []struct {
@@ -73,7 +73,7 @@ func TestExecMise_dotfilesApplySudoSpec_argv(t *testing.T) {
 				},
 			})
 
-			cmd, err := em.DotfilesApplySudoSpec(context.Background(), "/cfg/mise.toml", true, false)
+			cmd, err := em.DotfilesApplySudoCmd(context.Background(), "/cfg/mise.toml", true, false)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, cmd.Args)
 			// exec.CommandContext resolves argv[0] on PATH: bare names stay in
@@ -103,7 +103,7 @@ func TestExecMise_dotfilesApplySudoSpec_trustsGeneratedConfigDir(t *testing.T) {
 	})
 	cfgDir, cfg := generatedConfig(t)
 
-	cmd, err := em.DotfilesApplySudoSpec(context.Background(), cfg, false, false)
+	cmd, err := em.DotfilesApplySudoCmd(context.Background(), cfg, false, false)
 	require.NoError(t, err)
 	want := "MISE_TRUSTED_CONFIG_PATHS=" + cfgDir
 	found := false

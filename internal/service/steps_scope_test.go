@@ -104,8 +104,8 @@ func TestSystemFilesStep_bootstrapFailurePropagates(t *testing.T) {
 }
 
 // System-scope EDIT entries keep the elevated [dotfiles] path: a
-// non-writable edit target converges via one \`sudo -E mise dotfiles
-// apply\` child handed to the consumer's terminal (contract #18 —
+// non-writable edit target converges via one "sudo -E mise dotfiles
+// apply" child handed to the consumer's terminal (contract #18 —
 // bootstrap.files has no edit concept; 0071 handover seam).
 func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 	if os.Geteuid() == 0 {

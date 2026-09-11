@@ -667,10 +667,10 @@ func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, bac
 
 	var captured *mise.Mise
 	deps = &service.ApplyDeps{
-		Detect:       func() (*facts.Facts, error) { return f, nil },
-		NewMise:      func() *mise.Mise { captured = fakeMise(events); return captured },
-		PackagesFor:  func(string) packages.Backend { return backend },
-		NewSmbRunner: func() smb.Runner { return sr },
+		Detect:          func() (*facts.Facts, error) { return f, nil },
+		NewMise:         func() *mise.Mise { captured = fakeMise(events); return captured },
+		PackagesFor:     func(string) packages.Backend { return backend },
+		NewSmbRunner:    func() smb.Runner { return sr },
 		StdinIsTerminal: func() bool { return false }, // non-interactive path; see stubApplyFakes
 	}
 	return &captured, backend, sr, deps

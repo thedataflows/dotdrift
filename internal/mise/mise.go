@@ -5,11 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
-	"github.com/thedataflows/dotdrift/internal/executil"
-	"github.com/thedataflows/dotdrift/internal/facts"
-	"github.com/thedataflows/dotdrift/internal/profile"
-	"github.com/thedataflows/dotdrift/internal/resolve"
 	"io"
 	"os"
 	"os/exec"
@@ -18,6 +13,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/rs/zerolog/log"
+	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 // MinMiseVersion is the hardcoded minimum mise version required by dotdrift.
@@ -620,13 +621,13 @@ func dotfilesApplyArgv(euid int, misePath, configPath string, yes, force bool) [
 	return append([]string{"sudo", "-E", misePath}, args...)
 }
 
-// DotfilesApplySudoSpec builds (never starts) the child for the elevated
+// DotfilesApplySudoCmd builds (never starts) the child for the elevated
 // system-edits apply — the handover twin source (issue 0071): `sudo -E
 // <mise> dotfiles apply` when not root, directly as `<mise> dotfiles
 // apply` when already root (EUID 0, e.g. containers). Stdio nil for the
 // consumer to wire; env carries the trust plumbing and MISE_VERBOSE under
 // Verbose.
-func (e *ExecMise) DotfilesApplySudoSpec(ctx context.Context, configPath string, yes, force bool) (*exec.Cmd, error) {
+func (e *ExecMise) DotfilesApplySudoCmd(ctx context.Context, configPath string, yes, force bool) (*exec.Cmd, error) {
 	path, err := e.mise.EnsureContext(ctx)
 	if err != nil {
 		return nil, err
@@ -645,10 +646,10 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 	return err
 }
 
-// RunTaskSpec builds (never starts) the child for one mise task run — the
+// RunTaskCmd builds (never starts) the child for one mise task run — the
 // handover twin source (issue 0071): stdio nil for the consumer to wire,
 // env carrying the trust plumbing, argv `mise run --cd <dir> <task>`.
-func (e *ExecMise) RunTaskSpec(ctx context.Context, configPath, taskName string) (*exec.Cmd, error) {
+func (e *ExecMise) RunTaskCmd(ctx context.Context, configPath, taskName string) (*exec.Cmd, error) {
 	path, err := e.mise.EnsureContext(ctx)
 	if err != nil {
 		return nil, err

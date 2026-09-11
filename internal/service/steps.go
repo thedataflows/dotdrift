@@ -86,7 +86,7 @@ func (s *packagesStep) Run(ctx context.Context) error {
 // when elevation is impossible — dotdrift runs no sudo for whole files.
 // symlink→copy is inherent: bootstrap.files manages content, not links.
 // Edit entries have no bootstrap.files equivalent (contract #18): they keep
-// the [dotfiles] path, elevated via one \`sudo -E mise dotfiles apply\`
+// the [dotfiles] path, elevated via one sudo -E "mise dotfiles apply"
 // handover child when an edit target is not user-writable (0071).
 type systemFilesStep struct {
 	exec       *mise.ExecMise
@@ -198,7 +198,7 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 			if s.handover == nil {
 				return fmt.Errorf("elevated system edits require a handover callback")
 			}
-			cmd, err := s.exec.DotfilesApplySudoSpec(ctx, s.editsPath, s.yes, s.force)
+			cmd, err := s.exec.DotfilesApplySudoCmd(ctx, s.editsPath, s.yes, s.force)
 			if err == nil {
 				err = s.handover(cmd)
 			}

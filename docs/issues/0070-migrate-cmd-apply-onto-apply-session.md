@@ -9,10 +9,10 @@ timestamp: 2026-09-12T00:00:00Z
 # ISSUE 0070: Migrate cmd/apply onto the apply session
 
 - **Type**: task
-- **Status**: open
+- **Status**: in-progress
 - **Priority**: high
 - **Labels**: [implementation]
-- **Assignee**: none
+- **Assignee**: cri
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [0069 apply-session service core](0069-implement-apply-session-service-core.md), [0061-D7 migration order](0061-service-layer-architecture-cli-migration.md)
 - **Related code**: [`cmd/apply.go`](../../cmd/apply.go), `internal/service/`
 - **Blocked by**: [0069 Implement apply-session service core](0069-implement-apply-session-service-core.md)

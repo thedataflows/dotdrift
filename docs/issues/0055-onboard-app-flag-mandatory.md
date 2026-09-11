@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [0017](0017-onboard-adoption-units-and-profile-paths.md) (directed module-file adoption still overrides the value)
 - **Related code**: [`cmd/onboard.go`](../../cmd/onboard.go), [`internal/onboard/onboard.go`](../../internal/onboard/onboard.go)
-- **Closing commits**: none (recorded at done)
+- **Closing commits**: dceba3d
 
 ## Summary
 

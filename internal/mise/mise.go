@@ -237,19 +237,36 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	if (m.RunContext != nil || m.Run != nil) || (!m.ForceStream && !executil.StreamLive(m.Verbose, out, errW)) {
 		return m.runWithEnv(ctx, extraEnv, name, args...)
 	}
+	cmd := m.newOpCmd(ctx, extraEnv, name, args...)
+	cmd.Stdin = opStdin()
+	setGroupKill(cmd)
+	cmd.Stdout = out
+	cmd.Stderr = errW
+	if runErr := cmd.Run(); runErr != nil {
+		return "", runErr
+	}
+	return "", nil
+}
+
+// newOpCmd builds (but never starts) the child for one operation command,
+// identical to how runOp streams it: inherited env plus per-run entries
+// (the caller's trust paths; MISE_VERBOSE under Verbose), the pinned work
+// directory, and the set -x-style echo under Verbose. Stdio stays nil —
+// the streaming path wires the writers, the handover path leaves wiring
+// to the consumer (0064-D9). Neither Setpgid nor Cancel is set here:
+// each consumer adds its own process-group policy.
+func (m *Mise) newOpCmd(ctx context.Context, extraEnv []string, name string, args ...string) *exec.Cmd {
 	env := make([]string, 0, len(m.Env)+len(extraEnv)+1)
 	env = append(env, m.Env...)
 	env = append(env, extraEnv...)
 	// Run mise itself verbosely: MISE_VERBOSE is mise's own env var for
-	// verbose mode (DEBUG logging to stderr). An argv --verbose flag can't be
-	// used here — the sudo path is `sudo -E <mise> …`, so the flag would land
-	// on sudo; the env var is preserved by `sudo -E` uniformly.
+	// verbose mode (DEBUG logging to stderr). An argv --verbose flag can't
+	// be used here — the sudo path is `sudo -E <mise> …`, so the flag would
+	// land on sudo; the env var is preserved by `sudo -E` uniformly.
 	if m.Verbose {
 		env = append(env, "MISE_VERBOSE=1")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
-	cmd.Stdin = opStdin()
-	setGroupKill(cmd)
 	if dir := m.workDir(); dir != "" {
 		cmd.Dir = dir
 	}
@@ -257,14 +274,10 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 		cmd.Env = append(os.Environ(), env...)
 	}
 	if m.Verbose {
+		_, errW := m.writers()
 		executil.EchoCommand(errW, append([]string{name}, args...))
 	}
-	cmd.Stdout = out
-	cmd.Stderr = errW
-	if runErr := cmd.Run(); runErr != nil {
-		return "", runErr
-	}
-	return "", nil
+	return cmd
 }
 
 // trustEnv returns a MISE_TRUSTED_CONFIG_PATHS entry covering the directory
@@ -648,6 +661,17 @@ func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) err
 	}
 	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, "run", "--cd", filepath.Dir(configPath), taskName)
 	return err
+}
+
+// RunTaskSpec builds (never starts) the child for one mise task run — the
+// handover twin source (issue 0071): stdio nil for the consumer to wire,
+// env carrying the trust plumbing, argv `mise run --cd <dir> <task>`.
+func (e *ExecMise) RunTaskSpec(ctx context.Context, configPath, taskName string) (*exec.Cmd, error) {
+	path, err := e.mise.EnsureContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return e.mise.newOpCmd(ctx, trustEnv(configPath), path, "run", "--cd", filepath.Dir(configPath), taskName), nil
 }
 
 // Bootstrap invokes `mise bootstrap --yes` against the config. It runs the

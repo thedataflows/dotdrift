@@ -256,10 +256,10 @@ func (c *ApplyCmd) applyDeps() service.ApplyDeps {
 }
 
 // handoverToTerminal runs one session-built child command on dotdrift's
-// real stdio — fd passthrough keeps the child's color and prompt. No
-// pipeline step hands over until issue 0071; the seam exists so the
-// session's contract is met from day one.
-func handoverToTerminal(cmd *exec.Cmd) error {
+// real stdio — fd passthrough keeps the child's color and prompt (0071:
+// sudo edits and interactive hook tasks are the real handovers). A var so
+// tests can stand in for the terminal exec.
+var handoverToTerminal = func(cmd *exec.Cmd) error {
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
 }

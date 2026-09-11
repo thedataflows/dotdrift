@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,6 +122,12 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) *applyFakes {
 			NewMise:      func() *mise.Mise { return fakeMise(events) },
 			PackagesFor:  func(string) packages.Backend { return backend },
 			NewSmbRunner: func() smb.Runner { return &recordingSmbRunner{events: events} },
+			// Pin the non-interactive path: go test's stdin is /dev/null,
+			// whose char-device mode makes the real probe report a terminal
+			// and would push hook tasks through the handover seam (where the
+			// fake mise path cannot exec). The interactive handover path is
+			// covered at the service seam (issue 0071).
+			StdinIsTerminal: func() bool { return false },
 		},
 	}
 }
@@ -244,6 +251,12 @@ func TestApply_hookTaskInteractiveReflectsStdinTTY(t *testing.T) {
 		f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 		fk := stubApplyDeps(t, f)
 		fk.deps.StdinIsTerminal = func() bool { return tty }
+		// tty=true now also routes hook commands through the handover seam
+		// (issue 0071); a no-op handover stands in for the terminal exec so
+		// the fake mise path is never forked.
+		orig := handoverToTerminal
+		handoverToTerminal = func(*exec.Cmd) error { return nil }
+		t.Cleanup(func() { handoverToTerminal = orig })
 		require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
 		cfg, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
 		require.NoError(t, err)
@@ -658,6 +671,7 @@ func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, bac
 		NewMise:      func() *mise.Mise { captured = fakeMise(events); return captured },
 		PackagesFor:  func(string) packages.Backend { return backend },
 		NewSmbRunner: func() smb.Runner { return sr },
+		StdinIsTerminal: func() bool { return false }, // non-interactive path; see stubApplyFakes
 	}
 	return &captured, backend, sr, deps
 }

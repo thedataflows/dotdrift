@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -644,4 +645,79 @@ func TestSession_hookSubStepFailure(t *testing.T) {
 	require.Contains(t, subFails[0].Err.Error(), pr.Plan.Hooks.Pre[0].Command)
 	require.Len(t, stepFails, 1, "the step-level failure follows, Sub nil")
 	require.Equal(t, "hooks-pre", stepFails[0].Name)
+}
+
+// With handover available, hook steps classify as needing the terminal
+// (0064-D4: the interactive-hook opt-in) and their commands run through
+// the Handover seam instead of the piped mise runner (0071).
+func TestSession_interactiveHooksHandover(t *testing.T) {
+	dir := t.TempDir()
+	deps, events := stubSessionDeps(t, testFacts())
+
+	var handed []*exec.Cmd
+	opts := baseOpts(resolveFixture(t), filepath.Join(dir, "s.json"))
+	opts.HandoverAvailable = ptr(true)
+	opts.Handover = func(cmd *exec.Cmd) error {
+		handed = append(handed, cmd)
+		return nil
+	}
+
+	sess, err := NewApplyArea(deps).Start(context.Background(), opts)
+	require.NoError(t, err)
+	pv := sess.Preview()
+	evs := drain(t, sess)
+	_, err = sess.Wait()
+	require.NoError(t, err)
+
+	// Classification names the real cause, only for the hook steps.
+	byName := map[string]StepPreview{}
+	for _, p := range pv {
+		byName[p.Name] = p
+	}
+	require.True(t, byName["hooks-pre"].NeedsTTY)
+	require.Contains(t, byName["hooks-pre"].Reason, "interactive hook")
+	require.True(t, byName["hooks-post"].NeedsTTY)
+	require.False(t, byName["packages"].NeedsTTY)
+	require.False(t, byName["tools"].NeedsTTY)
+	require.False(t, byName["dotfiles"].NeedsTTY)
+
+	// Every hook command went through handover as `mise run <task>`, in
+	// plan order (pre then post), never through the piped runner.
+	pr := evs[0].(PlanResolved)
+	require.Len(t, handed, len(pr.Plan.Hooks.Pre)+len(pr.Plan.Hooks.Post))
+	taskAt := func(i int) string {
+		if i < len(pr.Plan.Hooks.Pre) {
+			return fmt.Sprintf("hooks-pre-%d", i)
+		}
+		return fmt.Sprintf("hooks-post-%d", i-len(pr.Plan.Hooks.Pre))
+	}
+	for i, cmd := range handed {
+		require.Equal(t, "/fake/mise", cmd.Path)
+		require.Equal(t, []string{"/fake/mise", "run", "--cd", cmd.Args[3], taskAt(i)}, cmd.Args)
+		require.True(t, hasEnv(cmd.Env, "MISE_TRUSTED_CONFIG_PATHS"), "trust plumbing rides the handover child")
+	}
+	for _, e := range *events {
+		require.NotContains(t, e, "hooks-pre-0", "hook tasks must not run through the piped runner")
+	}
+	// Sub-step boundaries still announced.
+	subs := 0
+	for _, ev := range evs {
+		if st, ok := ev.(StepStarted); ok && st.Sub != nil {
+			subs++
+		}
+	}
+	require.Equal(t, len(pr.Plan.Hooks.Pre)+len(pr.Plan.Hooks.Post), subs)
+	require.Equal(t, OutcomeCompleted, func() SessionOutcome { r, _ := sess.Wait(); return r.Outcome }())
+}
+
+func ptr[T any](v T) *T { return &v }
+
+// hasEnv reports whether the environment carries the key.
+func hasEnv(env []string, key string) bool {
+	for _, e := range env {
+		if strings.HasPrefix(e, key+"=") {
+			return true
+		}
+	}
+	return false
 }

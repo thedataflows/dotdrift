@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/rs/zerolog/log"
@@ -118,13 +119,36 @@ type HooksStep struct {
 	ConfigPath string
 	Task       string // mise task-name prefix, e.g. "hooks-pre"; per-command tasks are <Task>-<i>
 	StepName   string // pipeline step name, e.g. "hooks-pre"
+	// Interactive mirrors the interactive = true opt-in written into the
+	// tasks at config-write (0064-D4): interactive commands must reach the
+	// real terminal, so with a Handover callback every task runs through it
+	// (issue 0071) instead of the piped runner.
+	Interactive bool
+	// Handover runs one child command on the consumer's terminal. Injected
+	// by the apply session; nil (no session) keeps the piped runner path.
+	Handover apply.HandoverFunc
 
 	obs apply.Observer // injected by the pipeline; nil = no observation
 }
 
-var _ apply.Step = (*HooksStep)(nil)
+var (
+	_ apply.Step         = (*HooksStep)(nil)
+	_ apply.HandoverStep = (*HooksStep)(nil)
+)
 
 func (s *HooksStep) Name() string { return s.StepName }
+
+// RequiresTTY classifies the step up front (0064-D4): interactive hook
+// commands run on the consumer's terminal.
+func (s *HooksStep) RequiresTTY() string {
+	if s.Interactive && len(s.Commands) > 0 {
+		return "interactive hook commands run on your terminal"
+	}
+	return ""
+}
+
+// SetHandover injects the consumer's handover callback (apply.HandoverStep).
+func (s *HooksStep) SetHandover(h apply.HandoverFunc) { s.Handover = h }
 
 // SetObserver receives the pipeline observer (apply.observerSetter) so the
 // step can announce per-command hook boundaries (issue 0071).
@@ -143,7 +167,17 @@ func (s *HooksStep) Run(ctx context.Context) error {
 		if s.obs != nil {
 			s.obs.HookStarted(s.StepName, sub)
 		}
-		if err := s.Exec.RunTask(ctx, s.ConfigPath, task); err != nil {
+		var err error
+		if s.Interactive && s.Handover != nil {
+			var cmd *exec.Cmd
+			cmd, err = s.Exec.RunTaskSpec(ctx, s.ConfigPath, task)
+			if err == nil {
+				err = s.Handover(cmd)
+			}
+		} else {
+			err = s.Exec.RunTask(ctx, s.ConfigPath, task)
+		}
+		if err != nil {
 			if s.obs != nil {
 				s.obs.HookFailed(s.StepName, sub, err)
 			}

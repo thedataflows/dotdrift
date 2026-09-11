@@ -197,7 +197,15 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		misePluginsDir = mise.PluginsDirFromEnv()
 	}
 	paths := newConfigPaths(filepath.Dir(statePath))
-	run.steps = buildSteps(sections, plan, runner, f, profileRoot, out, misePluginsDir, opts, a.deps, paths)
+	// D4: the interactive-hook opt-in keys on handover availability, not
+	// raw stdin — CLI passes its own reality via deps, a UI that can hand
+	// the terminal over sets HandoverAvailable. Decided once, here: it
+	// drives both the config-write (runSpec) and the hook classification.
+	interactive := a.deps.StdinIsTerminal()
+	if opts.HandoverAvailable != nil {
+		interactive = *opts.HandoverAvailable
+	}
+	run.steps = buildSteps(sections, plan, runner, f, profileRoot, out, misePluginsDir, opts, a.deps, paths, interactive)
 
 	run.index = make(map[string]int, len(run.steps))
 	for i, st := range run.steps {
@@ -227,13 +235,6 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 	}
 	run.sess = sess
 
-	// D4: the interactive-hook opt-in keys on handover availability, not
-	// raw stdin — CLI passes its own reality via deps, a UI that can hand
-	// the terminal over sets HandoverAvailable.
-	interactive := a.deps.StdinIsTerminal()
-	if opts.HandoverAvailable != nil {
-		interactive = *opts.HandoverAvailable
-	}
 	go run.run(runCtx, &runSpec{
 		m:           m,
 		plan:        plan,

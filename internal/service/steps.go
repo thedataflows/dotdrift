@@ -413,7 +413,7 @@ func moduleLayerDir(profileRoot string, e resolve.DotfileEntry, f *facts.Facts) 
 // section selection, and returns them in pipeline order.
 func buildSteps(sections SectionSet, plan *resolve.Plan, runner *mise.ExecMise,
 	f *facts.Facts, profileRoot string, out io.Writer, misePluginsDir string,
-	opts ApplyOpts, deps ApplyDeps, paths configPaths,
+	opts ApplyOpts, deps ApplyDeps, paths configPaths, interactive bool,
 ) []apply.Step {
 	backend := deps.PackagesFor(f.Backend)
 
@@ -446,7 +446,7 @@ func buildSteps(sections SectionSet, plan *resolve.Plan, runner *mise.ExecMise,
 	if sections.Has("hooks") && len(plan.Hooks.Pre) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: paths.shared,
-			Task: "hooks-pre", StepName: "hooks-pre",
+			Task: "hooks-pre", StepName: "hooks-pre", Interactive: interactive,
 		})
 	}
 	if sections.Has("packages") {
@@ -492,7 +492,7 @@ func buildSteps(sections SectionSet, plan *resolve.Plan, runner *mise.ExecMise,
 	if sections.Has("hooks") && len(plan.Hooks.Post) > 0 {
 		steps = append(steps, &mise.HooksStep{
 			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: paths.shared,
-			Task: "hooks-post", StepName: "hooks-post",
+			Task: "hooks-post", StepName: "hooks-post", Interactive: interactive,
 		})
 	}
 	return steps

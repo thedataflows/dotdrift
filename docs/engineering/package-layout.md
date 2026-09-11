@@ -13,9 +13,12 @@ Each top-level `internal/` directory is a deep module with a small public API an
 ```
 .
 ├── cmd/                      # Kong CLI wiring; no business logic
-│   │                         # (exception: cmd/init.go's git clone/create
-│   │                         # orchestration is intentional command wiring,
-│   │                         # not domain logic; anything richer belongs in internal/)
+│   │                         # (apply is the 0061-D7 adapter: flags -> service
+│   │                         # ApplyOpts, session drain, event rendering;
+│   │                         # exceptions: cmd/init.go's git orchestration and
+│   │                         # cmd/restore.go stay command-local until their
+│   │                         # service areas exist; anything richer belongs in
+│   │                         # internal/)
 ├── internal/
 │   ├── profile/              # Load dotdrift.toml + modules; selection
 │   ├── resolve/              # Merge host/user layers into Plan

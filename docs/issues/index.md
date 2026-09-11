@@ -44,3 +44,14 @@ use, plus emergent features and chores. Planned work lives in
 | [0026](0026-restore-command.md) | restore command: copy backed-up copy-mode targets back to their live paths | done | medium |
 | [0027](0027-readme-backup-restore-examples.md) | README: backup/restore usage examples | done | low |
 | [0028](0028-apply-mise-prompts-unanswerable-stdin.md) | apply: mise confirmation prompts can never be answered (stdin is the null device) | done | high |
+| [0057](0057-dotdrift-tui-design-map.md) | Dotdrift TUI design map (wayfinder) | in-progress | high |
+| [0058](0058-bubbles-layout-inventory.md) | Bubbles & layout inventory | in-progress | medium |
+| [0059](0059-apply-streaming-tty-precedents.md) | Apply streaming & TTY precedents | in-progress | medium |
+| [0060](0060-idl-choice-go-derivation.md) | IDL choice & Go derivation | open | medium |
+| [0061](0061-service-layer-architecture-cli-migration.md) | Service-layer architecture & CLI migration | open | medium |
+| [0062](0062-tui-information-architecture.md) | TUI information architecture | open | medium |
+| [0063](0063-two-pane-shell-prototype.md) | Two-pane shell prototype | open | low |
+| [0064](0064-apply-session-tty-suspend-design.md) | Apply session & TTY suspend design | open | medium |
+| [0065](0065-full-schema-editor-suite-design.md) | Full-schema editor suite design | open | medium |
+| [0066](0066-wizard-absorption-contract-15.md) | Wizard absorption & contract #15 amendment | open | medium |
+| [0067](0067-assemble-tui-design-set.md) | Assemble the TUI design set | open | high |

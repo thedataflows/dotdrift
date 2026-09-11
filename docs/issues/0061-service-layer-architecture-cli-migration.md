@@ -15,7 +15,7 @@ timestamp: 2026-09-11T00:00:00Z
 - **Assignee**: none
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [contract](../product/contract.md), [`docs/engineering/package-layout.md`](../engineering/package-layout.md)
 - **Related code**: [`cmd/`](../../cmd/), [`internal/profile/`](../../internal/profile/), [`internal/resolve/`](../../internal/resolve/), [`internal/generate/`](../../internal/generate/)
-- **Blocked by**: [0060 IDL choice &amp; Go derivation](0060-idl-choice-go-derivation.md)
+- **Blocked by**: none (frontier — 0060 resolved: the contract is the Go service layer itself, no IDL)
 - **Closing commits**: none
 
 ## Question
@@ -28,6 +28,8 @@ layer look like, and how does `cmd/` migrate onto it?
   `internal/api/`, `internal/service/`) against
   `docs/engineering/package-layout.md` conventions and the existing
   seams (`internal/tui`'s spec-builders already model the pattern).
+  0060's resolution makes this layout carry API versioning too — there
+  is no IDL to do it.
 - Service decomposition: read models (plan, status, modules, detect,
   diff), write models (onboard, restore, generate, profile-file
   editing), and sessions (apply with streaming events, cancel). Which

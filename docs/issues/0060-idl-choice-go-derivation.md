@@ -9,14 +9,14 @@ timestamp: 2026-09-11T00:00:00Z
 # ISSUE 0060: IDL choice &amp; Go derivation
 
 - **Type**: task
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [wayfinder:grilling]
-- **Assignee**: none
+- **Assignee**: cri (main session)
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md)
 - **Related code**: none yet
 - **Blocked by**: none (frontier)
-- **Closing commits**: none
+- **Closing commits**: pending
 
 ## Question
 
@@ -47,3 +47,31 @@ candidate expresses streaming apply events, consult the findings of
 [Bubbles &amp; layout inventory](0058-bubbles-layout-inventory.md) and
 especially [Apply streaming &amp; TTY precedents](0059-apply-streaming-tty-precedents.md)
 *if they have landed*; do not block on them.
+
+## Resolution
+
+Grilled in the main session. Round 1 settled the constraints
+(multi-language as hedge-with-discipline, conformance-by-test over
+codegen, sections growing inside one versioned package, contract at
+`api/dotdrift/v1/`, operations normative alongside data). The verdict
+round proposed **CUE** as the IDL with structural-reflection
+conformance — and the human **revoked the IDL premise** on the spot:
+any IDL plus its conformance apparatus is complexity the product does
+not need.
+
+**Decision: no IDL.** The Go service layer itself — interfaces and
+structs in the dotdrift module — is the normative contract. Operations
+are interface methods; apply events are Go types carrying research
+0059's vocabulary (per-step Start/Finished/Exit keyed off the
+pipeline's named steps + hook index). `docs/product/tui.md` and the
+contract doc from 0061/0067 describe that surface in prose; no machine
+IDL is checked in.
+
+- Survives from round 1: the growth pacing (TUI-critical core first,
+  surface grows section by section) transfers to 0061's migration
+  slicing; versioning dissolves into ordinary Go package versioning,
+  decided with 0061.
+- Deferred, not abandoned: non-Go UI consumers were the IDL's only
+  customer and are already out of scope on the map. If one ever
+  materializes, derive an exchange format from the Go types *then*
+  (reflection-based export or a written IDL at that point).

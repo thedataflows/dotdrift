@@ -1,7 +1,7 @@
 ---
 type: Issue
 title: Dotdrift TUI design map (wayfinder)
-description: Wayfinder map — chart the way to an approved design set for the dotdrift tui command, its service-layer API and formal IDL, and the M14 proposal.
+description: Wayfinder map — chart the way to an approved design set for the dotdrift tui command, its service-layer API contract, and the M14 proposal.
 tags: [wayfinder, map, tui, api, design]
 timestamp: 2026-09-11T00:00:00Z
 ---
@@ -20,7 +20,7 @@ timestamp: 2026-09-11T00:00:00Z
 ## Destination
 
 An approved design set for `dotdrift tui`: the product spec
-(`docs/product/tui.md`), the normative formal IDL + API contract doc for
+(`docs/product/tui.md`), the normative service-layer API contract doc for
 the full product service layer (the front door every command migrates
 onto), supporting ADRs, and a proposed M14-TUI milestone breakdown.
 Design only — no implementation ships from this map; implementation
@@ -41,8 +41,10 @@ Standing preferences settled while charting (grilling rounds 1–2):
 - The service layer is a **big-bang doorway**: every command (CLI and
   TUI) migrates onto it; the design includes the migration of all
   `cmd/`.
-- A **formal IDL** (checked in) is the normative contract even before
-  any transport exists.
+- The contract is the **Go service layer itself** (interfaces + structs)
+  — the formal-IDL preference from charting was revoked during the 0060
+  grill: no IDL is checked in; non-Go consumers stay out of scope until
+  one exists.
 - **Full-schema editors**: first-class structured editors for every
   `module.toml` section.
 - Apply runs **inside the TUI, streamed**, with bubbletea
@@ -75,6 +77,7 @@ ticket.
 
 ## Decisions so far
 
+- [IDL choice & Go derivation](0060-idl-choice-go-derivation.md): no IDL — the Go service layer (interfaces + structs) is the normative contract; operations are interface methods, apply events are Go types (research 0059's vocabulary); surface grows TUI-critical-core-first; versioning becomes ordinary Go package versioning; non-Go consumers deferred until one exists.
 - [Apply streaming & TTY precedents](0059-apply-streaming-tty-precedents.md): stream steps into a pane keyed off the pipeline's own step/exit events; hand the real terminal over via `tea.ExecProcess` only for pre-classified TTY steps (sudo prompts, interactive hooks), run pane steps with `--yes`, and cancel through one ctx with process-group kills (cursor already survives aborts).
 - [Bubbles & layout inventory](0058-bubbles-layout-inventory.md): charm v2 is GA under `charm.land/*` (v1 frozen), making v1-vs-v2 the first design call; the tree gap closed on v2 only (official tree bubble, Aug 2026); two-pane layout needs nothing beyond lipgloss Join* + WindowSizeMsg; huh embeds as a child model; teatest is still untagged, so pure state machines + golden View() tests stay the testing mandate.
 
@@ -86,7 +89,9 @@ ticket.
   [TUI information architecture](0062-tui-information-architecture.md)
   already decides; the inventory (research 0058) landed the facts — v2
   renames the styling APIs — but no ticket owns the mechanism yet.
-- API versioning of the IDL and its error model details.
+- Versioning and error-model details of the Go service package
+  (package-path versioning, typed errors) — decided with 0061 or the
+  assembly ticket.
 - A status/drift view inside the TUI (read-only surface over plan/status
   read models) — scope not yet pinned.
 - Multi-account presentation: how the superuser overlay and other
@@ -97,7 +102,7 @@ ticket.
 
 ## Out of scope
 
-- Implementing the TUI, service layer, or IDL tooling — that is M14+
+- Implementing the TUI or service layer — that is M14+
   work this map only *designs* (destination: the design set).
 - Building non-Go UIs; the contract exists so others *can*, not so this
   effort does.

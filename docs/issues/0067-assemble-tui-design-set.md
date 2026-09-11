@@ -1,7 +1,7 @@
 ---
 type: Issue
 title: Assemble the TUI design set
-description: Destination-closing ticket — write tui.md, the IDL + API contract doc, the ADRs, the M14 proposal, and the glossary additions from the resolved tickets.
+description: Destination-closing ticket — write tui.md, the API contract doc, the ADRs, the M14 proposal, and the glossary additions from the resolved tickets.
 tags: [wayfinder, task, tui, design, docs]
 timestamp: 2026-09-11T00:00:00Z
 ---
@@ -26,11 +26,11 @@ reviewable. What ships, where, and is it approved?
 - `docs/product/tui.md` (OKF): the product spec — command surface, IA,
   screens, editors, apply UX — written *from the resolutions*, not
   re-litigating them.
-- The IDL artifact + API contract doc from ticket 0060/0061's decision
-  (location fixed there), normative, with the service surface for the
-  whole product.
+- The API contract doc from ticket 0060/0061's decisions (location
+  fixed there), normative prose over the Go service layer — the whole
+  product surface.
 - ADRs per ticket 0066's decision (service-layer doorway; wizard
-  absorption; IDL choice if it earns one).
+  absorption).
 - M14-TUI milestone proposal in `docs/milestones/` (+ `docs/tasks/` per
   conventions), sliced from the design so implementation can start as
   ordinary planned work.

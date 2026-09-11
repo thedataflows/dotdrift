@@ -47,7 +47,7 @@ use, plus emergent features and chores. Planned work lives in
 | [0057](0057-dotdrift-tui-design-map.md) | Dotdrift TUI design map (wayfinder) | in-progress | high |
 | [0058](0058-bubbles-layout-inventory.md) | Bubbles & layout inventory | done | medium |
 | [0059](0059-apply-streaming-tty-precedents.md) | Apply streaming & TTY precedents | done | medium |
-| [0060](0060-idl-choice-go-derivation.md) | IDL choice & Go derivation | open | medium |
+| [0060](0060-idl-choice-go-derivation.md) | IDL choice & Go derivation | done | medium |
 | [0061](0061-service-layer-architecture-cli-migration.md) | Service-layer architecture & CLI migration | open | medium |
 | [0062](0062-tui-information-architecture.md) | TUI information architecture | open | medium |
 | [0063](0063-two-pane-shell-prototype.md) | Two-pane shell prototype | open | low |

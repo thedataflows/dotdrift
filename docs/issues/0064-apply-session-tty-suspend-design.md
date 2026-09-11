@@ -1,7 +1,7 @@
 ---
 type: Issue
 title: Apply session &amp; TTY suspend design
-description: Design the apply-session shape (events, progress, cancel, terminal handoff) the IDL carries so apply streams inside the TUI.
+description: Design the apply-session shape (events, progress, cancel, terminal handoff) the service layer carries so apply streams inside the TUI.
 tags: [wayfinder, grilling, apply, api]
 timestamp: 2026-09-11T00:00:00Z
 ---

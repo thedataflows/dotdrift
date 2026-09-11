@@ -9,10 +9,10 @@ timestamp: 2026-09-12T00:00:00Z
 # ISSUE 0071: Surface TTY handover for real steps
 
 - **Type**: task
-- **Status**: open
+- **Status**: in progress
 - **Priority**: high
 - **Labels**: [implementation]
-- **Assignee**: none
+- **Assignee**: dev
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [0069 apply-session service core](0069-implement-apply-session-service-core.md), [0064 D3/D4/D9](0064-apply-session-tty-suspend-design.md), [contract invariants 12, 13](../product/contract.md)
 - **Related code**: [`internal/mise/`](../../internal/mise/), `internal/service/`
 - **Blocked by**: [0069 Implement apply-session service core](0069-implement-apply-session-service-core.md)

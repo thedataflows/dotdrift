@@ -37,18 +37,18 @@ func TestApply_systemdStep(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: systemdFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: systemdFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
 	unitIdx := -1
-	for i, e := range *events {
+	for i, e := range *fk.events {
 		if strings.Contains(e, "bootstrap") && strings.Contains(e, filepath.Join("mise", "systemd")) && strings.Contains(e, "--only linux-systemd-units") {
 			unitIdx = i
 		}
 	}
-	require.GreaterOrEqual(t, unitIdx, 0, "systemd units bootstrap missing in %v", *events)
+	require.GreaterOrEqual(t, unitIdx, 0, "systemd units bootstrap missing in %v", *fk.events)
 
 	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "systemd", "mise.toml"))
 	require.NoError(t, err)
@@ -64,13 +64,13 @@ func TestApply_sectionFlagsSystemd(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: systemdFixture(t), State: statePath, Yes: true,
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: systemdFixture(t), State: statePath, Yes: true,
 		onlySections: []string{"packages", "tools", "dotfiles", "mounts", "smb", "hooks"}}
 	require.NoError(t, cmd.Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "linux-systemd-units", "systemd step must not run when deselected")
 	}
 	_, err := os.Stat(filepath.Join(dir, "mise", "systemd"))
@@ -82,12 +82,12 @@ func TestApply_noSystemdNoStep(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "linux-systemd-units")
 	}
 }

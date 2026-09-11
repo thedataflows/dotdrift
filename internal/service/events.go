@@ -41,9 +41,13 @@ func (PlanResolved) event() {}
 
 // BackupTaken reports one module's copy-mode backup generation (0064-D3:
 // one event per receiving module directory, when ApplyOpts.Backup is set).
+// Count is the number of destinations actually written — backup.Run skips
+// nonexistent destinations, so it can be less than len(Files) (the CLI's
+// summary line prints this count, byte-parity with the pre-session output).
 type BackupTaken struct {
 	Dir   string   // the backups/<generation>/ directory written
-	Files []string // the destinations that were snapshotted
+	Files []string // the copy destinations the run requested
+	Count int      // destinations actually written (Run's return)
 }
 
 func (BackupTaken) event() {}

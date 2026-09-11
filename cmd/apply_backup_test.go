@@ -57,10 +57,10 @@ func applyBackupDeps(t *testing.T, backup bool, sections []string) (*strings.Bui
 	statePath := filepath.Join(t.TempDir(), "state.json")
 
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
 	var out strings.Builder
-	cmd := &ApplyCmd{Profile: root, State: statePath, Yes: true, Backup: backup, Out: &out}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: root, State: statePath, Yes: true, Backup: backup, Out: &out}
 	if sections != nil {
 		cmd.onlySections = sections
 	}

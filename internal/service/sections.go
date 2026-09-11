@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -20,11 +21,23 @@ func (s SectionSet) Has(name string) bool { return s[name] }
 // selection (name → true to select, false to subtract; nil or empty
 // means everything): any positive entry makes the positives the whole
 // selection, negatives subtract, and an empty result is an error — a
-// silent no-op apply is never OK.
+// silent no-op apply is never OK. Names outside SectionNames are
+// rejected with the valid list (a typo must fail loudly).
 func ResolveSections(explicit map[string]bool) (SectionSet, error) {
 	all := make(SectionSet, len(SectionNames))
 	for _, n := range SectionNames {
 		all[n] = true
+	}
+	var unknown []string
+	for name := range explicit {
+		if _, ok := all[name]; !ok {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) > 0 {
+		sort.Strings(unknown)
+		return nil, fmt.Errorf("unknown section(s): %s (valid sections: %s)",
+			strings.Join(unknown, ", "), strings.Join(SectionNames, ", "))
 	}
 	selected := make(SectionSet, len(SectionNames))
 	for n := range all {

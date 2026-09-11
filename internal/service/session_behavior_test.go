@@ -291,6 +291,8 @@ func TestSession_outputPolicyPassthrough(t *testing.T) {
 	require.NotNil(t, captured)
 	require.False(t, captured.ForceStream)
 	require.Same(t, buf, captured.Out)
+	require.Nil(t, captured.Err,
+		"child stderr must keep the process's stderr (parity with the pre-session CLI), not merge into Output")
 }
 
 // Event mode (Output absent): streaming is forced to the collector
@@ -362,8 +364,12 @@ func TestSession_backupEmitsEvents(t *testing.T) {
 		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
 	}
-	write("modules/demo/module.toml", "[dotfiles]\n\"~/.config/demo/app.conf\" = { source = \"home/app.conf\", mode = \"copy\" }\n")
+	// gone.conf's destination does not exist on this host (fresh-host
+	// semantics): backup.Run skips it, so the module's written count is 1
+	// while the request lists 2 targets.
+	write("modules/demo/module.toml", "[dotfiles]\n\"~/.config/demo/app.conf\" = { source = \"home/app.conf\", mode = \"copy\" }\n\"~/.config/demo/gone.conf\" = { source = \"home/gone.conf\", mode = \"copy\" }\n")
 	write("modules/demo/home/app.conf", "profile copy content")
+	write("modules/demo/home/gone.conf", "profile gone content")
 	write("hosts/myhost/modules/demo/module.toml", "[dotfiles]\n\"~/.config/demo/host.conf\" = { source = \"home/host.conf\", mode = \"copy\" }\n")
 	write("hosts/myhost/modules/demo/home/host.conf", "host copy content")
 
@@ -394,18 +400,27 @@ func TestSession_backupEmitsEvents(t *testing.T) {
 		}
 	}
 	require.Len(t, backups, 2)
-	byDir := map[string][]string{}
-	for _, bt := range backups {
-		byDir[filepath.Dir(filepath.Dir(bt.Dir))] = bt.Files
+	byDir := map[string]*BackupTaken{}
+	for i := range backups {
+		byDir[filepath.Dir(filepath.Dir(backups[i].Dir))] = &backups[i]
 	}
 	require.Contains(t, byDir, filepath.Join(root, "modules", "demo"))
+	// Fresh-host count semantics: the demo module requested two copy
+	// destinations but only app.conf existed — Count reports the written
+	// truth (the CLI summary line), Files the full request.
+	demo := byDir[filepath.Join(root, "modules", "demo")]
+	require.Equal(t, 2, len(demo.Files))
+	require.Equal(t, 1, demo.Count)
+	host := byDir[filepath.Join(root, "hosts", "myhost", "modules", "demo")]
+	require.Equal(t, 1, len(host.Files))
+	require.Equal(t, 1, host.Count)
 	require.Contains(t, byDir, filepath.Join(root, "hosts", "myhost", "modules", "demo"))
 	require.FileExists(t, filepath.Join(backups[0].Dir,
 		strings.TrimPrefix(filepath.Join(live, "host.conf"), "/"))) // hosts/ sorts first
 	require.FileExists(t, filepath.Join(backups[1].Dir,
 		strings.TrimPrefix(filepath.Join(live, "app.conf"), "/"))) // absolute target path mirrored under the generation
-	require.Equal(t, []string{filepath.Join(live, "app.conf")}, byDir[filepath.Join(root, "modules", "demo")])
-	require.Equal(t, []string{filepath.Join(live, "host.conf")}, byDir[filepath.Join(root, "hosts", "myhost", "modules", "demo")])
+	require.Equal(t, []string{filepath.Join(live, "app.conf"), filepath.Join(live, "gone.conf")}, demo.Files)
+	require.Equal(t, []string{filepath.Join(live, "host.conf")}, host.Files)
 
 	// Symlink and edit entries are never backed up; no dotfiles section, no
 	// backups — covered by cmd/apply_backup_test.go's selection matrix.

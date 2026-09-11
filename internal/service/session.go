@@ -54,31 +54,9 @@ type ApplyArea struct {
 }
 
 // NewApplyArea builds the area on the given deps (zero-value dep fields
-// fall back to the real implementations).
+// fall back to the real implementations — WithDefaults).
 func NewApplyArea(deps ApplyDeps) *ApplyArea {
-	def := defaultApplyDeps()
-	if deps.Detect == nil {
-		deps.Detect = def.Detect
-	}
-	if deps.LoadProfile == nil {
-		deps.LoadProfile = def.LoadProfile
-	}
-	if deps.Resolve == nil {
-		deps.Resolve = def.Resolve
-	}
-	if deps.NewMise == nil {
-		deps.NewMise = def.NewMise
-	}
-	if deps.PackagesFor == nil {
-		deps.PackagesFor = def.PackagesFor
-	}
-	if deps.NewSmbRunner == nil {
-		deps.NewSmbRunner = def.NewSmbRunner
-	}
-	if deps.StdinIsTerminal == nil {
-		deps.StdinIsTerminal = def.StdinIsTerminal
-	}
-	return &ApplyArea{deps: deps}
+	return &ApplyArea{deps: deps.WithDefaults()}
 }
 
 // SessionResult is the outcome of a finished session (0064-D7): returned
@@ -384,9 +362,14 @@ func (r *sessionRunner) run(ctx context.Context, spec *runSpec) {
 
 	// Output policy (D2): attached writer = children stream to it exactly
 	// as StreamLive wires them today (a terminal writer keeps child color);
-	// absent = forced streaming into the line-buffered collector.
+	// absent = forced streaming into the line-buffered collector. The
+	// passthrough stderr stays nil — mise's writers() then defaults it to
+	// the process's stderr, byte-parity with the pre-session CLI (the old
+	// Run left both writers nil); merging it into Output would move mise
+	// warnings and the --verbose echo onto the stdout stream.
 	if r.opts.Output != nil {
-		spec.m.Out, spec.m.Err = r.opts.Output, r.opts.Output
+		spec.m.Out = r.opts.Output
+		spec.m.Err = nil
 	} else {
 		spec.m.Out, spec.m.Err = r.collector, r.collector
 		spec.m.ForceStream = true

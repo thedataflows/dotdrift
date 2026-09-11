@@ -15,6 +15,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
+	"github.com/thedataflows/dotdrift/internal/service"
 	"github.com/thedataflows/dotdrift/internal/smb"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
@@ -39,7 +40,7 @@ func (b *recordingBackend) Absent(_ context.Context, pkgs []string) error {
 }
 
 func (b *recordingBackend) IsInstalled(context.Context, string) (bool, error) { return false, nil }
-func (b *recordingBackend) Installed(context.Context) ([]string, error)      { return nil, nil }
+func (b *recordingBackend) Installed(context.Context) ([]string, error)       { return nil, nil }
 
 func (b *recordingBackend) DirectDeps(context.Context, string) ([]string, error) { return nil, nil }
 
@@ -85,7 +86,16 @@ func (r *recordingSmbRunner) RunInteractive(_ context.Context, name string, args
 // returns the shared event log plus the recording packages backend.
 // profile.Load and resolve.Resolve run for real (wrapped to record order) so
 // the wiring is exercised end-to-end against a fixture profile.
-func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) {
+// applyFakes bundles the injected session deps with the recording fakes
+// tests assert on. deps is the seam: every Run-calling test threads
+// &fk.deps into the ApplyCmd (issue 0070 moved the seams off package vars).
+type applyFakes struct {
+	events  *[]string
+	backend *recordingBackend
+	deps    service.ApplyDeps
+}
+
+func stubApplyDeps(t *testing.T, f *facts.Facts) *applyFakes {
 	t.Helper()
 	// Contain plugin source/link writes (paru.EnsureInstalled) to temp — the
 	// packages step otherwise writes under the real $XDG_DATA_HOME. Same for
@@ -95,27 +105,24 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) (*[]string, *recordingBackend) 
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	events := &[]string{}
 	backend := &recordingBackend{events: events}
-
-	origDetect, origLoad, origResolve, origMise, origFor := detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor
-	origSmbRunner := newSmbRunner
-	t.Cleanup(func() {
-		detectFacts, profileLoad, resolvePlan, defaultMise, packagesFor = origDetect, origLoad, origResolve, origMise, origFor
-		newSmbRunner = origSmbRunner
-	})
-
-	detectFacts = func() (*facts.Facts, error) { return f, nil }
-	profileLoad = func(root string, ff *facts.Facts) (*profile.Profile, error) {
-		*events = append(*events, "load")
-		return origLoad(root, ff)
+	return &applyFakes{
+		events:  events,
+		backend: backend,
+		deps: service.ApplyDeps{
+			Detect: func() (*facts.Facts, error) { return f, nil },
+			LoadProfile: func(root string, ff *facts.Facts) (*profile.Profile, error) {
+				*events = append(*events, "load")
+				return profile.Load(root, ff)
+			},
+			Resolve: func(p *profile.Profile, ff *facts.Facts) (*resolve.Plan, error) {
+				*events = append(*events, "resolve")
+				return resolve.Resolve(p, ff)
+			},
+			NewMise:      func() *mise.Mise { return fakeMise(events) },
+			PackagesFor:  func(string) packages.Backend { return backend },
+			NewSmbRunner: func() smb.Runner { return &recordingSmbRunner{events: events} },
+		},
 	}
-	resolvePlan = func(p *profile.Profile, ff *facts.Facts) (*resolve.Plan, error) {
-		*events = append(*events, "resolve")
-		return origResolve(p, ff)
-	}
-	defaultMise = func() *mise.Mise { return fakeMise(events) }
-	packagesFor = func(string) packages.Backend { return backend }
-	newSmbRunner = func() smb.Runner { return &recordingSmbRunner{events: events} }
-	return events, backend
 }
 
 // requireOrder asserts that the given event prefixes appear in order.
@@ -154,12 +161,12 @@ func TestApply_happyPath(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	requireOrder(t, *events,
+	requireOrder(t, *fk.events,
 		"load",
 		"resolve",
 		"mise:ensure",
@@ -170,12 +177,36 @@ func TestApply_happyPath(t *testing.T) {
 		"mise:run dotfiles apply",
 		"mise:run run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-post-0",
 	)
-	requireOrder(t, *events, "mise:run bootstrap")
-	require.Contains(t, *events, "packages:absent emacs,nano")
-	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
+	requireOrder(t, *fk.events, "mise:run bootstrap")
+	require.Contains(t, *fk.events, "packages:absent emacs,nano")
+	require.Contains(t, *fk.events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
 
 	_, statErr := os.Stat(statePath)
 	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
+}
+
+// A second apply on the same state file refuses instead of queueing
+// (contract 11, 0064-D6): the adapter surfaces the session's
+// AlreadyRunningError, message intact.
+func TestApply_alreadyRunningErrors(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	fk := stubApplyDeps(t, f)
+
+	// Hold the sidecar lock the way a first apply would.
+	store := state.NewFileStore(statePath)
+	ok, err := store.TryLock()
+	require.NoError(t, err)
+	require.True(t, ok)
+	t.Cleanup(func() { _ = store.Unlock() })
+
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
+	err = cmd.Run()
+	require.Error(t, err)
+	var running *service.AlreadyRunningError
+	require.ErrorAs(t, err, &running)
+	require.Contains(t, err.Error(), "another apply is already running")
 }
 
 // A persisted cursor naming a completed step makes apply skip through it:
@@ -185,17 +216,17 @@ func TestApply_resumeSkipsStepsThroughCursor(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
 	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "tools"}))
 
-	require.NoError(t, (&ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "mise:run install", "tools step must be skipped after a tools cursor")
 		require.NotContains(t, e, "packages:absent", "packages step must be skipped after a tools cursor")
 	}
-	require.Contains(t, *events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
+	require.Contains(t, *fk.events, "mise:run dotfiles apply --cd "+filepath.Join(dir, "mise", "dotfiles")+" --yes")
 
 	_, statErr := os.Stat(statePath)
 	require.True(t, os.IsNotExist(statErr), "state file must be removed after the resumed apply completes")
@@ -206,17 +237,14 @@ func TestApply_resumeSkipsStepsThroughCursor(t *testing.T) {
 // controlling terminal and can disable echo; when stdin is not a terminal the
 // key is omitted so mise runs normally.
 func TestApply_hookTaskInteractiveReflectsStdinTTY(t *testing.T) {
-	orig := stdinIsTerminal
-	t.Cleanup(func() { stdinIsTerminal = orig })
-
 	run := func(t *testing.T, tty bool) string {
 		t.Helper()
 		dir := t.TempDir()
 		statePath := filepath.Join(dir, "state.json")
 		f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-		stubApplyDeps(t, f)
-		stdinIsTerminal = func() bool { return tty }
-		require.NoError(t, (&ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
+		fk := stubApplyDeps(t, f)
+		fk.deps.StdinIsTerminal = func() bool { return tty }
+		require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
 		cfg, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
 		require.NoError(t, err)
 		return string(cfg)
@@ -238,9 +266,9 @@ func TestApply_stepsDoNotClobberSharedMiseConfig(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
 	shared, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
@@ -259,10 +287,10 @@ func TestApply_printsPlan(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
 	var buf bytes.Buffer
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true, Out: &buf}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true, Out: &buf}
 	require.NoError(t, cmd.Run())
 
 	out := buf.String()
@@ -289,11 +317,11 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 	// Inject a bootstrap failure (packages install now goes through mise
 	// bootstrap, not the backend's Present).
-	defaultMise = func() *mise.Mise {
-		m := fakeMise(events)
+	fk.deps.NewMise = func() *mise.Mise {
+		m := fakeMise(fk.events)
 		m.Run = func(_ string, args ...string) (string, error) {
 			for _, a := range args {
 				if a == "bootstrap" {
@@ -308,7 +336,7 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 		return m
 	}
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath}
 	err := cmd.Run()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "packages")
@@ -329,7 +357,7 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	require.Contains(t, cfg, `[tasks."hooks-pre-0"]`)
 	require.Contains(t, cfg, `[tasks."hooks-post-0"]`)
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "mise:run install", "tools step must not run after the packages failure")
 	}
 }
@@ -342,13 +370,13 @@ func TestApply_noHooksFlag(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true,
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true,
 		onlySections: []string{"packages", "tools", "dotfiles", "mounts", "smb"}}
 	require.NoError(t, cmd.Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "hooks:", "--no-hooks must not run any hook task")
 	}
 
@@ -362,14 +390,14 @@ func TestApply_onlyPackages(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true,
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true,
 		onlySections: []string{"packages"}}
 	require.NoError(t, cmd.Run())
 
-	requireOrder(t, *events, "packages:absent")
-	for _, e := range *events {
+	requireOrder(t, *fk.events, "packages:absent")
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "mise:run install", "tools must not run")
 		require.NotContains(t, e, "dotfiles apply", "dotfiles must not run")
 		require.NotContains(t, e, "hooks:", "hooks must not run")
@@ -382,14 +410,14 @@ func TestApply_onlyToolsAndDotfiles(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true,
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true,
 		onlySections: []string{"tools", "dotfiles"}}
 	require.NoError(t, cmd.Run())
 
-	requireOrder(t, *events, "mise:run install", "dotfiles apply")
-	for _, e := range *events {
+	requireOrder(t, *fk.events, "mise:run install", "dotfiles apply")
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "packages:absent", "packages must not run")
 		require.NotContains(t, e, "packages:present", "packages must not run")
 		require.NotContains(t, e, "hooks:", "hooks must not run")
@@ -403,16 +431,16 @@ func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true,
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: mountsFixture(t), State: statePath, Yes: true,
 		onlySections: []string{"dotfiles"}}
 	require.NoError(t, cmd.Run())
 
 	// The fixture's system-scope unit files still converge via bootstrap
 	// --only files; mount services must not.
-	requireOrder(t, *events, "--only files")
-	for _, e := range *events {
+	requireOrder(t, *fk.events, "--only files")
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "services", "mounts services must not run")
 	}
 	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
@@ -427,12 +455,12 @@ func TestApply_noHooksEnv(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "hooks:", "DOTDRIFT_NO_HOOKS=1 must not run any hook task")
 	}
 
@@ -462,12 +490,12 @@ func TestApply_mountsStepConditional(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: mountsFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	requireOrder(t, *events,
+	requireOrder(t, *fk.events,
 		"mise:run run",    // hooks:pre
 		"--only packages", // packages
 		"--only files",    // system files + mount destination dirs (issue 0042)
@@ -488,26 +516,26 @@ func TestApply_smbStepConditional(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
 	var buf bytes.Buffer
-	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Out: &buf}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: mountsFixture(t), State: statePath, Yes: true, Out: &buf}
 	require.NoError(t, cmd.Run())
 
 	// Bootstrap handles group/user/service convergence; PostBootstrap still
 	// uses the smbRunner for testparm + smbpasswd.
-	requireOrder(t, *events,
+	requireOrder(t, *fk.events,
 		"mise:run bootstrap", // mounts services
 		"mise:run bootstrap", // smb accounts+services
 		"smb:run",            // PostBootstrap testparm
 		"mise:run run",       // hooks:post
 	)
 
-	joined := strings.Join(*events, "\n")
+	joined := strings.Join(*fk.events, "\n")
 	require.Contains(t, joined, "testparm -s")
 	require.Contains(t, joined, "pdbedit -L")
 
-	if eventIdx(*events, "smb:run-interactive") >= 0 {
+	if eventIdx(*fk.events, "smb:run-interactive") >= 0 {
 		require.Contains(t, joined, "smbpasswd -a cri")
 	} else {
 		require.Contains(t, buf.String(), "samba password missing for cri; run: sudo smbpasswd -a cri")
@@ -523,12 +551,12 @@ func TestApply_noMountsNoSmb_stepsAbsent(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		require.NotContains(t, e, "mounts:run", "no mounts step must run for a plan without mounts")
 		require.NotContains(t, e, "smb:run", "no smb step must run for a plan without smb")
 	}
@@ -546,14 +574,16 @@ func TestApply_moduleFilterLimitsSelection(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	var selectedIDs []string
+	// The resolve seam fires twice (adapter display reads + session Start),
+	// so the observed selection is a set.
+	selectedIDs := map[string]bool{}
 	skippedReasons := map[string]string{}
-	innerResolve := resolvePlan
-	resolvePlan = func(p *profile.Profile, ff *facts.Facts) (*resolve.Plan, error) {
+	innerResolve := fk.deps.Resolve
+	fk.deps.Resolve = func(p *profile.Profile, ff *facts.Facts) (*resolve.Plan, error) {
 		for _, m := range p.Selected {
-			selectedIDs = append(selectedIDs, m.ID)
+			selectedIDs[m.ID] = true
 		}
 		for _, s := range p.Skipped {
 			skippedReasons[s.Module.ID] = s.Reason
@@ -561,7 +591,7 @@ func TestApply_moduleFilterLimitsSelection(t *testing.T) {
 		return innerResolve(p, ff)
 	}
 
-	cmd := &ApplyCmd{
+	cmd := &ApplyCmd{deps: &fk.deps,
 		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
 		State:   statePath,
 		Yes:     true,
@@ -569,8 +599,8 @@ func TestApply_moduleFilterLimitsSelection(t *testing.T) {
 	}
 	require.NoError(t, cmd.Run())
 
-	requireOrder(t, *events, "load", "resolve")
-	require.Equal(t, []string{"shell"}, selectedIDs)
+	requireOrder(t, *fk.events, "load", "resolve")
+	require.Equal(t, map[string]bool{"shell": true}, selectedIDs)
 	require.Equal(t, "module filter", skippedReasons["demo"])
 
 	_, statErr := os.Stat(statePath)
@@ -583,14 +613,14 @@ func TestApply_moduleFilterUnknownErrors(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Modules: []string{"nope"}}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Modules: []string{"nope"}}
 	err := cmd.Run()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "nope")
 	require.Contains(t, err.Error(), "shell", "error must list the valid module ids")
-	require.NotContains(t, *events, "resolve", "resolvePlan must not run when the filter is invalid")
+	require.NotContains(t, *fk.events, "resolve", "resolve must not run when the filter is invalid")
 }
 
 // verboseRecordingBackend records SetVerbose calls while satisfying
@@ -611,10 +641,10 @@ type verboseSmbRunner struct {
 
 func (r *verboseSmbRunner) SetVerbose(v bool) { r.verbose = v }
 
-// stubVerboseDeps swaps the runner-construction seams for verbose-recording
-// fakes and returns them plus the captured mise, so tests can assert where
-// --verbose landed.
-func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, sr *verboseSmbRunner) {
+// stubVerboseDeps builds the session seam from verbose-recording fakes and
+// returns them plus the captured mise and the deps, so tests can assert
+// where --verbose landed.
+func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, sr *verboseSmbRunner, deps *service.ApplyDeps) {
 	t.Helper()
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // tools activation fragment (issue 0037)
@@ -623,30 +653,25 @@ func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, bac
 	sr = &verboseSmbRunner{recordingSmbRunner: &recordingSmbRunner{events: events}}
 
 	var captured *mise.Mise
-	origDetect, origMise, origFor := detectFacts, defaultMise, packagesFor
-	origSmbRunner := newSmbRunner
-	t.Cleanup(func() {
-		detectFacts, defaultMise, packagesFor = origDetect, origMise, origFor
-		newSmbRunner = origSmbRunner
-	})
-
-	detectFacts = func() (*facts.Facts, error) { return f, nil }
-	defaultMise = func() *mise.Mise { captured = fakeMise(events); return captured }
-	packagesFor = func(string) packages.Backend { return backend }
-	newSmbRunner = func() smb.Runner { return sr }
-	return &captured, backend, sr
+	deps = &service.ApplyDeps{
+		Detect:       func() (*facts.Facts, error) { return f, nil },
+		NewMise:      func() *mise.Mise { captured = fakeMise(events); return captured },
+		PackagesFor:  func(string) packages.Backend { return backend },
+		NewSmbRunner: func() smb.Runner { return sr },
+	}
+	return &captured, backend, sr, deps
 }
 
-// --verbose threads through the existing construction seams: the mise
+// --verbose threads through the session's construction seams: the mise
 // bootstrapper's Verbose field is set and every interface runner receives
 // SetVerbose(true).
 func TestApply_verbosePropagatesToRunners(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	capturedMise, backend, sr := stubVerboseDeps(t, f)
+	capturedMise, backend, sr, vd := stubVerboseDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true, Verbose: true}
+	cmd := &ApplyCmd{deps: vd, Profile: mountsFixture(t), State: statePath, Yes: true, Verbose: true}
 	require.NoError(t, cmd.Run())
 
 	require.NotNil(t, *capturedMise)
@@ -660,9 +685,9 @@ func TestApply_nonVerboseLeavesRunnersQuiet(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	capturedMise, backend, sr := stubVerboseDeps(t, f)
+	capturedMise, backend, sr, vd := stubVerboseDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: mountsFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: vd, Profile: mountsFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
 	require.NotNil(t, *capturedMise)
@@ -694,11 +719,11 @@ func TestApply_diffFlagShowsDiff(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 	writeCopyProfile(t, dir, "theme = \"light\"\n", "theme = \"dark\"\n")
 
 	var buf bytes.Buffer
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "internal", Out: &buf}).Run())
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: dir, State: statePath, Yes: true, Diff: "internal", Out: &buf}).Run())
 
 	out := buf.String()
 	t.Log(out)
@@ -713,11 +738,11 @@ func TestApply_diffFlagIdenticalFilesNoDiff(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 	writeCopyProfile(t, dir, "same\n", "same\n")
 
 	var buf bytes.Buffer
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "internal", Out: &buf}).Run())
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: dir, State: statePath, Yes: true, Diff: "internal", Out: &buf}).Run())
 
 	out := buf.String()
 	require.NotContains(t, out, "---")
@@ -728,11 +753,11 @@ func TestApply_diffFlagExternalTool(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 	target := writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo", Out: &buf}).Run())
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: dir, State: statePath, Yes: true, Diff: "echo", Out: &buf}).Run())
 
 	// echo prints its args (the two file paths), proving the tool was invoked
 	// with target and source as arguments.
@@ -745,13 +770,13 @@ func TestApply_diffFlagExternalToolWithArgs(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 	writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
 	// "echo --marker" → echo prints "--marker" then the two file paths,
 	// proving the tool spec was split into command + user args.
-	require.NoError(t, (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "echo --marker", Out: &buf}).Run())
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: dir, State: statePath, Yes: true, Diff: "echo --marker", Out: &buf}).Run())
 	out := buf.String()
 	require.Contains(t, out, "--marker")
 }
@@ -760,11 +785,11 @@ func TestApply_diffFlagToolNotFoundErrors(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 	writeCopyProfile(t, dir, "old\n", "new\n")
 
 	var buf bytes.Buffer
-	err := (&ApplyCmd{Profile: dir, State: statePath, Yes: true, Diff: "nonexistent-diff-tool-xyz", Out: &buf}).Run()
+	err := (&ApplyCmd{deps: &fk.deps, Profile: dir, State: statePath, Yes: true, Diff: "nonexistent-diff-tool-xyz", Out: &buf}).Run()
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "'nonexistent-diff-tool-xyz'")
 }
@@ -777,19 +802,19 @@ func TestApply_forceFlagReachesDotfilesApply(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true, Force: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true, Force: true}
 	require.NoError(t, cmd.Run())
 
 	var found bool
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		if strings.Contains(e, "dotfiles apply") {
 			found = true
 			require.Contains(t, e, "--force", "every dotfiles apply must carry --force: %q", e)
 		}
 	}
-	require.True(t, found, "no dotfiles apply ran: %v", *events)
+	require.True(t, found, "no dotfiles apply ran: %v", *fk.events)
 }
 
 // Default (no --force): argv stays without it — refusal to clobber files mise
@@ -798,12 +823,12 @@ func TestApply_noForceByDefault(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	events, _ := stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: resolveFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	for _, e := range *events {
+	for _, e := range *fk.events {
 		if strings.Contains(e, "dotfiles apply") {
 			require.NotContains(t, e, "--force", "no --force without the flag: %q", e)
 		}
@@ -819,9 +844,9 @@ func TestApply_stepConfigsHaveNoAncestorMiseToml(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-	stubApplyDeps(t, f)
+	fk := stubApplyDeps(t, f)
 
-	cmd := &ApplyCmd{Profile: scopeFixture(t), State: statePath, Yes: true}
+	cmd := &ApplyCmd{deps: &fk.deps, Profile: scopeFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
 	configRoot := filepath.Join(dir, "mise")

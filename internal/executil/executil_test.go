@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -164,4 +165,26 @@ func TestOrStderr_nilDefaultsToOsStderr(t *testing.T) {
 func TestOrStderr_nonNilReturnsArg(t *testing.T) {
 	var b bytes.Buffer
 	require.Equal(t, &b, executil.OrStderr(&b))
+}
+
+// PathUserWritable walks up to the nearest existing ancestor and checks the
+// write-access bit: a new file under a user-owned dir is writable; under a
+// read-only dir (or root-owned /etc) it is not. Only the edit-entry elevation
+// pre-flight uses this (issue 0042).
+func TestPathUserWritable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("writability test requires a non-root user")
+	}
+	userDir := t.TempDir()
+	require.True(t, executil.PathUserWritable(filepath.Join(userDir, "new-file")),
+		"a path under a user-owned dir is writable")
+
+	locked := t.TempDir()
+	require.NoError(t, os.Chmod(locked, 0o555))
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
+	require.False(t, executil.PathUserWritable(filepath.Join(locked, "new-file")),
+		"a path under a read-only dir is not writable")
+
+	require.False(t, executil.PathUserWritable("/etc/dotdrift-probe.conf"),
+		"a path under root-owned /etc is not user-writable")
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/backup"
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/executil"
 )
 
 // elevatedRestore copies one backed-up file to a target the current user
@@ -126,7 +127,7 @@ func (c *RestoreCmd) Run() error {
 			restored++
 			continue
 		}
-		if pathUserWritable(target) {
+		if executil.PathUserWritable(target) {
 			if err := backup.RestoreItem(filepath.Join(hit.moduleDir, "backups", hit.gen), target); err != nil {
 				return err
 			}

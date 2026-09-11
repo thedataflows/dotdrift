@@ -76,25 +76,6 @@ var errNoPath = errors.New("state: no state path; set XDG_STATE_HOME or HOME")
 // so a lock held on it survives Save's atomic tmp+rename of the state file.
 func (fs *FileStore) LockPath() string { return fs.Path + ".lock" }
 
-// Lock acquires the exclusive sidecar lock, blocking until it is available.
-// Hold it across the entire load→pipeline→save window; it is idempotent on a
-// FileStore that already holds it.
-func (fs *FileStore) Lock() error {
-	if fs.lockFile != nil {
-		return nil
-	}
-	f, err := fs.openLock()
-	if err != nil {
-		return err
-	}
-	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
-		_ = f.Close()
-		return fmt.Errorf("lock state: %w", err)
-	}
-	fs.lockFile = f
-	return nil
-}
-
 // TryLock attempts the exclusive sidecar lock without blocking and reports
 // whether it was acquired.
 func (fs *FileStore) TryLock() (bool, error) {

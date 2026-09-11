@@ -30,14 +30,30 @@ type ApplyDeps struct {
 	StdinIsTerminal func() bool
 }
 
-func defaultApplyDeps() ApplyDeps {
-	return ApplyDeps{
-		Detect:          detect.Detect,
-		LoadProfile:     profile.Load,
-		Resolve:         resolve.Resolve,
-		NewMise:         mise.DefaultMise,
-		PackagesFor:     packages.For,
-		NewSmbRunner:    func() smb.Runner { return &smb.ExecRunner{} },
-		StdinIsTerminal: executil.IsStdinTerminal,
+// WithDefaults returns the dep set with zero-value fields replaced by the
+// real implementations. Consumers composing partial dep sets (the CLI
+// adapter overrides only what it wraps) get the real behavior for the rest.
+func (d ApplyDeps) WithDefaults() ApplyDeps {
+	if d.Detect == nil {
+		d.Detect = detect.Detect
 	}
+	if d.LoadProfile == nil {
+		d.LoadProfile = profile.Load
+	}
+	if d.Resolve == nil {
+		d.Resolve = resolve.Resolve
+	}
+	if d.NewMise == nil {
+		d.NewMise = mise.DefaultMise
+	}
+	if d.PackagesFor == nil {
+		d.PackagesFor = packages.For
+	}
+	if d.NewSmbRunner == nil {
+		d.NewSmbRunner = func() smb.Runner { return &smb.ExecRunner{} }
+	}
+	if d.StdinIsTerminal == nil {
+		d.StdinIsTerminal = executil.IsStdinTerminal
+	}
+	return d
 }

@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"unicode"
+
+	"golang.org/x/sys/unix"
 )
 
 // needsQuoting reports whether an argv element must be single-quoted for a
@@ -121,4 +124,24 @@ func OrStderr(w io.Writer) io.Writer {
 		return os.Stderr
 	}
 	return w
+}
+
+// PathUserWritable reports whether the current user can write to path: if
+// path exists, check it directly; otherwise walk up to the nearest existing
+// ancestor (the directory that must hold the new entry) and check that. The
+// walk-up also resolves edit keys like /etc/foo.conf/<id>: the file the edit
+// keys into is itself the ancestor that must be writable. Reaching the
+// filesystem root without a writable ancestor means not writable.
+func PathUserWritable(path string) bool {
+	p := path
+	for {
+		if _, err := os.Stat(p); err == nil {
+			return unix.Access(p, unix.W_OK) == nil
+		}
+		parent := filepath.Dir(p)
+		if parent == p {
+			return false
+		}
+		p = parent
+	}
 }

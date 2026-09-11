@@ -12,5 +12,5 @@ type Service struct {
 
 // New builds a Service wired with real dependencies.
 func New() *Service {
-	return &Service{Apply: NewApplyArea(defaultApplyDeps())}
+	return &Service{Apply: NewApplyArea(ApplyDeps{})}
 }

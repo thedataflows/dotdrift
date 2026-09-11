@@ -3,32 +3,25 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"golang.org/x/sys/unix"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
-	"sort"
-	"strings"
-	"time"
 
 	"github.com/alecthomas/kong"
-	"github.com/rs/zerolog/log"
-	"github.com/thedataflows/dotdrift/internal/apply"
-	"github.com/thedataflows/dotdrift/internal/backup"
 	"github.com/thedataflows/dotdrift/internal/detect"
-	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
-	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/packages"
-	"github.com/thedataflows/dotdrift/internal/paru"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
+	"github.com/thedataflows/dotdrift/internal/service"
 	"github.com/thedataflows/dotdrift/internal/smb"
-	"github.com/thedataflows/dotdrift/internal/state"
 )
 
-// Test seams (package-level vars, same pattern as runGit in init.go):
+// Test seams for the shared read preamble (detect/load/resolve), same
+// pattern as runGit in init.go. Apply itself runs through the session's
+// ApplyDeps (field deps); these stay for plan, status, onboard, restore.
 var (
 	// detectFacts gathers host facts; swapped out by tests. Shared by apply and onboard.
 	detectFacts = detect.Detect
@@ -40,13 +33,6 @@ var (
 	defaultMise = mise.DefaultMise
 	// packagesFor selects the distro package backend; swapped out by tests.
 	packagesFor = packages.For
-	// newSmbRunner builds the smb step runner; swapped out by tests.
-	newSmbRunner = func() smb.Runner { return &smb.ExecRunner{} }
-	// stdinIsTerminal reports whether dotdrift's stdin is a TTY, deciding
-	// whether generated hook tasks opt into mise interactive mode so an
-	// interactive hook command (e.g. sudo) reaches a controlling terminal.
-	// Swapped out by tests.
-	stdinIsTerminal = executil.IsStdinTerminal
 )
 
 // loadAndResolve runs the detect → load → filter → resolve preamble shared by
@@ -116,311 +102,6 @@ func setVerboseRunner(v bool, rs ...any) {
 	}
 }
 
-// packagesStep is the apply pipeline step for packages. It delegates install
-// to mise bootstrap (which converges [bootstrap.packages] via the paru plugin
-// or built-in managers) while keeping removal inline — mise's package-plugin
-// v1 does not support uninstall (packages.absent handling, issue 0002).
-type packagesStep struct {
-	runner         mise.Runner
-	backend        packages.Backend // for Absent only
-	plan           *resolve.Plan
-	backendStr     string // detected backend for prefix translation
-	configPath     string // bootstrap mise.toml path
-	misePluginsDir string // mise plugin registry dir ($XDG_DATA_HOME/mise/plugins); empty = non-Arch
-}
-
-var _ apply.Step = (*packagesStep)(nil)
-
-func (s *packagesStep) Name() string { return "packages" }
-
-func (s *packagesStep) Run(ctx context.Context) error {
-	// Maintain the paru package plugin (Arch backends): copy the embedded plugin
-	// into mise's registry as real files, but only when its content hash differs
-	// from what is installed (or it is missing/a stale symlink) — no writes on
-	// the common up-to-date path. Runs even with nothing to install.
-	if s.misePluginsDir != "" {
-		if updated, err := paru.EnsureInstalled(s.misePluginsDir, "paru"); err != nil {
-			return fmt.Errorf("maintain paru plugin: %w", err)
-		} else if updated {
-			log.Info().Str("version", paru.PluginVersion).Msg("paru mise plugin installed/updated")
-		}
-	}
-	// Removal is best-effort (warn, don't fail) — same contract as before.
-	if len(s.plan.Packages.Remove) > 0 {
-		if err := s.backend.Absent(ctx, s.plan.Packages.Remove); err != nil {
-			log.Warn().Err(err).Msg("remove packages failed; continuing")
-		}
-	}
-	if len(s.plan.Packages.Install) == 0 {
-		return nil
-	}
-	content := mise.GenerateBootstrapPackages(s.plan.Packages.Install, s.backendStr)
-	if err := writeBootstrapConfig(s.configPath, content); err != nil {
-		return fmt.Errorf("write packages config: %w", err)
-	}
-	// dotdrift copies the paru plugin into mise's registry itself (EnsureInstalled
-	// above), so there is no [bootstrap.plugins] declaration and the plugins
-	// phase is not run — mise discovers it as a normal installed plugin.
-	return s.runner.Bootstrap(ctx, s.configPath, true, "packages")
-}
-
-// systemFilesStep applies system-scope dotfile entries and creates mount
-// destination directories. Whole-file entries (symlink-each pre-expanded) and
-// mount dirs converge through mise's native [bootstrap.files] +
-// [bootstrap.directories] via `mise bootstrap --only files` (issue 0042):
-// mise attempts changes as the current user and retries the remainder in one
-// privileged batch, writes atomically, and fails loud with the exact command
-// when elevation is impossible — dotdrift runs no sudo for whole files.
-// symlink→copy is inherent: bootstrap.files manages content, not links.
-// Edit entries have no bootstrap.files equivalent (contract #18): they keep
-// the [dotfiles] path, elevated via DotfilesApplySudo when an edit target is
-// not user-writable.
-type systemFilesStep struct {
-	exec       *mise.ExecMise
-	entries    []resolve.DotfileEntry
-	sourceRoot string
-	homeDir    string
-	dirs       []string // mount destinations → [bootstrap.directories]
-	configPath string   // [bootstrap.files] + [bootstrap.directories] + [bootstrap.secrets]
-	editsPath  string   // [dotfiles] for edit entries
-	yes        bool
-	force      bool                      // dotdrift apply --force → --force on the edits dotfiles apply (issue 0046)
-	secrets    map[string]profile.Secret // declared secret inputs → [bootstrap.secrets]
-}
-
-var _ apply.Step = (*systemFilesStep)(nil)
-
-func (s *systemFilesStep) Name() string { return "dotfiles-system" }
-
-func (s *systemFilesStep) Run(ctx context.Context) error {
-	var whole, edit []resolve.DotfileEntry
-	for _, e := range s.entries {
-		if e.IsEdit() {
-			edit = append(edit, e)
-		} else {
-			whole = append(whole, e)
-		}
-	}
-
-	// Whole-file entries + mount destination directories → bootstrap files.
-	if len(whole) > 0 || len(s.dirs) > 0 {
-		if s.exec == nil {
-			return fmt.Errorf("system files require an exec mise runner")
-		}
-		var content string
-		if len(whole) > 0 {
-			files, err := mise.ResolveBootstrapFiles(whole, s.sourceRoot, s.homeDir)
-			if err != nil {
-				return fmt.Errorf("resolve system files: %w", err)
-			}
-			content = mise.GenerateBootstrapFiles(files)
-		}
-		content += mise.GenerateBootstrapDirectories(s.dirs)
-		// Declared secret inputs ride the same config: the system files
-		// template path is the only one where mise resolves secret()
-		// ([dotfiles] templates have no secret function — verified against
-		// mise 2026.9.1, issue 0044).
-		content += mise.GenerateBootstrapSecrets(s.secrets)
-		if err := writeBootstrapConfig(s.configPath, content); err != nil {
-			return fmt.Errorf("write system files config: %w", err)
-		}
-		if err := s.exec.Bootstrap(ctx, s.configPath, s.yes, "files"); err != nil {
-			return fmt.Errorf("system files: %w", err)
-		}
-	}
-
-	// Edit entries → elevated [dotfiles] path (contract #18).
-	if len(edit) > 0 {
-		if s.exec == nil {
-			return fmt.Errorf("system edits require an exec mise runner")
-		}
-		if err := writeBootstrapConfig(s.editsPath, mise.GenerateDotfiles(edit)); err != nil {
-			return fmt.Errorf("write system edits config: %w", err)
-		}
-		// Decide elevation up front from the edit targets' writability: runOp
-		// streams the child's fds straight to the terminal (preserving mise's
-		// color), so a "Permission denied" can't be read back from stderr.
-		if os.Geteuid() != 0 && !systemTargetsUserWritable(edit, s.homeDir) {
-			if err := s.exec.DotfilesApplySudo(ctx, s.editsPath, s.yes, s.force); err != nil {
-				return fmt.Errorf("system edits (elevated): %w", err)
-			}
-		} else {
-			if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, s.force); err != nil {
-				return fmt.Errorf("system edits: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-// systemTargetsUserWritable reports whether the current user can write every
-// edit target. Any non-writable target ⇒ the edits batch must converge
-// elevated (sudo) in one pass. Used to decide sudo up front instead of
-// inspecting mise's stderr (which runOp no longer captures — it streams
-// straight to the terminal to keep mise's color).
-func systemTargetsUserWritable(entries []resolve.DotfileEntry, homeDir string) bool {
-	for _, e := range entries {
-		p := e.Target
-		if strings.HasPrefix(p, "~/") {
-			p = filepath.Join(homeDir, p[2:])
-		}
-		if !pathUserWritable(p) {
-			return false
-		}
-	}
-	return true
-}
-
-// pathUserWritable reports whether the current user can write to path: if path
-// exists, check it directly; otherwise walk up to the nearest existing
-// ancestor (the directory that must hold the new entry) and check that. The
-// walk-up also resolves edit keys like /etc/foo.conf/<id>: the file the edit
-// keys into is itself the ancestor that must be writable. Reaching the
-// filesystem root without a writable ancestor means not writable.
-func pathUserWritable(path string) bool {
-	p := path
-	for {
-		if _, err := os.Stat(p); err == nil {
-			return unix.Access(p, unix.W_OK) == nil
-		}
-		parent := filepath.Dir(p)
-		if parent == p {
-			return false
-		}
-		p = parent
-	}
-}
-
-// systemdUnitsStep converges declarative systemd USER units (services and
-// timers) via [bootstrap.linux.systemd.units] and
-// `mise bootstrap --only linux-systemd-units` (issue 0048). mise writes the
-// dev.mise.<name> unit files, daemon-reloads, enables per wanted_by, and
-// starts/stops per start; under sudo mise skips user units with a warning
-// (wrong user manager) — no dotdrift-side euid branching.
-type systemdUnitsStep struct {
-	runner     mise.Runner
-	units      []resolve.SystemdUnitEntry
-	configPath string
-	yes        bool
-}
-
-var _ apply.Step = (*systemdUnitsStep)(nil)
-
-func (s *systemdUnitsStep) Name() string { return "systemd" }
-
-func (s *systemdUnitsStep) Run(ctx context.Context) error {
-	if len(s.units) == 0 {
-		return nil
-	}
-	content, err := mise.GenerateBootstrapSystemdUnits(s.units)
-	if err != nil {
-		return fmt.Errorf("generate systemd units config: %w", err)
-	}
-	if err := writeBootstrapConfig(s.configPath, content); err != nil {
-		return fmt.Errorf("write systemd units config: %w", err)
-	}
-	return s.runner.Bootstrap(ctx, s.configPath, s.yes, "linux-systemd-units")
-}
-
-// mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for
-// each mount unit (+ timer if startat) and converges via
-// `mise bootstrap --only services`. Directory creation moved to systemFilesStep.
-type mountsServicesStep struct {
-	runner     mise.Runner
-	entries    []resolve.MountEntry
-	configPath string
-}
-
-var _ apply.Step = (*mountsServicesStep)(nil)
-
-func (s *mountsServicesStep) Name() string { return "mounts" }
-
-func (s *mountsServicesStep) Run(ctx context.Context) error {
-	if len(s.entries) == 0 {
-		return nil
-	}
-	var svcs []mise.BootstrapService
-	for _, e := range s.entries {
-		escaped := generate.EscapePath(e.Spec.Destination)
-		enabled := e.Spec.State != "disabled"
-		svcs = append(svcs, mise.BootstrapService{
-			Name: escaped + ".mount", Enabled: enabled, Running: enabled,
-		})
-		if e.Spec.StartAt != "" {
-			svcs = append(svcs, mise.BootstrapService{
-				Name: escaped + ".timer", Enabled: enabled, Running: enabled,
-			})
-		}
-	}
-	content := mise.GenerateBootstrapServices(svcs)
-	if err := writeBootstrapConfig(s.configPath, content); err != nil {
-		return err
-	}
-	return s.runner.Bootstrap(ctx, s.configPath, true, "services")
-}
-
-// smbBootstrapStep replaces smb.Step: it emits [bootstrap.groups]/[users]/
-// [services] for the declarative parts and converges via
-// `mise bootstrap --only accounts,services`. The interactive smbpasswd/testparm
-// logic stays as a post-action via the existing smb.Runner.
-type smbBootstrapStep struct {
-	runner     mise.Runner
-	modules    []resolve.SmbModuleSpec
-	configPath string
-	smbRunner  smb.Runner // for smbpasswd/testparm post-actions
-	out        io.Writer
-}
-
-var _ apply.Step = (*smbBootstrapStep)(nil)
-
-func (s *smbBootstrapStep) Name() string { return "smb" }
-
-func (s *smbBootstrapStep) Run(ctx context.Context) error {
-	if len(s.modules) == 0 {
-		return nil
-	}
-	// Aggregate group/users/services across modules.
-	group := "smb"
-	var users []string
-	var svcs []mise.BootstrapService
-	avahiOn := false
-	for _, m := range s.modules {
-		if m.Spec.Group != "" {
-			group = m.Spec.Group
-		}
-		if len(m.Spec.Users) > 0 {
-			users = m.Spec.Users
-		}
-		if m.Spec.Avahi == nil || *m.Spec.Avahi {
-			avahiOn = true
-		}
-	}
-	svcs = append(svcs, mise.BootstrapService{Name: "smb", Enabled: true, Running: true})
-	if avahiOn {
-		svcs = append(svcs, mise.BootstrapService{Name: "avahi-daemon", Enabled: true, Running: true})
-	}
-
-	content := mise.GenerateBootstrapAccounts(group, users) + "\n" + mise.GenerateBootstrapServices(svcs)
-	if err := writeBootstrapConfig(s.configPath, content); err != nil {
-		return err
-	}
-	if err := s.runner.Bootstrap(ctx, s.configPath, true, "accounts", "services"); err != nil {
-		return err
-	}
-	// Post-actions: testparm validation + interactive smbpasswd (kept inline;
-	// mise has no declarative equivalent for these).
-	return smb.PostBootstrap(ctx, s.smbRunner, s.modules, s.out)
-}
-
-// writeBootstrapConfig writes content to configPath, creating parent dirs.
-func writeBootstrapConfig(configPath, content string) error {
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
-	return os.WriteFile(configPath, []byte(content), 0o644)
-}
-
-// ApplyCmd runs the full pipeline and always resumes.
 type ApplyCmd struct {
 	Profile string    `help:"Path to profile directory" type:"existingdir" default:"."`
 	State   string    `help:"Path to state file" type:"path" default:""`
@@ -449,38 +130,34 @@ type ApplyCmd struct {
 	// onlySections overrides the flag resolution (programmatic callers,
 	// tests); nil = resolve from the parsed flags. kctx is captured by
 	// AfterApply so flag presence (Set, positive or negated) is readable.
+	// deps is the session seam (tests): nil = the service's real
+	// implementations.
 	onlySections []string
 	kctx         *kong.Context
+	deps         *service.ApplyDeps
 }
 
-// Run executes the apply pipeline with resume semantics.
+// Run executes the apply pipeline with resume semantics through the
+// service layer's apply session (the 0061-D7 adapter, issue 0070):
+// display reads up front, then one session whose events render to the
+// streams. The session is the only apply orchestration in the tree.
 func (c *ApplyCmd) Run() error {
+	deps := c.applyDeps()
+	// Section resolution errors must surface before any output, so it is
+	// validated here even though Start re-resolves (idempotent).
 	sections, err := c.resolveSections()
 	if err != nil {
 		return err
 	}
-	f, p, plan, err := loadAndResolve(c.Profile, c.Modules)
+
+	// Display reads before the session can touch anything: the plan
+	// render (same renderer as `dotdrift plan`) and --diff must show the
+	// pre-apply state, so they cannot ride the session's event stream —
+	// the run goroutine is already writing once PlanResolved is drained.
+	f, p, plan, err := displayReads(deps, c.Profile, c.Modules)
 	if err != nil {
 		return err
 	}
-
-	statePath := c.State
-	if statePath == "" {
-		statePath = state.ProfileStatePath(c.Profile)
-	}
-	store := state.NewFileStore(statePath)
-	// Serialize concurrent applies: the sidecar lock is held from before Load
-	// until the pipeline's final save/removal, so two applies can never
-	// interleave load→pipeline→save on the same state file.
-	if err := store.Lock(); err != nil {
-		return fmt.Errorf("lock state: %w", err)
-	}
-	defer func() { _ = store.Unlock() }()
-	s, err := store.Load()
-	if err != nil {
-		return fmt.Errorf("load state: %w", err)
-	}
-
 	out := c.Out
 	if out == nil {
 		out = os.Stdout
@@ -492,246 +169,122 @@ func (c *ApplyCmd) Run() error {
 	if err := printPlan(out, plan, p, f, nil); err != nil {
 		return err
 	}
-
 	if c.Diff != "" {
 		if err := showDotfileDiffs(plan, profileRoot, c.Diff, out); err != nil {
 			return err
 		}
 	}
 
-	// Back up copy-mode destinations before the pipeline can overwrite
-	// them. Runs after the plan/diff output and before mise touches
-	// anything; a failure aborts the apply — a safety flag must not fail
-	// open. Skipped when the dotfiles section is deselected (no copy step
-	// runs, so there is nothing to safeguard).
-	if c.Backup && sections.has("dotfiles") {
-		if err := backupCopyTargets(plan, profileRoot, f, out); err != nil {
-			return fmt.Errorf("backup: %w", err)
-		}
-	}
-
-	m := defaultMise()
-	m.Verbose = c.Verbose
-	path, err := m.Ensure()
-	if err != nil {
-		return fmt.Errorf("ensure mise: %w", err)
-	}
-	_ = path
-	runner := mise.NewExecMise(m)
-
-	// Decision D8a (keep + test): write the FULL mise config ([tools] +
-	// [dotfiles] + [tasks]) before the pipeline starts. The tools/dotfiles steps later
-	// rewrite this file section-by-section, so if apply crashes or fails
-	// before them, the on-disk config still mirrors the whole resolved plan
-	// for crash recovery and manual mise runs. The snapshot lives in its OWN
-	// shared/ subtree (issue 0053): mise --cd config discovery walks UP and
-	// merges any ancestor mise.toml, so a snapshot at <state>/mise/mise.toml
-	// would smuggle the full user+system plan into every per-step config one
-	// level below (system entries leaking into the user dotfiles step —
-	// fresh-system EACCES before the elevating step ever runs).
-	configDir := filepath.Join(filepath.Dir(statePath), "mise")
-	configPath := filepath.Join(configDir, "shared", "mise.toml")
-	if err := writeBootstrapConfig(configPath, mise.GenerateApplyConfig(plan, profileRoot, f, stdinIsTerminal())); err != nil {
-		return fmt.Errorf("write mise config: %w", err)
-	}
-
-	// The tools/dotfiles steps rewrite their config file with a single
-	// section each. Giving each step its own config — in its own directory
-	// so `mise --cd` still discovers it as mise.toml — keeps the shared
-	// full config (and its [tasks] hook definitions) intact for the hooks
-	// steps; otherwise hooks-post would run `mise run` against a config
-	// with no tasks. Step configs are siblings of shared/, never nested
-	// under it (issue 0053).
-	toolsConfigPath := filepath.Join(configDir, "tools", "mise.toml")
-	dotfilesConfigPath := filepath.Join(configDir, "dotfiles", "mise.toml")
-	packagesConfigPath := filepath.Join(configDir, "packages", "mise.toml")
-	systemdConfigPath := filepath.Join(configDir, "systemd", "mise.toml")
-	systemConfigPath := filepath.Join(configDir, "system", "mise.toml")
-	systemEditsConfigPath := filepath.Join(configDir, "system-edits", "mise.toml")
-	mountsConfigPath := filepath.Join(configDir, "mounts", "mise.toml")
-	smbConfigPath := filepath.Join(configDir, "smb", "mise.toml")
-
-	// Arch backends install through the dotdrift paru mise plugin — bare names
-	// and aur/ markers alike (issues 0003, 0054). dotdrift copies it into
-	// mise's plugin registry (hash-gated) — real files, no symlink, no
-	// declaration.
-	var misePluginsDir string
-	if f.Backend == "paru" {
-		misePluginsDir = mise.PluginsDirFromEnv()
-	}
-
-	steps := c.buildSteps(plan, runner, f, profileRoot, out, misePluginsDir, sections, map[string]string{
-		"tools":        toolsConfigPath,
-		"systemd":      systemdConfigPath,
-		"dotfiles":     dotfilesConfigPath,
-		"packages":     packagesConfigPath,
-		"system":       systemConfigPath,
-		"system-edits": systemEditsConfigPath,
-		"mounts":       mountsConfigPath,
-		"smb":          smbConfigPath,
-		"shared":       configPath,
+	area := service.NewApplyArea(deps)
+	sess, err := area.Start(context.Background(), service.ApplyOpts{
+		ProfilePath: c.Profile,
+		StatePath:   c.State,
+		Modules:     c.Modules,
+		Sections:    sections,
+		Yes:         c.Yes,
+		Force:       c.Force,
+		Backup:      c.Backup,
+		Output:      out, // passthrough: children stream fd-direct (color kept)
+		Handover:    handoverToTerminal,
 	})
-
-	pipeline := apply.NewPipeline(steps, store.Save)
-	pipeline.SetState(s)
-	if err := pipeline.Run(context.Background()); err != nil {
-		return fmt.Errorf("apply: %w", err)
+	if err != nil {
+		return err
 	}
-	if err := store.Remove(); err != nil {
-		return fmt.Errorf("remove state file: %w", err)
+	return renderSession(sess, profileRoot, out)
+}
+
+// displayReads runs the detect → load → warn → filter → resolve preamble
+// through the session's deps, so tests stub one seam set. Reads are pure;
+// Start re-runs them internally for its own goroutine.
+func displayReads(deps service.ApplyDeps, profilePath string, modules []string) (*facts.Facts, *profile.Profile, *resolve.Plan, error) {
+	f, err := deps.Detect()
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("detect: %w", err)
+	}
+	p, err := deps.LoadProfile(profilePath, f)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("load profile: %w", err)
+	}
+	// Warn before LimitTo: a superuser-overlay module id passed as a
+	// filter errors as unknown, and this nudge explains why (issue 0029).
+	// The session does not warn — the nudge is CLI renderer output.
+	warnSuperuserOverlays(p)
+	warnMisplacedModules(p)
+	if err := p.LimitTo(profile.ParseModuleFilter(modules)); err != nil {
+		return nil, nil, nil, err
+	}
+	plan, err := deps.Resolve(p, f)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("resolve plan: %w", err)
+	}
+	return f, p, plan, nil
+}
+
+// applyDeps resolves the session dependency set: the injected seam when
+// set (tests), the real implementations otherwise, with --verbose wrapped
+// on top — a flag-layer concern (0064-D8). Partial dep sets fall back to
+// the real implementations (WithDefaults, the session's own rule), and
+// the verbose closures capture the original dep before replacing it
+// (never themselves).
+func (c *ApplyCmd) applyDeps() service.ApplyDeps {
+	deps := service.ApplyDeps{}.WithDefaults()
+	if c.deps != nil {
+		deps = c.deps.WithDefaults()
+	}
+	if !c.Verbose {
+		return deps
+	}
+	origMise := deps.NewMise
+	deps.NewMise = func() *mise.Mise {
+		m := origMise()
+		m.Verbose = true
+		return m
+	}
+	origFor := deps.PackagesFor
+	deps.PackagesFor = func(backend string) packages.Backend {
+		be := origFor(backend)
+		setVerboseRunner(true, be)
+		return be
+	}
+	origSmb := deps.NewSmbRunner
+	deps.NewSmbRunner = func() smb.Runner {
+		sr := origSmb()
+		setVerboseRunner(true, sr)
+		return sr
+	}
+	return deps
+}
+
+// handoverToTerminal runs one session-built child command on dotdrift's
+// real stdio — fd passthrough keeps the child's color and prompt. No
+// pipeline step hands over until issue 0071; the seam exists so the
+// session's contract is met from day one.
+func handoverToTerminal(cmd *exec.Cmd) error {
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return cmd.Run()
+}
+
+// renderSession drains the session's events to the streams and returns
+// the run's outcome. Passthrough mode emits no StepOutput events (children
+// stream fd-direct); the plan was already rendered before Start, so
+// PlanResolved only opens the stream here.
+func renderSession(sess *service.ApplySession, profileRoot string, out io.Writer) error {
+	for ev := range sess.Events() {
+		switch e := ev.(type) {
+		case service.BackupTaken:
+			// Byte-parity with the pre-session line: profile-relative
+			// module dir + generation (the event's Dir is absolute).
+			moduleDir := filepath.Dir(filepath.Dir(e.Dir))
+			fmt.Fprintf(out, "backup: %d path(s) -> %s\n",
+				e.Count, filepath.Join(moduleRel(profileRoot, moduleDir), "backups", filepath.Base(e.Dir)))
+		}
+	}
+	res, err := sess.Wait()
+	if err != nil {
+		return err // cancelled: rerun resumes from the cursor (contract 2)
+	}
+	if res.Outcome == service.OutcomeFailed {
+		return res.StepError
 	}
 	return nil
-}
-
-// backupCopyTargets snapshots every existing copy-mode destination of the
-// resolved plan into the declaring module's backups/<generation>/ tree
-// (issue 0025). Copy is the only mode whose apply overwrites destination
-// content (symlinks are recreated as links, edits are marker-scoped). The
-// declaring layer names the receiving module directory — base entries back
-// up under modules/<m>, host winners under hosts/<h>/modules/<m>, user
-// winners under users/<u>/modules/<m> — so each backup sits next to the
-// profile files that replace it. One generation (timestamp) is shared by
-// every module in the run. Only modules that received a backup are
-// reported, one line each.
-func backupCopyTargets(plan *resolve.Plan, profileRoot string, f *facts.Facts, out io.Writer) error {
-	home, _ := os.UserHomeDir()
-	gen := time.Now().Format("20060102-150405")
-
-	filesByDir := map[string][]backup.File{}
-	var dirs []string
-	for _, e := range plan.Dotfiles.Entries {
-		if e.IsEdit() || e.Mode != "copy" {
-			continue
-		}
-		target := e.Target
-		if strings.HasPrefix(target, "~/") {
-			target = filepath.Join(home, target[2:])
-		}
-		dir := moduleLayerDir(profileRoot, e, f)
-		if _, seen := filesByDir[dir]; !seen {
-			dirs = append(dirs, dir)
-		}
-		filesByDir[dir] = append(filesByDir[dir], backup.File{Target: target, ModuleDir: dir})
-	}
-	sort.Strings(dirs)
-	for _, dir := range dirs {
-		n, err := backup.Run(filesByDir[dir], gen)
-		if err != nil {
-			return err
-		}
-		if n > 0 {
-			fmt.Fprintf(out, "backup: %d path(s) -> %s\n", n, filepath.Join(moduleRel(profileRoot, dir), "backups", gen))
-		}
-	}
-	return nil
-}
-
-// moduleLayerDir reconstructs the module layer directory that declared a
-// dotfile entry: the entry's Layer label plus the run's facts reproduce the
-// same path resolve keyed the overlay to (a single host/user overlay per
-// resolve, so the reconstruction is exact).
-func moduleLayerDir(profileRoot string, e resolve.DotfileEntry, f *facts.Facts) string {
-	switch e.Layer {
-	case "host":
-		return filepath.Join(profileRoot, "hosts", f.Hostname, "modules", e.Module)
-	case "user":
-		return filepath.Join(profileRoot, "users", f.Username, "modules", e.Module)
-	default:
-		return filepath.Join(profileRoot, "modules", e.Module)
-	}
-}
-
-// buildSteps assembles the apply pipeline from the resolved plan, filtered
-// by the executed sections (--[no-]packages/tools/dotfiles/mounts/smb/hooks).
-// It splits dotfiles by scope, appends conditional steps (system files,
-// mounts, smb, hooks) based on plan contents and the section selection, and
-// returns them in pipeline order. paths maps logical names to generated
-// mise.toml config paths.
-func (c *ApplyCmd) buildSteps(plan *resolve.Plan, runner *mise.ExecMise,
-	f *facts.Facts, profileRoot string, out io.Writer, misePluginsDir string,
-	sections sectionSet, paths map[string]string,
-) []apply.Step {
-	backend := packagesFor(f.Backend)
-	setVerboseRunner(c.Verbose, backend)
-
-	// The dotfiles portion splits by scope: user entries apply as today via
-	// the DotfilesStep (against a scope-filtered plan copy), system entries
-	// get their own step applied with root privileges. The dotfiles-system
-	// step is appended only when at least one system-scope entry exists.
-	userPlan := *plan
-	var userEntries, systemEntries []resolve.DotfileEntry
-	if sections.has("dotfiles") {
-		for _, e := range plan.Dotfiles.Entries {
-			if e.Scope == profile.ScopeSystem {
-				systemEntries = append(systemEntries, e)
-			} else {
-				userEntries = append(userEntries, e)
-			}
-		}
-	}
-	userPlan.Dotfiles.Entries = userEntries
-
-	// Mount destination dirs belong to the mounts section.
-	var mountDests []string
-	if sections.has("mounts") {
-		for _, e := range plan.Mounts.Entries {
-			mountDests = append(mountDests, e.Spec.Destination)
-		}
-	}
-
-	var steps []apply.Step
-	if sections.has("hooks") && len(plan.Hooks.Pre) > 0 {
-		steps = append(steps, &mise.HooksStep{
-			Exec: runner, Commands: plan.Hooks.Pre, ConfigPath: paths["shared"],
-			Task: "hooks-pre", StepName: "hooks-pre",
-		})
-	}
-	if sections.has("packages") {
-		steps = append(steps, &packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: paths["packages"], misePluginsDir: misePluginsDir})
-	}
-	if sections.has("tools") {
-		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths["tools"], FragmentPath: mise.ToolsFragmentPath()})
-	}
-	if sections.has("dotfiles") {
-		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths["dotfiles"], Yes: c.Yes, Force: c.Force})
-	}
-	// systemd user units → mise bootstrap --only linux-systemd-units.
-	if sections.has("systemd") && len(plan.Systemd.Units) > 0 {
-		steps = append(steps, &systemdUnitsStep{
-			runner: runner, units: plan.Systemd.Units, configPath: paths["systemd"], yes: c.Yes,
-		})
-	}
-	// System dotfiles + mount directories → systemFilesStep.
-	// Runs when there are system-scope dotfiles OR mount destinations.
-	if len(systemEntries) > 0 || len(mountDests) > 0 {
-		homeDir, _ := os.UserHomeDir()
-		steps = append(steps, &systemFilesStep{
-			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
-			homeDir: homeDir, dirs: mountDests, configPath: paths["system"],
-			editsPath: paths["system-edits"], yes: c.Yes, force: c.Force, secrets: plan.Secrets,
-		})
-	}
-	// Mount unit services → mise bootstrap --only services.
-	if sections.has("mounts") && len(plan.Mounts.Entries) > 0 {
-		steps = append(steps, &mountsServicesStep{
-			runner: runner, entries: plan.Mounts.Entries, configPath: paths["mounts"],
-		})
-	}
-	// SMB accounts + services → mise bootstrap --only accounts,services,
-	// then interactive smbpasswd/testparm post-actions.
-	if sections.has("smb") && len(plan.Smb.Modules) > 0 {
-		sr := newSmbRunner()
-		setVerboseRunner(c.Verbose, sr)
-		steps = append(steps, &smbBootstrapStep{
-			runner: runner, modules: plan.Smb.Modules, configPath: paths["smb"],
-			smbRunner: sr, out: out,
-		})
-	}
-	if sections.has("hooks") && len(plan.Hooks.Post) > 0 {
-		steps = append(steps, &mise.HooksStep{
-			Exec: runner, Commands: plan.Hooks.Post, ConfigPath: paths["shared"],
-			Task: "hooks-post", StepName: "hooks-post",
-		})
-	}
-	return steps
 }

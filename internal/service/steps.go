@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/backup"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
@@ -26,7 +27,6 @@ import (
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/smb"
-	"golang.org/x/sys/unix"
 )
 
 // packagesStep is the apply pipeline step for packages. It delegates install
@@ -177,31 +177,11 @@ func systemTargetsUserWritable(entries []resolve.DotfileEntry, homeDir string) b
 		if strings.HasPrefix(p, "~/") {
 			p = filepath.Join(homeDir, p[2:])
 		}
-		if !pathUserWritable(p) {
+		if !executil.PathUserWritable(p) {
 			return false
 		}
 	}
 	return true
-}
-
-// pathUserWritable reports whether the current user can write to path: if path
-// exists, check it directly; otherwise walk up to the nearest existing
-// ancestor (the directory that must hold the new entry) and check that. The
-// walk-up also resolves edit keys like /etc/foo.conf/<id>: the file the edit
-// keys into is itself the ancestor that must be writable. Reaching the
-// filesystem root without a writable ancestor means not writable.
-func pathUserWritable(path string) bool {
-	p := path
-	for {
-		if _, err := os.Stat(p); err == nil {
-			return unix.Access(p, unix.W_OK) == nil
-		}
-		parent := filepath.Dir(p)
-		if parent == p {
-			return false
-		}
-		p = parent
-	}
 }
 
 // systemdUnitsStep converges declarative systemd USER units (services and
@@ -405,6 +385,7 @@ func backupCopyTargets(plan *resolve.Plan, profileRoot string, f *facts.Facts) (
 			taken = append(taken, BackupTaken{
 				Dir:   filepath.Join(dir, "backups", gen),
 				Files: targets,
+				Count: n,
 			})
 		}
 	}

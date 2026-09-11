@@ -1,65 +1,30 @@
 package cmd
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/alecthomas/kong"
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
-// resolveSections truth table: positives form an allowlist, negatives
-// subtract, no flags = everything, empty selection errors.
+// Section-resolution semantics (positives-allowlist, negatives-subtract,
+// empty-errors, unknown-errors) are pinned once, in the service layer
+// (internal/service/sections_test.go) — the single source this flag layer
+// feeds. The tests below cover only the flag layer's own concerns: kong
+// parsing, flag-presence detection, the env kill-switch, and the
+// programmatic override path.
 
-// mustSections builds a set or fails the test (valid names only).
-func mustSections(t *testing.T, names ...string) sectionSet {
+// mustSections builds the expected selection (valid names only).
+func mustSections(t *testing.T, names ...string) service.SectionSet {
 	t.Helper()
-	set, err := newSectionSet(names...)
-	require.NoError(t, err)
-	return set
-}
-
-func TestResolveSections_noFlagsSelectsAll(t *testing.T) {
-	got, err := resolveSections(nil)
-	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "mounts", "smb", "hooks"), got)
-}
-
-func TestResolveSections_positiveOnly(t *testing.T) {
-	got, err := resolveSections(map[string]bool{"packages": true})
-	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages"), got)
-}
-
-func TestResolveSections_multiplePositives(t *testing.T) {
-	got, err := resolveSections(map[string]bool{"packages": true, "tools": true})
-	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools"), got)
-}
-
-func TestResolveSections_negatedSubtractsFromAll(t *testing.T) {
-	got, err := resolveSections(map[string]bool{"hooks": false})
-	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "mounts", "smb"), got)
-}
-
-func TestResolveSections_mixedPositiveAndNegative(t *testing.T) {
-	// --packages --no-tools --no-smb: the allowlist is packages, the
-	// negatives subtract from it (already absent here, but the mix must
-	// not resurrect anything).
-	got, err := resolveSections(map[string]bool{"packages": true, "tools": false, "smb": false})
-	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages"), got)
-}
-
-func TestResolveSections_emptySelectionErrors(t *testing.T) {
-	allNegated := map[string]bool{
-		"packages": false, "tools": false, "dotfiles": false, "systemd": false,
-		"mounts": false, "smb": false, "hooks": false,
+	set := service.SectionSet{}
+	for _, n := range names {
+		require.Contains(t, service.SectionNames, n)
+		set[n] = true
 	}
-	_, err := resolveSections(allNegated)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "no sections selected")
-	require.Contains(t, err.Error(), "packages", "error names the valid sections")
+	return set
 }
 
 // The section flags parse positive and negated onto ApplyCmd, including
@@ -85,8 +50,9 @@ func TestKong_applyNoHooksLegacySpelling(t *testing.T) {
 }
 
 // Flag PRESENCE (positive vs negated vs absent) is read from kong's parse
-// state: AfterApply captures the context, and resolveSectionsFromKong
-// turns Set flags into the explicit map. Absent flags must not appear.
+// state: AfterApply captures the context, and ApplyCmd.resolveSections
+// turns Set flags into the explicit map before the service resolves it.
+// Absent flags must not appear.
 func TestApplyCmd_resolveSectionsFromKong(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli)
@@ -134,17 +100,17 @@ func TestKong_applySectionFlagsGrouped(t *testing.T) {
 
 	grouped := map[string]bool{}
 	for _, fl := range cli.Apply.kctx.Flags() {
-		if !isSectionName(fl.Name) {
+		if !slices.Contains(service.SectionNames, fl.Name) {
 			continue
 		}
 		require.NotNil(t, fl.Group, "section flag --%s must be grouped", fl.Name)
 		require.Equal(t, "Section flags", fl.Group.Key)
 		grouped[fl.Name] = true
 	}
-	require.Len(t, grouped, len(sectionNames), "all six section flags carry the group")
+	require.Len(t, grouped, len(service.SectionNames), "all six section flags carry the group")
 
 	for _, fl := range cli.Apply.kctx.Flags() {
-		if isSectionName(fl.Name) {
+		if slices.Contains(service.SectionNames, fl.Name) {
 			continue
 		}
 		require.Nil(t, fl.Group, "non-section flag --%s must stay ungrouped", fl.Name)

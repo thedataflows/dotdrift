@@ -252,13 +252,15 @@ func TestEnsureMise_prereleaseMinVersionIsTooOld(t *testing.T) {
 }
 
 func TestClassifyInstall(t *testing.T) {
-	home, err := os.UserHomeDir()
-	require.NoError(t, err)
+	// Isolated HOME: classification reads path strings, but this test must
+	// never create files in the real user home (same pattern as the
+	// systemEnvVariants test below).
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 
 	userMise := filepath.Join(home, ".local", "bin", "mise")
 	require.NoError(t, os.MkdirAll(filepath.Dir(userMise), 0o755))
 	require.NoError(t, os.WriteFile(userMise, []byte("fake"), 0o755))
-	t.Cleanup(func() { _ = os.RemoveAll(userMise) })
 
 	cases := []struct {
 		path     string

@@ -26,9 +26,12 @@ Rewire `ApplyCmd.Run` as the 0061-D7 adapter: translate flags →
 its real stdin), drain the session's events, and render — `printPlan`
 on `PlanResolved` (byte-identical), backup lines on `BackupTaken`,
 `--diff` as a reads call before `Start` — then **delete** the duplicated
-orchestration this migration orphans (the step types, `buildSteps`,
+orchestration this migration orphans: the step types, `buildSteps`,
 `backupCopyTargets`, `writeBootstrapConfig`, config-path wiring copied
-into `internal/service` by 0069). Nothing forks: after this ticket the
+into `internal/service` by 0069, **and the section-flag twins in
+`cmd/sections.go`** (`sectionSet`, `newSectionSet`, `resolveSections`,
+`isSectionName` — the flag layer reduces to kong parsing plus
+`service.ResolveSections`). Nothing forks: after this ticket the
 session is the only apply orchestration in the tree. The existing cmd
 apply tests are the byte-identical gate; their seam setup moves from
 package-level vars to `ApplyDeps` injection.

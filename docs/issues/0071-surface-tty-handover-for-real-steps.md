@@ -21,7 +21,11 @@ timestamp: 2026-09-12T00:00:00Z
 ## Question
 
 0069 ships the `Handover` seam and tests it with fake steps; no real
-step declares a terminal need yet. This ticket makes the honest
+step declares a terminal need yet. (Realization note: the session hands
+consumers a session-ctx cmd **twin** of the step's spec — `Setpgid` +
+group-SIGKILL via exec's own watcher, stdio nil — so 0071's steps only
+supply `Path`/`Args`/`Env`/`Dir` and call the injected callback.) This
+ticket makes the honest
 classification real: the mise-runner steps surface the child commands
 that truly need the terminal — sudo-elevated dotfiles/system applies
 (`DotfilesApplySudo` path), interactive `mise run` hook tasks — through

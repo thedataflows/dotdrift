@@ -9,14 +9,14 @@ timestamp: 2026-09-12T00:00:00Z
 # ISSUE 0069: Implement apply-session service core
 
 - **Type**: task
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: high
 - **Labels**: [implementation]
 - **Assignee**: cri (main session)
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [0064 apply session design](0064-apply-session-tty-suspend-design.md), [0061 service-layer architecture](0061-service-layer-architecture-cli-migration.md), [contract invariants 2, 11](../product/contract.md)
 - **Related code**: `internal/service/` (new), [`internal/apply/`](../../internal/apply/), [`internal/mise/mise.go`](../../internal/mise/), [`cmd/apply.go`](../../cmd/apply.go)
 - **Blocked by**: [0064 Apply session & TTY suspend design](0064-apply-session-tty-suspend-design.md)
-- **Closing commits**: none
+- **Closing commits**: d40e498
 
 ## Question
 
@@ -77,3 +77,58 @@ spec; seams are the designed public API.
 - [ ] Resume + stale-cursor rules unchanged (contract 2); sections
       filter works.
 - [ ] `go test ./...` green; `mise` group-kill + force-stream covered.
+
+## Resolution
+
+Implemented in d40e498 (TDD: the 0064 event-sequence spec written as
+acceptance tests first, red at the package seam, green per cycle). The
+session is live in `internal/service` with all 17 acceptance scenarios
+passing, `go vet` clean and `-race` clean.
+
+**Landed**
+
+- `ApplyArea.Start` run handle: resolve → `state.TryLock` (typed
+  `AlreadyRunningError`; reads stay lock-free) → classify → run
+  goroutine emitting `PlanResolved` (cursor + `CursorEffective`) →
+  [`BackupTaken` per receiving module dir] → per-step
+  `StepStarted`/`StepOutput`/`StepFinished`/`StepFailed` →
+  `SessionEnded`; state file removed on completion; `Wait` returns
+  `SessionResult` for every decision, erroring only
+  `*SessionCancelledError` (D1/D3/D6/D7).
+- D2 output policies: `Output` attached = children stream to it fd-direct
+  (terminal writers keep child color, exactly `StreamLive` semantics); nil
+  = new `mise.Mise.ForceStream` streams to a line-buffered collector
+  without the verbose echo; trailing partial lines flush at step end.
+- D5 cancel: `mise`'s streaming `runOp` branch gained the `Setpgid` +
+  process-group SIGKILL cancel `runContextEnv` already had (the gap
+  research 0059 §5 named), shared via `setGroupKill`; cancel mid-step
+  reports `Cancelled` with the interrupted step, cursor untouched.
+- D9 handover: the session derives a **session-ctx cmd twin** from the
+  step's command spec — `Setpgid` on, `Cancel` = group SIGKILL riding
+  exec's own ctx watcher (no process-handle race with the consumer's
+  `Start`), stdio left nil for the consumer to wire — and hands it to
+  `opts.Handover`. A refusal fails the step as a resumable `*StepError`.
+  Reviewed by two subagents: the first watchdog draft raced
+  `cmd.Process`; the stdlib-machinery shape replaced it.
+- Absorbed orchestration: step types + `buildSteps` + `backupCopyTargets`
+  (→ events, not printed lines) + `writeBootstrapConfig` + config-path
+  layout moved from `cmd/apply.go` behind `ApplyDeps` seams; section
+  vocabulary single-sourced as `service.SectionNames` /
+  `ResolveSections` (cmd aliases it). **cmd/apply.go itself is untouched**
+  — its step code stays until 0070 deletes it.
+- Review-driven hardening beyond the original tests: cursor rolls back
+  when a step's persist fails (it never names an unpersisted step,
+  contract 2); a genuine step failure stays `Failed` even when the
+  consumer's ctx dies mid-failure (the `StepFailed` event is not
+  rewritten to `Cancelled`); cancel is proven to kill a child
+  **mid-handover**; `configPaths` struct replaces the magic-string path
+  map; sections live in their own file.
+
+**Realization notes** (sanctioned deviations, per scope notes above):
+`ApplyOpts.HandoverAvailable *bool` keys the interactive-hook opt-in
+(zero-value = deps' stdin reality); `PlanResolved` carries `Profile` +
+`Facts` for the CLI's `printPlan`; hook `Sub` stays nil (no event lies
+about granularity that does not exist — 0071); real steps implement no
+handover yet (fakes only — 0071); cmd keeps a documented duplicated
+orchestration until 0070 (sections.go included — review flagged it,
+0070's scope now names it).

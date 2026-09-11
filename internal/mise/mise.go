@@ -86,6 +86,15 @@ type Mise struct {
 	Out io.Writer
 	Err io.Writer
 
+	// ForceStream streams operation subprocesses to Out/Err even when they
+	// are not terminals, without the "+ argv" echo (that stays a Verbose
+	// affordance). The apply session's event mode sets it: the child is
+	// piped (so it emits no ANSI — the honest colorless default) and its
+	// output lands in the session's line collector instead of a capture
+	// buffer only surfaced on failure. Fakes (Run/RunContext) bypass it
+	// like every streaming decision.
+	ForceStream bool
+
 	ensureOnce sync.Once
 	ensurePath string
 	ensureErr  error
@@ -128,18 +137,7 @@ func runContextEnv(ctx context.Context, env []string, dir, name string, args ...
 		cmd.Dir = dir
 	}
 	cmd.Stdin = opStdin()
-	// Cancel must kill the whole process group: the default Cancel kills only
-	// the direct child, and a shell wrapper (sh -c) may fork — surviving
-	// grandchildren keep the output pipes open and Wait hangs until they exit
-	// (observed with dash: ctx cancel blocked for the child's full runtime).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
+	setGroupKill(cmd)
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
@@ -151,6 +149,22 @@ func runContextEnv(ctx context.Context, env []string, dir, name string, args ...
 		return string(out), err
 	}
 	return string(out), nil
+}
+
+// setGroupKill makes ctx cancellation kill the whole process group: the
+// default Cancel kills only the direct child, and a shell wrapper (sh -c)
+// may fork — surviving grandchildren keep the output pipes open and Wait
+// hangs until they exit (observed with dash: ctx cancel blocked for the
+// child's full runtime). ESRCH means the group already exited.
+func setGroupKill(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
 }
 
 // runner resolves the ctx-aware runner: RunContext wins, then legacy Run.
@@ -220,7 +234,7 @@ func (m *Mise) writers() (io.Writer, io.Writer) {
 // failure carries self-contained diagnostics. Probes never come through here.
 func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args ...string) (string, error) {
 	out, errW := m.writers()
-	if (m.RunContext != nil || m.Run != nil) || !executil.StreamLive(m.Verbose, out, errW) {
+	if (m.RunContext != nil || m.Run != nil) || (!m.ForceStream && !executil.StreamLive(m.Verbose, out, errW)) {
 		return m.runWithEnv(ctx, extraEnv, name, args...)
 	}
 	env := make([]string, 0, len(m.Env)+len(extraEnv)+1)
@@ -235,6 +249,7 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Stdin = opStdin()
+	setGroupKill(cmd)
 	if dir := m.workDir(); dir != "" {
 		cmd.Dir = dir
 	}

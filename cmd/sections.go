@@ -6,11 +6,13 @@ import (
 	"strings"
 
 	"github.com/alecthomas/kong"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // sectionNames are the module.toml plan sections, each with a negatable
 // apply flag (--packages/--no-packages, ...). Order is the pipeline order.
-var sectionNames = []string{"packages", "tools", "dotfiles", "systemd", "mounts", "smb", "hooks"}
+// The vocabulary lives in the service layer; the flag layer aliases it.
+var sectionNames = service.SectionNames
 
 // sectionSet is the resolved selection of sections an apply run executes.
 type sectionSet map[string]bool

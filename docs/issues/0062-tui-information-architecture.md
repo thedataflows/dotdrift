@@ -13,7 +13,7 @@ timestamp: 2026-09-11T00:00:00Z
 - **Priority**: medium
 - **Labels**: [wayfinder:grilling]
 - **Assignee**: none
-- **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [ADR-0003](../adr/0003-tui-shared-palette.md)
+- **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [ADR-0003](../adr/0003-tui-shared-palette.md), [research 0058](../research/0058-bubbles-layout-inventory.md)
 - **Related code**: [`internal/tui/`](../../internal/tui/)
 - **Blocked by**: [0058 Bubbles &amp; layout inventory](0058-bubbles-layout-inventory.md)
 - **Closing commits**: none
@@ -42,3 +42,9 @@ does one drive the whole app from the keyboard?
 - Command surface inside the TUI: is there a command palette / `:`
   command line (apply, onboard, generate invoked from where?), or is
   everything context-menu/keypress driven?
+- Charm stack line: the pinned v1 (maintenance-mode) vs GA v2
+  (`charm.land/*`) — research 0058 shows the official tree bubble exists
+  only on v2 while v1 would hand-roll selection over lipgloss's
+  render-only tree, so this choice bounds every bullet above; decide it
+  here, and the prototype ([0063](0063-two-pane-shell-prototype.md))
+  pins it in `go.mod`.

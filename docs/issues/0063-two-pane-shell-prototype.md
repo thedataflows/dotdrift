@@ -25,10 +25,11 @@ terminal — is the tree/pane split, focus model, and chrome right before
 any editor is designed?
 
 - Throwaway artifact (not merged as the real TUI unless it earns it): a
-  bubbletea program with the decided tree on the left, a detail pane on
-  the right, the keybinding baseline, and fake or minimal-real data for
-  one profile (the repo's `examples/` or `testdata/` profiles can feed
-  it).
+  bubbletea program on the charm line decided in
+  [0062](0062-tui-information-architecture.md), with the decided tree on
+  the left, a detail pane on the right, the keybinding baseline, and
+  fake or minimal-real data for one profile (the repo's `examples/` or
+  `testdata/` profiles can feed it).
 - The human reacts to: pane proportions and resize behavior, focus
   indicators, how overlay layers read in the tree, whether the chrome
   answers "where am I, what can I press".

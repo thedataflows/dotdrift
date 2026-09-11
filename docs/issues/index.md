@@ -45,7 +45,7 @@ use, plus emergent features and chores. Planned work lives in
 | [0027](0027-readme-backup-restore-examples.md) | README: backup/restore usage examples | done | low |
 | [0028](0028-apply-mise-prompts-unanswerable-stdin.md) | apply: mise confirmation prompts can never be answered (stdin is the null device) | done | high |
 | [0057](0057-dotdrift-tui-design-map.md) | Dotdrift TUI design map (wayfinder) | in-progress | high |
-| [0058](0058-bubbles-layout-inventory.md) | Bubbles & layout inventory | in-progress | medium |
+| [0058](0058-bubbles-layout-inventory.md) | Bubbles & layout inventory | done | medium |
 | [0059](0059-apply-streaming-tty-precedents.md) | Apply streaming & TTY precedents | done | medium |
 | [0060](0060-idl-choice-go-derivation.md) | IDL choice & Go derivation | open | medium |
 | [0061](0061-service-layer-architecture-cli-migration.md) | Service-layer architecture & CLI migration | open | medium |

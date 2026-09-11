@@ -76,6 +76,7 @@ ticket.
 ## Decisions so far
 
 - [Apply streaming & TTY precedents](0059-apply-streaming-tty-precedents.md): stream steps into a pane keyed off the pipeline's own step/exit events; hand the real terminal over via `tea.ExecProcess` only for pre-classified TTY steps (sudo prompts, interactive hooks), run pane steps with `--yes`, and cancel through one ctx with process-group kills (cursor already survives aborts).
+- [Bubbles & layout inventory](0058-bubbles-layout-inventory.md): charm v2 is GA under `charm.land/*` (v1 frozen), making v1-vs-v2 the first design call; the tree gap closed on v2 only (official tree bubble, Aug 2026); two-pane layout needs nothing beyond lipgloss Join* + WindowSizeMsg; huh embeds as a child model; teatest is still untagged, so pure state machines + golden View() tests stay the testing mandate.
 
 ## Not yet specified
 
@@ -83,9 +84,8 @@ ticket.
   to bubbles components (registry → lipgloss styles for arbitrary
   components) — beyond the per-surface chrome choices
   [TUI information architecture](0062-tui-information-architecture.md)
-  already decides; no decision until the bubbles inventory lands.
-- Testing strategy for the new TUI: pure state machines vs `teatest`
-  driver tests; what the design mandates.
+  already decides; the inventory (research 0058) landed the facts — v2
+  renames the styling APIs — but no ticket owns the mechanism yet.
 - API versioning of the IDL and its error model details.
 - A status/drift view inside the TUI (read-only surface over plan/status
   read models) — scope not yet pinned.

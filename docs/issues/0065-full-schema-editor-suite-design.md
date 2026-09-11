@@ -16,7 +16,7 @@ timestamp: 2026-09-11T00:00:00Z
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [profile layout](../product/profile-layout.md), [contract invariants 7, 19](../product/contract.md)
 - **Related code**: [`internal/profile/spec.go`](../../internal/profile/spec.go), [`internal/tui/tui.go`](../../internal/tui/tui.go)
 - **Blocked by**: [0062 TUI information architecture](0062-tui-information-architecture.md)
-- **Closing commits**: pending
+- **Closing commits**: 9575eb9 (design rounds + spec)
 
 ## Question
 

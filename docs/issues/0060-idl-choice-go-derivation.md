@@ -41,5 +41,9 @@ concretely mean?
   a big-bang doorway — and if so, is full-surface coverage in one pass
   realistic, or does it version in sections?
 
-Consult the research findings of ticket 0058 only insofar as they touch
-event/progress shapes; this decision is otherwise independent.
+Research carve-outs: this choice is independent of both research tickets
+except on event/progress shapes — when judging how naturally each
+candidate expresses streaming apply events, consult the findings of
+[Bubbles &amp; layout inventory](0058-bubbles-layout-inventory.md) and
+especially [Apply streaming &amp; TTY precedents](0059-apply-streaming-tty-precedents.md)
+*if they have landed*; do not block on them.

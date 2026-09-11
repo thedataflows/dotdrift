@@ -77,8 +77,11 @@ ticket.
 
 ## Not yet specified
 
-- Theming: how ADR-0003's palette registry extends to bubbles components
-  (no decision until the bubbles inventory lands).
+- Theming: the *mechanism* by which ADR-0003's palette registry extends
+  to bubbles components (registry → lipgloss styles for arbitrary
+  components) — beyond the per-surface chrome choices
+  [TUI information architecture](0062-tui-information-architecture.md)
+  already decides; no decision until the bubbles inventory lands.
 - Testing strategy for the new TUI: pure state machines vs `teatest`
   driver tests; what the design mandates.
 - API versioning of the IDL and its error model details.

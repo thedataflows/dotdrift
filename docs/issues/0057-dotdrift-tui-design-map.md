@@ -140,8 +140,11 @@ ticket.
   implementation phase for the designed apply-session service now runs
   under this map as ordinary implementation tickets ([0069](0069-implement-apply-session-service-core.md),
   [0070](0070-migrate-cmd-apply-onto-apply-session.md),
-  [0071](0071-surface-tty-handover-for-real-steps.md)); the TUI itself
-  still waits for M14 and the 0065–0067 design tail.
+  [0071](0071-surface-tty-handover-for-real-steps.md)); all three are
+  done (2026-09-12) — the session is the only apply orchestration and
+  real steps hand the terminal over. The TUI itself still waits for M14
+  and the 0065–0067 design tail, which is now the only open work on the
+  map.
 - Building non-Go UIs; the contract exists so others *can*, not so this
   effort does.
 - Remote/multi-host management and web/GUI frontends.

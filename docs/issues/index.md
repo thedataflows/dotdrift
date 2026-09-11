@@ -58,4 +58,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0067](0067-assemble-tui-design-set.md) | Assemble the TUI design set | open | high |
 | [0069](0069-implement-apply-session-service-core.md) | Implement apply-session service core | done | high |
 | [0070](0070-migrate-cmd-apply-onto-apply-session.md) | Migrate cmd/apply onto the apply session | done | high |
-| [0071](0071-surface-tty-handover-for-real-steps.md) | Surface TTY handover for real steps | open | high |
+| [0071](0071-surface-tty-handover-for-real-steps.md) | Surface TTY handover for real steps | done | high |

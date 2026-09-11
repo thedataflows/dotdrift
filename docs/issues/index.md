@@ -52,7 +52,7 @@ use, plus emergent features and chores. Planned work lives in
 | [0068](0068-classify-install-test-isolation.md) | TestClassifyInstall writes into the real user home | done | medium |
 | [0062](0062-tui-information-architecture.md) | TUI information architecture | done | medium |
 | [0063](0063-two-pane-shell-prototype.md) | Two-pane shell prototype | done | low |
-| [0064](0064-apply-session-tty-suspend-design.md) | Apply session & TTY suspend design | open | medium |
+| [0064](0064-apply-session-tty-suspend-design.md) | Apply session & TTY suspend design | done | medium |
 | [0065](0065-full-schema-editor-suite-design.md) | Full-schema editor suite design | open | medium |
 | [0066](0066-wizard-absorption-contract-15.md) | Wizard absorption & contract #15 amendment | open | medium |
 | [0067](0067-assemble-tui-design-set.md) | Assemble the TUI design set | open | high |

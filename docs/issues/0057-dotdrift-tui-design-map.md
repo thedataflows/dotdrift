@@ -77,6 +77,20 @@ ticket.
 
 ## Decisions so far
 
+- [Apply session & TTY suspend design](0064-apply-session-tty-suspend-design.md):
+  `service` apply session as a run handle — `Start` (resolve → `TryLock`
+  → classify → `PlanResolved`) on one goroutine streaming a closed
+  event vocabulary (hooks as sub-steps; handover is the synchronous
+  `Handover(*exec.Cmd)` seam, not an event); `Output io.Writer` picks
+  the consumption policy — attached = fd passthrough (byte-identical
+  CLI), absent = line-buffered colorless chunk events; `Preview()`
+  exposes per-step TTY needs up front and the `interactive = true`
+  opt-in keys on handover-available, not raw stdin; cancel = immediate
+  process-group kill with the cursor naming the last completed step;
+  exactly two new typed errors (`AlreadyRunningError`,
+  `SessionCancelledError`); `cmd/apply.go`'s orchestration is absorbed
+  wholesale — the apply view-model and output coalescing stay TUI-side
+  (0065/0067).
 - [Two-pane shell prototype](0063-two-pane-shell-prototype.md): the
   human ran the prototype branch and approved the shell as-is — 30%
   tree with column clamp, border-color focus, origins-as-children, the

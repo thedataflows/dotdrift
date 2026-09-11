@@ -9,10 +9,10 @@ timestamp: 2026-09-11T00:00:00Z
 # ISSUE 0064: Apply session &amp; TTY suspend design
 
 - **Type**: task
-- **Status**: open
+- **Status**: in-progress
 - **Priority**: medium
 - **Labels**: [wayfinder:grilling]
-- **Assignee**: none
+- **Assignee**: cri (main session)
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [contract invariants 2, 12, 13](../product/contract.md)
 - **Related code**: [`cmd/apply.go`](../../cmd/apply.go), [`internal/mise/`](../../internal/mise/), [`internal/state/`](../../internal/state/)
 - **Blocked by**: [0059 Apply streaming &amp; TTY precedents](0059-apply-streaming-tty-precedents.md)

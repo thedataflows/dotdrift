@@ -77,6 +77,17 @@ ticket.
 
 ## Decisions so far
 
+- [TUI information architecture](0062-tui-information-architecture.md):
+  charm v2; module-centric tree (Modules/Accounts/Profile, one node per
+  module across layers, overlay origins as markers); resolved-by-default
+  selection with raw-on-demand; view stack with one active view, dirty
+  editor state survives navigation; vim-ish keys, one focused pane,
+  `help.Model` help; keys + context menus only (no palette); minimal
+  chrome with ADR-0003 registry discipline; accounts as nodes, no
+  per-account drift views (ADR-0006 notice only); full-status parity via
+  0061's canonical renderer; Profile = plan/status views + onboard/
+  restore/generate dialog actions; the plan view's gate is the TUI's
+  only write path into convergence.
 - [Service-layer architecture & CLI migration](0061-service-layer-architecture-cli-migration.md): `internal/service` — one package, per-area structs (reads/writes/session) composed into a root; wrap the 17 domain packages, absorb `cmd/` orchestration; typed errors at the boundary (`SchemaError`, `StepError`, `AlreadyRunningError`); apply pipeline is service-driven with a `Handover(*exec.Cmd)` TTY seam (0064 designs on it); canonical text renderers shared only where CLI/TUI must be identical; migration slices reads → writes → apply session, always green with byte-identical output; single-flight lock owned by the session.
 - [IDL choice & Go derivation](0060-idl-choice-go-derivation.md): no IDL — the Go service layer (interfaces + structs) is the normative contract; operations are interface methods, apply events are Go types (research 0059's vocabulary); surface grows TUI-critical-core-first; versioning becomes ordinary Go package versioning; non-Go consumers deferred until one exists.
 - [Apply streaming & TTY precedents](0059-apply-streaming-tty-precedents.md): stream steps into a pane keyed off the pipeline's own step/exit events; hand the real terminal over via `tea.ExecProcess` only for pre-classified TTY steps (sudo prompts, interactive hooks), run pane steps with `--yes`, and cancel through one ctx with process-group kills (cursor already survives aborts).
@@ -90,10 +101,13 @@ ticket.
   [TUI information architecture](0062-tui-information-architecture.md)
   already decides; the inventory (research 0058) landed the facts — v2
   renames the styling APIs — but no ticket owns the mechanism yet.
-- A status/drift view inside the TUI (read-only surface over plan/status
-  read models) — scope not yet pinned.
-- Multi-account presentation: how the superuser overlay and other
-  accounts (contract 17's notices) appear in the tree.
+- Another-host resolution preview: the TUI's module views resolve
+  against the current host/user only (0062-D3, matching the CLI's
+  read paths); previewing a *different* host's resolved stack would be
+  new reads-service surface, deferred until a user story exists.
+- Command palette / `:` command line inside the TUI: deferred by
+  0062-D6 until [0065's editor suite](0065-full-schema-editor-suite-design.md)
+  exists to command; keys + context menus carry M14.
 - Per-editor UX specifics (dotfiles entries editor shape, inline
   validation timing, unsaved-changes affordances).
 - Large-profile performance (render cost of big trees).

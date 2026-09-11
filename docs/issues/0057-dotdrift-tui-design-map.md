@@ -77,6 +77,7 @@ ticket.
 
 ## Decisions so far
 
+- [Service-layer architecture & CLI migration](0061-service-layer-architecture-cli-migration.md): `internal/service` — one package, per-area structs (reads/writes/session) composed into a root; wrap the 17 domain packages, absorb `cmd/` orchestration; typed errors at the boundary (`SchemaError`, `StepError`, `AlreadyRunningError`); apply pipeline is service-driven with a `Handover(*exec.Cmd)` TTY seam (0064 designs on it); canonical text renderers shared only where CLI/TUI must be identical; migration slices reads → writes → apply session, always green with byte-identical output; single-flight lock owned by the session.
 - [IDL choice & Go derivation](0060-idl-choice-go-derivation.md): no IDL — the Go service layer (interfaces + structs) is the normative contract; operations are interface methods, apply events are Go types (research 0059's vocabulary); surface grows TUI-critical-core-first; versioning becomes ordinary Go package versioning; non-Go consumers deferred until one exists.
 - [Apply streaming & TTY precedents](0059-apply-streaming-tty-precedents.md): stream steps into a pane keyed off the pipeline's own step/exit events; hand the real terminal over via `tea.ExecProcess` only for pre-classified TTY steps (sudo prompts, interactive hooks), run pane steps with `--yes`, and cancel through one ctx with process-group kills (cursor already survives aborts).
 - [Bubbles & layout inventory](0058-bubbles-layout-inventory.md): charm v2 is GA under `charm.land/*` (v1 frozen), making v1-vs-v2 the first design call; the tree gap closed on v2 only (official tree bubble, Aug 2026); two-pane layout needs nothing beyond lipgloss Join* + WindowSizeMsg; huh embeds as a child model; teatest is still untagged, so pure state machines + golden View() tests stay the testing mandate.
@@ -89,9 +90,6 @@ ticket.
   [TUI information architecture](0062-tui-information-architecture.md)
   already decides; the inventory (research 0058) landed the facts — v2
   renames the styling APIs — but no ticket owns the mechanism yet.
-- Versioning and error-model details of the Go service package
-  (package-path versioning, typed errors) — decided with 0061 or the
-  assembly ticket.
 - A status/drift view inside the TUI (read-only surface over plan/status
   read models) — scope not yet pinned.
 - Multi-account presentation: how the superuser overlay and other

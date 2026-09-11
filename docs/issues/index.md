@@ -48,7 +48,8 @@ use, plus emergent features and chores. Planned work lives in
 | [0058](0058-bubbles-layout-inventory.md) | Bubbles & layout inventory | done | medium |
 | [0059](0059-apply-streaming-tty-precedents.md) | Apply streaming & TTY precedents | done | medium |
 | [0060](0060-idl-choice-go-derivation.md) | IDL choice & Go derivation | done | medium |
-| [0061](0061-service-layer-architecture-cli-migration.md) | Service-layer architecture & CLI migration | open | medium |
+| [0061](0061-service-layer-architecture-cli-migration.md) | Service-layer architecture & CLI migration | done | medium |
+| [0068](0068-classify-install-test-isolation.md) | TestClassifyInstall writes into the real user home | done | medium |
 | [0062](0062-tui-information-architecture.md) | TUI information architecture | open | medium |
 | [0063](0063-two-pane-shell-prototype.md) | Two-pane shell prototype | open | low |
 | [0064](0064-apply-session-tty-suspend-design.md) | Apply session & TTY suspend design | open | medium |

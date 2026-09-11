@@ -77,6 +77,18 @@ ticket.
 
 ## Decisions so far
 
+- [Full-schema editor suite design](0065-full-schema-editor-suite-design.md):
+  one schema-driven frame + section adapters (custom models only for
+  dotfiles/when/hooks/systemd.units); save = onboard's textual
+  section-splice generalized to every section — untouched sections
+  verbatim, edited sections canonically re-encoded, spliced output
+  strict-decoded as the contract-19 round-trip proof; editors open
+  from the raw overlay-stack view (tree position = layer picker);
+  file-scoped drafts with three-tier validation and disk-hash
+  conflict refusal; `bootstrap.users` corrected as emitted-only —
+  accounts = `users/` overlay lifecycle + ADR-0006 notice; module
+  mgmt = move-refuse, orphan preview, minimal scaffold; palette,
+  when-tree builder, and undo stay fog.
 - [Apply session & TTY suspend design](0064-apply-session-tty-suspend-design.md):
   `service` apply session as a run handle — `Start` (resolve → `TryLock`
   → classify → `PlanResolved`) on one goroutine streaming a closed
@@ -127,10 +139,14 @@ ticket.
   read paths); previewing a *different* host's resolved stack would be
   new reads-service surface, deferred until a user story exists.
 - Command palette / `:` command line inside the TUI: deferred by
-  0062-D6 until [0065's editor suite](0065-full-schema-editor-suite-design.md)
-  exists to command; keys + context menus carry M14.
-- Per-editor UX specifics (dotfiles entries editor shape, inline
-  validation timing, unsaved-changes affordances).
+  0062-D6; reviewed in [0065](0065-full-schema-editor-suite-design.md)
+  (D4) and re-deferred — keys + context menus carry M14 until a user
+  story asks for a second navigation model.
+- When-editor tree builder: the `when` editor is a validated text area
+  (0065-D9); a structured combinator-tree UI is fog until the text
+  editor proves limiting.
+- Editor undo: dirty-confirm on esc/`q` is the only guard in M14
+  (0065-D8); undo/redo is fog.
 - Large-profile performance (render cost of big trees).
 
 ## Out of scope
@@ -142,9 +158,10 @@ ticket.
   [0070](0070-migrate-cmd-apply-onto-apply-session.md),
   [0071](0071-surface-tty-handover-for-real-steps.md)); all three are
   done (2026-09-12) — the session is the only apply orchestration and
-  real steps hand the terminal over. The TUI itself still waits for M14
-  and the 0065–0067 design tail, which is now the only open work on the
-  map.
+  real steps hand the terminal over. The TUI itself still waits for M14;
+  the design tail is [0066](0066-wizard-absorption-contract-15.md) →
+  [0067](0067-assemble-tui-design-set.md) —
+  [0065](0065-full-schema-editor-suite-design.md) closed 2026-09-12.
 - Building non-Go UIs; the contract exists so others *can*, not so this
   effort does.
 - Remote/multi-host management and web/GUI frontends.

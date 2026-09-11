@@ -118,11 +118,17 @@ type HooksStep struct {
 	ConfigPath string
 	Task       string // mise task-name prefix, e.g. "hooks-pre"; per-command tasks are <Task>-<i>
 	StepName   string // pipeline step name, e.g. "hooks-pre"
+
+	obs apply.Observer // injected by the pipeline; nil = no observation
 }
 
 var _ apply.Step = (*HooksStep)(nil)
 
 func (s *HooksStep) Name() string { return s.StepName }
+
+// SetObserver receives the pipeline observer (apply.observerSetter) so the
+// step can announce per-command hook boundaries (issue 0071).
+func (s *HooksStep) SetObserver(o apply.Observer) { s.obs = o }
 
 func (s *HooksStep) Run(ctx context.Context) error {
 	if len(s.Commands) == 0 {
@@ -133,7 +139,14 @@ func (s *HooksStep) Run(ctx context.Context) error {
 	}
 	for i, c := range s.Commands {
 		task := fmt.Sprintf("%s-%d", s.Task, i)
+		sub := apply.SubStep{Index: i, Total: len(s.Commands), Command: c.Command}
+		if s.obs != nil {
+			s.obs.HookStarted(s.StepName, sub)
+		}
 		if err := s.Exec.RunTask(ctx, s.ConfigPath, task); err != nil {
+			if s.obs != nil {
+				s.obs.HookFailed(s.StepName, sub, err)
+			}
 			if c.Optional {
 				log.Warn().Err(err).Str("command", c.Command).Msg("optional hook failed; continuing")
 				continue

@@ -71,12 +71,7 @@ func TestSession_resumeSkipsThroughCursor(t *testing.T) {
 	require.Equal(t, "tools", pr.Cursor)
 	require.True(t, pr.CursorEffective)
 
-	var started []string
-	for _, ev := range evs {
-		if st, ok := ev.(StepStarted); ok {
-			started = append(started, st.Name)
-		}
-	}
+	started := stepNames(evs)
 	require.Equal(t, []string{"dotfiles", "hooks-post"}, started)
 	for _, e := range *events {
 		require.NotContains(t, e, "mise:run bootstrap", "packages must be skipped after a tools cursor")
@@ -104,12 +99,7 @@ func TestSession_staleCursorIgnored(t *testing.T) {
 	pr := evs[0].(PlanResolved)
 	require.Equal(t, "vanished", pr.Cursor)
 	require.False(t, pr.CursorEffective)
-	var started []string
-	for _, ev := range evs {
-		if st, ok := ev.(StepStarted); ok {
-			started = append(started, st.Name)
-		}
-	}
+	started := stepNames(evs)
 	require.Equal(t, []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"}, started)
 }
 
@@ -127,12 +117,7 @@ func TestSession_sectionsFilter(t *testing.T) {
 	_, err = sess.Wait()
 	require.NoError(t, err)
 
-	var started []string
-	for _, ev := range evs {
-		if st, ok := ev.(StepStarted); ok {
-			started = append(started, st.Name)
-		}
-	}
+	started := stepNames(evs)
 	require.Equal(t, []string{"packages"}, started)
 }
 
@@ -551,4 +536,112 @@ func TestSession_failureOutracesCancel(t *testing.T) {
 	require.NotNil(t, res.StepError)
 	require.Equal(t, "dotfiles", res.StepError.Step)
 	require.Equal(t, "tools", res.FinalCursor)
+}
+
+// Hook steps surface per-command sub-step boundaries (0071): each hook
+// command's start is observable as a StepStarted carrying Sub{Index, Total,
+// Command} mirroring the resolved plan, alongside the step-level start.
+func TestSession_hookSubStepEvents(t *testing.T) {
+	dir := t.TempDir()
+	deps, _ := stubSessionDeps(t, testFacts())
+	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(resolveFixture(t), filepath.Join(dir, "s.json")))
+	require.NoError(t, err)
+	evs := drain(t, sess)
+	_, err = sess.Wait()
+	require.NoError(t, err)
+
+	pr := evs[0].(PlanResolved)
+	wantPre := pr.Plan.Hooks.Pre
+	wantPost := pr.Plan.Hooks.Post
+	require.NotEmpty(t, wantPre, "fixture must declare pre hooks")
+
+	type subStart struct {
+		step string
+		sub  *SubStep
+	}
+	var subs []subStart
+	for _, ev := range evs {
+		if st, ok := ev.(StepStarted); ok && st.Sub != nil {
+			subs = append(subs, subStart{st.Name, st.Sub})
+		}
+	}
+
+	// Step-level starts stay one per step (Sub nil); sub starts ride the
+	// hooks steps only.
+	require.Equal(t, []string{"hooks-pre", "packages", "tools", "dotfiles", "hooks-post"}, stepNames(evs))
+	require.Len(t, subs, len(wantPre)+len(wantPost))
+
+	var gotPre, gotPost []SubStep
+	for _, s := range subs {
+		require.Equal(t, len(wantPre), s.sub.Total, "hooks-pre total")
+		switch s.step {
+		case "hooks-pre":
+			gotPre = append(gotPre, *s.sub)
+		case "hooks-post":
+			gotPost = append(gotPost, *s.sub)
+		default:
+			t.Fatalf("sub-step start on non-hook step %s", s.step)
+		}
+	}
+	require.Len(t, gotPre, len(wantPre))
+	for i, w := range wantPre {
+		require.Equal(t, i, gotPre[i].Index, "hook index follows plan order")
+		require.Equal(t, w.Command, gotPre[i].Command)
+	}
+	require.Len(t, gotPost, len(wantPost))
+	for i, w := range wantPost {
+		require.Equal(t, i, gotPost[i].Index)
+		require.Equal(t, w.Command, gotPost[i].Command)
+	}
+}
+
+// A failing required hook command is observable before the step-level
+// failure: a Sub-carrying StepFailed names the command, then the step
+// fails resumably (cursor untouched, session outcome Failed).
+func TestSession_hookSubStepFailure(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	deps, _ := stubSessionDeps(t, testFacts())
+	events := &[]string{}
+	deps.NewMise = func() *mise.Mise {
+		m := fakeMise(events)
+		inner := m.Run
+		m.Run = func(name string, args ...string) (string, error) {
+			for _, a := range args {
+				if a == "hooks-pre-0" {
+					return "", errors.New("hook boom")
+				}
+			}
+			return inner(name, args...)
+		}
+		return m
+	}
+
+	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(resolveFixture(t), statePath))
+	require.NoError(t, err)
+	evs := drain(t, sess)
+	res, err := sess.Wait()
+	require.NoError(t, err)
+
+	pr := evs[0].(PlanResolved)
+	require.Equal(t, OutcomeFailed, res.Outcome)
+	require.Equal(t, "", res.FinalCursor, "nothing completed before hooks-pre")
+
+	var subFails, stepFails []StepFailed
+	for _, ev := range evs {
+		if f, ok := ev.(StepFailed); ok {
+			if f.Sub != nil {
+				subFails = append(subFails, f)
+			} else {
+				stepFails = append(stepFails, f)
+			}
+		}
+	}
+	require.Len(t, subFails, 1, "the failing hook command is announced")
+	require.Equal(t, "hooks-pre", subFails[0].Name)
+	require.Equal(t, 0, subFails[0].Sub.Index)
+	require.Equal(t, pr.Plan.Hooks.Pre[0].Command, subFails[0].Sub.Command)
+	require.Contains(t, subFails[0].Err.Error(), pr.Plan.Hooks.Pre[0].Command)
+	require.Len(t, stepFails, 1, "the step-level failure follows, Sub nil")
+	require.Equal(t, "hooks-pre", stepFails[0].Name)
 }

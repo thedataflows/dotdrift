@@ -3,6 +3,7 @@ package apply
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,14 @@ func (o *recordingObserver) StepFinished(name string) {
 }
 func (o *recordingObserver) StepFailed(name string, err error) {
 	*o.events = append(*o.events, "fail:"+name+":"+err.Error())
+}
+
+func (o *recordingObserver) HookStarted(step string, sub SubStep) {
+	*o.events = append(*o.events, fmt.Sprintf("hook-start:%s:%d/%d:%s", step, sub.Index, sub.Total, sub.Command))
+}
+
+func (o *recordingObserver) HookFailed(step string, sub SubStep, err error) {
+	*o.events = append(*o.events, fmt.Sprintf("hook-fail:%s:%d/%d:%s:%v", step, sub.Index, sub.Total, sub.Command, err))
 }
 
 // A pipeline with an observer fires start/finish per completed step and

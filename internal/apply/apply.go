@@ -17,11 +17,27 @@ type Step interface {
 
 // Observer receives pipeline step transitions. Callbacks fire on the
 // pipeline's run goroutine, in order, only for steps that actually ran —
-// steps skipped through the resume cursor never fire it.
+// steps skipped through the resume cursor never fire it. The hook
+// callbacks carry per-command boundaries inside a hook step (issue 0071);
+// a hook failure is announced there before the step-level StepFailed.
 type Observer interface {
 	StepStarted(name string)
 	StepFinished(name string)
 	StepFailed(name string, err error)
+	HookStarted(step string, sub SubStep)
+	HookFailed(step string, sub SubStep, err error)
+}
+
+// SubStep identifies one command inside a hook step's command sequence.
+type SubStep struct {
+	Index, Total int
+	Command      string
+}
+
+// observerSetter is the optional injection a Step may implement to receive
+// the pipeline's observer (only the hook step needs it today).
+type observerSetter interface {
+	SetObserver(Observer)
 }
 
 // HandoverFunc runs one child command under the consumer's real terminal
@@ -100,6 +116,11 @@ func (p *Pipeline) Run(ctx context.Context) error {
 		}
 		if p.obs != nil {
 			p.obs.StepStarted(step.Name())
+			// Steps that report their own sub-boundaries (the hook step)
+			// get the observer injected before they run.
+			if obsSetter, ok := step.(observerSetter); ok {
+				obsSetter.SetObserver(p.obs)
+			}
 		}
 		prev := p.state.LastCompleted
 		if err := step.Run(ctx); err != nil {

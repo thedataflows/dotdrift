@@ -106,6 +106,18 @@ func resolveFixture(t *testing.T) string {
 	return filepath.Join("..", "..", "testdata", "profiles", "resolve")
 }
 
+// stepNames returns the step-level start order (Sub nil — hook sub-step
+// starts carry a Sub and are asserted by the hook-specific tests).
+func stepNames(evs []Event) []string {
+	var names []string
+	for _, ev := range evs {
+		if st, ok := ev.(StepStarted); ok && st.Sub == nil {
+			names = append(names, st.Name)
+		}
+	}
+	return names
+}
+
 // drain collects every event until the session closes its stream.
 func drain(t *testing.T, s *ApplySession) []Event {
 	t.Helper()
@@ -157,12 +169,10 @@ func TestSession_lifecycleCompleted(t *testing.T) {
 
 	// Pipeline order for the resolve fixture: hooks-pre, packages, tools,
 	// dotfiles, hooks-post (the same steps the cmd happy path exercises).
-	var started []string
+	started := stepNames(evs)
 	var sawOutput bool
 	for _, ev := range evs {
 		switch e := ev.(type) {
-		case StepStarted:
-			started = append(started, e.Name)
 		case StepOutput:
 			sawOutput = true
 		case BackupTaken:

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
@@ -52,13 +53,10 @@ type BackupTaken struct {
 
 func (BackupTaken) event() {}
 
-// SubStep identifies one hook command inside a hooks step. Sub stays nil
-// until real steps surface per-command boundaries (issue 0071) — no
-// event lies about granularity that does not exist yet.
-type SubStep struct {
-	Index, Total int
-	Command      string
-}
+// SubStep identifies one hook command inside a hooks step: hook steps fire
+// one StepStarted carrying Sub per command (0071), and a failing command
+// fires a Sub-carrying StepFailed before the step-level failure.
+type SubStep = apply.SubStep
 
 // StepStarted announces a step. NeedsTTY is true when the step will hand
 // the terminal to a child; Index is 0-based of Total steps.
@@ -90,10 +88,13 @@ type StepFinished struct {
 func (StepFinished) event() {}
 
 // StepFailed marks a failed step. The session ends Failed right after;
-// the cursor names the last completed step.
+// the cursor names the last completed step. A non-nil Sub reports a
+// failing command inside a hook step (the step-level failure follows
+// with Sub nil).
 type StepFailed struct {
 	Name string
 	Err  *StepError
+	Sub  *SubStep
 }
 
 func (StepFailed) event() {}

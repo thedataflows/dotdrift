@@ -459,8 +459,6 @@ func (r *sessionRunner) StepStarted(name string) {
 	r.mu.Lock()
 	r.current = name
 	r.mu.Unlock()
-	// Sub stays nil until real steps surface per-command hook boundaries
-	// (issue 0071) — no event lies about granularity that does not exist.
 	r.emit(StepStarted{
 		Name:     name,
 		Index:    r.index[name],
@@ -491,6 +489,28 @@ func (r *sessionRunner) StepFailed(name string, err error) {
 	}
 	r.mu.Unlock()
 	r.emit(StepFailed{Name: name, Err: r.failure})
+}
+
+// HookStarted implements apply.Observer: announce one hook command inside
+// a hook step (0071) — a StepStarted carrying Sub, same step identity.
+func (r *sessionRunner) HookStarted(step string, sub apply.SubStep) {
+	s := sub
+	r.emit(StepStarted{
+		Name:     step,
+		Index:    r.index[step],
+		Total:    len(r.steps),
+		NeedsTTY: r.needsTTY[step],
+		Sub:      &s,
+	})
+}
+
+// HookFailed implements apply.Observer: announce the failing hook command
+// with a Sub-carrying StepFailed. The step-level failure (Sub nil) follows
+// from StepFailed when the hook was required.
+func (r *sessionRunner) HookFailed(step string, sub apply.SubStep, err error) {
+	s := sub
+	se := &StepError{Step: step, Err: fmt.Errorf("hook %q: %w", sub.Command, err)}
+	r.emit(StepFailed{Name: step, Err: se, Sub: &s})
 }
 
 // lineCollector turns child output into line-buffered StepOutput events

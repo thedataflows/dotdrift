@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -102,8 +104,9 @@ func TestSystemFilesStep_bootstrapFailurePropagates(t *testing.T) {
 }
 
 // System-scope EDIT entries keep the elevated [dotfiles] path: a
-// non-writable edit target still converges via DotfilesApplySudo (contract
-// #18 — bootstrap.files has no edit concept).
+// non-writable edit target converges via one \`sudo -E mise dotfiles
+// apply\` child handed to the consumer's terminal (contract #18 —
+// bootstrap.files has no edit concept; 0071 handover seam).
 func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("elevation test requires a non-root user")
@@ -124,6 +127,7 @@ func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 	em := mise.NewExecMise(m)
 
 	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
+	var handed []*exec.Cmd
 	step := &systemFilesStep{
 		exec: em,
 		entries: []resolve.DotfileEntry{
@@ -134,11 +138,20 @@ func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 		configPath: filepath.Join(dir, "system", "mise.toml"),
 		editsPath:  editsPath,
 		yes:        true,
+		handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd)
+			return nil
+		},
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	require.Equal(t, []string{"sudo"}, names,
-		"a non-writable edit target converges elevated in one sudo pass")
+	require.Len(t, handed, 1, "a non-writable edit target converges elevated in one sudo pass")
+	require.True(t, strings.HasSuffix(handed[0].Path, "/sudo"))
+	require.Contains(t, handed[0].Args, "dotfiles")
+	require.Contains(t, handed[0].Args, "apply")
+	require.Contains(t, handed[0].Args, editsPath[0:len(editsPath)-len("/mise.toml")],
+		"the elevated child applies the system-edits config dir")
+	require.Empty(t, names, "the elevated apply must not run through the piped runner")
 
 	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)

@@ -721,3 +721,61 @@ func hasEnv(env []string, key string) bool {
 	}
 	return false
 }
+
+// System-scope edit entries whose targets the invoking user cannot write
+// converge through one elevated `sudo -E mise dotfiles apply` child —
+// surfaced through the handover seam (contract 13, issue 0071): the step
+// classifies NeedsTTY with the sudo reason and hands the real child over.
+func TestSession_sudoEditsHandover(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("running as root: every target is writable, no elevation decision exists")
+	}
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+
+	// Profile: one system-scope module with an edit entry under /etc —
+	// the walk-up writability probe hits /etc (not user-writable).
+	root := filepath.Join(dir, "profile")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "modules", "sysedit"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "modules", "sysedit", "module.toml"), []byte(
+		"id = \"sysedit\"\napp = \"sysedit\"\nscope = \"system\"\n\n[dotfiles]\n\"/etc/dotdrift-0071-test/x.conf/anchor\" = { line = \"x\" }\n",
+	), 0o644))
+
+	deps, events := stubSessionDeps(t, testFacts())
+
+	var handed []*exec.Cmd
+	opts := baseOpts(root, statePath)
+	opts.Sections = map[string]bool{"dotfiles": true}
+	opts.Handover = func(cmd *exec.Cmd) error {
+		handed = append(handed, cmd)
+		return nil
+	}
+
+	sess, err := NewApplyArea(deps).Start(context.Background(), opts)
+	require.NoError(t, err)
+	pv := sess.Preview()
+	drain(t, sess)
+	res, err := sess.Wait()
+	require.NoError(t, err)
+
+	byName := map[string]StepPreview{}
+	for _, p := range pv {
+		byName[p.Name] = p
+	}
+	require.True(t, byName["dotfiles-system"].NeedsTTY, "sudo edits need the terminal")
+	require.Contains(t, byName["dotfiles-system"].Reason, "sudo")
+	require.False(t, byName["dotfiles"].NeedsTTY, "the user dotfiles step has no terminal need")
+
+	// The elevated apply went through handover as one sudo -E child.
+	require.Len(t, handed, 1)
+	cmd := handed[0]
+	require.True(t, strings.HasSuffix(cmd.Path, "/sudo"), "sudo resolves on PATH, got %q", cmd.Path)
+	require.Equal(t, []string{"sudo", "-E", "/fake/mise", "dotfiles", "apply",
+		"--cd", filepath.Join(dir, "mise", "system-edits"), "--yes"}, cmd.Args)
+	require.True(t, hasEnv(cmd.Env, "MISE_TRUSTED_CONFIG_PATHS"), "trust plumbing survives the elevation")
+	for _, e := range *events {
+		require.NotContains(t, e, "dotfiles apply", "the elevated apply must not run through the piped runner")
+	}
+	require.Equal(t, OutcomeCompleted, res.Outcome)
+}

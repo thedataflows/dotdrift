@@ -177,10 +177,6 @@ func verboseExecMise(t *testing.T, script string, verbose bool, out, errW *bytes
 // Verbose mode streams every ExecMise operation's child stdout/stderr live
 // to the injected writers.
 func TestExecMise_verboseStreamsOperationOutput(t *testing.T) {
-	orig := geteuid
-	geteuid = func() int { return 0 } // root: DotfilesApplySudo runs mise directly, no sudo
-	t.Cleanup(func() { geteuid = orig })
-
 	cases := []struct {
 		name    string
 		invoke  func(ctx context.Context, em *ExecMise, cfg string) error
@@ -191,9 +187,6 @@ func TestExecMise_verboseStreamsOperationOutput(t *testing.T) {
 		}, "install"},
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.DotfilesApply(ctx, cfg, true, false)
-		}, "dotfiles"},
-		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApplySudo(ctx, cfg, true, false)
 		}, "dotfiles"},
 		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.RunTask(ctx, cfg, "hooks:pre")
@@ -275,10 +268,6 @@ func TestMise_versionProbeStaysCapturedWhenVerbose(t *testing.T) {
 // Verbose operations echo the command line (bash set -x style: "+ argv") to
 // the Err writer immediately before the command's own output.
 func TestExecMise_verboseEchoesCommandLine(t *testing.T) {
-	orig := geteuid
-	geteuid = func() int { return 0 } // root: DotfilesApplySudo runs mise directly, no sudo
-	t.Cleanup(func() { geteuid = orig })
-
 	cases := []struct {
 		name     string
 		invoke   func(ctx context.Context, em *ExecMise, cfg string) error
@@ -286,11 +275,6 @@ func TestExecMise_verboseEchoesCommandLine(t *testing.T) {
 	}{
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.DotfilesApply(ctx, cfg, true, false)
-		}, func(script, cfgDir string) []string {
-			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
-		}},
-		{"DotfilesApplySudo", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.DotfilesApplySudo(ctx, cfg, true, false)
 		}, func(script, cfgDir string) []string {
 			return []string{script, "dotfiles", "apply", "--cd", cfgDir, "--yes"}
 		}},

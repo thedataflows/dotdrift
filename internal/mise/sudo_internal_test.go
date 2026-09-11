@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,56 +49,70 @@ func TestDotfilesApplyArgv_forceAppended(t *testing.T) {
 	require.Equal(t, []string{"/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes", "--force"}, argv)
 }
 
-// DotfilesApplySudo drives the argv decision off the live euid seam: sudo
-// when non-root, direct when root.
-func TestExecMise_dotfilesApplySudo_invocationArgv(t *testing.T) {
+// DotfilesApplySudoSpec drives the argv decision off the live euid seam:
+// sudo -E when non-root, direct when root (issue 0071 handover source).
+func TestExecMise_dotfilesApplySudoSpec_argv(t *testing.T) {
 	cases := []struct {
-		name     string
-		euid     int
-		wantName string
-		wantArgs []string
+		name  string
+		euid  int
+		want  []string
 	}{
-		{"nonRootSudo", 1000, "sudo", []string{"-E", "/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}},
-		{"rootDirect", 0, "/fake/mise", []string{"dotfiles", "apply", "--cd", "/cfg", "--yes"}},
+		{"nonRootSudo", 1000, []string{"sudo", "-E", "/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}},
+		{"rootDirect", 0, []string{"/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			swapEUID(t, tc.euid)
-			var gotName string
-			var gotArgs []string
 			em := NewExecMise(&Mise{
 				LookPath: func(string) (string, error) { return "/fake/mise", nil },
 				RunContext: func(_ context.Context, name string, args ...string) (string, error) {
 					if len(args) > 0 && args[0] == "--version" {
 						return MinMiseVersion + "\n", nil
 					}
-					gotName = name
-					gotArgs = append([]string{}, args...)
 					return "", nil
 				},
 			})
 
-			require.NoError(t, em.DotfilesApplySudo(context.Background(), "/cfg/mise.toml", true, false))
-			require.Equal(t, tc.wantName, gotName)
-			require.Equal(t, tc.wantArgs, gotArgs)
+			cmd, err := em.DotfilesApplySudoSpec(context.Background(), "/cfg/mise.toml", true, false)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, cmd.Args)
+			// exec.CommandContext resolves argv[0] on PATH: bare names stay in
+			// Args, the resolved binary lands in Path.
+			if tc.euid != 0 {
+				require.True(t, strings.HasSuffix(cmd.Path, "/sudo"), "sudo resolves on PATH, got %q", cmd.Path)
+			} else {
+				require.Equal(t, tc.want[0], cmd.Path)
+			}
 		})
 	}
 }
 
-// The trust plumbing must survive the sudo entry point: running as root (no
-// sudo needed) the generated config dir still lands in
-// MISE_TRUSTED_CONFIG_PATHS on the real exec path.
-func TestExecMise_dotfilesApplySudo_trustsGeneratedConfigDir(t *testing.T) {
+// The trust plumbing must survive the elevation entry point: the spec's
+// child env carries MISE_TRUSTED_CONFIG_PATHS for the generated config's
+// directory (the consumer execs exactly this env, issue 0071).
+func TestExecMise_dotfilesApplySudoSpec_trustsGeneratedConfigDir(t *testing.T) {
 	swapEUID(t, 0)
-	capture := filepath.Join(t.TempDir(), "capture")
-	em := realExecMise(t, fakeMiseScript(t, capture))
+	em := NewExecMise(&Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return MinMiseVersion + "\n", nil
+			}
+			return "", nil
+		},
+	})
 	cfgDir, cfg := generatedConfig(t)
 
-	require.NoError(t, em.DotfilesApplySudo(context.Background(), cfg, false, false))
-
-	lines := captureLines(t, capture)
-	require.Equal(t, "TRUSTED="+cfgDir, lines[0],
-		"mise subprocess env must trust the generated config's directory")
+	cmd, err := em.DotfilesApplySudoSpec(context.Background(), cfg, false, false)
+	require.NoError(t, err)
+	want := "MISE_TRUSTED_CONFIG_PATHS=" + cfgDir
+	found := false
+	for _, e := range cmd.Env {
+		if e == want {
+			found = true
+		}
+	}
+	require.True(t, found, "child env must trust the generated config's directory")
 }
 
 // runOp streams the child's stdout/stderr straight to the destination — never

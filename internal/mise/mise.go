@@ -638,19 +638,19 @@ func dotfilesApplyArgv(euid int, misePath, configPath string, yes, force bool) [
 	return append([]string{"sudo", "-E", misePath}, args...)
 }
 
-// DotfilesApplySudo applies system-scope dotfiles with root privileges. When
-// the process is not already root it invokes sudo (failing loudly if sudo is
-// missing or authentication fails); as root it applies directly. force maps
-// to dotdrift apply --force (issue 0046): replace pre-existing files at
-// managed targets instead of refusing.
-func (e *ExecMise) DotfilesApplySudo(ctx context.Context, configPath string, yes, force bool) error {
+// DotfilesApplySudoSpec builds (never starts) the child for the elevated
+// system-edits apply — the handover twin source (issue 0071): `sudo -E
+// <mise> dotfiles apply` when not root, directly as `<mise> dotfiles
+// apply` when already root (EUID 0, e.g. containers). Stdio nil for the
+// consumer to wire; env carries the trust plumbing and MISE_VERBOSE under
+// Verbose.
+func (e *ExecMise) DotfilesApplySudoSpec(ctx context.Context, configPath string, yes, force bool) (*exec.Cmd, error) {
 	path, err := e.mise.EnsureContext(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	argv := dotfilesApplyArgv(geteuid(), path, configPath, yes, force)
-	_, err = e.mise.runOp(ctx, trustEnv(configPath), argv[0], argv[1:]...)
-	return err
+	return e.mise.newOpCmd(ctx, trustEnv(configPath), argv[0], argv[1:]...), nil
 }
 
 // RunTask runs a named task (e.g. "hooks:pre") from the generated config.

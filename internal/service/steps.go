@@ -99,18 +99,55 @@ type systemFilesStep struct {
 	yes        bool
 	force      bool                      // apply --force → --force on the edits dotfiles apply (issue 0046)
 	secrets    map[string]profile.Secret // declared secret inputs → [bootstrap.secrets]
+	handover   apply.HandoverFunc        // session-injected; the elevated edits child needs the terminal
 }
 
-var _ apply.Step = (*systemFilesStep)(nil)
+var (
+	_ apply.Step         = (*systemFilesStep)(nil)
+	_ apply.HandoverStep = (*systemFilesStep)(nil)
+)
+
+// geteuid is a test seam for the elevation decision (mirrors mise).
+var geteuid = os.Geteuid
 
 func (s *systemFilesStep) Name() string { return "dotfiles-system" }
 
-func (s *systemFilesStep) Run(ctx context.Context) error {
-	var whole, edit []resolve.DotfileEntry
+// RequiresTTY classifies the step up front (0064-D4): elevated system edits
+// prompt through sudo on the consumer's terminal.
+func (s *systemFilesStep) RequiresTTY() string {
+	if s.needsSudo() {
+		return "elevated system edits: edit targets are not user-writable (sudo)"
+	}
+	return ""
+}
+
+// SetHandover injects the consumer's handover callback (apply.HandoverStep).
+func (s *systemFilesStep) SetHandover(h apply.HandoverFunc) { s.handover = h }
+
+// editEntries returns the step's partial-edit entries.
+func (s *systemFilesStep) editEntries() []resolve.DotfileEntry {
+	var edit []resolve.DotfileEntry
 	for _, e := range s.entries {
 		if e.IsEdit() {
 			edit = append(edit, e)
-		} else {
+		}
+	}
+	return edit
+}
+
+// needsSudo reports whether the edit batch must converge elevated: not
+// already root and some edit target is not user-writable. RequiresTTY and
+// Run share this one predicate, so the up-front classification cannot
+// drift from what the step actually does (issue 0071).
+func (s *systemFilesStep) needsSudo() bool {
+	return geteuid() != 0 && !systemTargetsUserWritable(s.editEntries(), s.homeDir)
+}
+
+func (s *systemFilesStep) Run(ctx context.Context) error {
+	edit := s.editEntries()
+	var whole []resolve.DotfileEntry
+	for _, e := range s.entries {
+		if !e.IsEdit() {
 			whole = append(whole, e)
 		}
 	}
@@ -150,11 +187,22 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		if err := writeBootstrapConfig(s.editsPath, mise.GenerateDotfiles(edit)); err != nil {
 			return fmt.Errorf("write system edits config: %w", err)
 		}
-		// Decide elevation up front from the edit targets' writability: runOp
-		// streams the child's fds straight to the terminal (preserving mise's
-		// color), so a "Permission denied" can't be read back from stderr.
-		if os.Geteuid() != 0 && !systemTargetsUserWritable(edit, s.homeDir) {
-			if err := s.exec.DotfilesApplySudo(ctx, s.editsPath, s.yes, s.force); err != nil {
+		// Elevation is decided up front from the edit targets' writability
+		// (the same predicate RequiresTTY reported): the elevated child needs
+		// the real terminal for the sudo prompt, so it goes through the
+		// session's handover seam (issue 0071) — the consumer wires fds,
+		// keeping mise's color and the prompt. No handover (impossible under
+		// a session, which always injects one) fails loud instead of silently
+		// degrading to a piped sudo.
+		if s.needsSudo() {
+			if s.handover == nil {
+				return fmt.Errorf("elevated system edits require a handover callback")
+			}
+			cmd, err := s.exec.DotfilesApplySudoSpec(ctx, s.editsPath, s.yes, s.force)
+			if err == nil {
+				err = s.handover(cmd)
+			}
+			if err != nil {
 				return fmt.Errorf("system edits (elevated): %w", err)
 			}
 		} else {

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,6 +10,19 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 )
+
+// recordHandover redirects the CLI's terminal handover into the events
+// slice: the fake mise path must never really exec, and the recorded argv
+// is the observable for "which child would run on the terminal" (0071).
+func recordHandover(t *testing.T, events *[]string) {
+	t.Helper()
+	orig := handoverToTerminal
+	handoverToTerminal = func(cmd *exec.Cmd) error {
+		*events = append(*events, "handover:"+cmd.Path+" "+strings.Join(cmd.Args, " "))
+		return nil
+	}
+	t.Cleanup(func() { handoverToTerminal = orig })
+}
 
 func scopeFixture(t *testing.T) string {
 	t.Helper()
@@ -110,12 +124,14 @@ scope = "system"
 
 	f := &facts.Facts{Hostname: "h", Username: "u", OS: "linux", Backend: "paru"}
 	fk := stubApplyDeps(t, f)
+	recordHandover(t, fk.events)
 
 	cmd := &ApplyCmd{deps: &fk.deps, Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// The system edit runs as `mise dotfiles apply` from the system-edits/
-	// config dir; no bootstrap files phase runs for an edits-only plan.
+	// The system edit runs as `sudo -E mise dotfiles apply` from the
+	// system-edits/ config dir (0071: through the handover seam); no
+	// bootstrap files phase runs for an edits-only plan.
 	var foundApply bool
 	for _, e := range *fk.events {
 		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system-edits")) {
@@ -152,6 +168,7 @@ scope = "system"
 
 	f := &facts.Facts{Hostname: "h", Username: "u", OS: "linux", Backend: "paru"}
 	fk := stubApplyDeps(t, f)
+	recordHandover(t, fk.events)
 
 	cmd := &ApplyCmd{deps: &fk.deps, Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())

@@ -14,7 +14,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 # Tests first
 
 - `TestPathMap_homeAndSystem` — map absolute paths to module-relative source paths and target paths.
-- `TestInferApp_configDir` — infer app name from `~/.config/<app>` paths.
+- `TestOnboard_emptyAppErrors` — App is mandatory (issue 0055; was `TestInferApp_configDir` first-path inference).
 - `TestOnboard_copiesTree` — live paths are copied into the module directory.
 - `TestOnboard_writesToml` — `module.toml` is written with discovered metadata.
 - `TestOnboard_noEnableFlagNeeded` — created module is selected by presence on next `apply`.
@@ -40,7 +40,7 @@ Implement `dotdrift onboard` per [CLI surface](/product/cli-surface.md).
 - `--force` turns a destination conflict into a refresh: the existing module destination is removed (`os.RemoveAll`, covering both file and directory destinations) and re-copied from the live path. Without `--force`, a conflict errors and leaves the module untouched.
 - File modes are preserved when copying files and directory trees; ownership is not (copies belong to the current user).
 - Default mode is `symlink`; `--mode copy|template` overrides.
-- `--app` overrides inferred app name.
+- `--app` is required and names the module directory (issue 0055; was: optional override of an inferred name).
 - `--package` and `--tool` add entries to `module.toml`.
 - `--host` writes files only to the host overlay directory.
 - No `--enable` flag; presence selects the module automatically.

@@ -89,7 +89,9 @@ func TestOnboard_relativePathIsHomeRelative(t *testing.T) {
 	require.NotContains(t, content, home, "module.toml must not embed the absolute home path")
 }
 
-func TestInferApp_configDir(t *testing.T) {
+// App is mandatory (issue 0055): no first-path inference — an empty App on
+// a live-path run is a loud error, not a guess at the module name.
+func TestOnboard_emptyAppErrors(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
 	isolateState(t)
@@ -104,9 +106,8 @@ func TestInferApp_configDir(t *testing.T) {
 		Paths:       []string{src},
 		Home:        home,
 	})
-	require.NoError(t, err)
-
-	require.DirExists(t, filepath.Join(profile, "modules", "nvim"))
+	require.ErrorContains(t, err, "--app")
+	require.NoDirExists(t, filepath.Join(profile, "modules", "nvim"), "a rejected run must not create a module")
 }
 
 func TestOnboard_copiesTree(t *testing.T) {

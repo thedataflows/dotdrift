@@ -140,7 +140,7 @@ func TestOnboard_modeFlag_acceptsDocumentedModes(t *testing.T) {
 			var cli CLI
 			parser, err := kong.New(&cli, kong.Name(appName))
 			require.NoError(t, err)
-			_, err = parser.Parse([]string{"onboard", "--mode", mode, filepath.Join(t.TempDir(), "x")})
+			_, err = parser.Parse([]string{"onboard", "--app", "x", "--mode", mode, filepath.Join(t.TempDir(), "x")})
 			require.NoError(t, err, "--mode %s is documented in docs/product/profile-layout.md and must parse", mode)
 			require.Equal(t, mode, cli.Onboard.Mode)
 		})
@@ -154,9 +154,20 @@ func TestOnboard_modeFlag_defaultIsSymlink(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"onboard", filepath.Join(t.TempDir(), "x")})
+	_, err = parser.Parse([]string{"onboard", "--app", "x", filepath.Join(t.TempDir(), "x")})
 	require.NoError(t, err)
 	require.Equal(t, "symlink", cli.Onboard.Mode, "default dotfile mode is symlink (contract.md invariant 5)")
+}
+
+// --app is required (issue 0055): the module name must be explicit — the
+// old first-path inference was a silent guess at profile structure.
+func TestKong_onboardAppRequired(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli, kong.Name(appName))
+	require.NoError(t, err)
+	_, err = parser.Parse([]string{"onboard", filepath.Join(t.TempDir(), "x")})
+	require.Error(t, err, "onboard without --app must fail at parse time")
+	require.Contains(t, err.Error(), "--app")
 }
 
 func TestOnboard_modeFlowsToModuleTOML(t *testing.T) {

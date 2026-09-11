@@ -35,7 +35,7 @@ dotdrift detect || fail "dotdrift detect exited non-zero"
 # --- onboard -------------------------------------------------------------
 step "onboard"
 echo "live-config 1" > /root/.liverc
-dotdrift onboard --yes --profile /profile /root/.liverc || fail "onboard exited non-zero"
+dotdrift onboard --app liverc --yes --profile /profile /root/.liverc || fail "onboard exited non-zero"
 [ -f /profile/modules/liverc/module.toml ] || fail "onboard did not materialize modules/liverc/module.toml"
 [ -f /profile/modules/liverc/home/.liverc ] || fail "onboard did not copy the live file into the module"
 [ -L /root/.liverc ] || fail "onboard did not link /root/.liverc"

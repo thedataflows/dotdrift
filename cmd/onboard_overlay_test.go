@@ -23,7 +23,8 @@ func TestKong_onboardOverlayValues(t *testing.T) {
 		var cli CLI
 		parser, err := kong.New(&cli, kong.Name(appName))
 		require.NoError(t, err)
-		_, err = parser.Parse(append([]string{"onboard"}, args...))
+		// --app is required (issue 0055); these tests exercise --host/--user.
+		_, err = parser.Parse(append([]string{"onboard", "--app=x"}, args...))
 		require.NoError(t, err)
 		return cli.Onboard
 	}

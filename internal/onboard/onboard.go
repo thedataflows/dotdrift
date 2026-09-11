@@ -111,7 +111,7 @@ func (o *Onboard) Run(opts Options) error {
 	// A path inside a module layer directory of the profile IS a module
 	// file: onboard adopts it into that layer's module.toml instead of
 	// copying it like a live path (issue 0017). The path's own layer wins
-	// over --app/--host inference — it names the corresponding module.
+	// over the --app/--host flags — it names the corresponding module.
 	var directed []adoption
 	var directedDir string
 	var live []string
@@ -142,12 +142,11 @@ func (o *Onboard) Run(opts Options) error {
 	if directedDir != "" {
 		app = filepath.Base(directedDir)
 	} else {
+		// --app is mandatory (issue 0055): the module name is always
+		// explicit, never inferred from a path.
 		app = opts.App
 		if app == "" {
-			app = inferApp(live, home)
-		}
-		if app == "" {
-			return fmt.Errorf("could not infer app from paths")
+			return fmt.Errorf("onboard: --app is required (module directory name)")
 		}
 	}
 
@@ -655,20 +654,6 @@ func expandPath(p, home string) string {
 	default:
 		return filepath.Join(home, p)
 	}
-}
-
-func inferApp(paths []string, home string) string {
-	for _, p := range paths {
-		rel, err := filepath.Rel(filepath.Join(home, ".config"), p)
-		if err == nil && !strings.HasPrefix(rel, "..") {
-			parts := strings.Split(rel, string(os.PathSeparator))
-			if parts[0] != "" && parts[0] != "." {
-				return parts[0]
-			}
-		}
-	}
-	base := filepath.Base(paths[0])
-	return strings.TrimPrefix(base, ".")
 }
 
 func mapPath(p, home, moduleDir string) (target, source string, err error) {

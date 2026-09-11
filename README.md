@@ -49,8 +49,8 @@ go install github.com/thedataflows/dotdrift@latest
 dotdrift init ./my-profile
 cd ./my-profile
 
-# Onboard an existing config path into a module
-dotdrift onboard ~/.bashrc
+# Onboard an existing config path into a module (--app names it)
+dotdrift onboard --app bash ~/.bashrc
 
 # See what would change
 dotdrift plan
@@ -191,20 +191,20 @@ See `docs/product/profile-layout.md` for the full validation rules and `examples
 
 `dotdrift onboard` (aliases: `add`, `adopt`) turns live paths into managed module content. Onboarding a path copies it into the module, writes the `[dotfiles]` entry, and applies immediately; orphans — module files no entry references — are adopted along the way. A few scenarios:
 
-**Onboard a live path.** Copies `~/.config/nvim` into `modules/nvim/home/.config/nvim` and links it back:
+**Onboard a live path.** Copies `~/.config/nvim` into `modules/nvim/home/.config/nvim` and links it back. `--app` is required — it names the module directory:
 
 ```bash
-dotdrift onboard ~/.config/nvim
+dotdrift onboard --app nvim ~/.config/nvim
 ```
 
 Re-running **updates**: the module copy is refreshed from the live path (directories replaced wholesale, so deletions propagate) and `module.toml` is merged — existing entries and unmanaged sections survive.
 
 `--host` / `--user` land the module in the host/user layer — no value = current host/user, `--host=<hostname>` / `--user=<username>` = explicit; omitting the flags lands in `modules/` (both flags together onboard into both layers).
 
-**Adopt an orphaned module file.** A file sitting in the profile that no `[dotfiles]` entry references (status lists it under `orphans:`) is declared by passing the module file itself — no copy, the entry lands in that layer's `module.toml`:
+**Adopt an orphaned module file.** A file sitting in the profile that no `[dotfiles]` entry references (status lists it under `orphans:`) is declared by passing the module file itself — no copy, the entry lands in that layer's `module.toml` (the path's own layer names the module; `--app` is still required but its value is overridden):
 
 ```bash
-dotdrift adopt ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc
+dotdrift adopt --app easyeffects ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc
 # adopted: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [hosts/cri-pc]
 ```
 
@@ -213,7 +213,7 @@ The path names its level: a `modules/<app>/...` file adopts into `[base]`, a `ho
 **Preview first.** `--dry-run` lists what would be onboarded and adopted, touching nothing:
 
 ```bash
-dotdrift adopt --dry-run ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc
+dotdrift adopt --app easyeffects --dry-run ~/dotfiles/hosts/cri-pc/modules/easyeffects/home/.config/easyeffects/db/easyeffectsrc
 # would adopt: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [hosts/cri-pc]
 ```
 
@@ -268,7 +268,7 @@ dotdrift restore ~/.config/easyeffects/db/easyeffectsrc
 **Keep the restored content.** Restored files now differ from the profile — `status` reports `content differs` and the next `apply` overwrites them again. To make restored content the profile's truth, re-onboard it:
 
 ```bash
-dotdrift onboard ~/.config/easyeffects/db/easyeffectsrc
+dotdrift onboard --app easyeffects ~/.config/easyeffects/db/easyeffectsrc
 ```
 
 Bare `dotdrift restore` is an error — at least one target is required. Full rules in [profile layout — backups](docs/product/profile-layout.md).
@@ -303,7 +303,7 @@ See `docs/product/cli-surface.md` for the full flag reference, and `docs/product
 | `dotdrift plan [--json] [modules...]` | Print the effective plan without side effects (`--json` for machine-readable output; optionally limited to the listed modules). |
 | `dotdrift apply [--yes] [--verbose] [--diff[=tool]] [--backup] [--[no-]packages\|--tools\|--dotfiles\|--mounts\|--smb\|--hooks ...] [modules...]` | Run the full pipeline and resume from the last successful step (the cursor file is deleted on completion; optionally limited to the listed modules). Section flags restrict the run: positives (`--packages --tools`) execute exactly those sections, negated (`--no-hooks`) skip that one, any combination composes; no flags runs everything. `--diff` shows colored unified diffs for differing `copy`-mode dotfiles before applying; bare = internal diff, `--diff=delta` uses the named tool with `<target> <source>` args. `--backup` snapshots every existing `copy`-mode destination into the declaring module's `backups/<timestamp>/` tree before applying (copy is the only mode whose apply overwrites destination content); bring them back with `dotdrift restore` — see [profile layout — backups](docs/product/profile-layout.md#backups-apply---backup). |
 | `dotdrift status [-v] [-j N] [--diff[=tool]] [modules...]` | Show drift between the profile and the live system (packages, tools, dotfiles, mounts, smb), plus the resume cursor. Symlink sources are validated (dangling links, stale symlink-each children), and an `orphans` section lists unreferenced files per module/layer (every host/user layer in the profile is scanned, not just the current machine's). Colored hues are overridable via `[colors]` in `dotdrift.toml`. Probes run concurrently (`-j N` workers; default: CPUs); `-v` streams per-probe progress to stderr; `--diff` shows colored unified diffs after the report. Exits 0 even when drift is found. |
-| `dotdrift onboard [--verbose] <path>...` (aliases: `add`, `adopt`) | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). Orphaned module files (unreferenced by `[dotfiles]`) are adopted as entries with the run's mode — a fully-orphaned directory collapses to one entry (never a shared root like `~/.config`) and the live counterpart is snapshotted first; passing a module file path adopts it into its own layer's module.toml; `--dry-run` lists the would-be adoptions. |
+| `dotdrift onboard --app <id> [--verbose] <path>...` (aliases: `add`, `adopt`) | Copy live paths into a module and apply; re-running updates the module (refresh files, merge `module.toml`). Orphaned module files (unreferenced by `[dotfiles]`) are adopted as entries with the run's mode — a fully-orphaned directory collapses to one entry (never a shared root like `~/.config`) and the live counterpart is snapshotted first; passing a module file path adopts it into its own layer's module.toml (its layer overrides the `--app` value); `--dry-run` lists the would-be adoptions. |
 | `dotdrift restore <targets...> [--gen <timestamp>] [--dry-run]` · `--list [targets...]` | The inverse of `apply --backup`: copy backed-up copy-mode destinations back to their live target paths (default: the newest generation holding each target; `--list` browses generations, optionally for a path). Removes a symlink at the target instead of writing through it, creates missing parents, restores file modes, and restores unwritable targets (system files) elevated via sudo. Restored content drifts from the profile — `apply` overwrites it again; re-onboard a path to keep it. |
 | `dotdrift generate mounts&#124;smb` | Generate a mounts module (systemd units) or smb module (samba shares) into a profile layer; interactive wizard on a terminal, strict flag mode otherwise. |
 

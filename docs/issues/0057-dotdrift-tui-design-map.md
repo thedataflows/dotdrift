@@ -77,6 +77,13 @@ ticket.
 
 ## Decisions so far
 
+- [Two-pane shell prototype](0063-two-pane-shell-prototype.md): the
+  human ran the prototype branch and approved the shell as-is — 30%
+  tree with column clamp, border-color focus, origins-as-children, the
+  one-line header + status-bar help. The 0062 IA decisions are now
+  reacted-upon; the prototype stays on its branch (static colors and
+  stubbed editors/apply are recorded simplifications, not patterns to
+  copy).
 - [TUI information architecture](0062-tui-information-architecture.md):
   charm v2; module-centric tree (Modules/Accounts/Profile, one node per
   module across layers, overlay origins as markers); resolved-by-default

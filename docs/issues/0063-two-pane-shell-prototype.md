@@ -9,12 +9,14 @@ timestamp: 2026-09-11T00:00:00Z
 # ISSUE 0063: Two-pane shell prototype
 
 - **Type**: task
-- **Status**: open
+- **Status**: in-progress
 - **Priority**: low
 - **Labels**: [wayfinder:prototype]
-- **Assignee**: none
+- **Assignee**: cri (main session)
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md)
 - **Related code**: [`internal/tui/`](../../internal/tui/)
+- **Prototype**: branch `prototype/two-pane-shell` (6257ce5) — `internal/tui/proto/`,
+  run `go run ./internal/tui/proto`; main stays prototype-free.
 - **Blocked by**: [0062 TUI information architecture](0062-tui-information-architecture.md)
 - **Closing commits**: none
 

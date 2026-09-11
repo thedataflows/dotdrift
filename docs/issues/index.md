@@ -56,3 +56,6 @@ use, plus emergent features and chores. Planned work lives in
 | [0065](0065-full-schema-editor-suite-design.md) | Full-schema editor suite design | open | medium |
 | [0066](0066-wizard-absorption-contract-15.md) | Wizard absorption & contract #15 amendment | open | medium |
 | [0067](0067-assemble-tui-design-set.md) | Assemble the TUI design set | open | high |
+| [0069](0069-implement-apply-session-service-core.md) | Implement apply-session service core | in-progress | high |
+| [0070](0070-migrate-cmd-apply-onto-apply-session.md) | Migrate cmd/apply onto the apply session | open | high |
+| [0071](0071-surface-tty-handover-for-real-steps.md) | Surface TTY handover for real steps | open | high |

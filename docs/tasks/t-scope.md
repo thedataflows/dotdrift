@@ -53,7 +53,7 @@ Implement [scope](/milestones/m12-scope.md): a top-level `scope` key in
   system)` — the same fail-loud pattern as dotfile mode validation.
 - `resolve.DotfileEntry` gains `Scope`; `mergeDotfiles` takes the validated
   module scope and stamps every entry.
-- `ExecMise.DotfilesApplySudo(ctx, configPath, yes)` is additive: the
+- `ExecMise.DotfilesApplySudo(ctx, configPath, yes)` is additive (historical: since issue 0071 the runner is retired in favor of the `DotfilesApplySudoSpec` handover source; the argv decision below still holds): the
   `Runner` interface, `FakeRunner`, and `internal/onboard` are untouched. The
   argv comes from the pure `dotfilesApplyArgv(euid, ...)` decision function;
   `geteuid` is a package-level test seam. Non-root prepends `sudo -E` so the

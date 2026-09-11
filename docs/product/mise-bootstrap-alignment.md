@@ -10,7 +10,7 @@ timestamp: 2026-09-07T00:00:00Z
 
 - Spec: `/mnt/linux2/dev/mise/docs/bootstrap/` (14 pages + 10 package-manager pages)
 - Implementation: `/mnt/linux2/dev/mise/src/cli/bootstrap.rs` (4807 lines; subcommands accounts, files, services, firewall, compose, secrets, dotfiles, plugins, packages, repos, remote, linux/systemd, macos, launchd, shell, user, plan, status) and `src/system/` (accounts, files, firewall, compose, login_shell, managed_files, packages/{apk,apt,aur,brew,dnf,flatpak,mas,pacman,plugin}, …). The documented surface is implemented, including the hidden `__apply-*-plan` privileged helpers.
-- dotdrift side: `internal/mise/bootstrap.go` (translators), `internal/mise/mise.go` (`Bootstrap`, `DotfilesApplySudo`), `cmd/apply.go` (steps), `internal/packages/` (own backends).
+- dotdrift side: `internal/mise/bootstrap.go` (translators), `internal/mise/mise.go` (`Bootstrap`, and since issue 0071 the `DotfilesApplySudoSpec` handover source — the `DotfilesApplySudo` runner is gone), `internal/service/` (steps; the old `cmd/apply.go` copy migrated in 0070), `internal/packages/` (own backends).
 
 The spec is normative for dotdrift: the checkout is upstream `jdx/mise` @ `main`
 (clean, f507a3c92), so every `[bootstrap.*]` emission targets exactly this
@@ -40,9 +40,11 @@ fails every bootstrap phase. Pin `cmd.Dir` for `Bootstrap`/`DotfilesApply`/
 
 ## A3. System files go through `[dotfiles]` + hand-rolled sudo instead of `[bootstrap.files]`
 
-`systemFilesStep` (`cmd/apply.go:189`) translates system-scope dotfiles back
+`systemFilesStep` translates system-scope dotfiles back
 into `[dotfiles]` entries and runs `mise dotfiles apply`, retrying elevated via
-`DotfilesApplySudo`. But mise's `[bootstrap.files]` (files.md) natively
+`sudo -E mise dotfiles apply` (since 0071 through the session's handover seam;
+the historical dotdrift-side runner name was `DotfilesApplySudo`, now
+`DotfilesApplySudoSpec`). But mise's `[bootstrap.files]` (files.md) natively
 provides everything this machinery re-implements:
 
 - try-as-user, then retry the remaining ordered changes in **one privileged
@@ -55,7 +57,7 @@ provides everything this machinery re-implements:
 - `replace = true` for node-type conflicts, `state = "absent"` (+ `recursive`)
   for explicit removal, `notify = [...]` service handlers (C1).
 
-Adopting it deletes `DotfilesApplySudo`, the sudo argv builder, and the
+Adopting it deletes `DotfilesApplySudoSpec` (0071 already retired the streaming `DotfilesApplySudo` runner in favor of the handover spec), the sudo argv builder, and the
 try/retry pattern in `systemFilesStep`. Also aligns `status`: mise
 `bootstrap files status --json` already compares content/type/mode/owner.
 

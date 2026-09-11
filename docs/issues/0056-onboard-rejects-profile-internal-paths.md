@@ -15,7 +15,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Assignee**: agent
 - **Related**: [0017](0017-onboard-adoption-units-and-profile-paths.md) (semantics amended), [0055](0055-onboard-app-flag-mandatory.md) (removes its "deliberate survivor")
 - **Related code**: [`internal/onboard/onboard.go`](../../internal/onboard/onboard.go), [`cmd/onboard.go`](../../cmd/onboard.go)
-- **Closing commits**: none (recorded at done)
+- **Closing commits**: f9e8704
 
 ## Summary
 

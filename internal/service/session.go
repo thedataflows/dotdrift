@@ -5,14 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"sync"
-	"syscall"
-	"time"
-
 	"github.com/thedataflows/dotdrift/internal/apply"
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
@@ -20,6 +12,12 @@ import (
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"time"
 )
 
 // ApplyOpts configures one apply session (0064-D8). The consumer seams —
@@ -285,14 +283,7 @@ func (r *sessionRunner) handover(cmd *exec.Cmd) error {
 	twin.Env = cmd.Env
 	twin.Dir = cmd.Dir
 	twin.Err = cmd.Err
-	twin.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	twin.Cancel = func() error {
-		err := syscall.Kill(-twin.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
+	executil.SetGroupKill(twin)
 	twin.WaitDelay = 5 * time.Second
 	return r.opts.Handover(twin)
 }

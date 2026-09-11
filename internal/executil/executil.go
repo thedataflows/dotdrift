@@ -2,12 +2,15 @@
 package executil
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"unicode"
 
 	"golang.org/x/sys/unix"
@@ -97,6 +100,23 @@ var IsTerminal = func(w io.Writer) bool {
 // diagnostics.
 func StreamLive(verbose bool, out, err io.Writer) bool {
 	return verbose || (IsTerminal(out) && IsTerminal(err))
+}
+
+// SetGroupKill makes ctx cancellation kill the whole process group: the
+// default Cancel kills only the direct child, and a shell wrapper (sh -c)
+// may fork — surviving grandchildren keep the output pipes open and Wait
+// hangs until they exit (observed with dash: ctx cancel blocked for the
+// child's full runtime). ESRCH means the group already exited. Shared by
+// every child dotdrift starts (mise streaming, session handover twins).
+func SetGroupKill(cmd *exec.Cmd) {
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error {
+		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		}
+		return err
+	}
 }
 
 // NoColor disables ANSI color output in dotdrift's own rendering when true.

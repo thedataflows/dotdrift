@@ -53,9 +53,9 @@ func TestDotfilesApplyArgv_forceAppended(t *testing.T) {
 // sudo -E when non-root, direct when root (issue 0071 handover source).
 func TestExecMise_dotfilesApplySudoSpec_argv(t *testing.T) {
 	cases := []struct {
-		name  string
-		euid  int
-		want  []string
+		name string
+		euid int
+		want []string
 	}{
 		{"nonRootSudo", 1000, []string{"sudo", "-E", "/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}},
 		{"rootDirect", 0, []string{"/fake/mise", "dotfiles", "apply", "--cd", "/cfg", "--yes"}},

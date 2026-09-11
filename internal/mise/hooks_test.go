@@ -340,9 +340,9 @@ type recordingHooksObserver struct {
 	events []string
 }
 
-func (o *recordingHooksObserver) StepStarted(string)               {}
-func (o *recordingHooksObserver) StepFinished(string)              {}
-func (o *recordingHooksObserver) StepFailed(string, error)         {}
+func (o *recordingHooksObserver) StepStarted(string)       {}
+func (o *recordingHooksObserver) StepFinished(string)      {}
+func (o *recordingHooksObserver) StepFailed(string, error) {}
 func (o *recordingHooksObserver) HookStarted(step string, sub apply.SubStep) {
 	o.events = append(o.events, fmt.Sprintf("start:%s:%d/%d:%s", step, sub.Index, sub.Total, sub.Command))
 }
@@ -395,11 +395,11 @@ func TestHooksStep_interactiveRoutesThroughHandover(t *testing.T) {
 	runner := mise.NewExecMise(recordingRunMise(&calls, nil))
 	var handed [][]string
 	step := &mise.HooksStep{
-		Exec:       runner,
-		Commands:   []profile.HookCommand{{Command: "sudo chown"}, {Command: "echo done"}},
-		ConfigPath: "/state/mise/mise.toml",
-		Task:       "hooks-pre",
-		StepName:   "hooks-pre",
+		Exec:        runner,
+		Commands:    []profile.HookCommand{{Command: "sudo chown"}, {Command: "echo done"}},
+		ConfigPath:  "/state/mise/mise.toml",
+		Task:        "hooks-pre",
+		StepName:    "hooks-pre",
 		Interactive: true,
 		Handover: func(cmd *exec.Cmd) error {
 			handed = append(handed, cmd.Args)

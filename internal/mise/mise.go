@@ -5,6 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
+	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 	"io"
 	"os"
 	"os/exec"
@@ -13,13 +18,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
-
-	"github.com/rs/zerolog/log"
-	"github.com/thedataflows/dotdrift/internal/executil"
-	"github.com/thedataflows/dotdrift/internal/facts"
-	"github.com/thedataflows/dotdrift/internal/profile"
-	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 // MinMiseVersion is the hardcoded minimum mise version required by dotdrift.
@@ -137,7 +135,7 @@ func runContextEnv(ctx context.Context, env []string, dir, name string, args ...
 		cmd.Dir = dir
 	}
 	cmd.Stdin = opStdin()
-	setGroupKill(cmd)
+	executil.SetGroupKill(cmd)
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}
@@ -149,22 +147,6 @@ func runContextEnv(ctx context.Context, env []string, dir, name string, args ...
 		return string(out), err
 	}
 	return string(out), nil
-}
-
-// setGroupKill makes ctx cancellation kill the whole process group: the
-// default Cancel kills only the direct child, and a shell wrapper (sh -c)
-// may fork — surviving grandchildren keep the output pipes open and Wait
-// hangs until they exit (observed with dash: ctx cancel blocked for the
-// child's full runtime). ESRCH means the group already exited.
-func setGroupKill(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
 }
 
 // runner resolves the ctx-aware runner: RunContext wins, then legacy Run.
@@ -239,7 +221,7 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	}
 	cmd := m.newOpCmd(ctx, extraEnv, name, args...)
 	cmd.Stdin = opStdin()
-	setGroupKill(cmd)
+	executil.SetGroupKill(cmd)
 	cmd.Stdout = out
 	cmd.Stderr = errW
 	if runErr := cmd.Run(); runErr != nil {

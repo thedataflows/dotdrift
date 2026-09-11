@@ -75,6 +75,8 @@ ticket.
 
 ## Decisions so far
 
+- [Apply streaming & TTY precedents](0059-apply-streaming-tty-precedents.md): stream steps into a pane keyed off the pipeline's own step/exit events; hand the real terminal over via `tea.ExecProcess` only for pre-classified TTY steps (sudo prompts, interactive hooks), run pane steps with `--yes`, and cancel through one ctx with process-group kills (cursor already survives aborts).
+
 ## Not yet specified
 
 - Theming: the *mechanism* by which ADR-0003's palette registry extends

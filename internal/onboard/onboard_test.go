@@ -997,11 +997,13 @@ func TestOnboard_dryRunListsAdoptions(t *testing.T) {
 	require.Equal(t, "orphan until adopted", kept)
 }
 
-// A path INSIDE a module layer directory of the profile is a module file,
-// not a live path: onboard answers by adopting it into ITS layer's
-// module.toml (the field-report easyeffects command). No copy, no garbage
-// target derived from the profile path, file content untouched.
-func TestOnboard_profileInternalPathAdopts(t *testing.T) {
+// A path INSIDE a module layer directory of the profile is rejected, not
+// adopted (issue 0056, amending 0017): onboard brings EXTERNAL live paths
+// into the profile. A module file is already inside — registering it is a
+// hand-edit of that module.toml (or it rides the orphan sweep of any
+// live-path onboard). The error names the module and layer; nothing is
+// written; the --app value is never silently overridden.
+func TestOnboard_profileInternalPathRejected(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
 	isolateState(t)
@@ -1016,69 +1018,36 @@ func TestOnboard_profileInternalPathAdopts(t *testing.T) {
 		"module.toml": "",
 		"home/.config/easyeffects/db/easyeffectsrc": "orphan preset",
 	})
-	orphan := filepath.Join(hostMod, "home", ".config", "easyeffects", "db", "easyeffectsrc")
-
-	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
-	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{orphan}, Home: home, Hostname: "cri-pc", DryRun: true,
-	}))
-	// Dry-run touched nothing: the host module.toml stays empty.
-	c, err := readFile(filepath.Join(hostMod, "module.toml"))
-	require.NoError(t, err)
-	require.Equal(t, "", c)
-
-	var out bytes.Buffer
-	o = &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
-	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{orphan}, Home: home, Hostname: "cri-pc",
-	}))
-
-	require.Contains(t, out.String(),
-		"adopted: ~/.config/easyeffects/db/easyeffectsrc (home/.config/easyeffects/db/easyeffectsrc) [hosts/cri-pc]",
-		"the notice names the file and its layer")
-
-	content, err := readFile(filepath.Join(hostMod, "module.toml"))
-	require.NoError(t, err)
-	t.Log(content)
-	require.Contains(t, content,
-		`"~/.config/easyeffects/db/easyeffectsrc" = { source = "home/.config/easyeffects/db/easyeffectsrc", mode = "symlink" }`)
-	require.NotContains(t, content, "hosts/cri-pc", "no garbage source derived from the profile path")
-	require.NotContains(t, content, profile, "no absolute profile paths leak into module.toml")
-
-	kept, err := readFile(orphan)
-	require.NoError(t, err)
-	require.Equal(t, "orphan preset", kept, "the module file itself is never copied over")
-
-	baseToml, err := readFile(filepath.Join(base, "module.toml"))
-	require.NoError(t, err)
-	require.NotContains(t, baseToml, "easyeffectsrc", "the adoption lands in the HOST layer, not base")
-
-	// A directed path that does not exist is an error, not a silent skip.
-	err = o.Run(onboard.Options{
-		ProfileRoot: profile,
-		Paths:       []string{filepath.Join(hostMod, "home", ".config", "gone.conf")},
-		Home:        home, Hostname: "cri-pc",
-	})
-	require.Error(t, err, "a missing module file cannot be adopted")
-
-	// User layers spell their label the same way: users/<username>.
 	userMod := mkModule(t, filepath.Join(profile, "users", "cri", "modules", "easyeffects"), map[string]string{
 		"module.toml":                        "",
 		"home/.config/easyeffects/db/userrc": "user-layer orphan",
 	})
-	var out2 bytes.Buffer
-	o2 := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out2}
-	require.NoError(t, o2.Run(onboard.Options{
-		ProfileRoot: profile,
-		Paths:       []string{filepath.Join(userMod, "home", ".config", "easyeffects", "db", "userrc")},
-		Home:        home, Username: "cri",
-	}))
-	require.Contains(t, out2.String(),
-		"adopted: ~/.config/easyeffects/db/userrc (home/.config/easyeffects/db/userrc) [users/cri]",
-		"user layers spell their label users/<username>")
-	userToml, err := readFile(filepath.Join(userMod, "module.toml"))
+
+	reject := func(path string, wantLayer string) {
+		t.Helper()
+		o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
+		err := o.Run(onboard.Options{
+			ProfileRoot: profile, Paths: []string{path},
+			App: "ignored-value", Home: home, Hostname: "cri-pc", Username: "cri",
+		})
+		require.ErrorContains(t, err, `already inside module "easyeffects"`)
+		require.ErrorContains(t, err, wantLayer)
+		require.ErrorContains(t, err, "onboard adopts live paths only")
+	}
+
+	reject(filepath.Join(hostMod, "home", ".config", "easyeffects", "db", "easyeffectsrc"), "hosts/cri-pc")
+	reject(filepath.Join(base, "home", ".config", "easyeffects", "db", "deesserrc"), "base")
+	reject(filepath.Join(userMod, "home", ".config", "easyeffects", "db", "userrc"), "users/cri")
+	// A nonexistent module file is rejected by shape, before any stat.
+	reject(filepath.Join(hostMod, "home", ".config", "gone.conf"), "hosts/cri-pc")
+
+	// Nothing was written: module.tomls and file contents untouched.
+	c, err := readFile(filepath.Join(hostMod, "module.toml"))
 	require.NoError(t, err)
-	require.Contains(t, userToml, `"~/.config/easyeffects/db/userrc" = { source = "home/.config/easyeffects/db/userrc", mode = "symlink" }`)
+	require.Equal(t, "", c)
+	kept, err := readFile(filepath.Join(hostMod, "home", ".config", "easyeffects", "db", "easyeffectsrc"))
+	require.NoError(t, err)
+	require.Equal(t, "orphan preset", kept)
 }
 
 // The ancestor chain never claims a shared namespace root: with no

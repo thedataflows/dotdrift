@@ -13,7 +13,7 @@ timestamp: 2026-09-07T00:00:00Z
 - **Priority**: medium
 - **Labels**: [cli, onboard]
 - **Assignee**: agent
-- **Related**: [0017](0017-onboard-adoption-units-and-profile-paths.md) (directed module-file adoption still overrides the value)
+- **Related**: [0017](0017-onboard-adoption-units-and-profile-paths.md) (directed module-file adoption overrode the value — **deleted by [0056](0056-onboard-rejects-profile-internal-paths.md)**; profile-internal paths are now rejected)
 - **Related code**: [`cmd/onboard.go`](../../cmd/onboard.go), [`internal/onboard/onboard.go`](../../internal/onboard/onboard.go)
 - **Closing commits**: dceba3d
 
@@ -35,6 +35,8 @@ structure, and a wrong guess silently creates or updates the wrong module.
 - Unchanged: a path **inside** a module layer directory is a directed
   adoption — its own layer names the module and overrides the `--app` value
   (0017). The flag is still required on the command line even then.
+  **Superseded by [0056](0056-onboard-rejects-profile-internal-paths.md)**:
+  profile-internal paths are now a loud error; `--app` is never overridden.
 - Docs: README onboard examples gain `--app`, cli-surface rows updated,
   t8-onboard note corrected.
 
@@ -42,7 +44,7 @@ structure, and a wrong guess silently creates or updates the wrong module.
 
 - [x] `onboard <path>` without `--app` fails at parse time naming the flag
 - [x] `inferApp` and the inference branch deleted; internal guard errors on empty App
-- [x] Directed module-file adoption still overrides the `--app` value
+- [x] ~~Directed module-file adoption still overrides the `--app` value~~ **deleted by [0056](0056-onboard-rejects-profile-internal-paths.md)** — profile-internal paths are rejected
 - [x] Docs updated (README examples, cli-surface, t8-onboard)
 - [x] `go test ./...` and `go vet` green
 

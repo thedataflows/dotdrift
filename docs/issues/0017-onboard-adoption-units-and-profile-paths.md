@@ -47,6 +47,11 @@ Field report: `onboard --host <profile>/hosts/cri-pc/modules/easyeffects/home/.c
   its layer becomes the target module (overriding `--app`/`--host`
   inference), no copy happens, and the notice names the level:
   `adopted: <target> (<source>) [base|host|user]`.
+  **Amended by [0056](0056-onboard-rejects-profile-internal-paths.md)**:
+  profile-internal paths are now REJECTED with a loud error naming the
+  module and layer — onboard adopts live paths only. The anti-mangling
+  substance of this issue (the garbage `~/dotfiles/...` target) is
+  preserved: such paths can no longer reach the live-path mapping at all.
 - Adoption references come from `drift.ReferencedPaths` (issue 0016) so
   onboard and status agree on what is an orphan.
 
@@ -59,7 +64,10 @@ Field report: `onboard --host <profile>/hosts/cri-pc/modules/easyeffects/home/.c
       ancestor.
 - [x] A profile-internal path produces an entry in ITS layer's
       module.toml with the correct target; no `~/dotfiles/...` target,
-      no duplicated tree, file content untouched.
+      no duplicated tree, file content untouched. **Amended by
+      [0056](0056-onboard-rejects-profile-internal-paths.md)**: a
+      profile-internal path is now a loud error; the "no garbage target"
+      guarantee holds by rejection instead of adoption.
 - [x] Adoption notices name the layer.
 
 ## Out of Scope

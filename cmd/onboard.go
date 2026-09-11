@@ -13,7 +13,7 @@ type OnboardCmd struct {
 	Paths []string `arg:"" optional:"" help:"Paths to onboard into the module"`
 
 	Profile  string   `help:"Path to profile directory" type:"existingdir" default:"."`
-	App      string   `help:"Module directory name (required; a directed module-file path's own layer still wins)" required:""`
+	App      string   `help:"Module directory name (required)" required:""`
 	Mode     string   `help:"Dotfile mode" enum:"symlink,symlink-each,copy,template" default:"symlink"`
 	Packages []string `help:"Distro packages to declare; each entry is a bare name or name=\"description\" (the description becomes a TOML comment)"`
 	Tools    []string `help:"Mise tools to declare"`

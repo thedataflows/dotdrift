@@ -108,46 +108,27 @@ func (o *Onboard) Run(opts Options) error {
 		profRoot = opts.ProfileRoot
 	}
 
-	// A path inside a module layer directory of the profile IS a module
-	// file: onboard adopts it into that layer's module.toml instead of
-	// copying it like a live path (issue 0017). The path's own layer wins
-	// over the --app/--host flags — it names the corresponding module.
-	var directed []adoption
-	var directedDir string
+	// onboard brings EXTERNAL live paths into the profile. A path already
+	// inside a module layer of the profile is rejected (issue 0056,
+	// amending 0017): registering it is a hand-edit of that module.toml,
+	// or it rides the orphan sweep of any live-path onboard. No silent
+	// --app/--host/--user override — the flags always mean what they say.
 	var live []string
 	for _, p := range expanded {
-		layerDir, rel, ok := moduleLayerPath(profRoot, p)
-		if ok {
-			if _, err := os.Stat(p); err != nil {
-				return fmt.Errorf("onboard: %s: %w", p, err)
-			}
-			target, invertible := invertTarget(rel)
-			if !invertible {
-				return fmt.Errorf("onboard: %s is inside module %s but not under home/ or system/; pass a module file or a live path", p, layerDir)
-			}
-			if directedDir != "" && directedDir != layerDir {
-				return fmt.Errorf("onboard: paths span multiple module layers (%s, %s); run them separately", directedDir, layerDir)
-			}
-			directedDir = layerDir
-			directed = append(directed, adoption{Rel: rel, Target: target})
-			continue
+		if layerDir, _, ok := moduleLayerPath(profRoot, p); ok {
+			return fmt.Errorf("onboard: %s is already inside module %q (%s) — onboard adopts live paths only; declare it in that module.toml directly", p, filepath.Base(layerDir), layerLabel(profRoot, layerDir))
 		}
 		if containsPath(profRoot, p) {
-			return fmt.Errorf("onboard: %s is inside the profile but not a module file under modules/<app>[/hosts|users]/home|system; onboard takes live paths (a module file is adopted by passing it)", p)
+			return fmt.Errorf("onboard: %s is inside the profile but not a module file under modules/<app>[/hosts|users]/home|system; onboard takes live paths", p)
 		}
 		live = append(live, p)
 	}
 
-	var app string
-	if directedDir != "" {
-		app = filepath.Base(directedDir)
-	} else {
-		// --app is mandatory (issue 0055): the module name is always
-		// explicit, never inferred from a path.
-		app = opts.App
-		if app == "" {
-			return fmt.Errorf("onboard: --app is required (module directory name)")
-		}
+	// --app is mandatory (issue 0055): the module name is always explicit,
+	// never inferred from a path.
+	app := opts.App
+	if app == "" {
+		return fmt.Errorf("onboard: --app is required (module directory name)")
 	}
 
 	mode := opts.Mode
@@ -157,12 +138,9 @@ func (o *Onboard) Run(opts Options) error {
 
 	// Target layers: which module directories this run writes. No flag
 	// means base; --host/--user select their overlay(s); both together
-	// onboard into BOTH layers. A directed (module-file) path ignores the
-	// flags — its own layer is the target.
+	// onboard into BOTH layers.
 	var targets []string
 	switch {
-	case directedDir != "":
-		targets = []string{directedDir}
 	case opts.Host && opts.User:
 		if opts.Hostname == "" {
 			return fmt.Errorf("hostname required for host overlay")
@@ -192,18 +170,12 @@ func (o *Onboard) Run(opts Options) error {
 	// of its layers (base, this host, this user) bounds the adoption
 	// chain — a base symlink-each entry keeps a stray overlay file from
 	// collapsing into a giant ancestor unit (issue 0017).
-	hostOwner := opts.Hostname
-	if directedDir != "" {
-		if owner, ok := strings.CutPrefix(layerLabel(profRoot, directedDir), "hosts/"); ok {
-			hostOwner = owner
-		}
-	}
 	appLayers := []drift.ModuleLayer{
 		{Dir: app, Layer: "base", Path: filepath.Join(profRoot, "modules", app)},
 	}
-	if hostOwner != "" {
+	if opts.Hostname != "" {
 		appLayers = append(appLayers, drift.ModuleLayer{
-			Dir: app, Layer: "host", Owner: hostOwner, Path: filepath.Join(profRoot, "hosts", hostOwner, "modules", app),
+			Dir: app, Layer: "host", Owner: opts.Hostname, Path: filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app),
 		})
 	}
 	if opts.Username != "" {
@@ -279,29 +251,14 @@ func (o *Onboard) Run(opts Options) error {
 		for _, e := range entries {
 			markSourceTree(filepath.Join(moduleDir, filepath.FromSlash(e.Source)), refs)
 		}
-		for _, a := range directed {
-			refs[filepath.Join(moduleDir, filepath.FromSlash(a.Rel))] = true
-		}
 
-		// Directed adoptions first (the user named these files); then the
-		// orphan scan of the module dir.
+		// Then the orphan scan of the module dir.
 		claims := map[string]bool{}
 		for t := range declared {
 			claims[t] = true
 		}
 		for t := range entries {
 			claims[t] = true
-		}
-		for _, a := range directed {
-			if declared[a.Target] {
-				fmt.Fprintf(out, "already declared: %s (skipped)\n", a.Target)
-				continue
-			}
-			claims[a.Target] = true
-			if !opts.DryRun {
-				entries[a.Target] = dotfileEntry{Source: a.Rel, Mode: mode}
-			}
-			fmt.Fprintln(out, notice(opts.DryRun, a, label))
 		}
 		adoptions := planAdoptions(moduleDir, refs, claims)
 		if opts.DryRun {

@@ -1,6 +1,5 @@
-// Package tui hosts the interactive `dotdrift generate` wizard's huh
-// front-end and its flow helpers. The pure spec-builder state machines
-// and the shared Input assembly live in internal/generate (issue 0066);
-// this package feeds them choices and will become the `dotdrift tui`
-// shell once the wizard is absorbed (issue 0065).
+// Package tui holds the style registry for the dotdrift TUI shell
+// (ADR-0003). The generate wizard's huh front-end was absorbed —
+// generate is CLI-only and the interactive surfaces arrive with the
+// editor suite (issue 0065).
 package tui

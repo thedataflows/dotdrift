@@ -9,10 +9,10 @@ timestamp: 2026-09-11T00:00:00Z
 # ISSUE 0067: Assemble the TUI design set
 
 - **Type**: task
-- **Status**: open
+- **Status**: in-progress
 - **Priority**: high
 - **Labels**: [wayfinder:task]
-- **Assignee**: none
+- **Assignee**: cri (main session)
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md)
 - **Related code**: none yet
 - **Blocked by**: [0061 Service-layer architecture](0061-service-layer-architecture-cli-migration.md), [0063 Two-pane shell prototype](0063-two-pane-shell-prototype.md), [0064 Apply session &amp; TTY suspend design](0064-apply-session-tty-suspend-design.md), [0065 Full-schema editor suite design](0065-full-schema-editor-suite-design.md), [0066 Wizard absorption &amp; contract #15 amendment](0066-wizard-absorption-contract-15.md)

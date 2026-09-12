@@ -30,7 +30,9 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   ├── mise/                 # Bootstrap, tools, dotfiles via mise
 │   ├── service/              # Service layer: per-area ops (apply session:
 │   │                         # run handle, event vocabulary, 0064/0069);
-│   │                         # reads areas migrate here slice by slice
+│   │                         # reads areas migrate here slice by slice.
+│   │                         # Versioning is the module's; breaking changes
+│   │                         # copy forward to internal/service/v2 (0061-D1)
 │   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts
 │   └── onboard/              # Module factory + copy

@@ -7,6 +7,7 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/detect"
 	"github.com/thedataflows/dotdrift/internal/facts"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // DetectCmd prints system facts.
@@ -18,17 +19,17 @@ type DetectCmd struct {
 	GPUReader detect.GPUReader       `kong:"-"`
 }
 
-// Run gathers and prints system facts in a stable line-oriented format.
+// Run gathers and prints system facts in a stable line-oriented format
+// through the service reads area (T-tui-reads).
 func (c *DetectCmd) Run() error {
-	var f *facts.Facts
-	var err error
+	deps := service.ReadsDeps{}
 	if c.OSReader != nil || c.GPUReader != nil {
-		f, err = detect.DetectWith(c.OSReader, c.GPUReader)
-	} else {
-		f, err = detect.Detect()
+		osr, gpr := c.OSReader, c.GPUReader
+		deps.Detect = func() (*facts.Facts, error) { return detect.DetectWith(osr, gpr) }
 	}
+	f, err := service.NewReadsArea(deps).Detect()
 	if err != nil {
-		return fmt.Errorf("detect: %w", err)
+		return err
 	}
 
 	out := c.Out

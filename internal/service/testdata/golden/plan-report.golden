@@ -1,0 +1,40 @@
+fingerprint:
+selected=shell
+disable=
+hostname=myhost
+username=cri
+os=linux
+kernel=
+gpu=
+backend=
+packages:
+  - eza
+  - fd
+  - neovim
+  - ripgrep
+remove:
+  - emacs
+  - nano
+tools:
+  node: 22
+  python: 3.12
+dotfiles:
+  ~/.bashrc:
+    source: $PROFILE/users/cri/modules/shell/.bashrc
+    mode: copy
+    module: shell
+    layer: user
+  ~/.config/fish:
+    source: $PROFILE/hosts/myhost/modules/shell/fish
+    mode: symlink-each
+    module: shell
+    layer: host
+hooks:
+  pre:
+    - echo base-pre
+    - echo host-pre
+    - echo user-pre
+  post:
+    - echo base-post
+    - echo host-post
+    - echo user-post

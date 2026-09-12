@@ -2,19 +2,17 @@ package cmd
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
-	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/profile"
-	"github.com/thedataflows/dotdrift/internal/state"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // StatusCmd reports drift between the resolved profile and the live system,
@@ -30,97 +28,62 @@ type StatusCmd struct {
 	err     io.Writer
 }
 
-// Run loads state, resolves the plan, probes the live system for drift, and
-// prints the report. Only real errors (detect/load/resolve/corrupt state)
-// return non-nil; drift is reported, never an error.
+// Run loads state, resolves the plan, probes the live system, and prints
+// the report through the service reads area (T-tui-reads): the adapter
+// owns the probes (its sudo-elevation and backend/mise seams) and the
+// rendering order; the service owns the read and the canonical renderers.
+// Only real errors (detect/load/resolve/corrupt state) return non-nil;
+// drift is reported, never an error.
 func (c *StatusCmd) Run() error {
-	statePath := c.State
-	if statePath == "" {
-		statePath = state.ProfileStatePath(c.Profile)
+	area := service.NewReadsArea(service.ReadsDeps{
+		Detect:        detectFacts,
+		LoadProfile:   profileLoad,
+		Resolve:       resolvePlan,
+		OtherAccounts: otherAccounts,
+		WarnLoad:      warnLoadNudges,
+	})
+	var verbose io.Writer
+	if c.Verbose {
+		verbose = c.err
+		if verbose == nil {
+			verbose = os.Stderr
+		}
 	}
-	store := state.NewFileStore(statePath)
-	s, err := store.Load()
-	if err != nil {
-		return fmt.Errorf("load state: %w", err)
-	}
-
-	f, p, plan, err := loadAndResolve(c.Profile, c.Modules)
+	r, err := area.Status(context.Background(), service.StatusOpts{
+		ProfilePath: c.Profile,
+		StatePath:   c.State,
+		Modules:     c.Modules,
+		Jobs:        c.Jobs,
+		Verbose:     verbose,
+		ProbesFor: func(f *facts.Facts) drift.Probes {
+			pr := drift.DefaultProbes()
+			pr.IsInstalled = packagesFor(f.Backend).IsInstalled
+			pr.ToolCurrent = mise.NewExecMise(defaultMise()).Current
+			return elevateProbes(pr) // retry elevated on permission denied (system files)
+		},
+	})
 	if err != nil {
 		return err
 	}
-	pr := drift.DefaultProbes()
-	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
-	pr.ToolCurrent = mise.NewExecMise(defaultMise()).Current
-	pr = elevateProbes(pr) // retry elevated on permission denied (system files)
-	profileRoot, _ := filepath.Abs(p.Root)
-	opts := drift.CheckOptions{Jobs: c.Jobs}
-	if c.Verbose {
-		errW := c.err
-		if errW == nil {
-			errW = os.Stderr
-		}
-		opts.Verbose = errW
-	}
-	findings := drift.Check(context.Background(), plan, profileRoot, pr, opts)
-	findings = append(findings, drift.CheckOrphans(statusModuleLayers(p))...)
 
 	out := c.out
 	if out == nil {
 		out = os.Stdout
 	}
-	pal, err := palette.FromConfig(p.Config.Colors)
-	if err != nil {
-		return err // already validated at load; unreachable double-check
+	if err := service.RenderStatusHeader(out, r); err != nil {
+		return err
 	}
-	fmt.Fprintf(out, "profile: %s\n", c.Profile)
-	fmt.Fprintf(out, "state: %s\n", statePath)
-	// The resume line's MESSAGE carries a role hue on a TTY (the literal
-	// `resume: ` prefix stays plain): ok when clean, warn when a cursor
-	// is pending (an interrupted apply awaits resuming).
-	resumeMsg := "clean - next apply starts from the beginning"
-	resumeRole := palette.OK
-	if s.LastCompleted != "" {
-		resumeMsg = fmt.Sprintf("last completed %q - next apply resumes after it", s.LastCompleted)
-		resumeRole = palette.Warn
-	}
-	if executil.ColorEnabled(out) {
-		resumeMsg = pal.Wrap(resumeRole, resumeMsg)
-	}
-	fmt.Fprintf(out, "resume: %s\n", resumeMsg)
-	drift.Render(out, findings, drift.WithPalette(pal))
-
 	if c.Diff != "" {
-		if err := showDotfileDiffs(plan, profileRoot, c.Diff, out); err != nil {
+		entries, err := area.Diff(r.Plan, r.ProfileRoot)
+		if err != nil {
+			return err
+		}
+		if err := service.RenderDiff(out, entries, c.Diff, executil.ColorEnabled(out)); err != nil {
 			return err
 		}
 	}
-
-	// Configuration notice for other accounts (issue 0038, ADR-0006): no
-	// per-account probing — per-account drift sections proved too noisy
-	// (sudo-dependent, cwd-sensitive). Just name each existing account that
-	// has configuration on this machine and the apply command for it.
-	others, err := otherAccounts(p.Root, f)
-	if err != nil {
-		return fmt.Errorf("list other accounts: %w", err)
-	}
-	if len(others) > 0 {
-		fmt.Fprintln(out, "note: configuration exists for other accounts on this machine:")
-		for _, acct := range others {
-			fmt.Fprintf(out, "  users/%s — apply with: %s\n", acct.Name, applyCommandFor(acct))
-		}
-		fmt.Fprintln(out, "  (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system scope)")
-	}
+	service.RenderStatusNote(out, r)
 	return nil
-}
-
-// applyCommandFor is the per-account apply instruction in the status notice:
-// the uid-0 account converges with plain sudo; any other account needs a
-// login shell so its own PATH applies (issue 0038).
-func applyCommandFor(acct profile.Account) string {
-	if acct.Uid == "0" {
-		return "sudo dotdrift apply"
-	}
-	return "sudo -iu " + acct.Name + " dotdrift apply"
 }
 
 // sudoRead executes `sudo <name> <args>` and returns stdout. A test seam so
@@ -156,66 +119,6 @@ func elevateProbes(pr drift.Probes) drift.Probes {
 		pr.ListDir = elevateListDir(pr.ListDir)
 	}
 	return pr
-}
-
-// statusModuleLayers lists EVERY module layer directory in the profile:
-// modules/*, hosts/*/modules/*, users/*/modules/*. Orphans are
-// profile-content drift, not live-system drift — a leftover under
-// another host's or user's overlay is visible from any machine, and a
-// module not selected here (when-filter) is still scanned. Reference
-// semantics live in drift.ReferencedPaths (layer declarations, all
-// views), so no plan or facts are needed here.
-func statusModuleLayers(p *profile.Profile) []drift.ModuleLayer {
-	if p == nil || p.Root == "" {
-		return nil
-	}
-	var layers []drift.ModuleLayer
-	add := func(layer, owner, moduleDir string) {
-		layers = append(layers, drift.ModuleLayer{
-			Dir: filepath.Base(moduleDir), Layer: layer, Owner: owner, Path: moduleDir,
-		})
-	}
-	// moduleDirs lists the subdirectories of a modules/ root.
-	moduleDirs := func(root string) []string {
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			return nil
-		}
-		var dirs []string
-		for _, e := range entries {
-			if e.IsDir() {
-				dirs = append(dirs, filepath.Join(root, e.Name()))
-			}
-		}
-		return dirs
-	}
-	for _, d := range moduleDirs(filepath.Join(p.Root, "modules")) {
-		add("base", "", d)
-	}
-	owners := func(kind string) []string {
-		entries, err := os.ReadDir(filepath.Join(p.Root, kind))
-		if err != nil {
-			return nil
-		}
-		var names []string
-		for _, e := range entries {
-			if e.IsDir() {
-				names = append(names, e.Name())
-			}
-		}
-		return names
-	}
-	for _, h := range owners("hosts") {
-		for _, d := range moduleDirs(filepath.Join(p.Root, "hosts", h, "modules")) {
-			add("host", h, d)
-		}
-	}
-	for _, u := range owners("users") {
-		for _, d := range moduleDirs(filepath.Join(p.Root, "users", u, "modules")) {
-			add("user", u, d)
-		}
-	}
-	return layers
 }
 
 // elevate wraps a probe function so it retries elevated via sudo when the OS

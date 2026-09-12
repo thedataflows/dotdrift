@@ -10,6 +10,7 @@ import (
 
 	"github.com/alecthomas/kong"
 	"github.com/thedataflows/dotdrift/internal/detect"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -35,43 +36,8 @@ var (
 	packagesFor = packages.For
 )
 
-// loadAndResolve runs the detect → load → filter → resolve preamble shared by
-// apply, status, and plan. Returns facts, profile, and resolved plan.
-func loadAndResolve(profilePath string, modules []string) (*facts.Facts, *profile.Profile, *resolve.Plan, error) {
-	f, err := detectFacts()
-	if err != nil {
-		return nil, nil, nil, fmt.Errorf("detect: %w", err)
-	}
-	p, plan, err := loadAndResolvePlan(profilePath, modules, f)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-	return f, p, plan, nil
-}
-
-// loadAndResolvePlan loads the profile and resolves the plan using the given
-// facts. Called by loadAndResolve and by PlanCmd (which injects its own facts).
-func loadAndResolvePlan(profilePath string, modules []string, f *facts.Facts) (*profile.Profile, *resolve.Plan, error) {
-	p, err := profileLoad(profilePath, f)
-	if err != nil {
-		return nil, nil, fmt.Errorf("load profile: %w", err)
-	}
-	// Warn before LimitTo: a superuser-overlay module id passed as a filter
-	// errors as unknown, and this nudge explains why (issue 0029).
-	warnSuperuserOverlays(p)
-	warnMisplacedModules(p)
-	if err := p.LimitTo(profile.ParseModuleFilter(modules)); err != nil {
-		return nil, nil, err
-	}
-	plan, err := resolvePlan(p, f)
-	if err != nil {
-		return nil, nil, fmt.Errorf("resolve plan: %w", err)
-	}
-	return p, plan, nil
-}
-
-// loadProfile runs the detect → load → filter preamble shared by modules.
-// Returns facts and profile (no plan resolution).
+// loadProfile runs the detect → load → filter preamble shared by modules
+// and restore. Returns facts and profile (no plan resolution).
 func loadProfile(profilePath string, modules []string) (*facts.Facts, *profile.Profile, error) {
 	f, err := detectFacts()
 	if err != nil {
@@ -166,11 +132,15 @@ func (c *ApplyCmd) Run() error {
 	if err != nil {
 		return fmt.Errorf("resolve profile root: %w", err)
 	}
-	if err := printPlan(out, plan, p, f, nil); err != nil {
+	if err := service.RenderPlanReport(out, &service.PlanRead{Facts: f, Profile: p, Plan: plan}, nil); err != nil {
 		return err
 	}
 	if c.Diff != "" {
-		if err := showDotfileDiffs(plan, profileRoot, c.Diff, out); err != nil {
+		entries, err := service.NewReadsArea(service.ReadsDeps{}).Diff(plan, profileRoot)
+		if err != nil {
+			return err
+		}
+		if err := service.RenderDiff(out, entries, c.Diff, executil.ColorEnabled(out)); err != nil {
 			return err
 		}
 	}

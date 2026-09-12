@@ -41,3 +41,11 @@ func warnMisplacedModules(p *profile.Profile) {
 	}
 	log.Warn().Int("modules", n).Msg("misplaced module dirs skipped; module.toml must live under <layer>/modules/ — see dotdrift modules")
 }
+
+// warnLoadNudges is the reads-area WarnLoad hook: the plan/status preamble's
+// zerolog nudges, emitted after load and before the module filter. The
+// modules read never warns — its own listing is the canonical surfacing.
+func warnLoadNudges(p *profile.Profile) {
+	warnSuperuserOverlays(p)
+	warnMisplacedModules(p)
+}

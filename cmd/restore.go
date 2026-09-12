@@ -12,6 +12,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/backup"
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // elevatedRestore copies one backed-up file to a target the current user
@@ -67,7 +68,7 @@ func (c *RestoreCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
-	hits := indexBackups(statusModuleLayers(p))
+	hits := indexBackups(service.ModuleLayers(p))
 	home, _ := os.UserHomeDir()
 
 	if c.List {

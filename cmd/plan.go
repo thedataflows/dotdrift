@@ -5,17 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"maps"
 	"os"
-	"slices"
 	"sort"
-	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
-	"github.com/thedataflows/dotdrift/internal/smb"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // PlanCmd prints the resolved plan without side effects.
@@ -29,7 +26,8 @@ type PlanCmd struct {
 	Out       io.Writer    `kong:"-"`
 }
 
-// Run loads the profile and prints the resolved plan.
+// Run loads the profile and prints the resolved plan through the service
+// reads area; --json stays a dumb marshal over the typed plan (0061-D5).
 func (c *PlanCmd) Run() error {
 	// Programmatic construction leaves DepsDepth at its zero value (kong's
 	// default only applies to CLI parsing), so 0 without --deps means unset.
@@ -46,16 +44,13 @@ func (c *PlanCmd) Run() error {
 		c.DepsDepth = 1
 	}
 
-	f := c.Facts
-	if f == nil {
-		var err error
-		f, err = detectFacts()
-		if err != nil {
-			return fmt.Errorf("detect: %w", err)
-		}
-	}
-
-	p, plan, err := loadAndResolvePlan(c.Profile, c.Modules, f)
+	area := service.NewReadsArea(service.ReadsDeps{
+		Detect:      detectFacts,
+		LoadProfile: profileLoad,
+		Resolve:     resolvePlan,
+		WarnLoad:    warnLoadNudges,
+	})
+	r, err := area.Plan(c.Profile, c.Modules, c.Facts)
 	if err != nil {
 		return err
 	}
@@ -67,13 +62,13 @@ func (c *PlanCmd) Run() error {
 
 	var deps []packages.PackageDeps
 	if c.Deps {
-		deps = packages.DepsTree(context.Background(), packagesFor(f.Backend), plan.Packages.Install, c.DepsDepth)
+		deps = packages.DepsTree(context.Background(), packagesFor(r.Facts.Backend), r.Plan.Packages.Install, c.DepsDepth)
 	}
 
 	if c.JSON {
-		return printPlanJSON(out, plan, p, f, deps)
+		return printPlanJSON(out, r.Plan, r.Profile, r.Facts, deps)
 	}
-	return printPlan(out, plan, p, f, deps)
+	return service.RenderPlanReport(out, r, deps)
 }
 
 type planJSONDotfile struct {
@@ -258,146 +253,4 @@ func toPlanJSONHooks(hooks []profile.HookCommand) []planJSONHook {
 		out = append(out, planJSONHook{Command: h.Command, Optional: h.Optional})
 	}
 	return out
-}
-
-// optionalMarker renders the text-plan suffix for a hook: " (optional)" when
-// the hook is best-effort, "" when required.
-func optionalMarker(optional bool) string {
-	if optional {
-		return " (optional)"
-	}
-	return ""
-}
-
-func printPlan(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *facts.Facts, deps []packages.PackageDeps) error {
-	if len(p.Selected) == 0 {
-		fmt.Fprintln(out, "warning: no modules selected")
-	}
-	fmt.Fprintf(out, "fingerprint:\n%s", resolve.Fingerprint(p, f))
-	fmt.Fprintln(out, "packages:")
-	if deps != nil {
-		for _, node := range deps {
-			printDepTree(out, node, "  ")
-		}
-	} else {
-		for _, pkg := range plan.Packages.Install {
-			fmt.Fprintf(out, "  - %s\n", pkg)
-		}
-	}
-	fmt.Fprintln(out, "remove:")
-	for _, pkg := range plan.Packages.Remove {
-		fmt.Fprintf(out, "  - %s\n", pkg)
-	}
-	fmt.Fprintln(out, "tools:")
-	for _, k := range sortedKeys(plan.Tools.Versions) {
-		fmt.Fprintf(out, "  %s: %s\n", k, plan.Tools.Versions[k])
-	}
-	fmt.Fprintln(out, "dotfiles:")
-	for _, e := range plan.Dotfiles.Entries {
-		fmt.Fprintf(out, "  %s:\n", e.Target)
-		switch {
-		case e.Line != "":
-			fmt.Fprintf(out, "    line: %q\n", e.Line)
-		case e.Block != "":
-			fmt.Fprintf(out, "    block: %q\n", e.Block)
-			if e.Comment != "" {
-				fmt.Fprintf(out, "    comment: %q\n", e.Comment)
-			}
-		case e.Template != "":
-			fmt.Fprintf(out, "    source: %s\n", e.Source)
-			fmt.Fprintf(out, "    template: %s\n", e.Template)
-		default:
-			fmt.Fprintf(out, "    source: %s\n", e.Source)
-			fmt.Fprintf(out, "    mode: %s\n", e.Mode)
-		}
-		// System-scope entries are marked on the module line; user scope is
-		// the default and stays unmarked. (Edit entries are always user-scope.)
-		marker := ""
-		if e.Scope == profile.ScopeSystem {
-			marker = " [system]"
-		}
-		fmt.Fprintf(out, "    module: %s%s\n", e.Module, marker)
-		fmt.Fprintf(out, "    layer: %s\n", e.Layer)
-	}
-	fmt.Fprintln(out, "hooks:")
-	fmt.Fprintln(out, "  pre:")
-	for _, c := range plan.Hooks.Pre {
-		fmt.Fprintf(out, "    - %s%s\n", c.Command, optionalMarker(c.Optional))
-	}
-	fmt.Fprintln(out, "  post:")
-	for _, c := range plan.Hooks.Post {
-		fmt.Fprintf(out, "    - %s%s\n", c.Command, optionalMarker(c.Optional))
-	}
-	// systemd/mounts/smb sections render last and are omitted entirely when
-	// the profile declares none, keeping output for other profiles stable.
-	if len(plan.Systemd.Units) > 0 {
-		fmt.Fprintln(out, "systemd:")
-		for _, u := range plan.Systemd.Units {
-			fmt.Fprintf(out, "  %s: %s (%s) [%s]\n", u.Module, u.Name, u.Kind, u.Layer)
-		}
-	}
-	if len(plan.Mounts.Entries) > 0 {
-		fmt.Fprintln(out, "mounts:")
-		for _, e := range plan.Mounts.Entries {
-			fmt.Fprintf(out, "  %s: %s %s %s -> %s [%s][%s]",
-				e.Module, e.Name, e.Spec.Type, e.Spec.Source, e.Spec.Destination, e.Layer, e.Scope)
-			if e.Spec.StartAt != "" {
-				fmt.Fprintf(out, " startat=%s", e.Spec.StartAt)
-			}
-			if e.Spec.State != "" {
-				fmt.Fprintf(out, " state=%s", e.Spec.State)
-			}
-			fmt.Fprintln(out)
-		}
-	}
-	if len(plan.Smb.Modules) > 0 {
-		fmt.Fprintln(out, "smb:")
-		for _, m := range plan.Smb.Modules {
-			fmt.Fprintf(out, "  %s:\n", m.Module)
-			// Group and avahi render the effective activation values, not the
-			// raw spec: an unset group activates as smb.DefaultGroup and an
-			// unset avahi defaults to enabled.
-			group := m.Spec.Group
-			if group == "" {
-				group = smb.DefaultGroup
-			}
-			fmt.Fprintf(out, "    group: %s\n", group)
-			fmt.Fprintf(out, "    users: %s\n", strings.Join(m.Spec.Users, ", "))
-			fmt.Fprintf(out, "    avahi: %t\n", m.Spec.Avahi == nil || *m.Spec.Avahi)
-			if len(m.Spec.Shares) > 0 {
-				fmt.Fprintln(out, "    shares:")
-				for _, name := range slices.Sorted(maps.Keys(m.Spec.Shares)) {
-					fmt.Fprintf(out, "      %s -> %s\n", name, m.Spec.Shares[name].Path)
-				}
-			}
-		}
-	}
-	return nil
-}
-
-// printDepTree renders one dependency node at indent: `- name` (marked
-// `(deps unknown)` when the query failed), then a `deps:` block one level
-// deeper when children exist.
-func printDepTree(out io.Writer, node packages.PackageDeps, indent string) {
-	if node.Unknown {
-		fmt.Fprintf(out, "%s- %s (deps unknown)\n", indent, node.Name)
-	} else {
-		fmt.Fprintf(out, "%s- %s\n", indent, node.Name)
-	}
-	if len(node.Deps) > 0 {
-		child := indent + "  "
-		fmt.Fprintf(out, "%sdeps:\n", child)
-		for _, d := range node.Deps {
-			printDepTree(out, d, child)
-		}
-	}
-}
-
-func sortedKeys(m map[string]string) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	return keys
 }

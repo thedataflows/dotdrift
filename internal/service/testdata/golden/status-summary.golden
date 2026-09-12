@@ -1,0 +1,11 @@
+profile: $PROFILE
+state: $PROFILE/state.json
+resume: last completed "packages" - next apply resumes after it
+packages:
+  demo: demo-pkg - missing
+
+drift: 1 item
+note: configuration exists for other accounts on this machine:
+  users/alice — apply with: sudo -iu alice dotdrift apply
+  users/root — apply with: sudo dotdrift apply
+  (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system scope)

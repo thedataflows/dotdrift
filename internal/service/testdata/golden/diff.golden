@@ -1,0 +1,8 @@
+
+[demo] $PROFILE/live-target
+--- $PROFILE/live-target
++++ $PROFILE/modules/demo/files/config
+@@ -1,2 +1,2 @@
+-theme = "light"
++theme = "dark"
+ 

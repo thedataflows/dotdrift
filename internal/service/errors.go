@@ -38,3 +38,24 @@ func (e *SessionCancelledError) Error() string {
 	}
 	return fmt.Sprintf("apply cancelled during step %s (rerun to resume)", e.StepName)
 }
+
+// SchemaError is a strict-schema load failure (a profile file that does not
+// decode against its schema): the file, its 1-based line (0 when the
+// failure is not localizable), and the underlying error. Error() renders
+// the original wrapped string so CLI output stays byte-identical; front
+// ends match with errors.As to render structure (the TUI opens broken
+// files read-only, 0065-D8).
+type SchemaError struct {
+	Path string
+	Line int
+	Err  error
+}
+
+func (e *SchemaError) Error() string {
+	if e.Err == nil {
+		return e.Path
+	}
+	return e.Err.Error()
+}
+
+func (e *SchemaError) Unwrap() error { return e.Err }

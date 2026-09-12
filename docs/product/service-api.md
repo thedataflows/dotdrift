@@ -42,7 +42,8 @@ hold (0061-D2/D6):
 ```go
 type Service struct {
     Apply *ApplyArea
-    // Reads / Writes areas as migration lands them (below)
+    Reads *ReadsArea
+    // Writes areas as migration lands them (below)
 }
 
 func New() *Service
@@ -51,7 +52,7 @@ func New() *Service
 | Area | Covers | Status |
 |---|---|---|
 | Session (apply) | apply runs: start, stream, handover, cancel, resume | **shipped** (issues 0069/0070/0071) |
-| Reads | modules, plan, status, drift/diff, detect | designed (0061); migrates slice by slice under M14, each slice byte-identical in CLI output |
+| Reads | modules, plan, status, drift/diff, detect (`ReadsArea`: `Modules`, `Plan`, `Status`, `Diff`, `Detect`; canonical renderers + `ModuleLayers`) | **shipped** (T-tui-reads; each slice byte-identical in CLI output) |
 | Writes | onboard, restore, generate, profile editing (config area: `ReadModuleLayer`/`WriteModuleLayer` + module-management ops) | designed (0061/0065); M14 |
 
 The layer **wraps** the domain packages and **absorbs the orchestration**
@@ -59,6 +60,38 @@ The layer **wraps** the domain packages and **absorbs the orchestration**
 and public APIs untouched; what lives in the service layer is the
 coordination logic that used to live in `cmd/` (plan assembly, apply step
 wiring, session state) plus error translation at its boundary.
+
+# Reads area
+
+`ReadsArea` is the lock-free half (reads never take the state lock,
+contract 11). Each method wraps the domain preamble it is named after and
+returns the typed model the domain packages already produce:
+
+```go
+func (r *ReadsArea) Modules(profilePath string, modules []string) (*ModulesRead, error)
+func (r *ReadsArea) Plan(profilePath string, modules []string, f *facts.Facts) (*PlanRead, error)
+func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, error)
+func (r *ReadsArea) Diff(plan *resolve.Plan, profileRoot string) ([]DiffEntry, error)
+func (r *ReadsArea) Detect() (*facts.Facts, error)
+```
+
+- `Modules` runs detect → load → filter (no warns — the modules listing is
+  the canonical surfacing of skips); `Plan` runs detect (when `f` is nil)
+  → load → warn → filter → resolve, the exact preambles the CLI commands
+  ran before the migration. `WarnLoad` (a `ReadsDeps` hook) fires between
+  load and filter so the consumer's zerolog nudges keep their place.
+- `Status` adds the state load (`StatePath` "" = the profile's default),
+  the drift check over caller-prepared probes (`StatusOpts.ProbesFor` is
+  called with the detected facts — elevation and backend/mise seams stay
+  the consumer's), profile-content orphans, and the other configured
+  accounts (`StatusRead.Others`). Drift is model output, never an error.
+- `Diff` collects differing copy-mode dotfiles as content pairs;
+  unreadable sources and missing targets are skipped (nothing to diff).
+  `ModuleLayers` exposes the every-layer module scan (shared with
+  restore's backup index).
+- `ReadsDeps` carries the seams (detect/load/resolve, `OtherAccounts`,
+  `WarnLoad`); zero values fall back to the real implementations via
+  `WithDefaults`, composing exactly like `ApplyDeps`.
 
 # Session area — apply
 
@@ -199,18 +232,24 @@ never parse strings (0061-D3):
   the sidecar lock (contract 11).
 - `SessionCancelledError{StepName}` — `Wait`'s error return on a cancelled
   session; names the interrupted step.
-- `SchemaError{Path, Line, …}` — strict-schema load failures (lands with
-  the reads/config areas; the TUI renders it and opens a broken file
-  read-only, 0065-D8).
+- `SchemaError{Path, Line, …}` — strict-schema load failures (shipped with
+  the reads area; the TUI renders it and opens a broken file read-only,
+  0065-D8). Every read translates profile load errors at its boundary;
+  `Error()` carries the original string so CLI output is byte-identical.
 
 # Rendering ownership
 
 Canonical text renderers live in the service layer **only** for surfaces
 both front ends show fact-identically: the plan report, diff, and status
-summary (0061-D5). `--json` is a dumb marshal in `cmd/`; all TUI-styled
-rendering stays TUI-side and never shares code with the canonical
-renderers. CLI output must stay byte-identical across every migration
-slice — that gate is what makes the big-bang migration safe (0061-D7).
+summary (0061-D5) — shipped as `RenderPlanReport`, `RenderDiff`, and
+`RenderStatusHeader`/`RenderStatusNote` (composed by
+`RenderStatusSummary`; the CLI interleaves its `--diff` section between
+them). `--json` is a dumb marshal in `cmd/`; all TUI-styled rendering
+stays TUI-side and never shares code with the canonical renderers. CLI
+output must stay byte-identical across every migration slice — that gate
+is what makes the big-bang migration safe (0061-D7), and the service
+renderers are pinned to the pre-migration bytes under
+`internal/service/testdata/golden`.
 
 # Rules for change
 

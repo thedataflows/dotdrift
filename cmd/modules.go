@@ -9,6 +9,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/palette"
 	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // ModulesCmd lists selected and skipped modules for a profile.
@@ -23,12 +24,18 @@ type ModulesCmd struct {
 // color gating (executil.ColorEnabled). Hues come from the palette
 // (internal/palette), so dotdrift.toml [colors] overrides apply here too.
 
-// Run loads the profile and prints selection status.
+// Run loads the profile and prints selection status through the service
+// reads area (the adapter renders; the service reads, T-tui-reads).
 func (c *ModulesCmd) Run() error {
-	_, p, err := loadProfile(c.Profile, c.Modules)
+	area := service.NewReadsArea(service.ReadsDeps{
+		Detect:      detectFacts,
+		LoadProfile: profileLoad,
+	})
+	r, err := area.Modules(c.Profile, c.Modules)
 	if err != nil {
 		return err
 	}
+	p := r.Profile
 	out := c.Out
 	if out == nil {
 		out = os.Stdout

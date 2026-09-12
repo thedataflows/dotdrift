@@ -70,14 +70,9 @@ the registry preset for `--type` applies (the same presets the legacy
 script hard-coded).
 
 **Important:** one CLI run writes one mount, and `[mounts]` is replaced
-wholesale in the target module. Two working patterns:
-
-- **Scripted — one module per mount** (distinct `--module`; each module
-  is idempotent and independently rerunnable). This is the pattern used
-  below.
-- **Interactive — one module, many mounts**: run `dotdrift generate
-  mounts` in a terminal and use the wizard's "add another mount?" loop;
-  it accumulates all mounts and writes once.
+wholesale in the target module. The working pattern is one module per
+mount (distinct `--module`; each module is idempotent and independently
+rerunnable) — the pattern used below.
 
 ### Global mounts (base layer)
 
@@ -106,7 +101,7 @@ existing only under `hosts/<hostname>/modules/` is selected like a base
 module; no base stub needed). From `mounts.cri-pc.yaml`:
 
 ```bash
-# win_c: the wizard preselects dotdrift's kernel-recommended ntfs
+# win_c: use dotdrift's kernel-recommended ntfs
 # driver — ntfs3 on kernel >= 7.2, ntfs-3g below (the legacy script
 # split the same family at 7.1). Pick per host.
 # The --type selects the option preset and

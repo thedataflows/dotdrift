@@ -72,16 +72,15 @@ same engine (`internal/generate.WriteModule`); the regular apply pipeline
 | `--module ID` | `mounts` / `smb` | Module directory name |
 | `--hostname H` | detected | Required resolution for `--layer host` (detected when omitted) |
 | `--username U` | detected | Required resolution for `--layer user` (detected when omitted) |
-| `--tui` / `--no-tui` | auto | `--tui` forces the interactive wizard (terminal required), even with input flags — they pre-fill the wizard; `--no-tui` forces CLI mode |
 
 ## `generate mounts` input flags
 
 | Flag | Default | Notes |
 |------|---------|-------|
-| `--name NAME` | — | Mount name (`[mounts.<name>]`); required in CLI mode |
-| `--source SRC` | — | e.g. `UUID=<uuid>` or `server:/export`; required in CLI mode |
-| `--destination DEST` | — | Mount point; the unit stem is `EscapePath(DEST)`; required in CLI mode |
-| `--type TYPE` | — | Filesystem type; must exist in the generate registry; required in CLI mode |
+| `--name NAME` | — | Mount name (`[mounts.<name>]`); required |
+| `--source SRC` | — | e.g. `UUID=<uuid>` or `server:/export`; required |
+| `--destination DEST` | — | Mount point; the unit stem is `EscapePath(DEST)`; required |
+| `--type TYPE` | — | Filesystem type; must exist in the generate registry; required |
 | `--option OPT` | registry preset for `--type` | Repeatable; when omitted entirely the registry preset applies (bare `uid`/`gid` tokens expand to the invoking user's ids) |
 | `--startat CAL` | none | OnCalendar expression; adds a `.service` + `.timer` pair |
 | `--state enabled\|disabled` | `enabled` | Recorded in the mount spec |
@@ -91,7 +90,7 @@ same engine (`internal/generate.WriteModule`); the regular apply pipeline
 
 | Flag | Default | Notes |
 |------|---------|-------|
-| `--share name=path` | — | Repeatable; at least one required in CLI mode; both sides must be non-empty |
+| `--share name=path` | — | Repeatable; at least one required; both sides must be non-empty |
 | `--group G` | `smb` | Samba group for `valid users = @<group>` |
 | `--user U` | invoking user | Repeatable |
 | `--avahi` / `--no-avahi` | on (unset) | No flag: `avahi` key left unset (default-on semantics); `--no-avahi` records an explicit `avahi = false` and drops the `avahi` package |
@@ -99,60 +98,17 @@ same engine (`internal/generate.WriteModule`); the regular apply pipeline
 | `--readonly` | off | Sets `writable = false` on every share |
 | `--public` | off | Guest access on every share |
 
-## Mode selection (strict, both subcommands)
+## Flags or error (both subcommands)
 
-1. Any input flag present → **CLI mode**: the required input flags are
-   validated loudly (the error names each missing flag), a
-   `generate.Input` is assembled, `WriteModule` runs, and a summary
-   (module dir + written files) is printed.
-2. No input flags + terminal → the interactive **wizard** (see below).
-3. No input flags + no terminal → an actionable error listing the flags
-   CLI mode needs.
-4. `--tui` without a terminal → loud error.
-
-## The interactive wizard
-
-The wizard (charmbracelet huh forms over a pure spec-builder state
-machine, lipgloss chrome) owns everything after mode selection,
-including `WriteModule`.
-
-- **Tabs.** A lipgloss tab bar shows `mounts | smb` with the active
-  flow highlighted; a top-level select (`mounts | smb | quit`) acts as
-  the tab switcher. The invoking subcommand preselects its tab;
-  switching runs the other flow with the same profile/layer values.
-- **Pre-fill.** Any already-parsed input flags (`--tui` forces the
-  wizard even with flags) become the wizard's defaults: the first
-  mount's fields, or the smb group/users/avahi/shares.
-- **Mounts steps.** (1) layer select + module id (+ hostname/username
-  inputs shown only for the matching layer, defaulting to detected
-  values); (2) kind select: volume | network; (3a) volume: a
-  MultiSelect of lsblk-detected volumes with already-managed ones
-  marked `[managed]` (on lsblk failure the error is shown and a
-  manual-source fallback is offered), then per volume: name, type
-  select with the kernel-recommended entry preselected and marked
-  `(recommended)`, destination (default `/mnt/<label-or-uuid-short>`),
-  options MultiSelect (registry preset pre-checked) plus free-form
-  additions; (3b) network: source input validated as `host:/export`
-  (nfs-style) or `//host/share` (cifs-style), type select, same
-  options step; (4) optional `--startat` schedule via a confirm +
-  OnCalendar input; (5) state select (enabled/disabled); (6) a review
-  screen and keep-confirm per mount.
-- **Multiple mounts, one write.** After a mount is kept, "add another
-  mount?" loops back to the kind select. All accumulated mounts are
-  written with ONE `WriteModule` call at the end (a mid-loop write
-  would wipe earlier iterations, since `[mounts]` is replaced
-  wholesale). Aborting (ctrl+c/esc) before the end writes nothing.
-- **Smb steps.** Group (default `smb`), users (comma-separated, default
-  the invoking user), avahi confirm (default yes — a "yes" keeps the
-  key unset like the CLI default, a "no" records `avahi = false`), then
-  a shares loop (name, path, comment, writable confirm default yes,
-  public confirm default no, "add a share?"), a review, and one
-  `WriteModule` call.
-- **Equivalence guarantee.** CLI mode and the wizard assemble
-  `generate.Input` through the same shared helpers
-  (`internal/tui.MountsInput` / `SmbInput` / `ParseShareFlags`), so the
-  same logical inputs produce a byte-identical module tree either way
-  (locked by `TestGenerate_cliTuiEquivalence_*`).
+`generate` is CLI-only (issue 0066; [ADR-0007](../adr/0007-generate-cli-only.md)):
+with any missing required flag the error names each one; otherwise a
+`generate.Input` is assembled through the shared builders, `WriteModule`
+runs, and a summary (module dir + written files) is printed. `--tui`/
+`--no-tui` are gone — an unknown-flag error is the whole answer. The
+interactive path is `dotdrift tui` (editor suite, issue 0065), which
+prefills from the same builders; the same logical inputs produce a
+byte-identical module tree either way (contract invariant 15, locked by
+`TestGenerate_cliTuiEquivalence_*`).
 
 ## Examples
 

@@ -32,7 +32,7 @@ func promptTarget(flagLayer, flagModule, defaultModule, flagHostname, flagUserna
 		}
 	}
 	if username == "" {
-		if _, _, u, err := InvokingUser(); err == nil {
+		if _, _, u, err := generate.InvokingUser(); err == nil {
 			username = u
 		}
 	}
@@ -107,10 +107,10 @@ func promptTypeSelect(reg *generate.Registry, kind string, typ *string, recommen
 // promptOptionsScheduleState runs steps 4–6's input side: the options
 // MultiSelect (registry preset pre-checked) plus free-form additions,
 // the optional schedule, and the state select.
-func promptOptionsScheduleState(reg *generate.Registry, choice MountChoice) (MountChoice, error) {
+func promptOptionsScheduleState(reg *generate.Registry, choice generate.MountChoice) (generate.MountChoice, error) {
 	preset, ok := reg.Entry(choice.Type)
 	if !ok {
-		return MountChoice{}, fmt.Errorf("unknown filesystem type %q", choice.Type)
+		return generate.MountChoice{}, fmt.Errorf("unknown filesystem type %q", choice.Type)
 	}
 
 	selected := append([]string(nil), preset.Options...)
@@ -127,7 +127,7 @@ func promptOptionsScheduleState(reg *generate.Registry, choice MountChoice) (Mou
 			Title("Additional options (comma-separated, optional)").
 			Value(&additions),
 	)).Run(); err != nil {
-		return MountChoice{}, err
+		return generate.MountChoice{}, err
 	}
 	final := selected
 	if additions != "" {
@@ -147,7 +147,7 @@ func promptOptionsScheduleState(reg *generate.Registry, choice MountChoice) (Mou
 
 	schedule := choice.StartAt != ""
 	startAt := choice.StartAt
-	state := defaultState(choice.State)
+	state := generate.DefaultState(choice.State)
 	if err := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
@@ -171,7 +171,7 @@ func promptOptionsScheduleState(reg *generate.Registry, choice MountChoice) (Mou
 				Value(&state),
 		),
 	).Run(); err != nil {
-		return MountChoice{}, err
+		return generate.MountChoice{}, err
 	}
 	if schedule {
 		choice.StartAt = startAt
@@ -184,7 +184,7 @@ func promptOptionsScheduleState(reg *generate.Registry, choice MountChoice) (Mou
 
 // confirmMount renders the review screen and asks whether to keep the
 // mount.
-func confirmMount(c MountChoice) (bool, error) {
+func confirmMount(c generate.MountChoice) (bool, error) {
 	pairs := []KV{
 		{Key: "name", Value: c.Name},
 		{Key: "source", Value: c.Source},
@@ -199,7 +199,7 @@ func confirmMount(c MountChoice) (bool, error) {
 	if c.StartAt != "" {
 		pairs = append(pairs, KV{Key: "schedule", Value: c.StartAt})
 	}
-	pairs = append(pairs, KV{Key: "state", Value: defaultState(c.State)})
+	pairs = append(pairs, KV{Key: "state", Value: generate.DefaultState(c.State)})
 
 	keep := true
 	if err := huh.NewForm(huh.NewGroup(
@@ -210,4 +210,3 @@ func confirmMount(c MountChoice) (bool, error) {
 	}
 	return keep, nil
 }
-

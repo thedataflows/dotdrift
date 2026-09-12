@@ -50,7 +50,7 @@ func runMountsFlow(ctx context.Context, p MountsParams) error {
 		return friendlyAbort(err)
 	}
 
-	wizard := NewMountsWizard(sel, reg)
+	wizard := generate.NewMountsWizard(sel, reg)
 	defaults := p.Prefill()
 	for {
 		choices, err := promptMount(ctx, reg, p.Profile, sel, defaults)
@@ -75,28 +75,28 @@ func runMountsFlow(ctx context.Context, p MountsParams) error {
 		if !another {
 			break
 		}
-		defaults = MountChoice{}
+		defaults = generate.MountChoice{}
 	}
 
 	if len(wizard.Mounts()) == 0 {
 		warnf(os.Stderr, "no mounts configured; nothing written")
 		return nil
 	}
-	uid, gid, _, err := InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	if err != nil {
 		return err
 	}
 	if err := wizard.Write(p.Profile, uid, gid); err != nil {
 		return err
 	}
-	return PrintSummary(os.Stderr, p.Profile, sel)
+	return generate.PrintSummary(os.Stderr, p.Profile, sel)
 }
 
 // promptMount runs one mounts-loop iteration (steps 2–5) and returns
 // the assembled choices — one per picked volume, or a single one for
 // the network/manual paths.
-func promptMount(ctx context.Context, reg *generate.Registry, root string, sel generate.Selection, defaults MountChoice) ([]MountChoice, error) {
-	kind := kindForDefaults(reg, defaults)
+func promptMount(ctx context.Context, reg *generate.Registry, root string, sel generate.Selection, defaults generate.MountChoice) ([]generate.MountChoice, error) {
+	kind := generate.KindForDefaults(reg, defaults)
 	kindForm := huh.NewForm(huh.NewGroup(
 		huh.NewSelect[string]().
 			Title("Mount kind").
@@ -117,8 +117,8 @@ func promptMount(ctx context.Context, reg *generate.Registry, root string, sel g
 
 // promptVolumeMounts runs the volume path: lsblk detection (with a
 // manual-source fallback), the volume picker, and the per-volume forms.
-func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string, sel generate.Selection, defaults MountChoice) ([]MountChoice, error) {
-	sources, err := ExistingMountSources(root, sel)
+func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string, sel generate.Selection, defaults generate.MountChoice) ([]generate.MountChoice, error) {
+	sources, err := generate.ExistingMountSources(root, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 		return promptManualVolume(reg, defaults)
 	}
 
-	choices := VolumeChoices(reg, vols)
+	choices := generate.VolumeChoices(reg, vols)
 	options := make([]huh.Option[string], len(choices))
 	for i, c := range choices {
 		options[i] = huh.NewOption(c.Label(), c.Volume.UUID)
@@ -158,10 +158,10 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 		return nil, errors.New("no volumes selected")
 	}
 
-	out := make([]MountChoice, 0, len(picked))
+	out := make([]generate.MountChoice, 0, len(picked))
 	for i, uuid := range picked {
-		c := choices[slices.IndexFunc(choices, func(c VolumeChoice) bool { return c.Volume.UUID == uuid })]
-		choice, err := promptMountDetails(reg, c, prefillForVolume(c, defaults, i == 0))
+		c := choices[slices.IndexFunc(choices, func(c generate.VolumeChoice) bool { return c.Volume.UUID == uuid })]
+		choice, err := promptMountDetails(reg, c, generate.PrefillForVolume(c, defaults, i == 0))
 		if err != nil {
 			return nil, err
 		}
@@ -172,7 +172,7 @@ func promptVolumeMounts(ctx context.Context, reg *generate.Registry, root string
 
 // promptManualVolume is the volume fallback: free-form source input and
 // a type select over the registry's volume entries.
-func promptManualVolume(reg *generate.Registry, defaults MountChoice) ([]MountChoice, error) {
+func promptManualVolume(reg *generate.Registry, defaults generate.MountChoice) ([]generate.MountChoice, error) {
 	choice := defaults
 	if err := huh.NewForm(huh.NewGroup(
 		huh.NewInput().
@@ -182,15 +182,15 @@ func promptManualVolume(reg *generate.Registry, defaults MountChoice) ([]MountCh
 	)).Run(); err != nil {
 		return nil, err
 	}
-	details, err := promptMountDetails(reg, VolumeChoice{}, choice)
+	details, err := promptMountDetails(reg, generate.VolumeChoice{}, choice)
 	if err != nil {
 		return nil, err
 	}
-	return []MountChoice{details}, nil
+	return []generate.MountChoice{details}, nil
 }
 
 // promptNetworkMount runs the network path (step 3b).
-func promptNetworkMount(reg *generate.Registry, defaults MountChoice) ([]MountChoice, error) {
+func promptNetworkMount(reg *generate.Registry, defaults generate.MountChoice) ([]generate.MountChoice, error) {
 	choice := defaults
 	name := choice.Name
 	source := choice.Source
@@ -206,7 +206,7 @@ func promptNetworkMount(reg *generate.Registry, defaults MountChoice) ([]MountCh
 				Title("Network source").
 				Placeholder("server:/export or //server/share").
 				Value(&source).
-				Validate(ValidateNetworkSource),
+				Validate(generate.ValidateNetworkSource),
 			huh.NewInput().
 				Title("Destination").
 				Placeholder("/mnt/<name>").
@@ -225,12 +225,12 @@ func promptNetworkMount(reg *generate.Registry, defaults MountChoice) ([]MountCh
 	if err != nil {
 		return nil, err
 	}
-	return []MountChoice{final}, nil
+	return []generate.MountChoice{final}, nil
 }
 
 // promptMountDetails runs the per-volume form: name, type (recommended
 // preselected), destination, then options/schedule/state.
-func promptMountDetails(reg *generate.Registry, c VolumeChoice, choice MountChoice) (MountChoice, error) {
+func promptMountDetails(reg *generate.Registry, c generate.VolumeChoice, choice generate.MountChoice) (generate.MountChoice, error) {
 	name := choice.Name
 	destination := choice.Destination
 	typ := choice.Type
@@ -238,12 +238,11 @@ func promptMountDetails(reg *generate.Registry, c VolumeChoice, choice MountChoi
 		huh.NewInput().Title("Mount name").Value(&name).Validate(nonEmpty("name")),
 		huh.NewInput().Title("Destination").Value(&destination).Validate(nonEmpty("destination")),
 	)).Run(); err != nil {
-		return MountChoice{}, err
+		return generate.MountChoice{}, err
 	}
 	if err := promptTypeSelect(reg, generate.KindVolume, &typ, c.Type); err != nil {
-		return MountChoice{}, err
+		return generate.MountChoice{}, err
 	}
 	choice.Name, choice.Destination, choice.Type = name, destination, typ
 	return promptOptionsScheduleState(reg, choice)
 }
-

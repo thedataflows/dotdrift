@@ -31,7 +31,7 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 		return friendlyAbort(err)
 	}
 
-	_, _, username, err := InvokingUser()
+	_, _, username, err := generate.InvokingUser()
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 		return friendlyAbort(err)
 	}
 
-	wizard := NewSmbWizard(sel)
+	wizard := generate.NewSmbWizard(sel)
 	wizard.SetServer(server)
 
 	prefilled, err := p.PrefillShares()
@@ -61,7 +61,7 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 			if err != nil {
 				return friendlyAbort(err)
 			}
-			if shareLoopDone(more, len(wizard.shares)) {
+			if generate.ShareLoopDone(more, len(wizard.Shares())) {
 				break
 			}
 			if !more {
@@ -96,19 +96,19 @@ func runSmbFlow(_ context.Context, p SmbParams) error {
 		return nil
 	}
 
-	uid, gid, _, err := InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	if err != nil {
 		return err
 	}
 	if err := wizard.Write(p.Profile, username, uid, gid); err != nil {
 		return err
 	}
-	return PrintSummary(os.Stderr, p.Profile, sel)
+	return generate.PrintSummary(os.Stderr, p.Profile, sel)
 }
 
 // promptServer runs the server-level form: group, users
 // (comma-separated), and the avahi confirm.
-func promptServer(p SmbParams, username string) (SmbServerChoice, error) {
+func promptServer(p SmbParams, username string) (generate.SmbServerChoice, error) {
 	group := p.Group
 	if group == "" {
 		group = "smb"
@@ -136,10 +136,10 @@ func promptServer(p SmbParams, username string) (SmbServerChoice, error) {
 			Title("Avahi service discovery?").
 			Value(&avahi),
 	)).Run(); err != nil {
-		return SmbServerChoice{}, err
+		return generate.SmbServerChoice{}, err
 	}
 
-	choice := SmbServerChoice{Group: group}
+	choice := generate.SmbServerChoice{Group: group}
 	for _, u := range strings.Split(users, ",") {
 		if u = strings.TrimSpace(u); u != "" {
 			choice.Users = append(choice.Users, u)
@@ -155,8 +155,8 @@ func promptServer(p SmbParams, username string) (SmbServerChoice, error) {
 }
 
 // promptShare runs one share form: name, path, comment, writable, public.
-func promptShare() (ShareChoice, error) {
-	var c ShareChoice
+func promptShare() (generate.ShareChoice, error) {
+	var c generate.ShareChoice
 	c.Writable = true
 	if err := huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Share name").Value(&c.Name).Validate(nonEmpty("name")),
@@ -165,13 +165,13 @@ func promptShare() (ShareChoice, error) {
 		huh.NewConfirm().Title("Writable?").Value(&c.Writable),
 		huh.NewConfirm().Title("Public (guest access)?").Value(&c.Public),
 	)).Run(); err != nil {
-		return ShareChoice{}, err
+		return generate.ShareChoice{}, err
 	}
 	return c, nil
 }
 
 // confirmShare renders a share review and asks whether to keep it.
-func confirmShare(c ShareChoice) (bool, error) {
+func confirmShare(c generate.ShareChoice) (bool, error) {
 	pairs := []KV{
 		{Key: "name", Value: c.Name},
 		{Key: "path", Value: c.Path},
@@ -195,7 +195,7 @@ func confirmShare(c ShareChoice) (bool, error) {
 }
 
 // confirmSmbSpec renders the final review and the write confirmation.
-func confirmSmbSpec(sel generate.Selection, server SmbServerChoice, wizard *SmbWizard) (bool, error) {
+func confirmSmbSpec(sel generate.Selection, server generate.SmbServerChoice, wizard *generate.SmbWizard) (bool, error) {
 	avahi := "yes"
 	if server.Avahi != nil && !*server.Avahi {
 		avahi = "no"
@@ -205,7 +205,7 @@ func confirmSmbSpec(sel generate.Selection, server SmbServerChoice, wizard *SmbW
 		{Key: "group", Value: server.Group},
 		{Key: "users", Value: strings.Join(server.Users, ", ")},
 		{Key: "avahi", Value: avahi},
-		{Key: "shares", Value: fmt.Sprintf("%d configured", len(wizard.shares))},
+		{Key: "shares", Value: fmt.Sprintf("%d configured", len(wizard.Shares()))},
 	}
 
 	write := true

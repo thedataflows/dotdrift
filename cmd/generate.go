@@ -146,11 +146,11 @@ func (c *GenerateMountsCmd) Run() error {
 		return err
 	}
 
-	uid, gid, _, err := tui.InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	if err != nil {
 		return err
 	}
-	input := tui.MountsInput(map[string]profile.MountSpec{
+	input := generate.MountsInput(map[string]profile.MountSpec{
 		c.Name: {
 			Source:      c.Source,
 			Destination: c.Destination,
@@ -163,7 +163,7 @@ func (c *GenerateMountsCmd) Run() error {
 	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
 		return fmt.Errorf("generate mounts: %w", err)
 	}
-	return tui.PrintSummary(out, c.Profile, sel)
+	return generate.PrintSummary(out, c.Profile, sel)
 }
 
 // validate enforces the CLI-mode required flags loudly, naming every
@@ -247,18 +247,18 @@ func (c *GenerateSmbCmd) Run() error {
 		return runWizard(wizardInvocation{Smb: c})
 	}
 
-	shares, err := tui.ParseShareFlags(c.Shares, tui.ResolveWritable(c.Writable, c.Readonly), c.Public)
+	shares, err := generate.ParseShareFlags(c.Shares, generate.ResolveWritable(c.Writable, c.Readonly), c.Public)
 	if err != nil {
 		return err
 	}
 
-	uid, gid, username, err := tui.InvokingUser()
+	uid, gid, username, err := generate.InvokingUser()
 	if err != nil {
 		return err
 	}
-	input := tui.SmbInput(c.Group, c.Users, c.Avahi, shares, username, uid, gid)
+	input := generate.SmbInput(c.Group, c.Users, c.Avahi, shares, username, uid, gid)
 	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
 		return fmt.Errorf("generate smb: %w", err)
 	}
-	return tui.PrintSummary(out, c.Profile, sel)
+	return generate.PrintSummary(out, c.Profile, sel)
 }

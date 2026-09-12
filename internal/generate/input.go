@@ -1,40 +1,40 @@
-package tui
+package generate
 
 import (
 	"fmt"
 	"strings"
 
-	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
-// Shared spec assembly: BOTH the generate CLI mode (cmd) and the
-// wizard build generate.Input through these helpers, which is what
-// makes the CLI↔TUI byte-identical-tree contract hold (S5).
+// Shared spec assembly: every producer of a generate module — the
+// flag-driven CLI (cmd) and each interactive machine — builds Input
+// through these helpers, which is what keeps contract invariant 15's
+// single-path assembly true.
 
-// MountsInput assembles a mounts generate.Input, defaulting each
-// mount's empty state to "enabled" (the CLI's --state default).
-func MountsInput(mounts map[string]profile.MountSpec, uid, gid int) generate.Input {
+// MountsInput assembles a mounts Input, defaulting each mount's empty
+// state to "enabled" (the CLI's --state default).
+func MountsInput(mounts map[string]profile.MountSpec, uid, gid int) Input {
 	out := make(map[string]profile.MountSpec, len(mounts))
 	for name, spec := range mounts {
-		spec.State = defaultState(spec.State)
+		spec.State = DefaultState(spec.State)
 		out[name] = spec
 	}
-	return generate.Input{Mounts: out, UID: uid, GID: gid}
+	return Input{Mounts: out, UID: uid, GID: gid}
 }
 
-// SmbInput assembles an smb generate.Input, applying the shared
-// defaults: an empty user list becomes the invoking user, an empty
-// group becomes "smb". Avahi passes through untouched: nil keeps the
-// default-on semantics, an explicit false records --no-avahi.
-func SmbInput(group string, users []string, avahi *bool, shares map[string]profile.ShareSpec, defaultUser string, uid, gid int) generate.Input {
+// SmbInput assembles an smb Input, applying the shared defaults: an
+// empty user list becomes the invoking user, an empty group becomes
+// "smb". Avahi passes through untouched: nil keeps the default-on
+// semantics, an explicit false records --no-avahi.
+func SmbInput(group string, users []string, avahi *bool, shares map[string]profile.ShareSpec, defaultUser string, uid, gid int) Input {
 	if len(users) == 0 {
 		users = []string{defaultUser}
 	}
 	if group == "" {
 		group = "smb"
 	}
-	return generate.Input{
+	return Input{
 		Smb: &profile.SmbSpec{
 			Group:  group,
 			Users:  users,

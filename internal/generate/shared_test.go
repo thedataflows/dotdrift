@@ -1,4 +1,4 @@
-package tui
+package generate
 
 import (
 	"bytes"
@@ -7,20 +7,19 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/thedataflows/dotdrift/internal/generate"
 )
 
 // ExistingMountSources: sorted sources from the target module, nil for an
 // absent module, decode errors propagated (fail loud, never swallowed).
 func TestExistingMountSources(t *testing.T) {
 	root := t.TempDir()
-	sel := generate.Selection{Layer: generate.LayerBase, ModuleID: "media"}
+	sel := Selection{Layer: LayerBase, ModuleID: "media"}
 
 	sources, err := ExistingMountSources(root, sel)
 	require.NoError(t, err)
 	require.Nil(t, sources, "absent module yields nil, nil")
 
-	dir, err := generate.ModuleDir(root, sel)
+	dir, err := ModuleDir(root, sel)
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(`
@@ -49,8 +48,8 @@ type = "nfs"
 // written to the caller's writer (stdout for CLI, stderr for the wizard).
 func TestPrintSummary(t *testing.T) {
 	root := t.TempDir()
-	sel := generate.Selection{Layer: generate.LayerBase, ModuleID: "media"}
-	dir, err := generate.ModuleDir(root, sel)
+	sel := Selection{Layer: LayerBase, ModuleID: "media"}
+	dir, err := ModuleDir(root, sel)
 	require.NoError(t, err)
 
 	var out bytes.Buffer

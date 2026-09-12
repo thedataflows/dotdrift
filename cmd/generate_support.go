@@ -9,7 +9,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/thedataflows/dotdrift/internal/generate"
-	"github.com/thedataflows/dotdrift/internal/tui"
 )
 
 // Plumbing shared by the generate subcommands: the TTY probe, mode
@@ -103,7 +102,7 @@ func generateSelection(sel generate.Selection) (generate.Selection, error) {
 // volume's UUID already appears as a source in the target module's
 // [mounts] section (an absent module is tolerated: nothing managed).
 func printGenerateVolumes(out io.Writer, root string, sel generate.Selection) error {
-	sources, err := tui.ExistingMountSources(root, sel)
+	sources, err := generate.ExistingMountSources(root, sel)
 	if err != nil {
 		return err
 	}

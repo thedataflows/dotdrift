@@ -1,4 +1,4 @@
-package tui
+package generate
 
 import (
 	"errors"
@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 
-	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/profile"
 )
 
@@ -38,8 +37,8 @@ func InvokingUser() (uid int, gid int, username string, err error) {
 // ExistingMountSources returns the mount sources the target module
 // already manages (for MANAGED volume marking), sorted by mount name. An
 // absent module yields nil, nil; a malformed module.toml is a loud error.
-func ExistingMountSources(root string, sel generate.Selection) ([]string, error) {
-	dir, err := generate.ModuleDir(root, sel)
+func ExistingMountSources(root string, sel Selection) ([]string, error) {
+	dir, err := ModuleDir(root, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -60,9 +59,9 @@ func ExistingMountSources(root string, sel generate.Selection) ([]string, error)
 
 // PrintSummary lists what a generate run materialized: the module dir
 // and its files, name-sorted, written to the caller's writer (stdout for
-// the CLI, stderr for the wizard).
-func PrintSummary(out io.Writer, root string, sel generate.Selection) error {
-	dir, err := generate.ModuleDir(root, sel)
+// the CLI, stderr for an interactive flow).
+func PrintSummary(out io.Writer, root string, sel Selection) error {
+	dir, err := ModuleDir(root, sel)
 	if err != nil {
 		return err
 	}

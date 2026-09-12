@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/generate"
-	"github.com/thedataflows/dotdrift/internal/tui"
 )
 
 // S5: the wizard's spec assembly and the CLI assembly are the same code,
@@ -20,7 +19,7 @@ func readTreeFile(dir, name string) (string, error) {
 }
 
 func TestGenerate_cliTuiEquivalence_mounts(t *testing.T) {
-	uid, gid, _, err := tui.InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	// CLI path: the happy-path invocation from TestGenerateMountsCLI_happyPath.
@@ -43,10 +42,10 @@ func TestGenerate_cliTuiEquivalence_mounts(t *testing.T) {
 	wizProfile := newGenerateProfile(t)
 	reg, err := generate.Load()
 	require.NoError(t, err)
-	w := tui.NewMountsWizard(generate.Selection{
+	w := generate.NewMountsWizard(generate.Selection{
 		Layer: generate.LayerHost, Hostname: "h1", ModuleID: "nas",
 	}, reg)
-	require.NoError(t, w.AddMount(tui.MountChoice{
+	require.NoError(t, w.AddMount(generate.MountChoice{
 		Name:        "syn01",
 		Source:      "synology.local:/volume1/syn01",
 		Destination: "/mnt/synology/syn01",
@@ -62,7 +61,7 @@ func TestGenerate_cliTuiEquivalence_mounts(t *testing.T) {
 }
 
 func TestGenerate_cliTuiEquivalence_smb(t *testing.T) {
-	uid, gid, username, err := tui.InvokingUser()
+	uid, gid, username, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	// CLI path: the happy-path invocation from TestGenerateSmbCLI_happyPath.
@@ -81,14 +80,14 @@ func TestGenerate_cliTuiEquivalence_smb(t *testing.T) {
 	// answered "no" records an explicit false, matching --no-avahi.
 	wizProfile := newGenerateProfile(t)
 	avahi := false
-	sw := tui.NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
-	sw.SetServer(tui.SmbServerChoice{
+	sw := generate.NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
+	sw.SetServer(generate.SmbServerChoice{
 		Group: "smb",
 		Users: []string{"cri"},
 		Avahi: &avahi,
 	})
-	require.NoError(t, sw.AddShare(tui.ShareChoice{Name: "media", Path: "/srv/media", Writable: true}))
-	require.NoError(t, sw.AddShare(tui.ShareChoice{Name: "data", Path: "/mnt/data", Writable: true}))
+	require.NoError(t, sw.AddShare(generate.ShareChoice{Name: "media", Path: "/srv/media", Writable: true}))
+	require.NoError(t, sw.AddShare(generate.ShareChoice{Name: "data", Path: "/mnt/data", Writable: true}))
 	require.NoError(t, sw.Write(wizProfile, username, uid, gid))
 
 	cliTree := generateTreeManifest(t, filepath.Join(cliProfile, "modules", "smb"))
@@ -100,7 +99,7 @@ func TestGenerate_cliTuiEquivalence_smb(t *testing.T) {
 // The wizard default-avahi answer ("yes") must match the CLI default
 // (avahi key unset), not an explicit true.
 func TestGenerate_cliTuiEquivalence_smbDefaultAvahi(t *testing.T) {
-	uid, gid, username, err := tui.InvokingUser()
+	uid, gid, username, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -112,9 +111,9 @@ func TestGenerate_cliTuiEquivalence_smbDefaultAvahi(t *testing.T) {
 	))
 
 	wizProfile := newGenerateProfile(t)
-	sw := tui.NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
-	sw.SetServer(tui.SmbServerChoice{Group: "smb", Users: []string{username}})
-	require.NoError(t, sw.AddShare(tui.ShareChoice{Name: "media", Path: "/srv/media", Writable: true}))
+	sw := generate.NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
+	sw.SetServer(generate.SmbServerChoice{Group: "smb", Users: []string{username}})
+	require.NoError(t, sw.AddShare(generate.ShareChoice{Name: "media", Path: "/srv/media", Writable: true}))
 	require.NoError(t, sw.Write(wizProfile, username, uid, gid))
 
 	cliTree := generateTreeManifest(t, filepath.Join(cliProfile, "modules", "smb"))
@@ -125,7 +124,7 @@ func TestGenerate_cliTuiEquivalence_smbDefaultAvahi(t *testing.T) {
 // Volume-kind mounts are the only presets carrying bare uid/gid tokens;
 // both assemblies must expand them identically into the rendered units.
 func TestGenerate_cliTuiEquivalence_volumeKindUidGid(t *testing.T) {
-	uid, gid, _, err := tui.InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -143,8 +142,8 @@ func TestGenerate_cliTuiEquivalence_volumeKindUidGid(t *testing.T) {
 	wizProfile := newGenerateProfile(t)
 	reg, err := generate.Load()
 	require.NoError(t, err)
-	w := tui.NewMountsWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "vol"}, reg)
-	require.NoError(t, w.AddMount(tui.MountChoice{
+	w := generate.NewMountsWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "vol"}, reg)
+	require.NoError(t, w.AddMount(generate.MountChoice{
 		Name:        "data",
 		Source:      "UUID=7FFD-B6CF",
 		Destination: "/mnt/ventoy",
@@ -164,7 +163,7 @@ func TestGenerate_cliTuiEquivalence_volumeKindUidGid(t *testing.T) {
 
 // Custom options (--option) must record identically from both assemblies.
 func TestGenerate_cliTuiEquivalence_customOptions(t *testing.T) {
-	uid, gid, _, err := tui.InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -183,8 +182,8 @@ func TestGenerate_cliTuiEquivalence_customOptions(t *testing.T) {
 	wizProfile := newGenerateProfile(t)
 	reg, err := generate.Load()
 	require.NoError(t, err)
-	w := tui.NewMountsWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "vol"}, reg)
-	require.NoError(t, w.AddMount(tui.MountChoice{
+	w := generate.NewMountsWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "vol"}, reg)
+	require.NoError(t, w.AddMount(generate.MountChoice{
 		Name:        "data",
 		Source:      "UUID=7FFD-B6CF",
 		Destination: "/mnt/ventoy",
@@ -200,7 +199,7 @@ func TestGenerate_cliTuiEquivalence_customOptions(t *testing.T) {
 
 // --state disabled must record identically from both assemblies.
 func TestGenerate_cliTuiEquivalence_stateDisabled(t *testing.T) {
-	uid, gid, _, err := tui.InvokingUser()
+	uid, gid, _, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -219,8 +218,8 @@ func TestGenerate_cliTuiEquivalence_stateDisabled(t *testing.T) {
 	wizProfile := newGenerateProfile(t)
 	reg, err := generate.Load()
 	require.NoError(t, err)
-	w := tui.NewMountsWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "vol"}, reg)
-	require.NoError(t, w.AddMount(tui.MountChoice{
+	w := generate.NewMountsWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "vol"}, reg)
+	require.NoError(t, w.AddMount(generate.MountChoice{
 		Name:        "data",
 		Source:      "UUID=7FFD-B6CF",
 		Destination: "/mnt/ventoy",
@@ -236,7 +235,7 @@ func TestGenerate_cliTuiEquivalence_stateDisabled(t *testing.T) {
 
 // --readonly must record writable = no identically from both assemblies.
 func TestGenerate_cliTuiEquivalence_smbReadonly(t *testing.T) {
-	uid, gid, username, err := tui.InvokingUser()
+	uid, gid, username, err := generate.InvokingUser()
 	require.NoError(t, err)
 
 	cliProfile := newGenerateProfile(t)
@@ -250,9 +249,9 @@ func TestGenerate_cliTuiEquivalence_smbReadonly(t *testing.T) {
 	))
 
 	wizProfile := newGenerateProfile(t)
-	sw := tui.NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
-	sw.SetServer(tui.SmbServerChoice{Group: "smb", Users: []string{"cri"}})
-	require.NoError(t, sw.AddShare(tui.ShareChoice{Name: "media", Path: "/srv/media", Writable: false}))
+	sw := generate.NewSmbWizard(generate.Selection{Layer: generate.LayerBase, ModuleID: "smb"})
+	sw.SetServer(generate.SmbServerChoice{Group: "smb", Users: []string{"cri"}})
+	require.NoError(t, sw.AddShare(generate.ShareChoice{Name: "media", Path: "/srv/media", Writable: false}))
 	require.NoError(t, sw.Write(wizProfile, username, uid, gid))
 
 	cliTree := generateTreeManifest(t, filepath.Join(cliProfile, "modules", "smb"))

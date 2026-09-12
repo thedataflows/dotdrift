@@ -19,27 +19,6 @@ import (
 
 // --- helpers ---------------------------------------------------------------
 
-// stubGenerateTTY pins the isTTY seam for the duration of the test.
-func stubGenerateTTY(t *testing.T, tty bool) {
-	t.Helper()
-	orig := isTTY
-	isTTY = func() bool { return tty }
-	t.Cleanup(func() { isTTY = orig })
-}
-
-// stubRunWizard records wizard invocations and returns nil.
-func stubRunWizard(t *testing.T) *[]wizardInvocation {
-	t.Helper()
-	var calls []wizardInvocation
-	orig := runWizard
-	runWizard = func(inv wizardInvocation) error {
-		calls = append(calls, inv)
-		return nil
-	}
-	t.Cleanup(func() { runWizard = orig })
-	return &calls
-}
-
 // generateTreeManifest returns a relpath -> sha256 map of every file under dir.
 func generateTreeManifest(t *testing.T, dir string) map[string]string {
 	t.Helper()
@@ -249,9 +228,9 @@ func TestGenerateSmbCLI_shareFlagParsing(t *testing.T) {
 
 // --- mode selection ----------------------------------------------------------
 
-func TestGenerate_noFlagsNoTTY_helpfulError(t *testing.T) {
-	stubGenerateTTY(t, false)
-
+// generate is CLI-only (issue 0066): with no input flags the required
+// flags are named loudly — no wizard clause, no terminal talk.
+func TestGenerate_noFlags_missingFlagsError(t *testing.T) {
 	t.Run("mounts", func(t *testing.T) {
 		cmd := &GenerateMountsCmd{Profile: newGenerateProfile(t)}
 		err := cmd.Run()
@@ -259,6 +238,8 @@ func TestGenerate_noFlagsNoTTY_helpfulError(t *testing.T) {
 		for _, flag := range []string{"--name", "--source", "--destination", "--type"} {
 			require.Contains(t, err.Error(), flag, "error must name required flag %s", flag)
 		}
+		require.NotContains(t, err.Error(), "wizard")
+		require.NotContains(t, err.Error(), "terminal")
 	})
 
 	t.Run("smb", func(t *testing.T) {
@@ -266,52 +247,8 @@ func TestGenerate_noFlagsNoTTY_helpfulError(t *testing.T) {
 		err := cmd.Run()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "--share")
-	})
-}
-
-func TestGenerate_tuiFlagNoTTY_errors(t *testing.T) {
-	stubGenerateTTY(t, false)
-	tui := true
-	cmd := &GenerateMountsCmd{Profile: newGenerateProfile(t), TUI: &tui}
-	err := cmd.Run()
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "--tui")
-	require.Contains(t, err.Error(), "terminal")
-}
-
-func TestGenerate_zeroFlagsTTY_invokesWizardSeam(t *testing.T) {
-	stubGenerateTTY(t, true)
-	calls := stubRunWizard(t)
-
-	t.Run("mounts", func(t *testing.T) {
-		cmd := &GenerateMountsCmd{Profile: newGenerateProfile(t)}
-		require.NoError(t, cmd.Run())
-		require.Len(t, *calls, 1)
-		require.Same(t, cmd, (*calls)[0].Mounts, "the wizard receives the parsed command")
-		require.Nil(t, (*calls)[0].Smb)
-	})
-
-	t.Run("smb", func(t *testing.T) {
-		*calls = nil
-		cmd := &GenerateSmbCmd{Profile: newGenerateProfile(t)}
-		require.NoError(t, cmd.Run())
-		require.Len(t, *calls, 1)
-		require.Same(t, cmd, (*calls)[0].Smb)
-		require.Nil(t, (*calls)[0].Mounts)
-	})
-
-	t.Run("tui flag forces wizard with input flags for pre-fill", func(t *testing.T) {
-		*calls = nil
-		tui := true
-		cmd := &GenerateMountsCmd{
-			Profile:     newGenerateProfile(t),
-			TUI:         &tui,
-			Name:        "syn01",
-			Destination: "/mnt/synology/syn01",
-		}
-		require.NoError(t, cmd.Run())
-		require.Len(t, *calls, 1, "--tui forces the wizard even when input flags are present")
-		require.Equal(t, "syn01", (*calls)[0].Mounts.Name, "input flags pass through for pre-fill")
+		require.NotContains(t, err.Error(), "wizard")
+		require.NotContains(t, err.Error(), "terminal")
 	})
 }
 

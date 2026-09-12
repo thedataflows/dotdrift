@@ -4,76 +4,17 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/thedataflows/dotdrift/internal/generate"
 )
 
-// Plumbing shared by the generate subcommands: the TTY probe, mode
-// selection, target/facts/user resolution, module-dir location, and the
-// --list-volumes and summary renderings.
-
-// isTTY reports whether stdin is a terminal: stdlib-only char-device
-// check (golang.org/x/term is not vendored). A deliberate small
-// duplication of internal/smb's isTTY; a package-level var so tests can
-// substitute it (same pattern as detectFacts in apply.go).
-var isTTY = func() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
-}
-
-// generateMode is how a generate subcommand proceeds after flag parsing.
-type generateMode int
-
-const (
-	// generateModeCLI assembles generate.Input from the input flags and
-	// calls generate.WriteModule directly.
-	generateModeCLI generateMode = iota
-	// generateModeWizard hands control to the interactive TUI wizard.
-	generateModeWizard
-)
-
-// generateModeQuery carries the mode-selection inputs shared by both
-// generate subcommands.
-type generateModeQuery struct {
-	// Sub is the subcommand name for error messages.
-	Sub string
-	// TUI is the --tui/--no-tui flag (nil: auto).
-	TUI *bool
-	// HasInput reports whether any subcommand input flag was given.
-	HasInput bool
-	// Required names the CLI-mode required flags for the no-TTY error.
-	Required string
-}
-
-// selectGenerateMode applies the strict mode-selection rules:
-//   - --tui forces the wizard (requires a terminal), even with input
-//     flags — they pass through the wizard seam for pre-fill;
-//   - --no-tui or any input flag selects CLI mode;
-//   - with no input flags a terminal selects the wizard, and no terminal
-//     is an actionable error naming the flags CLI mode needs.
-func selectGenerateMode(q generateModeQuery) (generateMode, error) {
-	switch {
-	case q.TUI != nil && *q.TUI:
-		if !isTTY() {
-			return generateModeCLI, fmt.Errorf("generate %s: --tui requires an interactive terminal", q.Sub)
-		}
-		return generateModeWizard, nil
-	case q.TUI != nil:
-		return generateModeCLI, nil
-	case q.HasInput:
-		return generateModeCLI, nil
-	case isTTY():
-		return generateModeWizard, nil
-	default:
-		return generateModeCLI, fmt.Errorf("generate %s: no input flags and no terminal for the interactive wizard; CLI mode requires: %s", q.Sub, q.Required)
-	}
-}
+// Plumbing shared by the generate subcommands: target/facts/user
+// resolution, module-dir location, and the --list-volumes and summary
+// renderings. Mode selection lived here until generate went CLI-only
+// (issue 0066); the required-flag validation in each subcommand is the
+// whole no-input story now.
 
 // generateSelection resolves the target selection, filling hostname/
 // username from detected facts when the layer needs them and the flag

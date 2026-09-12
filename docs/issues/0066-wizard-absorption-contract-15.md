@@ -9,14 +9,14 @@ timestamp: 2026-09-11T00:00:00Z
 # ISSUE 0066: Wizard absorption &amp; contract #15 amendment
 
 - **Type**: task
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [wayfinder:task]
 - **Assignee**: cri (main session)
 - **Related**: [map 0057](0057-dotdrift-tui-design-map.md), [contract invariant 15](../product/contract.md), [M13 Generate](../milestones/m13-generate.md)
-- **Related code**: [`cmd/generate.go`](../../cmd/generate.go), [`internal/tui/`](../../internal/tui/)
+- **Related code**: [`cmd/generate.go`](../../cmd/generate.go), [`internal/generate/`](../../internal/generate/), [`internal/tui/theme.go`](../../internal/tui/theme.go)
 - **Blocked by**: [0065 Full-schema editor suite design](0065-full-schema-editor-suite-design.md)
-- **Closing commits**: none
+- **Closing commits**: 5e4f71f (machines to internal/generate), cb94c9a (CLI-only surface), 45d86dd (huh front-end deleted), 8060659 (contract 15 + ADR-0007), 15b31ea (docs + log)
 
 ## Question
 

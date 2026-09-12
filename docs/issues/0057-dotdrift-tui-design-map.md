@@ -9,13 +9,13 @@ timestamp: 2026-09-11T00:00:00Z
 # ISSUE 0057: Dotdrift TUI design map (wayfinder)
 
 - **Type**: task
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: high
 - **Labels**: [wayfinder:map]
 - **Assignee**: none
 - **Related**: [contract invariant 15](../product/contract.md), [ADR-0003](../adr/0003-tui-shared-palette.md), [ADR-0004](../adr/0004-delegate-convergence-to-mise-bootstrap.md), [M13 Generate](../milestones/m13-generate.md)
 - **Related code**: [`internal/tui/`](../../internal/tui/), [`cmd/`](../../cmd/), [`internal/profile/`](../../internal/profile/), [`internal/resolve/`](../../internal/resolve/)
-- **Closing commits**: none
+- **Closing commits**: 9332a82, 9d4f117, 749f042, 6e1ba51 (the design set); 411e42f (0067 resolved — destination met 2026-09-12)
 
 ## Destination
 
@@ -77,6 +77,21 @@ ticket.
 
 ## Decisions so far
 
+- [Assemble the TUI design set](0067-assemble-tui-design-set.md): the
+  set is assembled from the resolutions and **approved as-is**
+  (2026-09-12) — `docs/product/service-api.md` (the normative Go
+  contract), `docs/product/tui.md` (the product spec), ADR-0008 (the
+  doorway) alongside ADR-0007, the M14 proposal with five TDD task
+  docs (reads → shell → editors → writes → apply), four glossary
+  terms — and with it the map's destination is met.
+- [Wizard absorption & contract #15 amendment](0066-wizard-absorption-contract-15.md):
+  generate is CLI-only — the huh front-end and the `--tui`/`--no-tui`
+  flags are deleted (kong's unknown-flag error is the removal UX), the
+  wizard state machines and shared builders move to
+  `internal/generate` with `tui → generate` the only arrow, contract
+  15 is repointed at the prefill seam ("the input an editor prefills
+  equals the input `generate` assembles"), one ADR (0007), M13 history
+  untouched. Shipped, not just decided (2026-09-12).
 - [Full-schema editor suite design](0065-full-schema-editor-suite-design.md):
   one schema-driven frame + section adapters (custom models only for
   dotfiles/when/hooks/systemd.units); save = onboard's textual
@@ -159,9 +174,10 @@ ticket.
   [0071](0071-surface-tty-handover-for-real-steps.md)); all three are
   done (2026-09-12) — the session is the only apply orchestration and
   real steps hand the terminal over. The TUI itself still waits for M14;
-  the design tail is [0066](0066-wizard-absorption-contract-15.md) →
-  [0067](0067-assemble-tui-design-set.md) —
-  [0065](0065-full-schema-editor-suite-design.md) closed 2026-09-12.
+  the design tail is closed — [0065](0065-full-schema-editor-suite-design.md),
+  [0066](0066-wizard-absorption-contract-15.md),
+  [0067](0067-assemble-tui-design-set.md) all done (2026-09-12) — and
+  with 0067's approval the destination is met and the map is complete.
 - Building non-Go UIs; the contract exists so others *can*, not so this
   effort does.
 - Remote/multi-host management and web/GUI frontends.

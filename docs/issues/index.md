@@ -44,7 +44,7 @@ use, plus emergent features and chores. Planned work lives in
 | [0026](0026-restore-command.md) | restore command: copy backed-up copy-mode targets back to their live paths | done | medium |
 | [0027](0027-readme-backup-restore-examples.md) | README: backup/restore usage examples | done | low |
 | [0028](0028-apply-mise-prompts-unanswerable-stdin.md) | apply: mise confirmation prompts can never be answered (stdin is the null device) | done | high |
-| [0057](0057-dotdrift-tui-design-map.md) | Dotdrift TUI design map (wayfinder) | in-progress | high |
+| [0057](0057-dotdrift-tui-design-map.md) | Dotdrift TUI design map (wayfinder) | done | high |
 | [0058](0058-bubbles-layout-inventory.md) | Bubbles & layout inventory | done | medium |
 | [0059](0059-apply-streaming-tty-precedents.md) | Apply streaming & TTY precedents | done | medium |
 | [0060](0060-idl-choice-go-derivation.md) | IDL choice & Go derivation | done | medium |

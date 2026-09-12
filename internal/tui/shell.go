@@ -16,6 +16,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/service"
+	"github.com/thedataflows/dotdrift/internal/tui/editor"
 )
 
 // The two-pane shell (T-tui-shell, prototype approved as issue 0063):
@@ -38,12 +39,15 @@ type Reads interface {
 }
 
 // Options carries the shell's construction inputs: where the profile
-// lives and the probe seam the status view needs (the caller's sudo /
-// backend seams, same shape as the CLI adapter's).
+// lives, the probe seam the status view needs (the caller's sudo /
+// backend seams, same shape as the CLI adapter's), and the config-area
+// factory the editor suite opens drafts through — the facts arrive with
+// the first read, so the factory is called lazily.
 type Options struct {
 	ProfilePath string
 	StatePath   string
 	ProbesFor   func(*facts.Facts) drift.Probes
+	ConfigFor   func(*facts.Facts) service.ConfigEditor
 }
 
 type focus int
@@ -125,6 +129,8 @@ type Shell struct {
 	paneH       int
 	walking     bool // cursor reselection in progress (suppress view sync)
 	modulePlans map[string]*service.PlanRead
+	frames      map[string]*editor.Frame // open editor frames, keyed by module dir
+	cfg         editor.Config            // built lazily via opts.ConfigFor
 }
 
 // New builds the shell; Init kicks off the modules read.
@@ -134,6 +140,7 @@ func New(area Reads, opts Options) *Shell {
 		opts:        opts,
 		isDark:      true, // corrected by BackgroundColorMsg once reported
 		modulePlans: map[string]*service.PlanRead{},
+		frames:      map[string]*editor.Frame{},
 	}
 	m.th = newTheme(m.isDark)
 	m.help = help.New()
@@ -239,6 +246,26 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// An editor view on top owns the main pane's keys: the frame's
+	// vocabulary (sections, fields, save, dirty-confirm) runs first; the
+	// shell's globals (tab, ?, q, ctrl+c) stay reserved above it.
+	if top := m.stack.top(); top.id.kind == viewEditor && m.focus == focusMain {
+		switch s {
+		case "tab", "shift+tab", "?", "q", "ctrl+c":
+			// handled by the shell below
+		default:
+			frame := m.editorFrameFor(top.id.key)
+			if frame != nil {
+				frame.HandleKey(s)
+				m.syncEditorView(top.id.key)
+				if frame.PopRequested() {
+					return m.escBack()
+				}
+				return m, nil
+			}
+		}
+	}
+
 	switch s {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -262,6 +289,8 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.escBack()
 	case "r":
 		return m.toggleRaw()
+	case "e":
+		return m.openEditor()
 	}
 
 	if m.focus == focusMain {
@@ -339,6 +368,74 @@ func (m *Shell) toggleRaw() (tea.Model, tea.Cmd) {
 	}
 	m.showResolved(top)
 	return m, nil
+}
+
+// openEditor opens the editor frame for the selected origin's module.toml
+// (0065-D2: editors open only from the raw overlay-stack node — the tree
+// position IS the layer choice, and the editor chrome names the file).
+func (m *Shell) openEditor() (tea.Model, tea.Cmd) {
+	top := m.stack.top()
+	if top.id.kind != viewOrigin && top.item.kind != kindOrigin {
+		return m, nil
+	}
+	dir := top.item.dir
+	if dir == "" {
+		return m, nil
+	}
+	frame := m.editorFrameFor(dir)
+	if frame == nil {
+		return m, nil
+	}
+	v := view{
+		id:      viewID{kind: viewEditor, key: dir},
+		title:   "EDIT " + top.item.moduleID,
+		item:    top.item,
+		dirty:   frame.Dirty(),
+		content: frame.View(),
+	}
+	m.stack.open(v)
+	m.syncViewport()
+	return m, nil
+}
+
+// editorFrameFor returns the open frame for a module dir, opening one
+// lazily through the config-area factory (the facts have landed by the
+// time an editor can be opened — the first read populated them).
+func (m *Shell) editorFrameFor(dir string) *editor.Frame {
+	if f, ok := m.frames[dir]; ok {
+		return f
+	}
+	if m.cfg == nil && m.opts.ConfigFor != nil {
+		var f *facts.Facts
+		if m.read != nil {
+			f = m.read.Facts
+		}
+		m.cfg = m.opts.ConfigFor(f)
+	}
+	if m.cfg == nil {
+		return nil
+	}
+	frame := editor.NewFrame(m.cfg, m.th, dir)
+	m.frames[dir] = frame
+	return frame
+}
+
+// syncEditorView re-renders the open editor view (content + dirty mark).
+func (m *Shell) syncEditorView(dir string) {
+	frame := m.frames[dir]
+	if frame == nil {
+		return
+	}
+	for i := len(m.stack.stack) - 1; i >= 0; i-- {
+		if m.stack.stack[i].id.kind == viewEditor && m.stack.stack[i].id.key == dir {
+			m.stack.stack[i].dirty = frame.Dirty()
+			m.stack.stack[i].content = frame.View()
+			if i == len(m.stack.stack)-1 {
+				m.syncViewport()
+			}
+			return
+		}
+	}
 }
 
 // showResolved restores a module view's resolved rendering from the
@@ -517,7 +614,7 @@ func (m *Shell) viewFor(it treeItem) (view, tea.Cmd) {
 		return v, m.loadModulePlan(v.id)
 	case kindOrigin:
 		v := view{id: viewID{kind: viewOrigin, key: it.dir}, title: "RAW " + it.origin, item: it}
-		v.content = renderOriginView(m, it)
+		v.content = renderOriginView(m, it) + "\n" + m.th.meta.Render("e edits this layer's module.toml")
 		return v, nil
 	case kindAccount:
 		v := view{id: viewID{kind: viewAccount, key: it.acctKind + "/" + it.acctName}, title: accountTitle(it), item: it}
@@ -652,6 +749,15 @@ func (m *Shell) ShortHelp() []key.Binding {
 	raw := key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "raw/resolved"))
 	if m.stack.top().id.kind != viewModule {
 		raw = key.NewBinding(key.WithDisabled())
+	}
+	if m.stack.top().id.kind == viewOrigin {
+		edit := key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit layer"))
+		return append([]key.Binding{edit, raw, keyBack, keyScroll}, base...)
+	}
+	if m.stack.top().id.kind == viewEditor {
+		save := key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "save"))
+		sections := key.NewBinding(key.WithKeys("[", "]"), key.WithHelp("[ ]", "section"))
+		return append([]key.Binding{save, sections, keyBack}, base...)
 	}
 	return append([]key.Binding{raw, keyBack, keyScroll}, base...)
 }

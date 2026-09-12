@@ -17,6 +17,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
+	"github.com/thedataflows/dotdrift/internal/tomlsplice"
 )
 
 // Options configures the onboard operation.
@@ -51,25 +52,15 @@ type Onboard struct {
 // module.toml — it is cosmetic only; resolve reads back just the bare
 // names (the TOML parser ignores comments), so descriptions do not enter
 // the data model.
-type PackageEntry struct {
-	Name        string
-	Description string
-}
+type PackageEntry = profile.PackageEntry
 
-// dotfileEntry is one managed path rendered as an inline TOML table. It has
-// no TOML tags: mergeExisting decodes an existing module.toml into
-// profile.Dotfile (which carries the tags) and converts here, so BurntSushi
-// never decodes into this struct directly. Carrying the edit fields (in
-// addition to Source/Mode) means re-onboarding a module whose module.toml
-// has hand-written edit entries round-trips them instead of dropping them.
-type dotfileEntry struct {
-	Source   string
-	Mode     string
-	Line     string
-	Block    string
-	Comment  string
-	Template string
-}
+// dotfileEntry is one managed path rendered as an inline TOML table. It is
+// profile.Dotfile outright: mergeExisting decodes an existing module.toml
+// straight into the data model, and the encoder is profile's. Carrying the
+// edit fields (in addition to Source/Mode) means re-onboarding a module
+// whose module.toml has hand-written edit entries round-trips them instead
+// of dropping them.
+type dotfileEntry = profile.Dotfile
 
 // moduleConfig is the shape written to module.toml. It is rendered by
 // hand (encodeModuleTOML) rather than a TOML encoder so dotfiles become
@@ -510,7 +501,8 @@ func isDirPath(path string) bool {
 
 // markSourceTree marks src, or — when src is a directory — every file in
 // its subtree, as referenced.
-func markSourceTree(src string, referenced map[string]bool) {	info, err := os.Stat(src)
+func markSourceTree(src string, referenced map[string]bool) {
+	info, err := os.Stat(src)
 	if err != nil || !info.IsDir() {
 		referenced[src] = true // missing/plain file: the exact path is the reference
 		return
@@ -587,10 +579,7 @@ func readExistingDotfiles(moduleDir string) map[string]dotfileEntry {
 	}
 	out := make(map[string]dotfileEntry, len(pc.Dotfiles))
 	for k, v := range pc.Dotfiles {
-		out[k] = dotfileEntry{
-			Source: v.Source, Mode: v.Mode,
-			Line: v.Line, Block: v.Block, Comment: v.Comment, Template: v.Template,
-		}
+		out[k] = v
 	}
 	return out
 }
@@ -737,8 +726,9 @@ func mergeModuleTOML(moduleDir string, cfg moduleConfig) error {
 }
 
 // mergeExisting folds cfg into an existing module.toml's text. It decodes the
-// existing managed values (for union), then reassembles the file preserving
-// non-managed sections verbatim while regenerating managed ones inline.
+// existing managed values (for union), then splices the regenerated managed
+// families back into the file through tomlsplice — untouched sections keep
+// their exact bytes (0065-D1; the splicer generalized out of onboard).
 func mergeExisting(path, existing string, cfg moduleConfig) (string, error) {
 	var pc profile.ModuleConfig
 	if err := profile.DecodeModuleTOML(path, []byte(existing), &pc); err != nil {
@@ -751,70 +741,48 @@ func mergeExisting(path, existing string, cfg moduleConfig) (string, error) {
 	// silently dropped to zero values.
 	dotfiles := make(map[string]dotfileEntry, len(pc.Dotfiles)+len(cfg.Dotfiles))
 	for k, v := range pc.Dotfiles {
-		dotfiles[k] = dotfileEntry{
-			Source: v.Source, Mode: v.Mode,
-			Line: v.Line, Block: v.Block, Comment: v.Comment, Template: v.Template,
-		}
+		dotfiles[k] = v
 	}
 	for k, v := range cfg.Dotfiles {
 		dotfiles[k] = v
 	}
 
-	// Packages/tools: regenerate only when this run declares new ones. A nil
-	// slice/map signals "leave the existing section untouched".
-	var packages []PackageEntry
+	repl := map[string]string{
+		profile.FamilyDotfiles: profile.EncodeDotfilesSection(dotfiles),
+	}
+	// Packages/tools: regenerate only when this run declares new ones.
 	if len(cfg.Packages.Present) > 0 {
-		packages = mergePackages(pc.Packages.Present, cfg.Packages.Present)
+		repl[profile.FamilyPackages] = profile.EncodePackagesSection(
+			mergePackages(pc.Packages.Present, cfg.Packages.Present), pc.Packages.Absent)
 	}
-	var tools map[string]string
 	if len(cfg.Tools) > 0 {
-		tools = mergeTools(pc.Tools, cfg.Tools)
+		repl[profile.FamilyTools] = profile.EncodeToolsSection(mergeTools(pc.Tools, cfg.Tools))
 	}
-	return reassembleModuleTOML(existing, packages, tools, dotfiles), nil
+	return tomlsplice.Splice(existing, repl), nil
 }
 
-// reassembleModuleTOML rebuilds the file: non-managed sections (and the
-// preamble) are emitted verbatim in their original order; managed sections
-// are dropped from their old positions and appended regenerated. A nil
-// packages/tools argument means preserve that section verbatim.
-func reassembleModuleTOML(existing string, packages []PackageEntry, tools map[string]string, dotfiles map[string]dotfileEntry) string {
-	regenPackages := packages != nil
-	regenTools := tools != nil
-
+// encodeModuleTOML renders a fresh module config (no existing file) as the
+// managed sections, via profile's per-section encoders. Package order is
+// preserved.
+func encodeModuleTOML(cfg moduleConfig) string {
 	var blocks []string
-	addBlock := func(s string) {
-		if t := strings.TrimSpace(s); t != "" {
-			blocks = append(blocks, t)
-		}
+	if len(cfg.Packages.Present) > 0 {
+		blocks = append(blocks, profile.EncodePackagesSection(cfg.Packages.Present, nil))
 	}
-	for _, sec := range splitTOMLSections(existing) {
-		h := strings.TrimSpace(sec.header)
-		switch {
-		case h == "":
-			addBlock(strings.Join(sec.lines, "\n"))
-		case h == "[packages]" && regenPackages, h == "[tools]" && regenTools:
-			// dropped; regenerated below
-		case strings.HasPrefix(h, "[dotfiles"):
-			// dropped; regenerated below
-		default:
-			addBlock(strings.Join(append([]string{sec.header}, sec.lines...), "\n"))
-		}
+	if len(cfg.Tools) > 0 {
+		blocks = append(blocks, profile.EncodeToolsSection(cfg.Tools))
 	}
-	if regenPackages && len(packages) > 0 {
-		blocks = append(blocks, encodePackagesSection(packages))
+	if len(cfg.Dotfiles) > 0 {
+		blocks = append(blocks, profile.EncodeDotfilesSection(cfg.Dotfiles))
 	}
-	if regenTools && len(tools) > 0 {
-		blocks = append(blocks, encodeToolsSection(tools))
-	}
-	if len(dotfiles) > 0 {
-		blocks = append(blocks, encodeDotfilesSection(dotfiles))
-	}
-	if len(blocks) == 0 {
-		return ""
-	}
-	return strings.Join(blocks, "\n\n") + "\n"
+	// Each block already ends with a newline; a single extra newline
+	// separates them (the established blank-line style).
+	return strings.Join(blocks, "\n")
 }
 
+// mergePackages unions this run's package entries with the existing
+// declarations: existing names keep their position, this run's entry
+// (with its description) overrides.
 func mergePackages(existing []string, new []PackageEntry) []PackageEntry {
 	idx := make(map[string]int)
 	var out []PackageEntry
@@ -845,172 +813,6 @@ func mergeTools(existing, new map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
-}
-
-type tomlSection struct {
-	header string
-	lines  []string
-}
-
-// splitTOMLSections splits text into the preamble (header "") followed by
-// each top-level "[...]" table block (header included). Inline values
-// (key = ..., "x" = { ... }) and array brackets are body lines, never
-// headers. Sub-tables ([mounts.foo], [dotfiles."x"]) are separate sections.
-func splitTOMLSections(text string) []tomlSection {
-	var sections []tomlSection
-	cur := tomlSection{}
-	for _, line := range strings.Split(text, "\n") {
-		if isTableHeader(line) {
-			sections = append(sections, cur)
-			cur = tomlSection{header: line}
-		} else {
-			cur.lines = append(cur.lines, line)
-		}
-	}
-	sections = append(sections, cur)
-	return sections
-}
-
-func isTableHeader(line string) bool {
-	s := strings.TrimSpace(line)
-	return strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") && !strings.Contains(s, "=")
-}
-
-// encodeModuleTOML renders a fresh module config (no existing file) as the
-// managed sections in inline style. Map keys are sorted for deterministic
-// output; package order is preserved.
-func encodeModuleTOML(cfg moduleConfig) string {
-	var blocks []string
-	if len(cfg.Packages.Present) > 0 {
-		blocks = append(blocks, encodePackagesSection(cfg.Packages.Present))
-	}
-	if len(cfg.Tools) > 0 {
-		blocks = append(blocks, encodeToolsSection(cfg.Tools))
-	}
-	if len(cfg.Dotfiles) > 0 {
-		blocks = append(blocks, encodeDotfilesSection(cfg.Dotfiles))
-	}
-	if len(blocks) == 0 {
-		return ""
-	}
-	return strings.Join(blocks, "\n\n") + "\n"
-}
-
-func encodePackagesSection(present []PackageEntry) string {
-	var b strings.Builder
-	b.WriteString("[packages]\npresent = [\n")
-	for _, p := range present {
-		if p.Description != "" {
-			b.WriteString("  " + tomlBasicString(p.Name) + ", # " + p.Description + "\n")
-		} else {
-			b.WriteString("  " + tomlBasicString(p.Name) + ",\n")
-		}
-	}
-	b.WriteString("]")
-	return b.String()
-}
-
-func encodeToolsSection(tools map[string]string) string {
-	keys := make([]string, 0, len(tools))
-	for k := range tools {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var b strings.Builder
-	b.WriteString("[tools]\n")
-	for _, k := range keys {
-		b.WriteString(tomlKey(k) + " = " + tomlBasicString(tools[k]) + "\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func encodeDotfilesSection(dotfiles map[string]dotfileEntry) string {
-	keys := make([]string, 0, len(dotfiles))
-	for k := range dotfiles {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var b strings.Builder
-	b.WriteString("[dotfiles]\n")
-	for _, k := range keys {
-		e := dotfiles[k]
-		// Build the inline table from whichever fields are set. Whole-file
-		// entries (source+mode) render exactly as before; edit entries
-		// (line/block[/comment]/source+template) round-trip their fields.
-		var parts []string
-		if e.Source != "" {
-			parts = append(parts, "source = "+tomlBasicString(e.Source))
-		}
-		if e.Mode != "" {
-			parts = append(parts, "mode = "+tomlBasicString(e.Mode))
-		}
-		if e.Line != "" {
-			parts = append(parts, "line = "+tomlBasicString(e.Line))
-		}
-		if e.Block != "" {
-			parts = append(parts, "block = "+tomlBasicString(e.Block))
-		}
-		if e.Comment != "" {
-			parts = append(parts, "comment = "+tomlBasicString(e.Comment))
-		}
-		if e.Template != "" {
-			parts = append(parts, "template = "+tomlBasicString(e.Template))
-		}
-		b.WriteString(tomlBasicString(k) + " = { " + strings.Join(parts, ", ") + " }\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-// tomlBasicString renders s as a TOML basic string with the minimal
-// escaping the TOML spec requires (control chars, quote, backslash).
-func tomlBasicString(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '"':
-			b.WriteString(`\"`)
-		case '\\':
-			b.WriteString(`\\`)
-		case '\n':
-			b.WriteString(`\n`)
-		case '\t':
-			b.WriteString(`\t`)
-		case '\r':
-			b.WriteString(`\r`)
-		default:
-			if r < 0x20 {
-				fmt.Fprintf(&b, `\u%04x`, r)
-			} else {
-				b.WriteRune(r)
-			}
-		}
-	}
-	b.WriteByte('"')
-	return b.String()
-}
-
-// tomlKey renders a key bare when it matches the simple-key charset
-// ([A-Za-z0-9_-]+), quoted otherwise.
-func tomlKey(k string) string {
-	if isBareKey(k) {
-		return k
-	}
-	return tomlBasicString(k)
-}
-
-func isBareKey(k string) bool {
-	if k == "" {
-		return false
-	}
-	for _, r := range k {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '_' || r == '-':
-		default:
-			return false
-		}
-	}
-	return true
 }
 
 // writeMiseConfig generates the onboard mise config under the profile's XDG

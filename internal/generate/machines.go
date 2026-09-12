@@ -54,8 +54,10 @@ type MountChoice struct {
 	State string
 }
 
-// spec converts the choice to a mount spec, defaulting the state.
-func (c MountChoice) spec() profile.MountSpec {
+// Spec converts the choice to a mount spec, defaulting the state. Exported
+// for the TUI editors: the wizard machines and the adapters share one
+// choice-to-spec conversion (0065-D6).
+func (c MountChoice) Spec() profile.MountSpec {
 	return profile.MountSpec{
 		Source:      c.Source,
 		Destination: c.Destination,
@@ -75,9 +77,10 @@ func DefaultState(s string) string {
 	return s
 }
 
-// validate checks the choice early (an interactive producer wants to
-// fail before the review screen, not inside WriteModule).
-func (c MountChoice) validate(reg *Registry) error {
+// Validate checks the choice early (an interactive producer wants to
+// fail before the review screen, not inside WriteModule). Exported for
+// the TUI editors, which reuse the same gate (0065-D9).
+func (c MountChoice) Validate(reg *Registry) error {
 	if c.Name == "" {
 		return errors.New("mount: name is required")
 	}
@@ -188,10 +191,10 @@ func (w *MountsWizard) Mounts() map[string]profile.MountSpec { return w.mounts }
 // with the same name replaces the earlier one (matching the
 // whole-entry-by-name merge of [mounts.<name>]).
 func (w *MountsWizard) AddMount(c MountChoice) error {
-	if err := c.validate(w.reg); err != nil {
+	if err := c.Validate(w.reg); err != nil {
 		return err
 	}
-	w.mounts[c.Name] = c.spec()
+	w.mounts[c.Name] = c.Spec()
 	return nil
 }
 
@@ -225,8 +228,9 @@ type ShareChoice struct {
 	Public   bool
 }
 
-// validate checks the share choice early.
-func (c ShareChoice) validate() error {
+// Validate checks the share choice early. Exported for the TUI editors,
+// which reuse the same gate (0065-D9).
+func (c ShareChoice) Validate() error {
 	if c.Name == "" {
 		return errors.New("share: name is required")
 	}
@@ -268,7 +272,7 @@ func (w *SmbWizard) Shares() map[string]profile.ShareSpec { return w.shares }
 
 // AddShare validates and accumulates one share choice.
 func (w *SmbWizard) AddShare(c ShareChoice) error {
-	if err := c.validate(); err != nil {
+	if err := c.Validate(); err != nil {
 		return err
 	}
 	w.shares[c.Name] = profile.ShareSpec{

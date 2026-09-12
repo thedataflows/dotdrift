@@ -315,6 +315,13 @@ func LoadModuleConfig(dir string) (*ModuleConfig, error) {
 	return &cfg, nil
 }
 
+// ValidateWhen applies the load-time when-grammar validation to a config
+// value that did not come through LoadModuleConfig — the editor's live
+// validation and the save pipeline reuse the exact grammar check (0065-D9).
+func ValidateWhen(id string, w When) error {
+	return validateWhen(id, w)
+}
+
 // validateWhen rejects malformed when expressions at load time, naming
 // the module — a typo must fail loudly, never silently skip the module.
 // Recursive over the expression tree: a bad kernel constraint is an

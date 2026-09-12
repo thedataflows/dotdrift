@@ -104,3 +104,18 @@ func (t theme) treeStyles() tree.Styles {
 	s.EnumeratorStyle = t.badge
 	return s
 }
+
+// The editor.Palette implementation: the editor chrome styles through the
+// same registry-backed theme (one color source, no second palette).
+
+// Label renders a section label or highlighted chrome text.
+func (t theme) Label(s string) string { return t.sectionLabel.Render(s) }
+
+// Meta renders dim, parenthetical chrome text.
+func (t theme) Meta(s string) string { return t.meta.Render(s) }
+
+// Error renders an error line.
+func (t theme) Error(s string) string { return t.errorMark.Render(s) }
+
+// Mark renders dirty/selection markers.
+func (t theme) Mark(s string) string { return t.dirtyMark.Render(s) }

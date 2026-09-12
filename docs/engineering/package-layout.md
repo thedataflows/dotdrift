@@ -30,13 +30,22 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   ├── mise/                 # Bootstrap, tools, dotfiles via mise
 │   ├── service/              # Service layer: per-area ops (apply session:
 │   │                         # run handle, event vocabulary, 0064/0069;
-│   │                         # reads areas + canonical renderers, M14).
-│   │                         # Writes areas migrate here slice by slice.
-│   │                         # Versioning is the module's; breaking changes
-│   │                         # copy forward to internal/service/v2 (0061-D1)
+│   │                         # reads areas + canonical renderers; the
+│   │                         # config area: module.toml read/save pipeline
+│   │                         # + module ops, 0065). Writes areas migrate
+│   │                         # here slice by slice. Versioning is the
+│   │                         # module's; breaking changes copy forward to
+│   │                         # internal/service/v2 (0061-D1)
+│   ├── tomlsplice/           # module.toml section splicer: split/splice
+│   │                         # text by table family, multi-line-string
+│   │                         # aware; untouched bytes pass through (0065)
 │   ├── tui/                  # The two-pane shell (M14, charm v2): ADR-0003
 │   │                         # style registry + shell/tree/views state
 │   │                         # machines over the service reads areas
+│   ├── tui/editor/           # The editor suite (0065): one frame
+│   │                         # (file-scoped drafts, validation tiers,
+│   │                         # dirty-confirm) + section adapters + the
+│   │                         # dotfiles/when/hooks/systemd custom models
 │   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts
 │   └── onboard/              # Module factory + copy

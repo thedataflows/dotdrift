@@ -104,10 +104,16 @@ First-class structured editors for every `module.toml` section — one
 schema-driven frame with section adapters, not fourteen bespoke tools
 (0065):
 
-- **Entry**: editors open only from the raw overlay-stack node — the tree
+- **Entry**: `e` on a raw origin view opens the editor — the tree
   position *is* the layer picker, and the editor chrome names the exact
   file. Opening "the winning layer" or choosing a layer at save are both
   rejected designs.
+- **Keys**: the editor vocabulary rides under the shell's reserved
+  globals — `[`/`]` switch section, `enter` edits the focused field,
+  `n`/`x` add/delete a row, `space` toggles, `v` switches a dotfiles
+  entry's variant (or a hook row's spelling), `<`/`>` reorder rows, `s`
+  saves, `r` reloads after a disk conflict, `esc` steps back and guards
+  through the dirty-confirm (save / discard / cancel).
 - **Draft**: the unit of editing is one (module, layer) file — raw text +
   baseline disk hash + typed config copy. Multiple dirty sections of one
   file save in one splice. Dirty means deep-compare against the baseline;

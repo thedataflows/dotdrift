@@ -7,3 +7,4 @@ modules/shell/module.toml
   hooks:
     pre:  echo base-pre
     post: echo base-post
+e edits this layer's module.toml

@@ -26,6 +26,7 @@ type viewKind int
 const (
 	viewModule viewKind = iota
 	viewOrigin
+	viewEditor
 	viewAccount
 	viewStatus
 	viewPlan

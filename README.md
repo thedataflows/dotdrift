@@ -280,7 +280,7 @@ Bare `dotdrift restore` is an error — at least one target is required. Full ru
 
 Mounts and shares are declared as `[mounts.<name>]` and `[smb]` / `[smb.shares.<name>]` tables in the module's `module.toml`, merged whole-entry by name across layers. The rendered files are derived artifacts.
 
-- **CLI-only** — `generate` assembles from flags, always; a missing required flag is a loud error naming every missing one. The interactive home is `dotdrift tui` (editor suite, in design — issue 0065), which prefills from the same builders (the old `--tui` wizard is absorbed; [ADR-0007](docs/adr/0007-generate-cli-only.md)).
+- **CLI-only** — `generate` assembles from flags, always; a missing required flag is a loud error naming every missing one. The interactive home is `dotdrift tui` (spec: [docs/product/tui.md](docs/product/tui.md), planned as M14), whose editors prefill from the same builders — the same logical inputs produce a byte-identical module tree either way (contract 15; the old `--tui` wizard is absorbed, [ADR-0007](docs/adr/0007-generate-cli-only.md)).
 - **Layer selection** — `--layer base|host|user` picks where the module lands. A host-layer-only module needs no base stub.
 - **Batching** — one CLI run writes one mount, since the `[mounts]` section is replaced wholesale. Use one `--module` per mount for several mounts. `--share` is repeatable.
 - **Activation** — the regular apply pipeline places the files via mise and activates them in the conditional `mounts` / `smb` steps (unit enablement, timers, samba group/users/service).

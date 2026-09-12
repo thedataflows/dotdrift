@@ -87,3 +87,35 @@ instead of being captured and discarded, and each command line is echoed
 means quiet — output is captured and surfaced only on failure. Probes
 (version checks, installed-package queries) are never streamed or echoed:
 they exist to be parsed, not seen.
+
+### Service layer
+
+The product's own front door: the one place where everything dotdrift can
+*do* — reading state, writing profiles, running applies — is expressed
+once, so every front end (the CLI, the TUI) asks the same layer instead of
+orchestrating for itself. Front ends translate input and render output;
+the layer owns the doing.
+
+### Apply session
+
+One running apply, as a handle: it starts (resolving, claiming the
+single-flight lock, classifying which steps need the terminal), streams
+what happens as it happens, can be cancelled mid-step, and ends with an
+outcome plus a resume point naming the last completed step. Two applies
+cannot run at once; the session is also what carries the terminal from the
+front end to a step that truly needs it.
+
+### Shell
+
+The TUI's frame: a tree of the profile on the left, exactly one active
+view on the right, and the keys and menus that move between them. The
+shell is where you are; views, editors, and apply are things the shell
+opens — one at a time.
+
+### Draft
+
+Unsaved edits to one layer's `module.toml` file, kept as a single unit:
+the file's current text, a snapshot of what was on disk, and the parsed
+changes on top. Several sections edited in one draft save together or not
+at all; a change made underneath the draft (by another run) blocks the
+save until the draft is reloaded.

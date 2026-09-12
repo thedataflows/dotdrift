@@ -1,0 +1,5 @@
+id = "vault"
+app = "vault"
+
+[packages]
+present = ["keepassxc"]

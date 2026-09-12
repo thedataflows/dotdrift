@@ -321,6 +321,37 @@ func statusFixture(t *testing.T) string {
 	return dir
 }
 
+// TestReads_moduleConfigAt covers the raw-declaration read the TUI's raw
+// view builds on: one layer's module.toml through the doorway, with the
+// schema boundary translating broken files (T-tui-shell).
+func TestReads_moduleConfigAt(t *testing.T) {
+	dir := statusFixture(t)
+	area := NewReadsArea(ReadsDeps{}.WithDefaults())
+	modDir := filepath.Join(dir, "modules", "demo")
+
+	cfg, err := area.ModuleConfigAt(modDir)
+	require.NoError(t, err)
+	require.NotNil(t, cfg, "an existing module.toml loads")
+	require.Equal(t, "demo", cfg.ID)
+
+	// A directory without module.toml is "no declaration here" — the
+	// profile package's load contract, not an error.
+	empty, err := area.ModuleConfigAt(filepath.Join(dir, "modules", "hollow"))
+	require.NoError(t, err)
+	require.Nil(t, empty)
+
+	// A broken module.toml surfaces as *SchemaError so front ends read
+	// Path/Line instead of parsing text.
+	broken := filepath.Join(dir, "modules", "broken")
+	require.NoError(t, os.MkdirAll(broken, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(broken, "module.toml"), []byte("id = ["), 0o644))
+	_, err = area.ModuleConfigAt(broken)
+	require.Error(t, err)
+	var schemaErr *SchemaError
+	require.ErrorAs(t, err, &schemaErr, "broken declarations translate at the boundary")
+	require.Equal(t, filepath.Join(broken, "module.toml"), schemaErr.Path)
+}
+
 // diffFixture writes a profile whose one copy dotfile differs from its live
 // target, and returns the root plus the resolved plan.
 func diffFixture(t *testing.T) (string, *resolve.Plan) {

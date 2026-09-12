@@ -34,6 +34,9 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   │                         # Writes areas migrate here slice by slice.
 │   │                         # Versioning is the module's; breaking changes
 │   │                         # copy forward to internal/service/v2 (0061-D1)
+│   ├── tui/                  # The two-pane shell (M14, charm v2): ADR-0003
+│   │                         # style registry + shell/tree/views state
+│   │                         # machines over the service reads areas
 │   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts
 │   └── onboard/              # Module factory + copy

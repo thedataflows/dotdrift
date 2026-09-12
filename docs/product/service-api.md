@@ -52,7 +52,7 @@ func New() *Service
 | Area | Covers | Status |
 |---|---|---|
 | Session (apply) | apply runs: start, stream, handover, cancel, resume | **shipped** (issues 0069/0070/0071) |
-| Reads | modules, plan, status, drift/diff, detect (`ReadsArea`: `Modules`, `Plan`, `Status`, `Diff`, `Detect`; canonical renderers + `ModuleLayers`) | **shipped** (T-tui-reads; each slice byte-identical in CLI output) |
+| Reads | modules, plan, status, drift/diff, detect, module config at a layer dir (`ReadsArea`: `Modules`, `Plan`, `Status`, `Diff`, `Detect`, `ModuleConfigAt`; canonical renderers + `ModuleLayers`) | **shipped** (T-tui-reads; each slice byte-identical in CLI output; `ModuleConfigAt` added for T-tui-shell) |
 | Writes | onboard, restore, generate, profile editing (config area: `ReadModuleLayer`/`WriteModuleLayer` + module-management ops) | designed (0061/0065); M14 |
 
 The layer **wraps** the domain packages and **absorbs the orchestration**
@@ -73,6 +73,7 @@ func (r *ReadsArea) Plan(profilePath string, modules []string, f *facts.Facts) (
 func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, error)
 func (r *ReadsArea) Diff(plan *resolve.Plan, profileRoot string) ([]DiffEntry, error)
 func (r *ReadsArea) Detect() (*facts.Facts, error)
+func (r *ReadsArea) ModuleConfigAt(dir string) (*profile.ModuleConfig, error)
 ```
 
 - `Modules` runs detect → load → filter (no warns — the modules listing is
@@ -87,7 +88,10 @@ func (r *ReadsArea) Detect() (*facts.Facts, error)
   accounts (`StatusRead.Others`). Drift is model output, never an error.
 - `Diff` collects differing copy-mode dotfiles as content pairs;
   unreadable sources and missing targets are skipped (nothing to diff).
-  `ModuleLayers` exposes the every-layer module scan (shared with
+  `ModuleConfigAt` loads one layer's module.toml (a tree origin's raw
+  declaration — the TUI's raw view and, later, the editors' input);
+  missing declarations are `(nil, nil)`, broken files surface as
+  `*SchemaError`. `ModuleLayers` exposes the every-layer module scan (shared with
   restore's backup index).
 - `ReadsDeps` carries the seams (detect/load/resolve, `OtherAccounts`,
   `WarnLoad`); zero values fall back to the real implementations via

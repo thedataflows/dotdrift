@@ -318,6 +318,18 @@ func ModuleLayers(p *profile.Profile) []drift.ModuleLayer {
 	return layers
 }
 
+// ModuleConfigAt loads one layer's module.toml (a tree origin's raw
+// declaration, T-tui-shell) through the doorway. Missing declarations are
+// (nil, nil) — the profile package's contract; broken files surface as
+// *SchemaError so front ends read Path/Line instead of parsing text.
+func (r *ReadsArea) ModuleConfigAt(dir string) (*profile.ModuleConfig, error) {
+	cfg, err := profile.LoadModuleConfig(dir)
+	if err != nil {
+		return nil, schemaError(err)
+	}
+	return cfg, nil
+}
+
 // Schema-error translation at the boundary (0061-D3): profile load errors
 // are wrapped strings today; the ones naming a file (and, when the
 // reporter could localize it, a line) become *SchemaError so front ends

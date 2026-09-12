@@ -46,6 +46,7 @@ type CLI struct {
 	Onboard  OnboardCmd  `cmd:"" help:"Onboard paths into a module" aliases:"add,adopt"`
 	Restore  RestoreCmd  `cmd:"" help:"Restore copy-mode targets from module backups"`
 	Generate GenerateCmd `cmd:"" help:"Generate mounts/smb modules"`
+	TUI      TUICmd      `cmd:"" help:"Open the two-pane interactive shell"`
 	Paru     ParuCmd     `cmd:"" help:"paru mise plugin backend (internal)"`
 	Version  VersionCmd  `cmd:"" help:"Show version information"`
 

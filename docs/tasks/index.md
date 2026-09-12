@@ -20,3 +20,8 @@ Each task: write failing tests first, then implement.
 * [T-module-filter](t-module-filter.md)
 * [T-verbose-output](t-verbose-output.md)
 * [T-plan-deps](t-plan-deps.md)
+* [T-tui-reads](t-tui-reads.md)
+* [T-tui-shell](t-tui-shell.md)
+* [T-tui-editors](t-tui-editors.md)
+* [T-tui-writes](t-tui-writes.md)
+* [T-tui-apply](t-tui-apply.md)

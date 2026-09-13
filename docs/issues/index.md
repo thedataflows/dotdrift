@@ -60,3 +60,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0070](0070-migrate-cmd-apply-onto-apply-session.md) | Migrate cmd/apply onto the apply session | done | high |
 | [0071](0071-surface-tty-handover-for-real-steps.md) | Surface TTY handover for real steps | done | high |
 | [0072](0072-module-management-dialogs.md) | Module-management dialogs in the TUI | done | high |
+| [0073](0073-tui-compositor-redesign.md) | TUI compositor redesign | open | high |

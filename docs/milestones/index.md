@@ -17,6 +17,7 @@ Execute in order. Each milestone links tasks. Complete TDD acceptance before mov
 * [M12 Scope](m12-scope.md) - User/system dotfile scope, sudo-applied system step
 * [M13 Generate](m13-generate.md) - `generate mounts|smb` CLI+TUI, mount/smb specs, activation steps
 * [M14 TUI](m14-tui.md) - `dotdrift tui`: two-pane shell, editors, streamed apply
+* [M15 TUI compositor](m15-tui-compositor.md) - Shell + modal compositor, sectioned workspace, inline editing, elevation modal, fuzzy palette
 
 # Dependency graph
 
@@ -27,4 +28,5 @@ M0 → M1 → M2 → M3 → M4
 M9 → M11 → M12 → M13
 Mise ensure (tasks/t-mise-ensure) → before M5/M6/M8 integration
 M13 → M14 (design set: issues 0057–0067; apply session pre-shipped)
+M14 → M15 (presentation-layer redesign: issue 0073; domain untouched)
 ```

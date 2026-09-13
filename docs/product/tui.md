@@ -16,6 +16,40 @@ apply gate is the TUI's **only** write path into convergence; profile
 *files* are written only by the editors and the module-management dialogs,
 both below.
 
+# The compositor (M15, landing task by task)
+
+M15 ([milestone](../milestones/m15-tui-compositor.md), issue
+[0073](../issues/0073-tui-compositor-redesign.md)) rebuilds the
+presentation layer as one shell plus a modal stack. It replaces the view
+stack described below as its tasks land; the old shell stays the default
+until T-tui-cleanup deletes it. The new shell is reachable now behind the
+hidden flag `dotdrift tui --compositor`.
+
+Shipped so far (T-tui-compositor):
+
+- **The base shell.** Full-screen (altscreen) layout: header, nav left,
+  workspace right, footer. The header names the profile root, the
+  host/user context, a dirty count (`● N`) when drafts exist, and an
+  apply badge while a session runs. The footer has two lines: a spinner
+  with the running operation's name (or the message slot), and the key
+  hints for the focused pane.
+- **The message slot.** Any operation longer than ~200 ms announces
+  itself (`opStartedMsg`) and reports (`opFinishedMsg`). A success note
+  fades after 4 s. A failure renders in the Error color and persists
+  until the next user action.
+- **The modal stack.** Modals render centered over the dimmed base
+  (lipgloss v2 layers on a canvas, the composited final frame). While a
+  modal is open it owns all input; covered modals render nothing and
+  receive nothing.
+- **One esc rule.** The compositor owns `esc`, not the views: it pops the
+  top modal first, then exits workspace edit mode, then returns focus to
+  the nav. No per-view fallthrough.
+- **Focus.** `tab`/`shift+tab` move between nav and workspace; focus is
+  the border color; exactly one pane is focused.
+- **Goldens** pin the composited final frames at fixed sizes (100x30 and
+  64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
+  and chrome behavior.
+
 # Stack and chrome
 
 - charm v2 (`charm.land/bubbletea/v2`, `charm.land/bubbles/v2`) — chosen

@@ -14,7 +14,8 @@ import (
 // approved prototype): the one interactive home (ADR-0007). It is the
 // only command that runs a TUI; everything else is strict flag mode.
 type TUICmd struct {
-	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
+	Profile    string `help:"Path to profile directory" type:"existingdir" default:"."`
+	Compositor bool   `name:"compositor" hidden:"" help:"Run the experimental M15 compositor shell."`
 }
 
 // Run builds the reads and writes areas over the adapter's pinned seams
@@ -25,6 +26,12 @@ type TUICmd struct {
 // and writes areas are built lazily — they need the facts, which land
 // with the first read.
 func (c *TUICmd) Run() error {
+	if c.Compositor {
+		// The M15 compositor shell (issue 0073), mounted behind a hidden
+		// flag until it reaches parity and the old shell is deleted
+		// (T-tui-cleanup).
+		return tui.NewCompositor(c.Profile).Run()
+	}
 	area := service.NewReadsArea(service.ReadsDeps{
 		Detect:        detectFacts,
 		LoadProfile:   profileLoad,

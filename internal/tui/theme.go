@@ -50,6 +50,8 @@ type theme struct {
 	dirtyMark     lipgloss.Style // the ● unsaved indicator
 	statusBar     lipgloss.Style // help hints line
 	confirmLine   lipgloss.Style // quit-with-dirty confirmation
+	applyBadge    lipgloss.Style // the ▶ apply header badge (M15)
+	dimBase       lipgloss.Style // the base frame under a modal (M15)
 
 	// Tree: groups, module labels, overlay badges, origin markers.
 	groupTitle   lipgloss.Style // MODULES / ACCOUNTS / PROFILE
@@ -78,6 +80,8 @@ func newTheme(isDark bool) theme {
 		dirtyMark:     lipgloss.NewStyle().Bold(true).Foreground(p.fuchsia),
 		statusBar:     lipgloss.NewStyle().Foreground(p.dim),
 		confirmLine:   lipgloss.NewStyle().Bold(true).Foreground(p.amber),
+		applyBadge:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
+		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
 
 		groupTitle:   lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 		originMark:   lipgloss.NewStyle().Foreground(p.fuchsia),

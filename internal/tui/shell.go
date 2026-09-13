@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 
@@ -40,14 +41,16 @@ type Reads interface {
 
 // Options carries the shell's construction inputs: where the profile
 // lives, the probe seam the status view needs (the caller's sudo /
-// backend seams, same shape as the CLI adapter's), and the config-area
-// factory the editor suite opens drafts through — the facts arrive with
-// the first read, so the factory is called lazily.
+// backend seams, same shape as the CLI adapter's), the config-area
+// factory the editor suite opens drafts through, and the writes factory
+// the Profile dialogs run through — the facts arrive with the first
+// read, so the factories are called lazily.
 type Options struct {
 	ProfilePath string
 	StatePath   string
 	ProbesFor   func(*facts.Facts) drift.Probes
 	ConfigFor   func(*facts.Facts) service.ConfigEditor
+	WritesFor   func(*facts.Facts) Writes
 }
 
 type focus int
@@ -131,6 +134,8 @@ type Shell struct {
 	modulePlans map[string]*service.PlanRead
 	frames      map[string]*editor.Frame // open editor frames, keyed by module dir
 	cfg         editor.Config            // built lazily via opts.ConfigFor
+	dialogs     map[string]dialog        // Profile dialogs, keyed by action
+	writes      Writes                   // built lazily via opts.WritesFor
 }
 
 // New builds the shell; Init kicks off the modules read.
@@ -226,6 +231,20 @@ func (m *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+
+	case writeFinishedMsg:
+		if d, ok := m.dialogs[msg.key]; ok {
+			d.applyFinished(msg)
+			m.syncDialog(msg.key)
+		}
+		return m, nil
+
+	case restorePlanMsg:
+		if d, ok := m.dialogs["restore"].(*restoreDialog); ok && msg.key == "restore" {
+			d.applyPlan(msg)
+			m.syncDialog("restore")
+		}
+		return m, nil
 	}
 	return m, nil
 }
@@ -244,6 +263,22 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.confirm = false
 		}
 		return m, nil
+	}
+
+	// A Profile dialog on top owns the main pane's keys: the dialog's
+	// form vocabulary runs first; the shell's globals stay reserved
+	// above it (same discipline as the editor frames).
+	if top := m.stack.top(); top.id.kind == viewAction && m.focus == focusMain {
+		switch s {
+		case "tab", "shift+tab", "?", "q", "ctrl+c":
+			// handled by the shell below
+		default:
+			if d := m.dialogs[top.id.key]; d != nil {
+				cmd := d.HandleKey(s)
+				m.syncDialog(top.id.key)
+				return m, cmd
+			}
+		}
 	}
 
 	// An editor view on top owns the main pane's keys: the frame's
@@ -430,6 +465,71 @@ func (m *Shell) syncEditorView(dir string) {
 		if m.stack.stack[i].id.kind == viewEditor && m.stack.stack[i].id.key == dir {
 			m.stack.stack[i].dirty = frame.Dirty()
 			m.stack.stack[i].content = frame.View()
+			if i == len(m.stack.stack)-1 {
+				m.syncViewport()
+			}
+			return
+		}
+	}
+}
+
+// dialogFor returns the Profile dialog for an action, building it
+// lazily through the writes factory (the facts have landed by the time
+// an action can be opened — the first read populated them). A nil
+// WritesFor keeps the disabled stub views.
+func (m *Shell) dialogFor(action string) dialog {
+	if m.opts.WritesFor == nil {
+		return nil
+	}
+	if m.dialogs == nil {
+		m.dialogs = map[string]dialog{}
+	}
+	if d, ok := m.dialogs[action]; ok {
+		return d
+	}
+	if m.writes == nil {
+		var f *facts.Facts
+		if m.read != nil {
+			f = m.read.Facts
+		}
+		m.writes = m.opts.WritesFor(f)
+	}
+	var d dialog
+	switch action {
+	case "onboard":
+		d = newOnboardDialog(m.writes, m.opts.ProfilePath)
+	case "restore":
+		d = newRestoreDialog(m.writes, m.opts.ProfilePath, m.restoreIndex)
+	case "generate":
+		d = newGenerateDialog(m.writes, m.opts.ProfilePath)
+	default:
+		return nil
+	}
+	m.dialogs[action] = d
+	return d
+}
+
+// restoreIndex reads the profile's backup index for the restore dialog's
+// generation picking (a pure service read over the already-loaded
+// profile).
+func (m *Shell) restoreIndex() (map[string]map[string][]service.RestoreHit, error) {
+	if m.read == nil || m.read.Profile == nil {
+		return nil, fmt.Errorf("restore: the profile is not loaded yet")
+	}
+	return service.IndexBackups(service.ModuleLayers(m.read.Profile)), nil
+}
+
+// syncDialog re-renders a dialog's stacked view (its form, confirm gate,
+// or report).
+func (m *Shell) syncDialog(action string) {
+	d := m.dialogs[action]
+	if d == nil {
+		return
+	}
+	for i := len(m.stack.stack) - 1; i >= 0; i-- {
+		v := m.stack.stack[i]
+		if v.id.kind == viewAction && v.id.key == action {
+			m.stack.stack[i].content = d.View(m.th)
 			if i == len(m.stack.stack)-1 {
 				m.syncViewport()
 			}
@@ -635,7 +735,11 @@ func (m *Shell) viewFor(it treeItem) (view, tea.Cmd) {
 		}
 	case kindAction:
 		v := view{id: viewID{kind: viewAction, key: it.action}, title: strings.ToUpper(it.action), item: it}
-		v.content = renderActionStub(m.th, it.action)
+		if d := m.dialogFor(it.action); d != nil {
+			v.content = d.View(m.th)
+		} else {
+			v.content = renderActionStub(m.th, it.action)
+		}
 		return v, nil
 	}
 	v := view{id: viewID{kind: viewGroup, key: it.label}, title: it.label, item: it}

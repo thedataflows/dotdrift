@@ -246,7 +246,7 @@ func renderSession(sess *service.ApplySession, profileRoot string, out io.Writer
 			// module dir + generation (the event's Dir is absolute).
 			moduleDir := filepath.Dir(filepath.Dir(e.Dir))
 			fmt.Fprintf(out, "backup: %d path(s) -> %s\n",
-				e.Count, filepath.Join(moduleRel(profileRoot, moduleDir), "backups", filepath.Base(e.Dir)))
+				e.Count, filepath.Join(service.ModuleRel(profileRoot, moduleDir), "backups", filepath.Base(e.Dir)))
 		}
 	}
 	res, err := sess.Wait()

@@ -32,12 +32,3 @@ func (o *overlayFlag) Decode(ctx *kong.DecodeContext) error {
 	}
 	return nil
 }
-
-// overlayOwner resolves an overlay flag's owner: an explicit value wins,
-// a bare flag falls back to the detected fact.
-func overlayOwner(flag overlayFlag, detected string) string {
-	if flag.Set && flag.Value != "" {
-		return flag.Value
-	}
-	return detected
-}

@@ -8,13 +8,15 @@ import (
 
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // The generate command group materializes self-contained mounts/smb
-// modules via internal/generate.WriteModule. It is CLI-only (issue 0066):
-// every subcommand assembles its generate.Input from the input flags —
-// the required flags are validated loudly — and interactivity lives in
-// `dotdrift tui`, not here.
+// modules through the service writes area (T-tui-writes), which calls
+// internal/generate.WriteModule — the one assembly and write path, shared
+// with the TUI's generate flows (issue 0066: interactivity lives in
+// `dotdrift tui`; each subcommand here assembles its generate.Input from
+// the input flags, and the required flags are validated loudly).
 
 // GenerateCmd groups the module generators.
 type GenerateCmd struct {
@@ -43,14 +45,15 @@ type GenerateMountsCmd struct {
 }
 
 // Run implements the mounts generator: the volume table, or CLI-mode
-// assembly + WriteModule.
+// assembly + service write.
 func (c *GenerateMountsCmd) Run() error {
 	out := c.Out
 	if out == nil {
 		out = os.Stdout
 	}
+	area := service.NewWritesArea(service.WritesDeps{Detect: detectFacts})
 
-	sel, err := generateSelection(generate.Selection{
+	sel, err := area.GenerateSelection(generate.Selection{
 		Layer: c.Layer, ModuleID: c.Module, Hostname: c.Hostname, Username: c.Username,
 	})
 	if err != nil {
@@ -58,7 +61,11 @@ func (c *GenerateMountsCmd) Run() error {
 	}
 
 	if c.ListVolumes {
-		return printGenerateVolumes(out, c.Profile, sel)
+		vols, err := area.Volumes(c.Profile, sel)
+		if err != nil {
+			return err
+		}
+		return printGenerateVolumes(out, vols)
 	}
 
 	if err := c.validate(); err != nil {
@@ -79,10 +86,10 @@ func (c *GenerateMountsCmd) Run() error {
 			State:       c.State,
 		},
 	}, uid, gid)
-	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
+	if err := area.WriteGenerate(c.Profile, sel, input, out); err != nil {
 		return fmt.Errorf("generate mounts: %w", err)
 	}
-	return generate.PrintSummary(out, c.Profile, sel)
+	return nil
 }
 
 // validate enforces the required flags loudly, naming every missing
@@ -137,8 +144,9 @@ func (c *GenerateSmbCmd) Run() error {
 	if out == nil {
 		out = os.Stdout
 	}
+	area := service.NewWritesArea(service.WritesDeps{Detect: detectFacts})
 
-	sel, err := generateSelection(generate.Selection{
+	sel, err := area.GenerateSelection(generate.Selection{
 		Layer: c.Layer, ModuleID: c.Module, Hostname: c.Hostname, Username: c.Username,
 	})
 	if err != nil {
@@ -155,8 +163,8 @@ func (c *GenerateSmbCmd) Run() error {
 		return err
 	}
 	input := generate.SmbInput(c.Group, c.Users, c.Avahi, shares, username, uid, gid)
-	if err := generate.WriteModule(c.Profile, sel, input); err != nil {
+	if err := area.WriteGenerate(c.Profile, sel, input, out); err != nil {
 		return fmt.Errorf("generate smb: %w", err)
 	}
-	return generate.PrintSummary(out, c.Profile, sel)
+	return nil
 }

@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -192,17 +192,19 @@ func TestRestore_elevatedForUnwritableTarget(t *testing.T) {
 	seedBackup(t, filepath.Join(root, "modules", "app"), "g1", target, "system copy", 0o640)
 
 	var calls []string
-	orig := elevatedRestore
-	elevatedRestore = func(src, dst string, mode os.FileMode) error {
-		calls = append(calls, fmt.Sprintf("%s|%s|%04o", src, dst, mode.Perm()))
+	orig := restoreHandover
+	restoreHandover = func(cmd *exec.Cmd) error {
+		calls = append(calls, strings.Join(append([]string{cmd.Path}, cmd.Args...), " "))
 		return nil
 	}
-	t.Cleanup(func() { elevatedRestore = orig })
+	t.Cleanup(func() { restoreHandover = orig })
 
 	out := runRestore(t, root, []string{target}, "", false)
 
 	require.Len(t, calls, 1, "one elevated copy")
-	require.Contains(t, calls[0], "|"+target+"|0640", "elevated copy gets the backup's mode")
+	require.Contains(t, calls[0], "install", "elevated copy installs the backup")
+	require.Contains(t, calls[0], "-m 0640", "elevated copy gets the backup's mode")
+	require.Contains(t, calls[0], target)
 	require.Contains(t, out, "restored: "+target)
 }
 

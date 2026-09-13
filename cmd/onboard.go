@@ -1,63 +1,57 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/thedataflows/dotdrift/internal/mise"
-	"github.com/thedataflows/dotdrift/internal/onboard"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // OnboardCmd copies live paths into a module and applies them.
 type OnboardCmd struct {
 	Paths []string `arg:"" optional:"" help:"Paths to onboard into the module"`
 
-	Profile  string   `help:"Path to profile directory" type:"existingdir" default:"."`
-	App      string   `help:"Module directory name (required)" required:""`
-	Mode     string   `help:"Dotfile mode" enum:"symlink,symlink-each,copy,template" default:"symlink"`
-	Packages []string `help:"Distro packages to declare; each entry is a bare name or name=\"description\" (the description becomes a TOML comment)"`
-	Tools    []string `help:"Mise tools to declare"`
+	Profile  string      `help:"Path to profile directory" type:"existingdir" default:"."`
+	App      string      `help:"Module directory name (required)" required:""`
+	Mode     string      `help:"Dotfile mode" enum:"symlink,symlink-each,copy,template" default:"symlink"`
+	Packages []string    `help:"Distro packages to declare; each entry is a bare name or name=\"description\" (the description becomes a TOML comment)"`
+	Tools    []string    `help:"Mise tools to declare"`
 	Host     overlayFlag `help:"Onboard into hosts/<hostname>; no value = current host, --host=<name> = explicit, flag omitted = base layer"`
 	User     overlayFlag `help:"Onboard into users/<username>; no value = current user, --user=<name> = explicit, flag omitted = base layer"`
-	DryRun   bool     `help:"Preview only"`
-	Yes      bool     `help:"Answer yes to mise prompts" default:"false"`
-	Verbose  bool     `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
+	DryRun   bool        `help:"Preview only"`
+	Yes      bool        `help:"Answer yes to mise prompts" default:"false"`
+	Verbose  bool        `help:"Stream package manager and mise output live, echoing each command line ('+ argv') to stderr before it runs" short:"v" default:"false"`
 	// Mise injects a runner for tests; nil uses the real mise bootstrap.
 	Mise mise.Runner `kong:"-"`
 }
 
-// Run implements the onboard command.
+// Run translates flags onto the service writes area and reports to the
+// CLI's stdout (T-tui-writes: the orchestration lives in the service).
 func (c *OnboardCmd) Run() error {
-	f, err := detectFacts()
-	if err != nil {
-		return fmt.Errorf("detect: %w", err)
-	}
-
-	runner := c.Mise
-	if runner == nil {
-		m := defaultMise()
-		m.Verbose = c.Verbose
-		runner = mise.NewExecMise(m)
-	}
-	o := &onboard.Onboard{Mise: runner, Out: os.Stdout}
-	pkgs, err := onboard.ParsePackages(c.Packages)
-	if err != nil {
-		return fmt.Errorf("parse packages: %w", err)
-	}
-	// Bare flag = current host/user (overlayOwner falls back to the
-	// detected fact), explicit =value wins, omitted = base layer.
-	return o.Run(onboard.Options{
+	return service.NewWritesArea(service.WritesDeps{
+		Detect: detectFacts,
+		NewMise: func(verbose bool) mise.Runner {
+			if c.Mise != nil {
+				return c.Mise
+			}
+			m := defaultMise()
+			m.Verbose = verbose
+			return mise.NewExecMise(m)
+		},
+	}).Onboard(service.OnboardOpts{
 		ProfileRoot: c.Profile,
 		Paths:       c.Paths,
 		App:         c.App,
 		Mode:        c.Mode,
-		Packages:    pkgs,
+		Packages:    c.Packages,
 		Tools:       c.Tools,
-		Host:        c.Host.Set,
-		Hostname:    overlayOwner(c.Host, f.Hostname),
-		User:        c.User.Set,
-		Username:    overlayOwner(c.User, f.Username),
+		HostSet:     c.Host.Set,
+		Hostname:    c.Host.Value,
+		UserSet:     c.User.Set,
+		Username:    c.User.Value,
 		DryRun:      c.DryRun,
 		Yes:         c.Yes,
+		Verbose:     c.Verbose,
+		Out:         os.Stdout,
 	})
 }

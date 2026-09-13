@@ -79,14 +79,6 @@ func TestKong_onboardOverlayValues(t *testing.T) {
 	})
 }
 
-// overlayOwner: explicit value wins, bare flag falls back to the detected
-// fact, an unset flag keeps detection (base-layer path).
-func TestOnboard_overlayFlagResolution(t *testing.T) {
-	require.Equal(t, "detected-host", overlayOwner(overlayFlag{Set: true}, "detected-host"))
-	require.Equal(t, "other-host", overlayOwner(overlayFlag{Set: true, Value: "other-host"}, "detected-host"))
-	require.Equal(t, "detected-user", overlayOwner(overlayFlag{}, "detected-user"))
-}
-
 // End to end through the command: bare flag lands in the DETECTED
 // host/user overlay, explicit value in that layer, no flag in base.
 func TestOnboard_overlayFlagsChooseLayers(t *testing.T) {

@@ -21,12 +21,13 @@ type TUICmd struct {
 	err io.Writer `kong:"-"`
 }
 
-// Run builds the reads area over the adapter's pinned seams and hands it
-// to the shell through the TUI package's narrow interface (ADR-0008).
-// WarnLoad stays nil: the tree's skip listing is the canonical surfacing
-// for load-time nudges (the modules read's contract), so the TUI never
-// doubles them as stderr lines. The config area is built lazily — the
-// editor suite needs the facts, which land with the first read.
+// Run builds the reads and writes areas over the adapter's pinned seams
+// and hands them to the shell through the TUI package's narrow
+// interfaces (ADR-0008). WarnLoad stays nil: the tree's skip listing is
+// the canonical surfacing for load-time nudges (the modules read's
+// contract), so the TUI never doubles them as stderr lines. The config
+// and writes areas are built lazily — they need the facts, which land
+// with the first read.
 func (c *TUICmd) Run() error {
 	area := service.NewReadsArea(service.ReadsDeps{
 		Detect:        detectFacts,
@@ -39,6 +40,16 @@ func (c *TUICmd) Run() error {
 		ProbesFor:   tuiProbesFor,
 		ConfigFor: func(f *facts.Facts) service.ConfigEditor {
 			return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})
+		},
+		WritesFor: func(*facts.Facts) tui.Writes {
+			return service.NewWritesArea(service.WritesDeps{
+				Detect: detectFacts,
+				NewMise: func(verbose bool) mise.Runner {
+					m := defaultMise()
+					m.Verbose = verbose
+					return mise.NewExecMise(m)
+				},
+			})
 		},
 	})
 	return runTUIProgram(shell)

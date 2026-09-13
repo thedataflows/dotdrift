@@ -53,7 +53,7 @@ func New() *Service
 |---|---|---|
 | Session (apply) | apply runs: start, stream, handover, cancel, resume | **shipped** (issues 0069/0070/0071) |
 | Reads | modules, plan, status, drift/diff, detect, module config at a layer dir (`ReadsArea`: `Modules`, `Plan`, `Status`, `Diff`, `Detect`, `ModuleConfigAt`; canonical renderers + `ModuleLayers`) | **shipped** (T-tui-reads; each slice byte-identical in CLI output; `ModuleConfigAt` added for T-tui-shell) |
-| Writes | onboard, restore, generate, profile editing (config area: `ReadModuleLayer`/`WriteModuleLayer` + module-management ops) | designed (0061/0065); M14 |
+| Writes | onboard, restore, generate, profile editing (config area: `ReadModuleLayer`/`WriteModuleLayer` + module-management ops); `WritesArea`: `Onboard`, `Restore`/`RestorePlan`, `GenerateSelection`, `Volumes`, `WriteGenerate`, plus `IndexBackups`/`NormalizeRestoreTarget`/`ModuleRel` for the browse views | **shipped** (T-tui-writes; onboard/restore/generate byte-identical in CLI output; restore's elevated copies run through `RestoreOpts.Handover` — the 0064-D9 seam) |
 
 The layer **wraps** the domain packages and **absorbs the orchestration**
 (0061-D6): the ~17 `internal/` packages keep their deep-module boundaries
@@ -96,6 +96,38 @@ func (r *ReadsArea) ModuleConfigAt(dir string) (*profile.ModuleConfig, error)
 - `ReadsDeps` carries the seams (detect/load/resolve, `OtherAccounts`,
   `WarnLoad`); zero values fall back to the real implementations via
   `WithDefaults`, composing exactly like `ApplyDeps`.
+
+# Writes area
+
+`WritesArea` owns the write orchestration the CLI adapters used to carry:
+onboard, restore, and generate run here once, and the front ends
+translate input and render output. The CLI's bytes are the area's
+contract — report lines go to the caller's `Out` writer (nil discards;
+the CLI passes stdout, the TUI a buffer).
+
+- `Onboard(OnboardOpts)` adopts live paths and applies: packages parse at
+  the boundary (`parse packages:` wrap), detect fills an overlay owner a
+  bare flag left empty, and the onboard flow runs unchanged. `DryRun` is
+  an option field.
+- `Restore(RestoreOpts)` and `RestorePlan(RestoreOpts)` share one
+  resolution: normalize targets, index the mirrored backup layout, pin
+  the newest generation or the caller's, and refuse ambiguity with the
+  CLI's exact errors. Restore copies user-writable targets directly and
+  runs everything else through `RestoreOpts.Handover func(*exec.Cmd)`
+  (the 0064-D9 seam — the service builds the `sudo install`/`sudo rm`
+  children, the consumer owns the terminal; the TUI skips elevated
+  targets and names the CLI command until a terminal bridge exists).
+- `IndexBackups`, `NormalizeRestoreTarget`, and `ModuleRel` are exported
+  for the `restore --list` browse rendering, which stays CLI
+  presentation over service data.
+- `GenerateSelection`, `Volumes`, and `WriteGenerate` are the generate
+  flow: selection fills owners from facts, volumes classify with the
+  managed-source annotation, and the write takes an already-assembled
+  `generate.Input` — assembly (flags or dialog) stays with the front
+  end through the shared builders (contract 15: one assembly path).
+
+`WritesDeps` carries the seams (detect, `LoadProfile`, `NewMise`,
+`HomeDir`, `ListVolumes`); `WithDefaults` fills the real implementations.
 
 # Session area — apply
 

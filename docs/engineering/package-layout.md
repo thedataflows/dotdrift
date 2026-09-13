@@ -43,7 +43,8 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   ├── tui/                  # The two-pane shell (M14, charm v2): ADR-0003
 │   │                         # style registry + shell/tree/views/dialogs
 │   │                         # state machines over the service areas
-│   │                         # (reads + writes doorways)
+│   │                         # (reads + writes + apply doorways: gate,
+│   │                         # streamed progress, ExecProcess handover)
 │   ├── tui/editor/           # The editor suite (0065): one frame
 │   │                         # (file-scoped drafts, validation tiers,
 │   │                         # dirty-confirm) + section adapters + the

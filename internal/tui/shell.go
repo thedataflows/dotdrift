@@ -42,15 +42,17 @@ type Reads interface {
 // Options carries the shell's construction inputs: where the profile
 // lives, the probe seam the status view needs (the caller's sudo /
 // backend seams, same shape as the CLI adapter's), the config-area
-// factory the editor suite opens drafts through, and the writes factory
-// the Profile dialogs run through — the facts arrive with the first
-// read, so the factories are called lazily.
+// factory the editor suite opens drafts through, the writes factory
+// the Profile dialogs run through, and the apply-area factory the plan
+// gate previews and starts sessions through — the facts arrive with the
+// first read, so the factories are called lazily.
 type Options struct {
 	ProfilePath string
 	StatePath   string
 	ProbesFor   func(*facts.Facts) drift.Probes
 	ConfigFor   func(*facts.Facts) service.ConfigEditor
 	WritesFor   func(*facts.Facts) Writes
+	ApplyFor    func(*facts.Facts) ApplyLauncher
 }
 
 type focus int
@@ -136,6 +138,9 @@ type Shell struct {
 	cfg         editor.Config            // built lazily via opts.ConfigFor
 	dialogs     map[string]dialog        // Profile dialogs, keyed by action
 	writes      Writes                   // built lazily via opts.WritesFor
+	apply       *applyModel              // the apply mode replacing the main pane (nil = off)
+	applier     ApplyLauncher            // built lazily via opts.ApplyFor
+	send        func(tea.Msg)            // the program's Send, captured in Run
 }
 
 // New builds the shell; Init kicks off the modules read.
@@ -156,9 +161,12 @@ func New(area Reads, opts Options) *Shell {
 }
 
 // Run starts the bubbletea program for this shell (the cmd adapter's
-// runner seam calls it).
+// runner seam calls it). The program's Send is captured for the apply
+// mode's drain goroutine — out-of-band messages ride it.
 func (m *Shell) Run() error {
-	_, err := tea.NewProgram(m).Run()
+	p := tea.NewProgram(m)
+	m.send = p.Send
+	_, err := p.Run()
 	return err
 }
 
@@ -170,6 +178,17 @@ func (m *Shell) Init() tea.Cmd {
 }
 
 func (m *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Apply mode messages: everything the apply model absorbs or answers
+	// (the handover message's answer is the tea.ExecProcess cmd).
+	switch msg.(type) {
+	case applyPreviewMsg, applyStartedMsg, applyEventMsg, applyTickMsg,
+		applyWaitedMsg, applyHandoverMsg, applyHandoverDoneMsg:
+		if m.apply == nil {
+			return m, nil
+		}
+		return m, m.apply.update(msg)
+	}
+
 	switch msg := msg.(type) {
 	case modulesLoadedMsg:
 		if msg.err != nil {
@@ -251,6 +270,10 @@ func (m *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKey is the 0062-D5 vocabulary. Global keys are reserved by the
 // shell; everything else goes to the focused pane (exactly one focused).
+// The apply mode, when on, owns the main pane's keys: the shell's
+// globals stay reserved above it, except quit — during a running apply,
+// q and ctrl+c route into the cancel gate (the explicit exit; killing
+// the program would orphan the session and its children).
 func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	s := msg.String()
 
@@ -263,6 +286,30 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.confirm = false
 		}
 		return m, nil
+	}
+
+	if m.apply != nil {
+		switch s {
+		case "tab", "shift+tab", "?":
+			// shell globals — handled below
+		case "ctrl+c":
+			if m.apply.phase == applyRunning {
+				m.apply.handleKey("x") // into the cancel gate, never a kill
+				return m, nil
+			}
+			return m, tea.Quit
+		default:
+			var cmd tea.Cmd
+			if m.focus == focusMain {
+				if s == "q" && m.apply.phase == applyRunning {
+					m.apply.handleKey("x")
+				} else {
+					cmd = m.apply.handleKey(s)
+				}
+				m.dropApplyIfClosed()
+				return m, cmd
+			}
+		}
 	}
 
 	// A Profile dialog on top owns the main pane's keys: the dialog's
@@ -326,6 +373,8 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.toggleRaw()
 	case "e":
 		return m.openEditor()
+	case "a":
+		return m, m.openApply()
 	}
 
 	if m.focus == focusMain {
@@ -431,6 +480,43 @@ func (m *Shell) openEditor() (tea.Model, tea.Cmd) {
 	m.stack.open(v)
 	m.syncViewport()
 	return m, nil
+}
+
+// openApply arms the apply mode from the plan view — the TUI's only
+// door to convergence (0062-D10). The mode replaces the main pane; the
+// gate's classification load starts immediately. A nil ApplyFor keeps
+// the door closed.
+func (m *Shell) openApply() tea.Cmd {
+	top := m.stack.top()
+	if top.id.kind != viewPlan || m.apply != nil || m.opts.ApplyFor == nil {
+		return nil
+	}
+	if m.applier == nil {
+		var f *facts.Facts
+		if m.read != nil {
+			f = m.read.Facts
+		}
+		m.applier = m.opts.ApplyFor(f)
+	}
+	if m.applier == nil {
+		return nil
+	}
+	send := m.send
+	if send == nil {
+		send = func(tea.Msg) {}
+	}
+	m.apply = newApplyModel(m.applier, m.opts.ProfilePath, m.opts.StatePath, send, m.th)
+	m.focus = focusMain
+	return m.apply.loadPreview()
+}
+
+// dropApplyIfClosed tears the mode down once the model asked to leave
+// (gate declined, ended acknowledged) — the underlying view returns.
+func (m *Shell) dropApplyIfClosed() {
+	if m.apply != nil && m.apply.closeRequested() {
+		m.apply = nil
+		m.syncViewport()
+	}
 }
 
 // editorFrameFor returns the open frame for a module dir, opening one
@@ -824,8 +910,12 @@ func (m *Shell) View() tea.View {
 		header += m.th.dirtyMark.Render("  ● unsaved")
 	}
 
+	main := m.vp.View()
+	if m.apply != nil {
+		main = m.apply.view()
+	}
 	left := m.pane(m.th.focusedBorder, m.th.unfocusedBorder, m.focus == focusTree, m.leftW-2, m.tree.View())
-	right := m.pane(m.th.focusedBorder, m.th.unfocusedBorder, m.focus == focusMain, m.rightW-2, m.vp.View())
+	right := m.pane(m.th.focusedBorder, m.th.unfocusedBorder, m.focus == focusMain, m.rightW-2, main)
 	body := lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 
 	status := m.th.statusBar.Render(" " + m.help.View(m))
@@ -847,6 +937,19 @@ func (m *Shell) pane(focused, unfocused lipgloss.Style, isFocused bool, w int, c
 // ShortHelp is the focused pane's status-bar line (0062-D7).
 func (m *Shell) ShortHelp() []key.Binding {
 	base := []key.Binding{keySwitchPane, keyQuit, keyHelp}
+	if m.apply != nil {
+		switch m.apply.phase {
+		case applyGate:
+			run := key.NewBinding(key.WithKeys("y", "n"), key.WithHelp("y/n", "run/decline"))
+			return append([]key.Binding{run}, base...)
+		case applyRunning:
+			cancel := key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "cancel"))
+			return append([]key.Binding{cancel}, base...)
+		case applyEnded:
+			back := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "back"))
+			return append([]key.Binding{back}, base...)
+		}
+	}
 	if m.focus == focusTree {
 		return append([]key.Binding{keyDown, keyOpen, keyJump}, base...)
 	}

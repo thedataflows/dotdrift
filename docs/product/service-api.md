@@ -176,6 +176,10 @@ func (s *ApplySession) Events() <-chan Event  // closed after SessionEnded
 func (s *ApplySession) Preview() []StepPreview // frozen at Start; stable
 func (s *ApplySession) Cancel()                // idempotent; no-op after the end
 func (s *ApplySession) Wait() (*SessionResult, error)
+
+// Read-only gate classification without starting a session (no lock,
+// no run goroutine, no writes):
+func (a *ApplyArea) Preview(opts ApplyOpts) ([]StepPreview, error)
 ```
 
 `Event` is a closed vocabulary (0064-D3) — consumers type-switch the
@@ -228,8 +232,11 @@ importing any UI package (0061-D4, 0064-D9):
 - A `Handover` error fails the step as a resumable `*StepError` — a
   refused handover behaves exactly like a crashed step.
 - Which steps will hand over is queryable up front: `Preview()` returns
-  `{Name, NeedsTTY, Reason}` per step, frozen at `Start`, so a gate can
-  say "N steps will take the terminal" before anything runs. The
+  `{Name, NeedsTTY, Reason}` per step — `ApplySession.Preview` frozen at
+  `Start`, or the area's read-only `Preview` before anything exists — so
+  a gate can say "N steps will take the terminal" before anything runs.
+  Both walk the same `buildSteps`/`RequiresTTY` path, so the
+  classification cannot drift from behavior. The
   `interactive = true` opt-in at config-write keys on **handover
   availability** (`HandoverAvailable`), not raw stdin state: the CLI
   passes its own stdin reality, a UI that can hand the terminal over
@@ -239,6 +246,10 @@ importing any UI package (0061-D4, 0064-D9):
 
 `Cancel` kills the process group immediately (children mid-handover
 included) — installs run minutes, so finish-then-stop would lie (0064-D5).
+A child the session itself killed reports `signal: killed`, which wraps
+no context error; the session therefore classifies by its own ctx: a
+failure that arrives after (or because of) the cancel is `Cancelled`,
+never `Failed` (contract 2).
 The pipeline returns without advancing the cursor past the interrupted
 step, so the resume cursor names the last completed step (contract 2);
 backups already taken stay.

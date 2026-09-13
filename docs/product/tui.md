@@ -83,20 +83,30 @@ model).
 Apply runs **inside** the TUI, streamed, over the service apply session
 ([service API](service-api.md)):
 
+- **Entry**: `a` on the plan view opens apply — the mode replaces the
+  main pane (0062-D4); the view stack stays underneath, untouched.
 - The plan view carries per-step diffs and the **gate**: before running,
-  the session's `Preview()` announces "N steps will take the terminal"
-  with reasons. Confirming the gate starts the session — this is the
-  TUI's only door to apply.
-- Events pump into bubbletea (`p.Send`); the progress list and output
-  pane are TUI-internal view-models, including output coalescing (ring
-  buffer + tick — raw line events are never rendered one-per-frame).
+  the apply area's read-only `Preview()` classifies the steps and
+  announces "N steps will take the terminal" with reasons. Confirming
+  the gate starts the session — this is the TUI's only door to apply;
+  declining writes nothing.
+- Events pump into bubbletea (`p.Send` off one drain goroutine); the
+  progress list and output pane are TUI-internal view-models, including
+  output coalescing (ring buffer + tick — raw line events are never
+  rendered one-per-frame).
 - When a step needs the terminal, the TUI hands it over with
   `tea.ExecProcess` (alt-screen suspend/restore is bubbletea's job); the
   child gets the real stdio — sudo prompts and interactive hooks work.
-- Cancel kills the process group immediately; the cancelled-state screen
-  names the interrupted step and the resume cursor still names the last
-  completed step (contract 2). A concurrent apply elsewhere surfaces as
-  the typed already-running refusal (contract 11).
+  While a handover child owns the terminal the TUI is suspended
+  (bubbletea runs the exec on the event loop), so nothing in the shell
+  can fire until the child exits.
+- Cancel is the explicit gated exit (`x`, or `q`/`ctrl+c` while running;
+  `esc` never pops a running apply). It kills the process group
+  immediately; the cancelled-state screen names the interrupted step and
+  the resume cursor still names the last completed step (contract 2) —
+  a kill the session itself performed classifies as Cancelled, not
+  Failed. A concurrent apply elsewhere surfaces as the typed
+  already-running refusal (contract 11).
 
 # Editors
 

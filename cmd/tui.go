@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"io"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
@@ -51,8 +52,33 @@ func (c *TUICmd) Run() error {
 				},
 			})
 		},
+		ApplyFor: func(*facts.Facts) tui.ApplyLauncher {
+			return tuiApplyLauncher{area: service.NewApplyArea(service.ApplyDeps{
+				Detect:      detectFacts,
+				LoadProfile: profileLoad,
+				Resolve:     resolvePlan,
+				NewMise:     func() *mise.Mise { return defaultMise() },
+			})}
+		},
 	})
 	return runTUIProgram(shell)
+}
+
+// tuiApplyLauncher adapts the apply area to the shell's launcher
+// interface (Go has no return-type covariance: Start's concrete
+// *ApplySession satisfies ApplyRun, but the method signature doesn't).
+type tuiApplyLauncher struct{ area *service.ApplyArea }
+
+func (l tuiApplyLauncher) Preview(opts service.ApplyOpts) ([]service.StepPreview, error) {
+	return l.area.Preview(opts)
+}
+
+func (l tuiApplyLauncher) Start(ctx context.Context, opts service.ApplyOpts) (tui.ApplyRun, error) {
+	sess, err := l.area.Start(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return sess, nil
 }
 
 // tuiProbesFor builds the drift probes for the status view: the same

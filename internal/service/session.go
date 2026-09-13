@@ -107,15 +107,27 @@ func (s *ApplySession) Wait() (*SessionResult, error) {
 	return s.result, s.waitErr
 }
 
-// Start resolves the plan, takes the sidecar lock, classifies the steps,
-// and launches the run goroutine (0064-D6). It returns once the session
-// is armed — events flow from the goroutine, so drain Events concurrently.
-func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, error) {
+// prepared carries the shared session prologue's results (reads, path
+// layout, the interactive decision): everything Start and Preview need
+// before steps exist.
+type prepared struct {
+	facts          *facts.Facts
+	profile        *profile.Profile
+	plan           *resolve.Plan
+	sections       SectionSet
+	statePath      string
+	profileRoot    string
+	misePluginsDir string
+	interactive    bool
+}
+
+// prepare runs the shared prologue: validate, detect, load, filter,
+// resolve, sections, and path layout — reads only, no lock, no writes.
+// Shared by Start and Preview so the up-front classification cannot
+// drift from what a real session builds.
+func (a *ApplyArea) prepare(opts ApplyOpts) (*prepared, error) {
 	if opts.ProfilePath == "" {
 		return nil, fmt.Errorf("apply session: ProfilePath is required")
-	}
-	if opts.Handover == nil {
-		return nil, fmt.Errorf("apply session: Handover callback is required")
 	}
 	f, err := a.deps.Detect()
 	if err != nil {
@@ -144,7 +156,83 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 	if statePath == "" {
 		statePath = state.ProfileStatePath(opts.ProfilePath)
 	}
-	store := state.NewFileStore(statePath)
+
+	profileRoot, err := filepath.Abs(p.Root)
+	if err != nil {
+		return nil, fmt.Errorf("resolve profile root: %w", err)
+	}
+
+	var misePluginsDir string
+	if f.Backend == "paru" {
+		misePluginsDir = mise.PluginsDirFromEnv()
+	}
+
+	// D4: the interactive-hook opt-in keys on handover availability, not
+	// raw stdin — CLI passes its own reality via deps, a UI that can hand
+	// the terminal over sets HandoverAvailable. Decided once, here: it
+	// drives both the config-write (runSpec) and the hook classification.
+	interactive := a.deps.StdinIsTerminal()
+	if opts.HandoverAvailable != nil {
+		interactive = *opts.HandoverAvailable
+	}
+
+	return &prepared{
+		facts:          f,
+		profile:        p,
+		plan:           plan,
+		sections:       sections,
+		statePath:      statePath,
+		profileRoot:    profileRoot,
+		misePluginsDir: misePluginsDir,
+		interactive:    interactive,
+	}, nil
+}
+
+// classifySteps freezes the per-step TTY classification (0064-D4): one
+// StepPreview per step in pipeline order, NeedsTTY with the step's own
+// reason. Pure predicate reads (euid, writability, declarations).
+func classifySteps(steps []apply.Step) []StepPreview {
+	previews := make([]StepPreview, len(steps))
+	for i, st := range steps {
+		reason := ""
+		if hs, ok := st.(apply.HandoverStep); ok {
+			reason = hs.RequiresTTY()
+		}
+		previews[i] = StepPreview{Name: st.Name(), NeedsTTY: reason != "", Reason: reason}
+	}
+	return previews
+}
+
+// Preview classifies a would-be session's steps without starting one —
+// the plan gate's data (0064-D4, the TUI's apply gate). The same
+// buildSteps/RequiresTTY path Start uses, so the classification cannot
+// drift from behavior; no sidecar lock, no run goroutine, no writes.
+// Reads are pure, so a later Start re-runs them for its own goroutine.
+func (a *ApplyArea) Preview(opts ApplyOpts) ([]StepPreview, error) {
+	prep, err := a.prepare(opts)
+	if err != nil {
+		return nil, err
+	}
+	steps := buildSteps(prep.sections, prep.plan, mise.NewExecMise(a.deps.NewMise()),
+		prep.facts, prep.profileRoot, nil, prep.misePluginsDir,
+		opts, a.deps, newConfigPaths(filepath.Dir(prep.statePath)), prep.interactive)
+	return classifySteps(steps), nil
+}
+
+// Start resolves the plan, takes the sidecar lock, classifies the steps,
+// and launches the run goroutine (0064-D6). It returns once the session
+// is armed — events flow from the goroutine, so drain Events concurrently.
+func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, error) {
+	if opts.Handover == nil {
+		return nil, fmt.Errorf("apply session: Handover callback is required")
+	}
+	prep, err := a.prepare(opts)
+	if err != nil {
+		return nil, err
+	}
+	f, p, plan := prep.facts, prep.profile, prep.plan
+
+	store := state.NewFileStore(prep.statePath)
 	// Single-flight: TryLock never blocks — a second apply is
 	// AlreadyRunningError, not a queue (contract 11, 0064-D6).
 	ok, err := store.TryLock()
@@ -152,18 +240,12 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		return nil, fmt.Errorf("lock state: %w", err)
 	}
 	if !ok {
-		return nil, &AlreadyRunningError{StatePath: statePath}
+		return nil, &AlreadyRunningError{StatePath: prep.statePath}
 	}
 	s0, err := store.Load()
 	if err != nil {
 		_ = store.Unlock()
 		return nil, fmt.Errorf("load state: %w", err)
-	}
-
-	profileRoot, err := filepath.Abs(p.Root)
-	if err != nil {
-		_ = store.Unlock()
-		return nil, fmt.Errorf("resolve profile root: %w", err)
 	}
 
 	// One mise instance drives both the pre-steps and every pipeline step.
@@ -190,20 +272,10 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		out = &executil.LockedWriter{W: out}
 	}
 
-	var misePluginsDir string
-	if f.Backend == "paru" {
-		misePluginsDir = mise.PluginsDirFromEnv()
-	}
-	paths := newConfigPaths(filepath.Dir(statePath))
-	// D4: the interactive-hook opt-in keys on handover availability, not
-	// raw stdin — CLI passes its own reality via deps, a UI that can hand
-	// the terminal over sets HandoverAvailable. Decided once, here: it
-	// drives both the config-write (runSpec) and the hook classification.
-	interactive := a.deps.StdinIsTerminal()
-	if opts.HandoverAvailable != nil {
-		interactive = *opts.HandoverAvailable
-	}
-	run.steps = buildSteps(sections, plan, runner, f, profileRoot, out, misePluginsDir, opts, a.deps, paths, interactive)
+	paths := newConfigPaths(filepath.Dir(prep.statePath))
+
+	run.steps = buildSteps(prep.sections, plan, runner, f, prep.profileRoot, out,
+		prep.misePluginsDir, opts, a.deps, paths, prep.interactive)
 
 	run.index = make(map[string]int, len(run.steps))
 	for i, st := range run.steps {
@@ -213,15 +285,14 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 	// TTY classification + handover injection (D4/D9): the session wraps
 	// the consumer's callback with the process-group and stdio contract,
 	// then hands the wrapper to every step that wants the terminal.
-	previews := make([]StepPreview, len(run.steps))
-	for i, st := range run.steps {
-		reason := ""
+	for _, st := range run.steps {
 		if hs, ok := st.(apply.HandoverStep); ok {
 			hs.SetHandover(run.handover)
-			reason = hs.RequiresTTY()
 		}
-		previews[i] = StepPreview{Name: st.Name(), NeedsTTY: reason != "", Reason: reason}
-		run.needsTTY[st.Name()] = reason != ""
+	}
+	previews := classifySteps(run.steps)
+	for _, pv := range previews {
+		run.needsTTY[pv.Name] = pv.NeedsTTY
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -238,11 +309,11 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		plan:        plan,
 		profile:     p,
 		facts:       f,
-		sections:    sections,
+		sections:    prep.sections,
 		paths:       paths,
-		profileRoot: profileRoot,
+		profileRoot: prep.profileRoot,
 		cursor:      s0.LastCompleted,
-		interactive: interactive,
+		interactive: prep.interactive,
 	})
 	return sess, nil
 }
@@ -285,7 +356,14 @@ func (r *sessionRunner) handover(cmd *exec.Cmd) error {
 	twin.Err = cmd.Err
 	executil.SetGroupKill(twin)
 	twin.WaitDelay = 5 * time.Second
-	return r.opts.Handover(twin)
+	err := r.opts.Handover(twin)
+	if err != nil && r.runCtx.Err() != nil {
+		// The session died while the child ran: our own group kill produced
+		// this failure ("signal: killed" wraps no context error), so the
+		// step ends cancelled, not failed (contract 2, 0064-D5).
+		return fmt.Errorf("%w: %v", context.Canceled, err)
+	}
+	return err
 }
 
 // runSpec carries everything the run goroutine needs, resolved at Start.

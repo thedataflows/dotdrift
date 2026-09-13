@@ -26,9 +26,9 @@ func cpress(c *Compositor, s string) *Compositor {
 }
 
 func newTestCompositor() *Compositor {
-	c := NewCompositor("/home/cri/profiles/main")
+	c := NewCompositor(nil, "/home/cri/profiles/main")
 	c.host, c.user = "myhost", "cri"
-	c.navText = "MODULES\n  shell\n  firefox"
+	c.nav = navModel{modules: []navModule{{id: "shell"}, {id: "firefox"}}}
 	c.workText = "module: shell\npackages: 3"
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 100, Height: 30})
 	return c
@@ -203,7 +203,7 @@ func TestHeader_dirtyCountAndApplyBadge(t *testing.T) {
 	require.NotContains(t, frame, "●", "a clean shell shows no dirty count")
 	require.NotContains(t, frame, "apply", "no badge without a running apply")
 
-	c.dirty = 2
+	c.drafts = map[string]bool{"/a": true, "/b": true}
 	require.Contains(t, c.View().Content, "● 2", "the header counts dirty drafts")
 
 	c.applying = true

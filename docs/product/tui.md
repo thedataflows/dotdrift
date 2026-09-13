@@ -49,6 +49,19 @@ Shipped so far (T-tui-compositor):
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
   64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
   and chrome behavior.
+- **The nav** (T-tui-nav). Module rows with overlay layers as expandable
+  children: `▸`/`▾` marks a module with layers, children indent as
+  `base`, `user <name>`, `host <name>` (`user root (superuser)` per
+  issue 0029's visibility). `j`/`k` move, `l`/`right` expands, `h`/`left`
+  collapses or jumps from a child to its module row. Selecting a layer
+  child points the workspace at that layer file; the workspace and the
+  nav never disagree. A module row is dirty (`●`) when any of its layer
+  files has a draft in the 0065 ledger; the child names its own file's
+  draft. Expansion state is remembered per session, and a reload keeps
+  the selected row selected (clamping when the row is gone). Skipped or
+  failed modules stay visible, greyed, naming the reason on the row;
+  while the read is in flight the pane shows placeholder rows; an empty
+  profile shows `(no modules)`. Rows truncate to the pane width.
 
 # Stack and chrome
 

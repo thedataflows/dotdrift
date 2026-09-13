@@ -52,6 +52,8 @@ type theme struct {
 	confirmLine   lipgloss.Style // quit-with-dirty confirmation
 	applyBadge    lipgloss.Style // the ▶ apply header badge (M15)
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
+	selection     lipgloss.Style // the cursor row (M15 nav/workspace)
+	rowText       lipgloss.Style // plain row text (truncation carrier)
 
 	// Tree: groups, module labels, overlay badges, origin markers.
 	groupTitle   lipgloss.Style // MODULES / ACCOUNTS / PROFILE
@@ -82,6 +84,8 @@ func newTheme(isDark bool) theme {
 		confirmLine:   lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		applyBadge:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
+		selection:     lipgloss.NewStyle().Bold(true),
+		rowText:       lipgloss.NewStyle(),
 
 		groupTitle:   lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 		originMark:   lipgloss.NewStyle().Foreground(p.fuchsia),

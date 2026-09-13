@@ -26,18 +26,18 @@ type TUICmd struct {
 // and writes areas are built lazily — they need the facts, which land
 // with the first read.
 func (c *TUICmd) Run() error {
-	if c.Compositor {
-		// The M15 compositor shell (issue 0073), mounted behind a hidden
-		// flag until it reaches parity and the old shell is deleted
-		// (T-tui-cleanup).
-		return tui.NewCompositor(c.Profile).Run()
-	}
 	area := service.NewReadsArea(service.ReadsDeps{
 		Detect:        detectFacts,
 		LoadProfile:   profileLoad,
 		Resolve:       resolvePlan,
 		OtherAccounts: otherAccounts,
 	})
+	if c.Compositor {
+		// The M15 compositor shell (issue 0073), mounted behind a hidden
+		// flag until it reaches parity and the old shell is deleted
+		// (T-tui-cleanup).
+		return tui.NewCompositor(area, c.Profile).Run()
+	}
 	shell := tui.New(area, tui.Options{
 		ProfilePath: c.Profile,
 		ProbesFor:   tuiProbesFor,

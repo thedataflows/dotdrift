@@ -17,6 +17,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/thedataflows/dotdrift/internal/service"
 )
 
 // paneFocus names the base panes; exactly one is focused at a time.
@@ -56,14 +57,22 @@ var stripANSIRe = regexp.MustCompile(`\x1b\[[0-9;:?]*[a-zA-Z]`)
 
 var keyPane = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane"))
 
-// Compositor is the M15 shell model. Placeholder pane content
-// (navText/workText) stands in until T-tui-nav and T-tui-workspace.
+// navLoadedMsg carries the modules read (T-tui-nav).
+type navLoadedMsg struct {
+	read *service.ModulesRead
+	err  error
+}
+
+// Compositor is the M15 shell model. The workspace pane is placeholder
+// text until T-tui-workspace.
 type Compositor struct {
 	th     theme
 	isDark bool
 	w, h   int
 
-	navText  string
+	area Reads
+
+	nav      navModel
 	workText string
 	focus    paneFocus
 	editing  bool // workspace inline edit mode; T-tui-editing drives it
@@ -74,7 +83,7 @@ type Compositor struct {
 	root     string
 	host     string
 	user     string
-	dirty    int
+	drafts   map[string]bool // the 0065 ledger: layer dir → unsaved draft
 	applying bool
 
 	// Footer chrome.
@@ -89,12 +98,14 @@ type Compositor struct {
 
 // NewCompositor builds the M15 shell over a profile root. Experimental
 // until it reaches parity with the M14 shell (T-tui-cleanup).
-func NewCompositor(root string) *Compositor {
+func NewCompositor(area Reads, root string) *Compositor {
 	return &Compositor{
 		th:     newTheme(true), // corrected by BackgroundColorMsg
+		area:   area,
 		root:   root,
 		help:   help.New(),
 		isDark: true,
+		nav:    navModel{pending: true},
 	}
 }
 
@@ -104,7 +115,15 @@ func (m *Compositor) Run() error {
 	return err
 }
 
-func (m *Compositor) Init() tea.Cmd { return nil }
+func (m *Compositor) Init() tea.Cmd {
+	if m.area == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		r, err := m.area.Modules(m.root, nil)
+		return navLoadedMsg{read: r, err: err}
+	}
+}
 
 func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -114,6 +133,21 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
 		m.th = newTheme(m.isDark)
+		return m, nil
+	case navLoadedMsg:
+		sel := m.nav.selected()
+		m.nav.pending = false
+		if msg.err != nil {
+			m.nav.loadErr = msg.err.Error()
+		} else {
+			m.nav.modules = navModules(msg.read)
+			m.nav.loadErr = ""
+			if f := msg.read.Facts; f != nil {
+				m.host, m.user = f.Hostname, f.Username
+			}
+		}
+		m.nav.restore(sel)
+		m.syncWorkspace()
 		return m, nil
 	case opStartedMsg:
 		m.op = msg.name
@@ -171,8 +205,45 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		} else if m.focus != focusNav {
 			m.focus = focusNav
 		}
+	default:
+		if m.focus == focusNav {
+			m.navKey(msg.String())
+		}
 	}
 	return m, nil
+}
+
+// navKey is the nav pane's key vocabulary: j/k move, h/l collapse/expand
+// (arrows too), and every move keeps the workspace on the selection.
+func (m *Compositor) navKey(s string) {
+	switch s {
+	case "j", "down":
+		m.nav.move(1)
+	case "k", "up":
+		m.nav.move(-1)
+	case "h", "left":
+		m.nav.collapse()
+	case "l", "right":
+		m.nav.expand()
+	default:
+		return
+	}
+	m.syncWorkspace()
+}
+
+// syncWorkspace points the workspace at the nav selection — the two never
+// disagree. Placeholder identity text until T-tui-workspace.
+func (m *Compositor) syncWorkspace() {
+	sel := m.nav.selected()
+	if sel.moduleID == "" {
+		m.workText = ""
+		return
+	}
+	if sel.layer != "" {
+		m.workText = sel.moduleID + " · " + sel.label
+		return
+	}
+	m.workText = sel.moduleID
 }
 
 func (m *Compositor) spinTick() tea.Cmd {
@@ -222,7 +293,7 @@ func (m *Compositor) compositedFrame() string {
 // baseFrame is header + panes + footer at the current size.
 func (m *Compositor) baseFrame() string {
 	navW, workW, paneH := m.layout()
-	left := m.pane(m.focus == focusNav, navW-2, paneH, m.navText)
+	left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-2, paneH, m.th, m.drafts))
 	right := m.pane(m.focus == focusWork, workW-2, paneH, m.workText)
 	return lipgloss.JoinVertical(lipgloss.Left,
 		m.headerView(),
@@ -253,8 +324,8 @@ func (m *Compositor) headerView() string {
 	if m.host != "" {
 		s += m.th.headerContext.Render(" · host " + m.host + " · user " + m.user)
 	}
-	if m.dirty > 0 {
-		s += m.th.dirtyMark.Render("  ● " + strconv.Itoa(m.dirty))
+	if len(m.drafts) > 0 {
+		s += m.th.dirtyMark.Render("  ● " + strconv.Itoa(len(m.drafts)))
 	}
 	if m.applying {
 		s += m.th.applyBadge.Render("  ▶ apply")

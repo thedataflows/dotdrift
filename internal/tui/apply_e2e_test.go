@@ -34,27 +34,6 @@ func scriptBin(t *testing.T, body string) string {
 	return path
 }
 
-// blockingBackend's Present blocks until its context dies — a pane-run
-// step in flight for the cancel test.
-type blockingBackend struct {
-	started chan struct{}
-}
-
-func (b *blockingBackend) Present(ctx context.Context, _ []string) error {
-	close(b.started)
-	<-ctx.Done()
-	return ctx.Err()
-}
-
-func (b *blockingBackend) Absent(context.Context, []string) error { return nil }
-func (b *blockingBackend) IsInstalled(context.Context, string) (bool, error) {
-	return false, nil
-}
-func (b *blockingBackend) Installed(context.Context) ([]string, error) { return nil, nil }
-func (b *blockingBackend) DirectDeps(context.Context, string) ([]string, error) {
-	return nil, nil
-}
-
 func boolPtr(v bool) *bool { return &v }
 
 // e2eLauncher wraps the real apply area, records the started run, and

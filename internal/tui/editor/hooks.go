@@ -142,47 +142,47 @@ func (a *hooksAdapter) HandleKey(key string) {
 		}
 	}
 
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.pre)+len(a.post)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "enter":
+	case "enter":
 		list, i := a.rowAt()
 		(*list)[i].cmd.beginEdit()
-	case key == "n":
+	case "n":
 		a.prompting = true
 		a.prompt = newField("command", "command", "")
 		a.prompt.beginEdit()
-	case key == "x":
+	case "x":
 		list, i := a.rowAt()
 		*list = slices.Delete(*list, i, i+1)
 		if a.cur >= len(a.pre)+len(a.post) && a.cur > 0 {
 			a.cur--
 		}
-	case key == " ":
+	case " ":
 		list, i := a.rowAt()
 		(*list)[i].optional = !(*list)[i].optional
-	case key == "v":
+	case "v":
 		list, i := a.rowAt()
 		(*list)[i].structured = !(*list)[i].structured
-	case key == "<":
+	case "<":
 		list, i := a.rowAt()
 		if i > 0 {
 			(*list)[i-1], (*list)[i] = (*list)[i], (*list)[i-1]
 			a.cur--
 		}
-	case key == ">":
+	case ">":
 		list, i := a.rowAt()
 		if i < len(*list)-1 {
 			(*list)[i+1], (*list)[i] = (*list)[i], (*list)[i+1]
 			a.cur++
 		}
-	case key == "esc":
+	case "esc":
 		list, i := a.rowAt()
 		(*list)[i].cmd.endEdit()
 	}
@@ -394,59 +394,59 @@ func (a *systemdAdapter) HandleKey(key string) {
 	if a.inUnit {
 		unit := a.units[a.cur]
 		dirs := a.directiveNames(unit)
-		switch {
-		case key == "j" || key == "down":
+		switch key {
+		case "j", "down":
 			if a.curDir < len(dirs)-1 {
 				a.curDir++
 			}
-		case key == "k" || key == "up":
+		case "k", "up":
 			if a.curDir > 0 {
 				a.curDir--
 			}
-		case key == "enter":
+		case "enter":
 			if a.curDir < len(dirs) {
 				a.editVal = newField("value", "value", a.raw[unit][dirs[a.curDir]])
 				a.editVal.beginEdit()
 				a.editing = true
 			}
-		case key == "n":
+		case "n":
 			a.promptDir = true
 			a.promptStep = 0
 			a.promptDKey = newField("key", "directive", "")
 			a.promptDVal = newField("value", "value", "")
 			a.promptDKey.beginEdit()
-		case key == "x":
+		case "x":
 			if a.curDir < len(dirs) {
 				delete(a.raw[unit], dirs[a.curDir])
 				if a.curDir >= len(a.raw[unit]) && a.curDir > 0 {
 					a.curDir--
 				}
 			}
-		case key == "esc":
+		case "esc":
 			a.inUnit = false
 			a.curDir = 0
 		}
 		return
 	}
 
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.units)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "enter":
+	case "enter":
 		if a.cur < len(a.units) {
 			a.inUnit = true
 		}
-	case key == "n":
+	case "n":
 		a.promptUnit = true
 		a.promptU = newField("unit", "unit", "")
 		a.promptU.beginEdit()
-	case key == "x":
+	case "x":
 		if a.cur < len(a.units) {
 			delete(a.draft, a.units[a.cur])
 			delete(a.raw, a.units[a.cur])

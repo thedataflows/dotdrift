@@ -41,6 +41,10 @@ type dialog interface {
 	HandleKey(string) tea.Cmd
 	View(th theme) string
 	applyFinished(writeFinishedMsg)
+	// back is the esc discipline (issue 0072): true when the dialog
+	// consumed the back step (a confirm gate clears and stays, a form
+	// steps back), false when the shell should pop the view.
+	back() bool
 }
 
 // tuiRestoreHandover refuses privileged children: the TUI has no
@@ -244,7 +248,7 @@ func (d *onboardDialog) HandleKey(key string) tea.Cmd {
 			d.running = true
 			d.report, d.err = "", nil
 			return d.run
-		case "n", "esc":
+		case "n":
 			d.confirm = false
 		}
 		return nil
@@ -304,6 +308,16 @@ func (d *onboardDialog) run() tea.Msg {
 func (d *onboardDialog) applyFinished(m writeFinishedMsg) {
 	d.running = false
 	d.report, d.err = m.report, m.err
+}
+
+// back is the shared esc discipline (issue 0072): the gate consumes esc,
+// the form's back step pops the dialog.
+func (d *onboardDialog) back() bool {
+	if d.confirm {
+		d.confirm = false
+		return true
+	}
+	return false
 }
 
 func (d *onboardDialog) View(th theme) string {
@@ -402,7 +416,7 @@ func (d *restoreDialog) HandleKey(key string) tea.Cmd {
 			d.running = true
 			d.report, d.err = "", nil
 			return d.run
-		case "n", "esc":
+		case "n":
 			d.confirm = false
 		}
 		return nil
@@ -486,6 +500,14 @@ func (d *restoreDialog) run() tea.Msg {
 func (d *restoreDialog) applyFinished(m writeFinishedMsg) {
 	d.running = false
 	d.report, d.err = m.report, m.err
+}
+
+func (d *restoreDialog) back() bool {
+	if d.confirm {
+		d.confirm = false
+		return true
+	}
+	return false
 }
 
 func (d *restoreDialog) View(th theme) string {
@@ -597,7 +619,7 @@ func (d *generateDialog) HandleKey(key string) tea.Cmd {
 			d.running = true
 			d.report, d.err = "", nil
 			return d.run
-		case "n", "esc":
+		case "n":
 			d.confirm = false
 		}
 		return nil
@@ -705,6 +727,14 @@ func (d *generateDialog) run() tea.Msg {
 func (d *generateDialog) applyFinished(m writeFinishedMsg) {
 	d.running = false
 	d.report, d.err = m.report, m.err
+}
+
+func (d *generateDialog) back() bool {
+	if d.confirm {
+		d.confirm = false
+		return true
+	}
+	return false
 }
 
 func (d *generateDialog) View(th theme) string {

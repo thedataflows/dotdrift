@@ -458,7 +458,7 @@ func (m *applyModel) gateView() string {
 		}
 	}
 	if tty > 0 {
-		b.WriteString(fmt.Sprintf("%d steps will take the terminal.\n\n", tty))
+		fmt.Fprintf(&b, "%d steps will take the terminal.\n\n", tty)
 	}
 	for _, p := range m.previews {
 		b.WriteString("  " + p.Name)
@@ -503,7 +503,7 @@ func (m *applyModel) progressView() string {
 // and any hook sub-command or error text under it.
 func (m *applyModel) renderRow(r *applyRow) string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("  %-4s  %s", r.state.mark(), r.name))
+	fmt.Fprintf(&b, "  %-4s  %s", r.state.mark(), r.name)
 	if r.needsTTY {
 		b.WriteString("  [tty]")
 	}

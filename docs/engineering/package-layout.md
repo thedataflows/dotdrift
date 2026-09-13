@@ -44,7 +44,8 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   │                         # style registry + shell/tree/views/dialogs
 │   │                         # state machines over the service areas
 │   │                         # (reads + writes + apply doorways: gate,
-│   │                         # streamed progress, ExecProcess handover)
+│   │                         # streamed progress, ExecProcess handover;
+│   │                         # manage.go: the module-management menu)
 │   ├── tui/editor/           # The editor suite (0065): one frame
 │   │                         # (file-scoped drafts, validation tiers,
 │   │                         # dirty-confirm) + section adapters + the

@@ -173,24 +173,24 @@ func (a *mountsAdapter) HandleKey(key string) {
 		}
 		return
 	}
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.names)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "enter":
+	case "enter":
 		if a.cur < len(a.names) {
 			a.openForm(a.names[a.cur])
 		}
-	case key == "n":
+	case "n":
 		a.prompting = true
 		a.prompt = newField("name", "mount", "")
 		a.prompt.beginEdit()
-	case key == "x":
+	case "x":
 		if a.cur < len(a.names) {
 			delete(a.draft, a.names[a.cur])
 			a.names = slices.Delete(a.names, a.cur, a.cur+1)
@@ -267,8 +267,6 @@ type smbAdapter struct {
 	inForm         bool
 	formFocus      int
 	shareFields    [5]field // path, comment, valid_users, writable, public
-	serverFocus    int
-	serverEditing  bool
 	prompting      bool
 	prompt         field
 }
@@ -432,24 +430,24 @@ func (a *smbAdapter) HandleKey(key string) {
 		}
 		return
 	}
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.shareNames)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "enter":
+	case "enter":
 		if a.cur < len(a.shareNames) {
 			a.openShareForm(a.shareNames[a.cur])
 		}
-	case key == "n":
+	case "n":
 		a.prompting = true
 		a.prompt = newField("name", "share", "")
 		a.prompt.beginEdit()
-	case key == "x":
+	case "x":
 		if a.cur < len(a.shareNames) {
 			delete(a.shares, a.shareNames[a.cur])
 			a.shareNames = slices.Delete(a.shareNames, a.cur, a.cur+1)

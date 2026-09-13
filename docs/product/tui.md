@@ -149,11 +149,16 @@ schema-driven frame with section adapters, not fourteen bespoke tools
   exclusivity), **when** (validated text area with positioned errors),
   **hooks** (ordered rows, one layer's array), **systemd.units**
   (directive passthrough with structural checks).
-- **Module management** (context-menu dialogs): create = minimal scaffold
-  with sections added through the editors; move = wholesale module-dir
+- **Module management** (`m` on a module or origin selection opens the
+  context menu; the tree position is its context): create = minimal
+  scaffold (app + layer choice — base, this host, this user) with
+  sections added through the editors; move = wholesale module-dir
   move, refused when the target layer already has the module; delete =
   confirm dialog pre-computing which referenced sources become orphans.
-  Content is never merged — contract 7 stays file-literal.
+  The menu's entries open in place as forms; `esc` steps back through
+  the menu, then out; a successful op reloads the modules read so the
+  tree reflects the change. Content is never merged — contract 7 stays
+  file-literal.
 - **OS accounts**: the Accounts group manages `users/<u>/` overlay
   lifecycle and shows ADR-0006's notice. `bootstrap.users` is *emitted*
   mise config, not profile schema; `smb.users` is an ordinary `[smb]`

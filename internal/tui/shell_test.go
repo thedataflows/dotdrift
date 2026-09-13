@@ -74,17 +74,6 @@ func newShellForTest(t *testing.T) (*Shell, tea.Cmd) {
 
 // loadShell runs the startup load and sizes the window — the ready shell
 // with the tree built and the first module selected.
-// loadTree runs the startup load only — the tree is built but the initial
-// view's async fill has not run yet.
-func loadTree(t *testing.T) *Shell {
-	t.Helper()
-	m, init := newShellForTest(t)
-	require.NotNil(t, init, "Init schedules the startup modules load")
-	m, _ = step(m, init())
-	m, _ = step(m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	return m
-}
-
 func loadShell(t *testing.T) *Shell {
 	t.Helper()
 	m, init := newShellForTest(t)

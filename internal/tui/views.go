@@ -195,7 +195,7 @@ func renderRawConfig(m *Shell, dir string) string {
 		b.WriteString("\n  dotfiles:")
 		for _, target := range slices.Sorted(maps.Keys(cfg.Dotfiles)) {
 			d := cfg.Dotfiles[target]
-			b.WriteString(fmt.Sprintf("\n    %s ← %s (%s)", target, d.Source, d.Mode))
+			fmt.Fprintf(&b, "\n    %s ← %s (%s)", target, d.Source, d.Mode)
 		}
 	}
 	if len(cfg.Hooks.Pre) > 0 || len(cfg.Hooks.Post) > 0 {
@@ -211,7 +211,7 @@ func renderRawConfig(m *Shell, dir string) string {
 		b.WriteString("\n  mounts:")
 		for _, name := range slices.Sorted(maps.Keys(cfg.Mounts)) {
 			spec := cfg.Mounts[name]
-			b.WriteString(fmt.Sprintf("\n    %s: %s → %s", name, spec.Source, spec.Destination))
+			fmt.Fprintf(&b, "\n    %s: %s → %s", name, spec.Source, spec.Destination)
 		}
 	}
 	if len(cfg.Smb.Users) > 0 || cfg.Smb.Group != "" {

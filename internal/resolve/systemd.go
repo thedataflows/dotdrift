@@ -95,8 +95,8 @@ func validateSystemdUnit(moduleID, name string, unit profile.SystemdUnit) (strin
 		return "", fmt.Errorf("module %s: systemd unit name must not be empty", moduleID)
 	}
 	for _, r := range name {
-		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' ||
-			r == '.' || r == '_' || r == '-' || r == '@') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') &&
+			r != '.' && r != '_' && r != '-' && r != '@' {
 			return "", fmt.Errorf("module %s: systemd unit name %q must contain only letters, numbers, '.', '_', '-', or '@'", moduleID, name)
 		}
 	}

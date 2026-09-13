@@ -327,6 +327,7 @@ func tomlSystemdValue(unit, key string, v any) (string, error) {
 }
 
 // --- Secrets → [bootstrap.secrets] ---
+
 // GenerateBootstrapSecrets emits a [bootstrap.secrets] section (issue 0044).
 // Entries with only an env var use the short form; description or
 // allow_empty force the table form. Sorted by logical name. Returns "" when

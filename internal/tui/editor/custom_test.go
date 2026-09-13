@@ -116,11 +116,11 @@ func TestWhenEditor_grammarValidationPositions(t *testing.T) {
 	// A malformed kernel constraint fails profile's own grammar (no
 	// source position exists for grammar errors — the message names it).
 	a.body = "kernel = \"wat\"\n"
-	require.Contains(t, strings_join(a.Errors()), "invalid kernel constraint")
+	require.Contains(t, stringsJoin(a.Errors()), "invalid kernel constraint")
 
 	// An empty or-list fails the same grammar.
 	a.body = "or = []\n"
-	require.Contains(t, strings_join(a.Errors()), "when.or")
+	require.Contains(t, stringsJoin(a.Errors()), "when.or")
 
 	// Editing flows through the tiny line editor.
 	b := newWhenAdapter(&profile.ModuleConfig{})
@@ -133,7 +133,7 @@ func TestWhenEditor_grammarValidationPositions(t *testing.T) {
 	require.False(t, b.edit)
 }
 
-func strings_join(errs []string) string {
+func stringsJoin(errs []string) string {
 	out := ""
 	for _, e := range errs {
 		out += e

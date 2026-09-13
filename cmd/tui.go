@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"io"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/facts"
@@ -16,10 +15,6 @@ import (
 // only command that runs a TUI; everything else is strict flag mode.
 type TUICmd struct {
 	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
-	// out/err exist for symmetry with the other adapters; the TUI owns
-	// its terminal.
-	out io.Writer `kong:"-"`
-	err io.Writer `kong:"-"`
 }
 
 // Run builds the reads and writes areas over the adapter's pinned seams

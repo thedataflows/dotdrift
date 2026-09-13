@@ -60,12 +60,6 @@ func (fl *field) String() string { return string(fl.value) }
 // Changed reports whether the field differs from its baseline.
 func (fl *field) Changed() bool { return fl.baseline != fl.String() }
 
-// reset restores the baseline value.
-func (fl *field) reset() {
-	fl.set(fl.baseline)
-	fl.endEdit()
-}
-
 func (fl *field) beginEdit() { fl.edit = true; fl.clampCursor() }
 func (fl *field) endEdit()   { fl.edit = false }
 
@@ -353,37 +347,37 @@ func (a *packagesAdapter) HandleKey(key string) {
 		}
 		return
 	}
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.rows)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "n":
+	case "n":
 		a.prompting = true
 		a.listAbsent = false
 		a.prompt = newField("name", "package", "")
 		a.prompt.beginEdit()
-	case key == "x":
+	case "x":
 		if a.cur < len(a.rows) {
 			a.rows = append(a.rows[:a.cur], a.rows[a.cur+1:]...)
 			if a.cur >= len(a.rows) && a.cur > 0 {
 				a.cur--
 			}
 		}
-	case key == " ":
+	case " ":
 		if a.cur < len(a.rows) {
 			a.rows[a.cur].Absent = !a.rows[a.cur].Absent
 		}
-	case key == "<":
+	case "<":
 		if a.cur > 0 {
 			a.rows[a.cur-1], a.rows[a.cur] = a.rows[a.cur], a.rows[a.cur-1]
 			a.cur--
 		}
-	case key == ">":
+	case ">":
 		if a.cur < len(a.rows)-1 {
 			a.rows[a.cur+1], a.rows[a.cur] = a.rows[a.cur], a.rows[a.cur+1]
 			a.cur++
@@ -508,23 +502,23 @@ func (a *toolsAdapter) HandleKey(key string) {
 			return
 		}
 	}
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.names)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "enter":
+	case "enter":
 		if a.cur < len(a.names) {
 			fl := a.values[a.names[a.cur]]
 			fl.beginEdit()
 			a.values[a.names[a.cur]] = fl
 			a.editing = true
 		}
-	case key == "x":
+	case "x":
 		if a.cur < len(a.names) {
 			delete(a.values, a.names[a.cur])
 			a.names = slices.Delete(a.names, a.cur, a.cur+1)
@@ -599,16 +593,16 @@ func (a *secretsAdapter) Errors() []string {
 }
 
 func (a *secretsAdapter) HandleKey(key string) {
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.names)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "enter":
+	case "enter":
 		if a.cur < len(a.names) {
 			e := a.entries[a.names[a.cur]]
 			e.env.beginEdit()

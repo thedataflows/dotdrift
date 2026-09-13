@@ -135,8 +135,8 @@ type Shell struct {
 	walking     bool // cursor reselection in progress (suppress view sync)
 	modulePlans map[string]*service.PlanRead
 	frames      map[string]*editor.Frame // open editor frames, keyed by module dir
-	cfg         editor.Config            // built lazily via opts.ConfigFor
-	dialogs     map[string]dialog        // Profile dialogs, keyed by action
+	cfg         service.ConfigEditor     // built lazily via opts.ConfigFor; editors see their narrow view of it
+	dialogs     map[string]dialog        // the Profile dialogs + the manage menu, keyed by action
 	writes      Writes                   // built lazily via opts.WritesFor
 	apply       *applyModel              // the apply mode replacing the main pane (nil = off)
 	applier     ApplyLauncher            // built lazily via opts.ApplyFor
@@ -256,6 +256,9 @@ func (m *Shell) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.applyFinished(msg)
 			m.syncDialog(msg.key)
 		}
+		if msg.key == manageKey && msg.err == nil {
+			return m, m.reloadModules() // the tree reflects the module op
+		}
 		return m, nil
 
 	case restorePlanMsg:
@@ -319,6 +322,15 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		switch s {
 		case "tab", "shift+tab", "?", "q", "ctrl+c":
 			// handled by the shell below
+		case "esc":
+			// The dialog's back step first (a confirm gate clears and
+			// stays, the manage menu's form steps back to the menu);
+			// a dialog that gives up esc pops (issue 0072).
+			if d := m.dialogs[top.id.key]; d != nil && d.back() {
+				m.syncDialog(top.id.key)
+				return m, nil
+			}
+			return m.escBack()
 		default:
 			if d := m.dialogs[top.id.key]; d != nil {
 				cmd := d.HandleKey(s)
@@ -373,6 +385,8 @@ func (m *Shell) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.toggleRaw()
 	case "e":
 		return m.openEditor()
+	case "m":
+		return m.openManage()
 	case "a":
 		return m, m.openApply()
 	}
@@ -480,6 +494,54 @@ func (m *Shell) openEditor() (tea.Model, tea.Cmd) {
 	m.stack.open(v)
 	m.syncViewport()
 	return m, nil
+}
+
+// openManage opens the module-management context menu (issue 0072) for
+// the selected module or origin — the tree position is the menu's
+// context, mirroring `e` for editors. A nil ConfigFor keeps it closed.
+func (m *Shell) openManage() (tea.Model, tea.Cmd) {
+	sel := m.selectedItem()
+	if sel.kind != kindModule && sel.kind != kindOrigin {
+		return m, nil
+	}
+	if m.cfg == nil && m.opts.ConfigFor != nil {
+		var f *facts.Facts
+		if m.read != nil {
+			f = m.read.Facts
+		}
+		m.cfg = m.opts.ConfigFor(f)
+	}
+	if m.cfg == nil {
+		return m, nil
+	}
+	var f *facts.Facts
+	if m.read != nil {
+		f = m.read.Facts
+	}
+	d := newManageDialog(m.cfg, m.opts.ProfilePath, f, sel)
+	if m.dialogs == nil {
+		m.dialogs = map[string]dialog{}
+	}
+	m.dialogs[manageKey] = d
+	v := view{
+		id:      viewID{kind: viewAction, key: manageKey},
+		title:   "MODULES",
+		item:    sel,
+		content: d.View(m.th),
+	}
+	m.stack.open(v)
+	m.focus = focusMain
+	m.syncViewport()
+	return m, nil
+}
+
+// reloadModules re-runs the modules read after a successful module op;
+// the tree, views, and cursor rebuild from the fresh read.
+func (m *Shell) reloadModules() tea.Cmd {
+	return func() tea.Msg {
+		r, err := m.area.Modules(m.opts.ProfilePath, nil)
+		return modulesLoadedMsg{read: r, err: err}
+	}
 }
 
 // openApply arms the apply mode from the plan view — the TUI's only

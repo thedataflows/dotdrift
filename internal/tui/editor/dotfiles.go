@@ -184,20 +184,20 @@ func (a *dotfilesAdapter) HandleKey(key string) {
 		return
 	}
 
-	switch {
-	case key == "j" || key == "down":
+	switch key {
+	case "j", "down":
 		if a.cur < len(a.targets)-1 {
 			a.cur++
 		}
-	case key == "k" || key == "up":
+	case "k", "up":
 		if a.cur > 0 {
 			a.cur--
 		}
-	case key == "n":
+	case "n":
 		a.prompting = true
 		a.prompt = newField("target", "target", "")
 		a.prompt.beginEdit()
-	case key == "x":
+	case "x":
 		if a.cur < len(a.targets) {
 			delete(a.draft, a.targets[a.cur])
 			a.targets = slices.Delete(a.targets, a.cur, a.cur+1)
@@ -205,11 +205,11 @@ func (a *dotfilesAdapter) HandleKey(key string) {
 				a.cur--
 			}
 		}
-	case key == "enter":
+	case "enter":
 		if a.cur < len(a.targets) {
 			a.openForm(a.targets[a.cur])
 		}
-	case key == "v":
+	case "v":
 		a.variant()
 	}
 }

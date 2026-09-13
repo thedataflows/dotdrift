@@ -66,12 +66,21 @@ func (d ConfigDeps) withDefaults() ConfigDeps {
 }
 
 // ConfigEditor is the front ends' narrow surface over the config area
-// (ADR-0008's doorway): exactly what the TUI editor frame drives.
+// (ADR-0008's doorway): what the TUI editor frame drives, plus the
+// module-management ops the context-menu dialogs run (issue 0072).
 // *ConfigArea satisfies it implicitly.
 type ConfigEditor interface {
 	ReadModuleLayer(dir string) (*ModuleLayerRead, error)
 	WriteModuleLayer(req SaveRequest) (*SaveResult, error)
+	CreateModule(app, layer string) error
+	MoveModule(app, fromLayer, toLayer string) error
+	// DeletePreview is the orphan list the delete gate shows before
+	// DeleteModule runs.
+	DeletePreview(app, layer string) ([]string, error)
+	DeleteModule(app, layer string) error
 }
+
+var _ ConfigEditor = (*ConfigArea)(nil)
 
 // ConfigArea owns module.toml editing for one profile root.
 type ConfigArea struct {

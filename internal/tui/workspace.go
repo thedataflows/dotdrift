@@ -5,9 +5,10 @@ package tui
 // when, hooks, systemd.units, tools, and a trailing "other" group for the
 // remaining schema sections. Rendering consumes the config area's strict
 // decode plus raw text (the 0065 seam); the workspace never parses TOML
-// itself. A broken file degrades to a read-only raw-text mode naming the
-// error. The row cursor walks entry rows so T-tui-editing hangs edit
-// mode off the same cursor.
+// itself. A broken file degrades to selectable raw-text rows naming the
+// error. Rows carry their edit metadata (family, key, value) so
+// T-tui-editing hangs the inline input off the same cursor; when a draft
+// exists the surface renders from it, dirty-marked per row.
 
 import (
 	"errors"
@@ -27,6 +28,11 @@ type LayerReader interface {
 	ReadModuleLayer(dir string) (*service.ModuleLayerRead, error)
 }
 
+// LayerWriter is the save half of the seam (0065-D8's pipeline).
+type LayerWriter interface {
+	WriteModuleLayer(req service.SaveRequest) (*service.SaveResult, error)
+}
+
 // layerLoadedMsg carries one layer file read; stale reads (the cursor
 // moved on) are dropped by dir.
 type layerLoadedMsg struct {
@@ -35,11 +41,17 @@ type layerLoadedMsg struct {
 	err  error
 }
 
-// wsRow is one rendered row; the cursor walks entry rows only.
+// wsRow is one rendered row; the cursor walks entry rows only. family is
+// the row's splice family ("raw" marks a raw-text line of a broken
+// file), key its stable identity within the family, value the editable
+// value without presentation decoration. Empty family means read-only.
 type wsRow struct {
 	section string
 	text    string
 	header  bool
+	family  string
+	key     string
+	value   string
 }
 
 type workspaceModel struct {
@@ -50,14 +62,16 @@ type workspaceModel struct {
 
 	pending   bool
 	loadErr   string
-	schemaErr error  // *service.SchemaError: broken file, read-only
+	schemaErr error  // *service.SchemaError: broken file, raw-text rows
 	rawErr    string // the broken file's raw text
 	read      *service.ModuleLayerRead
 	loadedDir string // the dir the landed read belongs to
 
-	rows   []wsRow
-	cursor int
-	offset int
+	rows    []wsRow
+	cursor  int
+	offset  int
+	editing *wsEdit  // the active field/line input (T-tui-editing)
+	draft   *wsDraft // the active layer's draft, if any
 
 	placeholder string // pre-reader identity text (and no-reader fallback)
 }
@@ -83,20 +97,41 @@ func (w *workspaceModel) activeDir() string {
 	return w.tabs[w.active].dir
 }
 
+// atSection reports whether the cursor sits in the named section.
+func (w *workspaceModel) atSection(name string) bool {
+	return w.cursor < len(w.rows) && w.rows[w.cursor].section == name
+}
+
+// draftEdits returns the committed-edit marker set, nil without a draft.
+func (w *workspaceModel) draftEdits() map[string]bool {
+	if w.draft == nil {
+		return nil
+	}
+	return w.draft.edited
+}
+
+// draftErrs returns the staged tier-1 errors, nil without a draft.
+func (w *workspaceModel) draftErrs() map[string]string {
+	if w.draft == nil {
+		return nil
+	}
+	return w.draft.errs
+}
+
 // setRead applies a landed layer read and rebuilds the rows.
 func (w *workspaceModel) setRead(r *service.ModuleLayerRead) {
 	w.read = r
 	w.loadedDir = r.Dir
 	w.schemaErr = nil
 	w.rawErr = ""
-	w.rows = wsRows(r, w.needsRoot)
+	w.rows = wsRows(r.Config, w.needsRoot)
 	w.cursor = w.firstEntry(0)
 	w.offset = 0
 }
 
-// setSchemaError applies the broken-file state: read-only, error named,
-// raw text visible (0065 behavior). The raw text is re-read from the
-// named path — reading is not parsing.
+// setSchemaError applies the broken-file state: the error named, the raw
+// text as selectable, line-editable rows (T-tui-editing's raw mode). The
+// raw text is re-read from the named path — reading is not parsing.
 func (w *workspaceModel) setSchemaError(err error) {
 	w.read = nil
 	w.schemaErr = err
@@ -106,7 +141,7 @@ func (w *workspaceModel) setSchemaError(err error) {
 			w.rawErr = string(raw)
 		}
 	}
-	w.rows = nil
+	w.rows = rawRows(w.rawErr)
 	w.cursor = 0
 }
 
@@ -135,7 +170,8 @@ func (w *workspaceModel) firstEntry(from int) int {
 }
 
 // view renders the surface: the title + tab bar line, then the rows in
-// the scroll window.
+// the scroll window, with the active field input and staged errors
+// rendered in place.
 func (w *workspaceModel) view(width, h int, th theme) string {
 	if w.placeholder != "" && w.read == nil && !w.pending && w.schemaErr == nil && w.loadErr == "" {
 		return w.placeholder
@@ -147,40 +183,31 @@ func (w *workspaceModel) view(width, h int, th theme) string {
 		lines = append(lines, th.loading.Render("loading "+w.moduleID+"…"))
 	case w.loadErr != "":
 		lines = append(lines, th.errorMark.Render("load failed: "+w.loadErr))
-	case w.schemaErr != nil:
-		// Every line is width-clamped: parse errors carry a multi-line
-		// source snippet and raw text is arbitrary — neither may break
-		// the pane border. The path is shown relative to the layer dir
-		// so the message itself survives truncation.
-		clamp := func(s string) string { return th.rowText.MaxWidth(width).Render(s) }
-		errText := w.schemaErr.Error()
-		if dir := w.activeDir(); dir != "" {
-			errText = strings.ReplaceAll(errText, dir+"/", "")
-		}
-		lines = append(lines, th.errorMark.MaxWidth(width).Render("broken module.toml — read-only"))
-		for _, l := range strings.Split(errText, "\n") {
-			lines = append(lines, clamp(th.meta.Render("  "+l)))
-		}
-		if w.rawErr != "" {
-			lines = append(lines, "")
-			for _, l := range strings.Split(strings.TrimRight(w.rawErr, "\n"), "\n") {
-				lines = append(lines, clamp(l))
-			}
-		}
 	default:
+		if w.schemaErr != nil {
+			// The error, width-clamped, above the raw rows; the path is
+			// relative to the layer dir so the message survives
+			// truncation.
+			errText := w.schemaErr.Error()
+			if dir := w.activeDir(); dir != "" {
+				errText = strings.ReplaceAll(errText, dir+"/", "")
+			}
+			lines = append(lines, th.errorMark.MaxWidth(width).Render("broken module.toml — raw text mode"))
+			lines = append(lines, th.rowText.MaxWidth(width).Render(th.meta.Render("  "+firstLineOf(errText))))
+		}
 		if w.read != nil && !w.read.Exists {
 			lines = append(lines, th.disabledMark.Render("(no module.toml in this layer)"))
 		}
 		for i := w.offset; i < len(w.rows) && len(lines) < h; i++ {
-			lines = append(lines, w.rowView(w.rows[i], i == w.cursor, th, width))
+			lines = append(lines, w.rowView(w.rows[i], i, th, width)...)
 		}
 	}
 	return strings.Join(lines, "\n")
 }
 
-// titleView renders "demo — [base] · user cri · host myhost": the module
-// id, the tab bar with the active tab bracketed, and the needs-root
-// marker.
+// titleView renders "demo  [base] · user cri · host myhost": the module
+// id, the tab bar with the active tab bracketed, and the needs-root and
+// draft markers.
 func (w *workspaceModel) titleView(th theme) string {
 	if w.moduleID == "" {
 		return ""
@@ -200,152 +227,197 @@ func (w *workspaceModel) titleView(th theme) string {
 	if w.needsRoot {
 		s += "  " + th.reasonMark.Render("needs root")
 	}
+	if w.draft != nil {
+		s += "  " + th.dirtyMark.Render("●")
+	}
 	return s
 }
 
-func (w *workspaceModel) rowView(r wsRow, cursor bool, th theme, width int) string {
+// rowView renders one row (possibly several lines: the edit input and its
+// tier-1 error render in place).
+func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.header {
-		return th.sectionLabel.Render(r.text)
+		return []string{th.sectionLabel.Render(r.text)}
 	}
 	if strings.HasPrefix(r.text, "(none)") {
-		return th.disabledMark.MaxWidth(width).Render("  " + r.text)
+		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}
 	}
-	if cursor {
-		return th.selection.MaxWidth(width).Render("  " + r.text)
+	if w.editing != nil && w.editing.row == i && !w.editing.add {
+		return w.editLines(w.editing, th, width)
 	}
-	return th.rowText.MaxWidth(width).Render("  " + r.text)
+	text := "  " + r.text
+	if w.rowDirty(r) {
+		text += " " + th.dirtyMark.Render("●")
+	}
+	if w.draft != nil {
+		if msg, bad := w.draft.errs[rowKey(r.family, r.key)]; bad {
+			text += "  " + th.errorMark.Render("✗ "+msg)
+		}
+	}
+	if i == w.cursor {
+		return []string{th.selection.MaxWidth(width).Render(text)}
+	}
+	return []string{th.rowText.MaxWidth(width).Render(text)}
 }
 
-// wsRows builds the section rows for one layer's config. Section order is
+// editLines renders the active input: the buffer with a cursor bar, plus
+// the live tier-1 error beneath.
+func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
+	runes := e.input
+	cur := min(e.cur, len(runes))
+	shown := string(runes[:cur]) + "▏" + string(runes[cur:])
+	prefix := "  ▸ "
+	if e.add {
+		prefix = "  + "
+	}
+	lines := []string{th.selection.MaxWidth(width).Render(prefix + shown)}
+	if e.err != "" {
+		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))
+	}
+	return lines
+}
+
+// rowDirty: the draft marks this row edited (committed edits, adds).
+func (w *workspaceModel) rowDirty(r wsRow) bool {
+	if w.draft == nil || r.family == "" {
+		return false
+	}
+	return w.draft.edited[rowKey(r.family, r.key)]
+}
+
+// firstLineOf returns s up to the first newline.
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// wsRows builds the section rows for one layer's config, carrying each
+// editable row's family/key/value for T-tui-editing. Section order is
 // fixed and matches the schema docs; schema sections outside the list
 // (secrets, mounts, smb) render in a trailing "other" group rather than
 // being dropped.
-func wsRows(r *service.ModuleLayerRead, needsRoot bool) []wsRow {
-	cfg := r.Config
+func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	if cfg == nil {
 		cfg = &profile.ModuleConfig{}
 	}
 	var rows []wsRow
-	section := func(name string, entries []string) {
+	section := func(name string, entries []wsRow) {
 		rows = append(rows, wsRow{section: name, text: name, header: true})
 		if len(entries) == 0 {
 			rows = append(rows, wsRow{section: name, text: "(none)"})
 			return
 		}
-		for _, e := range entries {
-			rows = append(rows, wsRow{section: name, text: e})
-		}
+		rows = append(rows, entries...)
+	}
+	entry := func(section, text, family, key, value string) wsRow {
+		return wsRow{section: section, text: text, family: family, key: key, value: value}
 	}
 
-	var meta []string
+	var meta []wsRow
 	if cfg.ID != "" {
-		meta = append(meta, "id "+cfg.ID)
+		meta = append(meta, entry("meta", "id "+cfg.ID, "", "", ""))
 	}
 	if cfg.App != "" && cfg.App != cfg.ID {
-		meta = append(meta, "app "+cfg.App)
+		meta = append(meta, entry("meta", "app "+cfg.App, profile.FamilyKeys, "app", cfg.App))
 	}
-	if cfg.Description != "" {
-		meta = append(meta, cfg.Description)
-	}
-	if cfg.Scope != "" {
-		meta = append(meta, "scope "+cfg.ScopeOrDefault())
-	}
+	meta = append(meta, entry("meta", "description "+cfg.Description, profile.FamilyKeys, "description", cfg.Description))
+	meta = append(meta, entry("meta", "scope "+cfg.ScopeOrDefault(), profile.FamilyKeys, "scope", cfg.Scope))
 	if cfg.Disabled {
-		meta = append(meta, "disabled")
+		meta = append(meta, entry("meta", "disabled", "", "", ""))
 	}
 	section("meta", meta)
 
-	var pkgs []string
+	var pkgs []wsRow
 	for _, p := range cfg.Packages.Present {
-		pkgs = append(pkgs, "+ "+p)
+		pkgs = append(pkgs, entry("packages", "+ "+p, profile.FamilyPackages, "present:"+p, p))
 	}
 	for _, p := range cfg.Packages.Absent {
-		pkgs = append(pkgs, "− "+p)
+		pkgs = append(pkgs, entry("packages", "− "+p, profile.FamilyPackages, "absent:"+p, "-"+p))
 	}
 	section("packages", pkgs)
 
-	var links, writes []string
+	var links, writes []wsRow
 	for _, target := range slices.Sorted(maps.Keys(cfg.Dotfiles)) {
 		d := cfg.Dotfiles[target]
 		switch {
 		case d.Source != "":
-			links = append(links, target+" ← "+d.Source+" ("+d.Mode+")")
+			links = append(links, entry("links", target+" ← "+d.Source+" ("+d.Mode+")",
+				profile.FamilyDotfiles, target, d.Source))
 		case d.Line != "":
-			writes = append(writes, target+" (edit: line)")
+			writes = append(writes, entry("writes", target+" (edit: line)",
+				profile.FamilyDotfiles, target, d.Line))
 		case d.Block != "":
-			writes = append(writes, target+" (edit: block)")
+			writes = append(writes, entry("writes", target+" (edit: block)", "", target, ""))
 		}
 	}
 	section("links", links)
 	section("writes", writes)
-	section("when", whenRows(cfg.When))
 
-	var hooks []string
+	var when []wsRow
+	listRow := func(name string, vs []string) {
+		if len(vs) > 0 {
+			when = append(when, entry("when", name+" "+strings.Join(vs, ", "),
+				profile.FamilyWhen, name, strings.Join(vs, ", ")))
+		}
+	}
+	listRow("hosts", cfg.When.Hosts)
+	listRow("users", cfg.When.Users)
+	listRow("os", cfg.When.OS)
+	if cfg.When.GPU != "" {
+		when = append(when, entry("when", "gpu "+cfg.When.GPU, profile.FamilyWhen, "gpu", cfg.When.GPU))
+	}
+	if cfg.When.Kernel != "" {
+		when = append(when, entry("when", "kernel "+cfg.When.Kernel, profile.FamilyWhen, "kernel", cfg.When.Kernel))
+	}
+	listRow("packages", cfg.When.Packages)
+	listRow("tools", cfg.When.Tools)
+	if len(cfg.When.And) > 0 {
+		when = append(when, entry("when", fmt.Sprintf("and (%d conditions)", len(cfg.When.And)), "", "", ""))
+	}
+	if len(cfg.When.Or) > 0 {
+		when = append(when, entry("when", fmt.Sprintf("or (%d conditions)", len(cfg.When.Or)), "", "", ""))
+	}
+	if cfg.When.Not != nil {
+		when = append(when, entry("when", "not (1 condition)", "", "", ""))
+	}
+	section("when", when)
+
+	var hooks []wsRow
 	for _, h := range cfg.Hooks.Pre {
-		hooks = append(hooks, "pre: "+h.Command)
+		hooks = append(hooks, entry("hooks", "pre: "+h.Command, profile.FamilyHooks, "pre:"+h.Command, h.Command))
 	}
 	for _, h := range cfg.Hooks.Post {
-		hooks = append(hooks, "post: "+h.Command)
+		hooks = append(hooks, entry("hooks", "post: "+h.Command, profile.FamilyHooks, "post:"+h.Command, h.Command))
 	}
 	section("hooks", hooks)
 
-	var units []string
+	var units []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Systemd.Units)) {
-		units = append(units, name)
+		units = append(units, entry("systemd.units", name, "", "", ""))
 	}
 	section("systemd.units", units)
 
-	var tools []string
+	var tools []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Tools)) {
-		tools = append(tools, name+" = "+cfg.Tools[name])
+		tools = append(tools, entry("tools", name+" = "+cfg.Tools[name], profile.FamilyTools, name, cfg.Tools[name]))
 	}
 	section("tools", tools)
 
-	var other []string
+	var other []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Secrets)) {
 		s := cfg.Secrets[name]
-		other = append(other, "secret "+name+" (env "+s.Env+")")
+		other = append(other, entry("other", "secret "+name+" (env "+s.Env+")", "", "", ""))
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Mounts)) {
 		m := cfg.Mounts[name]
-		other = append(other, "mount "+name+" → "+m.Destination)
+		other = append(other, entry("other", "mount "+name+" → "+m.Destination, "", "", ""))
 	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Smb.Shares)) {
-		other = append(other, "smb share "+name)
+		other = append(other, entry("other", "smb share "+name, "", "", ""))
 	}
 	section("other", other)
 
 	return rows
-}
-
-// whenRows renders the top-level conditions; nested groups render as
-// counts (the full tree builder is an explicit non-goal).
-func whenRows(w profile.When) []string {
-	var out []string
-	list := func(name string, vs []string) {
-		if len(vs) > 0 {
-			out = append(out, name+" "+strings.Join(vs, ", "))
-		}
-	}
-	list("hosts", w.Hosts)
-	list("users", w.Users)
-	list("os", w.OS)
-	if w.GPU != "" {
-		out = append(out, "gpu "+w.GPU)
-	}
-	if w.Kernel != "" {
-		out = append(out, "kernel "+w.Kernel)
-	}
-	list("packages", w.Packages)
-	list("tools", w.Tools)
-	if len(w.And) > 0 {
-		out = append(out, fmt.Sprintf("and (%d conditions)", len(w.And)))
-	}
-	if len(w.Or) > 0 {
-		out = append(out, fmt.Sprintf("or (%d conditions)", len(w.Or)))
-	}
-	if w.Not != nil {
-		out = append(out, "not (1 condition)")
-	}
-	return out
 }

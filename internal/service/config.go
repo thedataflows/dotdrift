@@ -47,17 +47,13 @@ type ConfigDeps struct {
 	// Facts the save pipeline's resolve checks run against. Nil falls back
 	// to an empty fact set (a profile whose modules carry no when-leaves
 	// still resolves).
-	Facts       *facts.Facts
-	LoadProfile func(root string, f *facts.Facts) (*profile.Profile, error)
-	Resolve     func(p *profile.Profile, f *facts.Facts) (*resolve.Plan, error)
+	Facts   *facts.Facts
+	Resolve func(p *profile.Profile, f *facts.Facts) (*resolve.Plan, error)
 }
 
 func (d ConfigDeps) withDefaults() ConfigDeps {
 	if d.Facts == nil {
 		d.Facts = &facts.Facts{}
-	}
-	if d.LoadProfile == nil {
-		d.LoadProfile = profile.Load
 	}
 	if d.Resolve == nil {
 		d.Resolve = resolve.Resolve
@@ -120,12 +116,12 @@ func (a *ConfigArea) ReadModuleLayer(dir string) (*ModuleLayerRead, error) {
 		if !os.IsNotExist(err) {
 			return nil, err
 		}
-		r.Hash = rawHash(nil)
+		r.Hash = RawHash(nil)
 		return r, nil
 	}
 	r.Exists = true
 	r.Raw = string(raw)
-	r.Hash = rawHash(raw)
+	r.Hash = RawHash(raw)
 	cfg := &profile.ModuleConfig{}
 	if err := profile.DecodeModuleTOML(path, raw, cfg); err != nil {
 		return nil, schemaError(err)
@@ -156,6 +152,10 @@ type SaveRequest struct {
 	// Replacements maps section families to their re-encoded blocks; see
 	// tomlsplice.Splice and the profile family constants.
 	Replacements map[string]string
+	// Raw, when non-nil, is the whole-file candidate (the raw-text repair
+	// path: a broken file cannot be family-spliced). Replacements is
+	// ignored; every other pipeline stage guards the save unchanged.
+	Raw *string
 }
 
 // SaveResult carries the post-save state the draft rebases onto.
@@ -176,11 +176,14 @@ func (a *ConfigArea) WriteModuleLayer(req SaveRequest) (*SaveResult, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if rawHash(current) != req.BaseHash {
+	if RawHash(current) != req.BaseHash {
 		return nil, &DiskHashConflictError{Path: path}
 	}
 
 	spliced := tomlsplice.Splice(string(current), req.Replacements)
+	if req.Raw != nil {
+		spliced = *req.Raw
+	}
 
 	// The round-trip proof: what the splice produced must be a valid
 	// module.toml under the strict schema.
@@ -197,7 +200,10 @@ func (a *ConfigArea) WriteModuleLayer(req SaveRequest) (*SaveResult, error) {
 	// conflicts (contracts 16/9), scope constraints (contract 14). The
 	// edited module's config is patched in memory — the checks see the
 	// save's outcome without touching the disk.
-	p, err := a.deps.LoadProfile(a.root, a.deps.Facts)
+	// The context load is tolerant: the edited module's own broken file
+	// is exactly what a raw-repair save fixes (patchModule substitutes the
+	// candidate), and a broken sibling must not block saving this file.
+	p, err := profile.LoadTolerant(a.root, a.deps.Facts)
 	if err != nil {
 		return nil, fmt.Errorf("save pipeline: load profile: %w", schemaError(err))
 	}
@@ -213,14 +219,14 @@ func (a *ConfigArea) WriteModuleLayer(req SaveRequest) (*SaveResult, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	if rawHash(now) != req.BaseHash {
+	if RawHash(now) != req.BaseHash {
 		return nil, &DiskHashConflictError{Path: path}
 	}
 
 	if err := atomicWrite(path, []byte(spliced)); err != nil {
 		return nil, err
 	}
-	return &SaveResult{Hash: rawHash([]byte(spliced)), Raw: spliced}, nil
+	return &SaveResult{Hash: RawHash([]byte(spliced)), Raw: spliced}, nil
 }
 
 // patchModule replaces the in-memory config of the module living at dir —
@@ -279,7 +285,10 @@ func atomicWrite(path string, data []byte) error {
 	return os.Rename(tmpName, path)
 }
 
-func rawHash(raw []byte) string {
+// RawHash is the disk-hash the draft ledger baselines against (0065-D8);
+// exported so the TUI's raw-repair draft — forked from a SchemaError,
+// which carries no ModuleLayerRead — can name its base.
+func RawHash(raw []byte) string {
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }

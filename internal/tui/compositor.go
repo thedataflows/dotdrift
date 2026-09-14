@@ -78,9 +78,11 @@ type Compositor struct {
 	ws    workspaceModel
 	focus paneFocus
 
-	editing bool // workspace inline edit mode; T-tui-editing drives it
-
 	modals []modal
+
+	// pendingReload is set by the conflict modal's reload answer; the
+	// compositor schedules the layer read after the modal pops.
+	pendingReload bool
 
 	// Layer reads (T-tui-workspace): layerFor builds the 0065 config seam
 	// once facts land; reader is the cached instance.
@@ -92,8 +94,10 @@ type Compositor struct {
 	root     string
 	host     string
 	user     string
-	drafts   map[string]bool // the 0065 ledger: layer dir → unsaved draft
 	applying bool
+
+	// store is the 0065 file-scoped draft ledger: layer dir → draft.
+	store map[string]*wsDraft
 
 	// Footer chrome.
 	op       string
@@ -118,6 +122,7 @@ func NewCompositor(area Reads, root string, layerFor func(*facts.Facts) LayerRea
 		help:     help.New(),
 		isDark:   true,
 		nav:      navModel{pending: true},
+		store:    map[string]*wsDraft{},
 	}
 }
 
@@ -176,7 +181,10 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ws.loadErr = ""
 			m.ws.setRead(msg.read)
 		}
+		m.attachDraft()
 		return m, nil
+	case saveFinishedMsg:
+		return m, m.saveFinished(msg)
 	case opStartedMsg:
 		m.op = msg.name
 		m.message, m.msgErr = "", false
@@ -204,13 +212,31 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.spinTick()
 	}
 
-	// The modal stack owns all other input; esc pops the top layer.
+	// The modal stack owns all other input; esc pops the top layer. A
+	// modal reporting finished() pops itself after its answer.
 	if len(m.modals) > 0 {
 		if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
 			m.modals = m.modals[:len(m.modals)-1]
 			return m, nil
 		}
-		return m, m.modals[len(m.modals)-1].update(msg)
+		top := m.modals[len(m.modals)-1]
+		cmd := top.update(msg)
+		if fm, ok := top.(interface{ finished() bool }); ok && fm.finished() {
+			m.modals = m.modals[:len(m.modals)-1]
+			if m.pendingReload {
+				m.pendingReload = false
+				return m, m.loadLayer()
+			}
+		}
+		return m, cmd
+	}
+
+	// Edit mode owns all keys while a field input is active.
+	if m.ws.editing != nil {
+		if k, ok := msg.(tea.KeyPressMsg); ok {
+			return m, m.editKey(k)
+		}
+		return m, nil
 	}
 
 	if k, ok := msg.(tea.KeyPressMsg); ok {
@@ -228,9 +254,7 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "tab", "shift+tab":
 		m.focus = (m.focus + 1) % 2 // two panes: reverse is forward
 	case "esc":
-		if m.editing {
-			m.editing = false
-		} else if m.focus != focusNav {
+		if m.focus != focusNav {
 			m.focus = focusNav
 		}
 	default:
@@ -263,7 +287,9 @@ func (m *Compositor) navKey(s string) tea.Cmd {
 }
 
 // workKey is the workspace pane's key vocabulary: j/k walk entry rows,
-// L cycles the layer tabs.
+// L cycles the layer tabs, enter/e edits the field, a adds a row, d
+// removes with confirm, ctrl+s saves the draft, D discards it with
+// confirm.
 func (m *Compositor) workKey(s string) tea.Cmd {
 	switch s {
 	case "j", "down":
@@ -272,6 +298,16 @@ func (m *Compositor) workKey(s string) tea.Cmd {
 		m.ws.move(-1)
 	case "L":
 		return m.cycleLayer()
+	case "enter", "e":
+		m.startEdit()
+	case "a":
+		m.startAdd()
+	case "d":
+		m.confirmRemoveRow()
+	case "D":
+		m.confirmDiscard()
+	case "ctrl+s":
+		return m.saveDraft()
 	}
 	return nil
 }
@@ -340,7 +376,44 @@ func (m *Compositor) syncWorkspace() tea.Cmd {
 		m.ws.placeholder = sel.moduleID
 		m.ws.active = 0
 	}
+	m.attachDraft()
 	return m.loadLayer()
+}
+
+// attachDraft points the workspace at the active layer's draft (if any)
+// and re-renders from it — drafts survive navigation and layer switches
+// because the store is keyed by file, not by selection.
+func (m *Compositor) attachDraft() {
+	d := m.store[m.ws.activeDir()]
+	m.ws.draft = d
+	m.ws.editing = nil
+	switch {
+	case d == nil:
+		// Rows already reflect the landed read (or the placeholder).
+	case d.cfg != nil:
+		m.ws.schemaErr = nil
+		m.ws.rows = wsRows(d.cfg, m.ws.needsRoot)
+	default: // raw-mode draft: the file is still broken
+		m.ws.rows = rawRows(d.raw)
+	}
+	if m.ws.cursor >= len(m.ws.rows) {
+		m.ws.cursor = max(0, len(m.ws.rows)-1)
+	}
+}
+
+// wsDraftFor returns the draft for a layer dir, if any.
+func (m *Compositor) wsDraftFor(dir string) *wsDraft { return m.store[dir] }
+
+// draftMarks derives the nav/header dirty marker set from the store.
+func (m *Compositor) draftMarks() map[string]bool {
+	if len(m.store) == 0 {
+		return nil
+	}
+	marks := make(map[string]bool, len(m.store))
+	for dir := range m.store {
+		marks[dir] = true
+	}
+	return marks
 }
 
 // loadLayer schedules a read of the active layer file through the 0065
@@ -413,7 +486,7 @@ func (m *Compositor) compositedFrame() string {
 // the box (the workspace-all golden caught this).
 func (m *Compositor) baseFrame() string {
 	navW, workW, paneH := m.layout()
-	left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-4, paneH-2, m.th, m.drafts))
+	left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-4, paneH-2, m.th, m.draftMarks()))
 	right := m.pane(m.focus == focusWork, workW-2, paneH, m.ws.view(workW-4, paneH-2, m.th))
 	return lipgloss.JoinVertical(lipgloss.Left,
 		m.headerView(),
@@ -444,8 +517,8 @@ func (m *Compositor) headerView() string {
 	if m.host != "" {
 		s += m.th.headerContext.Render(" · host " + m.host + " · user " + m.user)
 	}
-	if len(m.drafts) > 0 {
-		s += m.th.dirtyMark.Render("  ● " + strconv.Itoa(len(m.drafts)))
+	if len(m.store) > 0 {
+		s += m.th.dirtyMark.Render("  ● " + strconv.Itoa(len(m.store)))
 	}
 	if m.applying {
 		s += m.th.applyBadge.Render("  ▶ apply")

@@ -54,6 +54,8 @@ type theme struct {
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
 	selection     lipgloss.Style // the cursor row (M15 nav/workspace)
 	rowText       lipgloss.Style // plain row text (truncation carrier)
+	modalBorder   lipgloss.Style // the confirm modal's frame (M15)
+	modalTitle    lipgloss.Style // the confirm modal's question (M15)
 
 	// Tree: groups, module labels, overlay badges, origin markers.
 	groupTitle   lipgloss.Style // MODULES / ACCOUNTS / PROFILE
@@ -86,6 +88,8 @@ func newTheme(isDark bool) theme {
 		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
 		selection:     lipgloss.NewStyle().Bold(true),
 		rowText:       lipgloss.NewStyle(),
+		modalBorder:   pane.BorderForeground(p.amber),
+		modalTitle:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 
 		groupTitle:   lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 		originMark:   lipgloss.NewStyle().Foreground(p.fuchsia),

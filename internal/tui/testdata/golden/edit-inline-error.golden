@@ -5,24 +5,24 @@
 │                          ││  id demo                                                         │
 │                          ││  app demo-app                                                    │
 │                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
+│                          ││  ▸ bogus▏                                                        │
+│                          ││    ✗ scope must be "user" or "system"                            │
 │                          ││packages                                                          │
 │                          ││  + neovim                                                        │
 │                          ││  + ripgrep                                                       │
-│                          ││  − emacs                                                         │
 │                          ││links                                                             │
-│                          ││  ~/.bashrc ← .bashrc (symlink)                                   │
+│                          ││  (none)                                                          │
 │                          ││writes                                                            │
-│                          ││  ~/.config/demo.toml (edit: line)                                │
-│                          ││  ~/.profile (edit: block)                                        │
+│                          ││  (none)                                                          │
 │                          ││when                                                              │
-│                          ││  hosts myhost                                                    │
-│                          ││  os linux                                                        │
+│                          ││  (none)                                                          │
 │                          ││hooks                                                             │
-│                          ││  pre: echo pre                                                   │
-│                          ││  post: echo post                                                 │
+│                          ││  (none)                                                          │
 │                          ││systemd.units                                                     │
-│                          ││  demo.service                                                    │
+│                          ││  (none)                                                          │
+│                          ││tools                                                             │
+│                          ││  node = 20                                                       │
+│                          ││other                                                             │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
- k up • j down • enter open • tab pane • ? help • q quit
+ j/k scroll • L layer • tab pane • ? help • q quit

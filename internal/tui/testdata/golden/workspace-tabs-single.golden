@@ -3,6 +3,8 @@
 │MODULES                   ││plain  [base]                                                     │
 │▸ demo                    ││meta                                                              │
 │▸ plain                   ││  id plain                                                        │
+│                          ││  description                                                     │
+│                          ││  scope user                                                      │
 │                          ││packages                                                          │
 │                          ││  (none)                                                          │
 │                          ││links                                                             │
@@ -19,8 +21,6 @@
 │                          ││  (none)                                                          │
 │                          ││other                                                             │
 │                          ││  (none)                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯

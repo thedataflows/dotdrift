@@ -78,6 +78,24 @@ Shipped so far (T-tui-compositor):
   layer dir, the raw text visible, every line width-clamped. `j`/`k`
   walk entry rows (headers and empty markers are skipped) so
   T-tui-editing hangs edit mode off the same cursor.
+- **Inline editing** (T-tui-editing). `enter`/`e` turns the field under
+  the cursor into an input without leaving the workspace; the tier-1
+  error renders at the field live. Committed edits splice through the
+  profile family encoders into the file-scoped draft (0065), which
+  re-decodes on every commit — a draft can never hold unparseable text.
+  Dirty shows per row, on the tab line, and on the nav rows. Drafts are
+  file-scoped: navigation and layer switches never prompt. `ctrl+s`
+  saves through the untouched 0065 pipeline (staged tier-1 errors and
+  the tier-2 cross-check block in place; a disk-hash conflict opens a
+  reload-or-keep modal); `D` discards with a confirm naming module,
+  layer, and change count; `a` adds a row to packages/tools/hooks/links,
+  `d` removes one with confirm. A broken file edits as raw text lines
+  (`e` on a line); a repair that parses unlocks the structured surface,
+  and its save sends the whole repaired file as the raw candidate
+  (`SaveRequest.Raw` — the splice step swaps out, every other pipeline
+  check stands). Structural families beyond links/writes (systemd units,
+  secrets, mounts, smb) stay read-only rows here; their 0065 custom
+  editors remain in the M14 shell until T-tui-cleanup.
 
 # Stack and chrome
 

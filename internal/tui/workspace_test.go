@@ -140,7 +140,7 @@ func TestWorkspace_parseErrorShowsRawText(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n[broken\n"})
 	requireGolden(t, "workspace-parse-error.golden", c.View().Content, subs)
 	frame := c.View().Content
-	require.Contains(t, frame, "read-only", "a broken file opens read-only")
+	require.Contains(t, frame, "raw text mode", "a broken file opens in raw text mode")
 	require.Contains(t, frame, "[broken", "the raw text stays visible")
 }
 

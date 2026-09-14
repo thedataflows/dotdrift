@@ -135,16 +135,16 @@ func TestFocus_exactlyOnePaneFocused(t *testing.T) {
 
 func TestEsc_popsTopLayer(t *testing.T) {
 	c := newTestCompositor()
-	c.editing = true
+	c.ws.editing = &wsEdit{}
 	c.focus = focusWork
 	c.modals = append(c.modals, &stubModal{box: "AAAA"})
 
 	c = cpress(c, "esc")
 	require.Empty(t, c.modals, "esc pops the modal first")
-	require.True(t, c.editing, "edit mode survives while a modal is open")
+	require.NotNil(t, c.ws.editing, "edit mode survives while a modal is open")
 
 	c = cpress(c, "esc")
-	require.False(t, c.editing, "esc exits edit mode next")
+	require.Nil(t, c.ws.editing, "esc exits edit mode next")
 	require.Equal(t, focusWork, c.focus, "focus stays while editing exits")
 
 	c = cpress(c, "esc")
@@ -203,7 +203,7 @@ func TestHeader_dirtyCountAndApplyBadge(t *testing.T) {
 	require.NotContains(t, frame, "●", "a clean shell shows no dirty count")
 	require.NotContains(t, frame, "apply", "no badge without a running apply")
 
-	c.drafts = map[string]bool{"/a": true, "/b": true}
+	c.store = map[string]*wsDraft{"/a": {}, "/b": {}}
 	require.Contains(t, c.View().Content, "● 2", "the header counts dirty drafts")
 
 	c.applying = true

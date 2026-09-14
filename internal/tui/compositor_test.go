@@ -26,10 +26,10 @@ func cpress(c *Compositor, s string) *Compositor {
 }
 
 func newTestCompositor() *Compositor {
-	c := NewCompositor(nil, "/home/cri/profiles/main")
+	c := NewCompositor(nil, "/home/cri/profiles/main", nil)
 	c.host, c.user = "myhost", "cri"
 	c.nav = navModel{modules: []navModule{{id: "shell"}, {id: "firefox"}}}
-	c.workText = "module: shell\npackages: 3"
+	c.ws.placeholder = "module: shell\npackages: 3"
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 100, Height: 30})
 	return c
 }

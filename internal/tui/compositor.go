@@ -9,6 +9,7 @@ package tui
 // The old view stack (shell.go) stays alive until T-tui-cleanup.
 
 import (
+	"errors"
 	"regexp"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/service"
 )
 
@@ -56,6 +58,7 @@ var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"
 var stripANSIRe = regexp.MustCompile(`\x1b\[[0-9;:?]*[a-zA-Z]`)
 
 var keyPane = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane"))
+var keyLayer = key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "layer"))
 
 // navLoadedMsg carries the modules read (T-tui-nav).
 type navLoadedMsg struct {
@@ -63,8 +66,7 @@ type navLoadedMsg struct {
 	err  error
 }
 
-// Compositor is the M15 shell model. The workspace pane is placeholder
-// text until T-tui-workspace.
+// Compositor is the M15 shell model.
 type Compositor struct {
 	th     theme
 	isDark bool
@@ -72,12 +74,19 @@ type Compositor struct {
 
 	area Reads
 
-	nav      navModel
-	workText string
-	focus    paneFocus
-	editing  bool // workspace inline edit mode; T-tui-editing drives it
+	nav   navModel
+	ws    workspaceModel
+	focus paneFocus
+
+	editing bool // workspace inline edit mode; T-tui-editing drives it
 
 	modals []modal
+
+	// Layer reads (T-tui-workspace): layerFor builds the 0065 config seam
+	// once facts land; reader is the cached instance.
+	layerFor func(*facts.Facts) LayerReader
+	reader   LayerReader
+	facts    *facts.Facts
 
 	// Header chrome.
 	root     string
@@ -96,16 +105,19 @@ type Compositor struct {
 	help help.Model
 }
 
-// NewCompositor builds the M15 shell over a profile root. Experimental
-// until it reaches parity with the M14 shell (T-tui-cleanup).
-func NewCompositor(area Reads, root string) *Compositor {
+// NewCompositor builds the M15 shell over a profile root. layerFor builds
+// the workspace's layer reader once facts land (nil: the workspace shows
+// identity placeholder text only). Experimental until it reaches parity
+// with the M14 shell (T-tui-cleanup).
+func NewCompositor(area Reads, root string, layerFor func(*facts.Facts) LayerReader) *Compositor {
 	return &Compositor{
-		th:     newTheme(true), // corrected by BackgroundColorMsg
-		area:   area,
-		root:   root,
-		help:   help.New(),
-		isDark: true,
-		nav:    navModel{pending: true},
+		th:       newTheme(true), // corrected by BackgroundColorMsg
+		area:     area,
+		root:     root,
+		layerFor: layerFor,
+		help:     help.New(),
+		isDark:   true,
+		nav:      navModel{pending: true},
 	}
 }
 
@@ -144,10 +156,26 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.nav.loadErr = ""
 			if f := msg.read.Facts; f != nil {
 				m.host, m.user = f.Hostname, f.Username
+				m.facts = f
 			}
 		}
 		m.nav.restore(sel)
-		m.syncWorkspace()
+		return m, m.syncWorkspace()
+	case layerLoadedMsg:
+		if msg.dir != m.ws.activeDir() {
+			return m, nil // stale: the cursor moved on
+		}
+		m.ws.pending = false
+		var se *service.SchemaError
+		switch {
+		case errors.As(msg.err, &se):
+			m.ws.setSchemaError(msg.err)
+		case msg.err != nil:
+			m.ws.loadErr = msg.err.Error()
+		default:
+			m.ws.loadErr = ""
+			m.ws.setRead(msg.read)
+		}
 		return m, nil
 	case opStartedMsg:
 		m.op = msg.name
@@ -207,7 +235,10 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	default:
 		if m.focus == focusNav {
-			m.navKey(msg.String())
+			return m, m.navKey(msg.String())
+		}
+		if m.focus == focusWork {
+			return m, m.workKey(msg.String())
 		}
 	}
 	return m, nil
@@ -215,7 +246,7 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 // navKey is the nav pane's key vocabulary: j/k move, h/l collapse/expand
 // (arrows too), and every move keeps the workspace on the selection.
-func (m *Compositor) navKey(s string) {
+func (m *Compositor) navKey(s string) tea.Cmd {
 	switch s {
 	case "j", "down":
 		m.nav.move(1)
@@ -226,24 +257,110 @@ func (m *Compositor) navKey(s string) {
 	case "l", "right":
 		m.nav.expand()
 	default:
+		return nil
+	}
+	return m.syncWorkspace()
+}
+
+// workKey is the workspace pane's key vocabulary: j/k walk entry rows,
+// L cycles the layer tabs.
+func (m *Compositor) workKey(s string) tea.Cmd {
+	switch s {
+	case "j", "down":
+		m.ws.move(1)
+	case "k", "up":
+		m.ws.move(-1)
+	case "L":
+		return m.cycleLayer()
+	}
+	return nil
+}
+
+// cycleLayer advances the active layer tab (base → user → host, wrapping)
+// and pulls the nav cursor along — the two never disagree.
+func (m *Compositor) cycleLayer() tea.Cmd {
+	if len(m.ws.tabs) == 0 {
+		return nil
+	}
+	m.ws.active = (m.ws.active + 1) % len(m.ws.tabs)
+	m.syncNavToActiveLayer()
+	return m.loadLayer()
+}
+
+// syncNavToActiveLayer moves the nav cursor onto the active layer tab's
+// child row, expanding the module when needed.
+func (m *Compositor) syncNavToActiveLayer() {
+	if m.ws.moduleID == "" || m.ws.active >= len(m.ws.tabs) {
 		return
 	}
-	m.syncWorkspace()
+	if m.nav.expanded == nil {
+		m.nav.expanded = map[string]bool{}
+	}
+	m.nav.expanded[m.ws.moduleID] = true
+	want := m.ws.tabs[m.ws.active]
+	for i, r := range m.nav.rows() {
+		if r.moduleID == m.ws.moduleID && r.layer == want.layer && r.dir == want.dir {
+			m.nav.cursor = i
+			return
+		}
+	}
 }
 
 // syncWorkspace points the workspace at the nav selection — the two never
-// disagree. Placeholder identity text until T-tui-workspace.
-func (m *Compositor) syncWorkspace() {
+// disagree — and schedules the layer read when the target file changed.
+func (m *Compositor) syncWorkspace() tea.Cmd {
 	sel := m.nav.selected()
 	if sel.moduleID == "" {
-		m.workText = ""
-		return
+		m.ws = workspaceModel{}
+		return nil
+	}
+	if sel.moduleID != m.ws.moduleID {
+		m.ws = workspaceModel{moduleID: sel.moduleID, placeholder: sel.moduleID}
+		for i := range m.nav.modules {
+			mod := &m.nav.modules[i]
+			if mod.id != sel.moduleID {
+				continue
+			}
+			m.ws.tabs = mod.layers
+			for _, l := range mod.layers {
+				if l.super {
+					m.ws.needsRoot = true
+				}
+			}
+		}
 	}
 	if sel.layer != "" {
-		m.workText = sel.moduleID + " · " + sel.label
-		return
+		m.ws.placeholder = sel.moduleID + " · " + sel.label
+		for i, t := range m.ws.tabs {
+			if t.layer == sel.layer && t.dir == sel.dir {
+				m.ws.active = i
+			}
+		}
+	} else {
+		m.ws.placeholder = sel.moduleID
+		m.ws.active = 0
 	}
-	m.workText = sel.moduleID
+	return m.loadLayer()
+}
+
+// loadLayer schedules a read of the active layer file through the 0065
+// seam. No reader (nil layerFor): the workspace keeps its placeholder.
+func (m *Compositor) loadLayer() tea.Cmd {
+	dir := m.ws.activeDir()
+	if m.layerFor == nil || dir == "" {
+		return nil
+	}
+	if dir == m.ws.loadedDir {
+		return nil // already showing this file
+	}
+	m.ws.pending = true
+	return func() tea.Msg {
+		if m.reader == nil {
+			m.reader = m.layerFor(m.facts)
+		}
+		r, err := m.reader.ReadModuleLayer(dir)
+		return layerLoadedMsg{dir: dir, read: r, err: err}
+	}
 }
 
 func (m *Compositor) spinTick() tea.Cmd {
@@ -253,7 +370,7 @@ func (m *Compositor) spinTick() tea.Cmd {
 // ShortHelp implements help.KeyMap; hints follow the focused pane.
 func (m *Compositor) ShortHelp() []key.Binding {
 	if m.focus == focusWork {
-		return []key.Binding{keyScroll, keyPane, keyHelp, keyQuit}
+		return []key.Binding{keyScroll, keyLayer, keyPane, keyHelp, keyQuit}
 	}
 	return []key.Binding{keyUp, keyDown, keyOpen, keyPane, keyHelp, keyQuit}
 }
@@ -290,11 +407,14 @@ func (m *Compositor) compositedFrame() string {
 	return canvas.Render()
 }
 
-// baseFrame is header + panes + footer at the current size.
+// baseFrame is header + panes + footer at the current size. In lipgloss
+// v2 a style's Width/Height include the border, so pane content gets the
+// outer dimensions minus two — a view handed the outer size overflows
+// the box (the workspace-all golden caught this).
 func (m *Compositor) baseFrame() string {
 	navW, workW, paneH := m.layout()
-	left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-2, paneH, m.th, m.drafts))
-	right := m.pane(m.focus == focusWork, workW-2, paneH, m.workText)
+	left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-4, paneH-2, m.th, m.drafts))
+	right := m.pane(m.focus == focusWork, workW-2, paneH, m.ws.view(workW-4, paneH-2, m.th))
 	return lipgloss.JoinVertical(lipgloss.Left,
 		m.headerView(),
 		lipgloss.JoinHorizontal(lipgloss.Top, left, right),

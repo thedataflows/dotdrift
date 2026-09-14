@@ -270,6 +270,19 @@ type Profile struct {
 // Load reads a profile directory, unions dotdrift.toml layers, discovers
 // modules, and runs selection against the provided facts.
 func Load(root string, f *facts.Facts) (*Profile, error) {
+	return load(root, f, false)
+}
+
+// LoadTolerant behaves like Load except a module.toml that fails to
+// decode becomes a Skipped entry naming the error instead of failing the
+// whole load. The interactive shell uses it so one broken file greys out
+// its row and opens read-only rather than killing the TUI (M15); strict
+// Load stays the plan/apply path — writes never silently skip a module.
+func LoadTolerant(root string, f *facts.Facts) (*Profile, error) {
+	return load(root, f, true)
+}
+
+func load(root string, f *facts.Facts, tolerant bool) (*Profile, error) {
 	if f == nil {
 		f = &facts.Facts{}
 	}
@@ -277,18 +290,32 @@ func Load(root string, f *facts.Facts) (*Profile, error) {
 	if err := p.loadConfig(root, f); err != nil {
 		return nil, err
 	}
-	if err := p.discover(root, f); err != nil {
+	if err := p.discover(root, f, tolerant); err != nil {
 		return nil, err
 	}
+	// Select rebuilds Skipped from scratch; a broken module.toml recorded
+	// during tolerant discovery must survive it.
+	discoverSkips := p.Skipped
 	f = enrichProbes(f, p.Modules)
 	p.Select(f)
-	if err := p.markSuperuserOverlays(root, f); err != nil {
+	p.Skipped = append(discoverSkips, p.Skipped...)
+	if err := p.markSuperuserOverlays(root, f, tolerant); err != nil {
 		return nil, err
 	}
 	if err := p.markMisplacedModules(root); err != nil {
 		return nil, err
 	}
 	return p, nil
+}
+
+// firstLine returns s up to the first newline — parse errors carry a
+// multi-line source snippet, and a Skip reason must be one line (it is a
+// nav row suffix).
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // LoadModuleConfig reads a module.toml from the given directory.

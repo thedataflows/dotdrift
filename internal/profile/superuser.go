@@ -35,7 +35,7 @@ var lookupUID = func(name string) (string, bool) {
 // other-user overlay and stays invisible. The superuser test is uid == 0 —
 // never gid (root-group membership is not superuser). Selection is untouched:
 // skipped modules never reach resolve.
-func (p *Profile) markSuperuserOverlays(root string, f *facts.Facts) error {
+func (p *Profile) markSuperuserOverlays(root string, f *facts.Facts, tolerant bool) error {
 	usersDir := filepath.Join(root, "users")
 	entries, err := os.ReadDir(usersDir)
 	if err != nil {
@@ -64,8 +64,16 @@ func (p *Profile) markSuperuserOverlays(root string, f *facts.Facts) error {
 			if !m.IsDir() {
 				continue
 			}
-			mod, err := loadModule(filepath.Join(usersDir, name, "modules", m.Name()), m.Name())
+			modPath := filepath.Join(usersDir, name, "modules", m.Name())
+			mod, err := loadModule(modPath, m.Name())
 			if err != nil {
+				if tolerant {
+					skips = append(skips, Skip{
+						Module: Module{ID: m.Name(), Path: modPath},
+						Reason: "invalid module.toml: " + firstLine(err.Error()),
+					})
+					continue
+				}
 				return err
 			}
 			if mod == nil {

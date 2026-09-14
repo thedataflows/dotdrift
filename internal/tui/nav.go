@@ -24,6 +24,7 @@ type navLayer struct {
 	owner string // layer owner; empty for base
 	dir   string // absolute layer module directory (the draft-ledger key)
 	label string // "base", "user cri", "host myhost", "user root (superuser)"
+	super bool   // a superuser overlay (0029): the module needs root
 }
 
 // navModule is one module row plus its layers. A non-empty reason greys
@@ -110,6 +111,7 @@ func navLayerFor(l drift.ModuleLayer, host, user string, super map[string]bool) 
 		switch {
 		case super[l.Owner]:
 			nl.label = "user " + l.Owner + " (superuser)"
+			nl.super = true
 		case user != "" && l.Owner == user:
 			nl.label = "user " + l.Owner
 		default:

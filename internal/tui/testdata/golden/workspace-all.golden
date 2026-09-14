@@ -1,0 +1,28 @@
+ dotdrift · $PROFILE · host myhost · user cri
+╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
+│MODULES                   ││demo  [base]                                                      │
+│▸ demo                    ││meta                                                              │
+│                          ││  id demo                                                         │
+│                          ││  app demo-app                                                    │
+│                          ││  the demo module                                                 │
+│                          ││  scope user                                                      │
+│                          ││packages                                                          │
+│                          ││  + neovim                                                        │
+│                          ││  + ripgrep                                                       │
+│                          ││  − emacs                                                         │
+│                          ││links                                                             │
+│                          ││  ~/.bashrc ← .bashrc (symlink)                                   │
+│                          ││writes                                                            │
+│                          ││  ~/.config/demo.toml (edit: line)                                │
+│                          ││  ~/.profile (edit: block)                                        │
+│                          ││when                                                              │
+│                          ││  hosts myhost                                                    │
+│                          ││  os linux                                                        │
+│                          ││hooks                                                             │
+│                          ││  pre: echo pre                                                   │
+│                          ││  post: echo post                                                 │
+│                          ││systemd.units                                                     │
+│                          ││  demo.service                                                    │
+╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+
+ k up • j down • enter open • tab pane • ? help • q quit

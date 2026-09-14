@@ -6,6 +6,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/service"
 	"github.com/thedataflows/dotdrift/internal/tui"
 )
@@ -18,6 +19,11 @@ type TUICmd struct {
 	Compositor bool   `name:"compositor" hidden:"" help:"Run the experimental M15 compositor shell."`
 }
 
+// profileLoadTolerant loads the profile for interactive use: a broken
+// module.toml greys out its row instead of killing the shell (M15). The
+// write paths (plan/apply) keep the strict profileLoad.
+var profileLoadTolerant = profile.LoadTolerant
+
 // Run builds the reads and writes areas over the adapter's pinned seams
 // and hands them to the shell through the TUI package's narrow
 // interfaces (ADR-0008). WarnLoad stays nil: the tree's skip listing is
@@ -28,7 +34,7 @@ type TUICmd struct {
 func (c *TUICmd) Run() error {
 	area := service.NewReadsArea(service.ReadsDeps{
 		Detect:        detectFacts,
-		LoadProfile:   profileLoad,
+		LoadProfile:   profileLoadTolerant,
 		Resolve:       resolvePlan,
 		OtherAccounts: otherAccounts,
 	})
@@ -36,7 +42,9 @@ func (c *TUICmd) Run() error {
 		// The M15 compositor shell (issue 0073), mounted behind a hidden
 		// flag until it reaches parity and the old shell is deleted
 		// (T-tui-cleanup).
-		return tui.NewCompositor(area, c.Profile).Run()
+		return tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
+			return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})
+		}).Run()
 	}
 	shell := tui.New(area, tui.Options{
 		ProfilePath: c.Profile,

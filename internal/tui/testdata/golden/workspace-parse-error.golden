@@ -1,13 +1,13 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││baseonly                                                          │
-│▸ baseonly                ││                                                                  │
-│▸ vault · requires root (r││                                                                  │
+│MODULES                   ││demo  [base]                                                      │
+│▸ demo · invalid module.to││broken module.toml — read-only                                    │
+│                          ││  module.toml:3:8: expected '.' or ']' to end table name, but got │
 │                          ││                                                                  │
+│                          ││             ^                                                    │
 │                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
+│                          ││id = "demo"                                                       │
+│                          ││[broken                                                           │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

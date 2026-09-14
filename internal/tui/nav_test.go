@@ -30,7 +30,7 @@ func navShell(t *testing.T, profileRel string) (map[string]string, *Compositor) 
 			return &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Kernel: "6.12.1-arch1-1", Distro: "arch", GPU: " amd", Backend: "pacman"}, nil
 		},
 	})
-	c := NewCompositor(area, dir)
+	c := NewCompositor(area, dir, nil)
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 100, Height: 30})
 	load := mustMsg(c.Init())
 	require.NotNil(t, load, "Init schedules the modules read")
@@ -68,7 +68,7 @@ func TestNav_emptyProfile(t *testing.T) {
 			return &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"}, nil
 		},
 	})
-	c := NewCompositor(area, dir)
+	c := NewCompositor(area, dir, nil)
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 64, Height: 24})
 	c, _ = cstep(c, mustMsg(c.Init()))
 	requireGolden(t, "nav-empty.golden", c.View().Content, map[string]string{dir: "$PROFILE"})
@@ -85,7 +85,7 @@ func TestNav_loadPlaceholderRows(t *testing.T) {
 	area := service.NewReadsArea(service.ReadsDeps{
 		Detect: func() (*facts.Facts, error) { return &facts.Facts{}, nil },
 	})
-	c := NewCompositor(area, ".")
+	c := NewCompositor(area, ".", nil)
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 64, Height: 24})
 	requireGolden(t, "nav-loading.golden", c.View().Content, nil)
 }
@@ -97,7 +97,7 @@ func TestNav_loadErrorNamed(t *testing.T) {
 			return nil, errors.New("boom")
 		},
 	})
-	c := NewCompositor(area, ".")
+	c := NewCompositor(area, ".", nil)
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 100, Height: 30})
 	c, _ = cstep(c, mustMsg(c.Init()))
 	require.Contains(t, c.View().Content, "boom", "a failed read names the error in the nav")
@@ -142,15 +142,15 @@ func TestNav_expansionRememberedPerSession(t *testing.T) {
 
 func TestNav_selectionSyncsWorkspace(t *testing.T) {
 	_, c := navShell(t, "resolve")
-	require.Contains(t, c.workText, "shell", "the workspace opens on the first module")
+	require.Contains(t, c.ws.placeholder, "shell", "the workspace opens on the first module")
 
 	c = cpress(c, "l")
 	c = cpress(c, "j")
-	require.Contains(t, c.workText, "shell")
-	require.Contains(t, c.workText, "base", "the workspace follows the selected layer")
+	require.Contains(t, c.ws.placeholder, "shell")
+	require.Contains(t, c.ws.placeholder, "base", "the workspace follows the selected layer")
 
 	c = cpress(c, "j")
-	require.Contains(t, c.workText, "user", "the workspace never disagrees with the nav")
+	require.Contains(t, c.ws.placeholder, "user", "the workspace never disagrees with the nav")
 }
 
 func TestNav_cursorSurvivesReload(t *testing.T) {

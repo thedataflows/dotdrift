@@ -19,7 +19,7 @@ import (
 // across different directory names remain fatal. Empty hostname/username
 // facts skip that layer's scan; missing layer module directories are absent
 // layers, not errors (only the base modules/ directory is required).
-func (p *Profile) discover(root string, f *facts.Facts) error {
+func (p *Profile) discover(root string, f *facts.Facts, tolerant bool) error {
 	layers := []string{filepath.Join(root, "modules")}
 	if f.Hostname != "" {
 		layers = append(layers, filepath.Join(root, "hosts", f.Hostname, "modules"))
@@ -47,6 +47,13 @@ func (p *Profile) discover(root string, f *facts.Facts) error {
 			modPath := filepath.Join(layerDir, entry.Name())
 			mod, err := loadModule(modPath, entry.Name())
 			if err != nil {
+				if tolerant {
+					p.Skipped = append(p.Skipped, Skip{
+						Module: Module{ID: entry.Name(), Path: modPath},
+						Reason: "invalid module.toml: " + firstLine(err.Error()),
+					})
+					continue
+				}
 				return err
 			}
 			if mod == nil {

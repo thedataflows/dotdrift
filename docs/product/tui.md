@@ -62,6 +62,22 @@ Shipped so far (T-tui-compositor):
   failed modules stay visible, greyed, naming the reason on the row;
   while the read is in flight the pane shows placeholder rows; an empty
   profile shows `(no modules)`. Rows truncate to the pane width.
+- **The workspace** (T-tui-workspace). `module.toml` rendered as a
+  sectioned read surface over the 0065 config seam (strict decode + raw
+  text; the workspace never parses TOML): fixed-order sections — meta,
+  packages, links, writes, when, hooks, systemd.units, tools, and an
+  "other" group for the rest of the schema — with `(none)` for empty
+  sections, never a blank pane. The title line carries the layer tabs
+  (`base · user cri · host myhost`, active bracketed) in sync with the
+  nav both ways: selecting a layer child moves the tab, `L` cycles the
+  tabs and moves the nav cursor. A module with a superuser overlay shows
+  `needs root`. A broken `module.toml` no longer kills the shell: the
+  interactive load (`profile.LoadTolerant`; strict `Load` stays the
+  plan/apply path) greys the module's nav row with the error, and the
+  workspace opens the file read-only — the error named relative to the
+  layer dir, the raw text visible, every line width-clamped. `j`/`k`
+  walk entry rows (headers and empty markers are skipped) so
+  T-tui-editing hangs edit mode off the same cursor.
 
 # Stack and chrome
 

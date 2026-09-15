@@ -12,6 +12,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/rs/zerolog v1.35.1
+	github.com/sahilm/fuzzy v0.1.3
 	github.com/stretchr/testify v1.12.1
 	golang.org/x/sys v0.48.0
 )

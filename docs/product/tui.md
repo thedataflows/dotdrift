@@ -113,6 +113,19 @@ Shipped so far (T-tui-compositor):
   tail, verdict) — closing never cancels, `ctrl+c` inside asks first.
   Session events are compositor-level messages: they flow while any
   modal is open.
+- **The palette** (T-tui-palette). `/` opens the fuzzy palette — the
+  teleport path: modules with overlay layers as separate entries
+  (`demo · user cri`), contextually valid actions (apply, manage, new
+  module, save/discard draft — only what can run right now), and the
+  current module's non-empty sections as deep links. Fixed section order
+  (modules, actions, fields); ranking is sahilm/fuzzy (vendored) with an
+  exact/prefix affinity tier and shorter-label tiebreak, recency
+  (in-session, last 8) breaking ties last. Empty query shows recents
+  then all modules; `no matches` carries the dimmed `ctrl+n` hint that
+  opens module creation with the query prefilled (never auto-offered).
+  Choosing a module jumps nav and workspace in sync (focus to the
+  workspace); a dirty draft never prompts on a jump. esc restores the
+  exact prior state. Mouse: wheel moves, click chooses.
 
 # Stack and chrome
 

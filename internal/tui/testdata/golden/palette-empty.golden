@@ -1,0 +1,29 @@
+ dotdrift · $PROFILE · host myhost · user cri
+╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
+│MODULES                   ││demo  [base] · user cri · host myhost                             │
+│▸ demo                    ││meta                                                              │
+│▸ other                   ││  id demo                                                         │
+│▸ plain                   ││  app demo-app                                                    │
+│                          ││  description the demo module                                     │
+│                          ││  scope user                                                      │
+│                          ││packages                                                          │
+│                          ││  +╭──────────────────────────────────╮                           │
+│                          ││  +│                                  │                           │
+│                          ││lin│  / ▏                             │                           │
+│                          ││  (│                                  │                           │
+│                          ││wri│    ◆ demo  module                │                           │
+│                          ││  (│    ◆ demo · user cri  module     │                           │
+│                          ││whe│    ◆ demo · host myhost  module  │                           │
+│                          ││  (│    ◆ other  module               │                           │
+│                          ││hoo│    ◆ plain  module               │                           │
+│                          ││  (│                                  │                           │
+│                          ││sys╰──────────────────────────────────╯                           │
+│                          ││  (none)                                                          │
+│                          ││tools                                                             │
+│                          ││  node = 20                                                       │
+│                          ││other                                                             │
+│                          ││  (none)                                                          │
+╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+
+ k up • j down • enter open • tab pane • ? help • q quit
+

@@ -95,6 +95,9 @@ type Compositor struct {
 	applyPreviews []service.StepPreview
 	pumpNoBlock   bool // tests: the event pump never blocks a settle loop
 
+	// paletteRecents: the palette's last-8 selections, session-only.
+	paletteRecents []string
+
 	// Layer reads (T-tui-workspace): layerFor builds the 0065 config seam
 	// once facts land; reader is the cached instance.
 	layerFor func(*facts.Facts) LayerReader
@@ -325,6 +328,8 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.focus == focusNav {
 			m.openManage()
 		}
+	case "/":
+		m.openPalette()
 	default:
 		if m.focus == focusNav {
 			return m, m.navKey(msg.String())

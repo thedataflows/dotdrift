@@ -454,6 +454,26 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
+// openManageCreate opens the manage dialog straight in create mode, the
+// app field prefilled (the palette's ctrl+n escape from no-results —
+// explicit, never auto-offered).
+func (m *Compositor) openManageCreate(prefill string) {
+	ce, ok := m.reader.(service.ConfigEditor)
+	if !ok {
+		m.message, m.msgErr = "module management needs the config area", true
+		return
+	}
+	sel := m.nav.selected()
+	item := treeItem{kind: kindModule, label: sel.moduleID, moduleID: sel.moduleID, dir: sel.dir}
+	d := newManageDialog(ce, m.root, m.facts, item)
+	d.openEntry() // menu cursor defaults to "create module"
+	if prefill != "" && len(d.rows) > 0 && d.rows[0].field != nil {
+		d.rows[0].field.value = []rune(prefill)
+		d.rows[0].field.cursor = len([]rune(prefill))
+	}
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th})
+}
+
 // openManage opens the module-management menu (m) as a modal over the
 // nav selection.
 func (m *Compositor) openManage() {

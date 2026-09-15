@@ -464,7 +464,7 @@ func (m *Compositor) openManageCreate(prefill string) {
 		return
 	}
 	sel := m.nav.selected()
-	item := treeItem{kind: kindModule, label: sel.moduleID, moduleID: sel.moduleID, dir: sel.dir}
+	item := manageSel{moduleID: sel.moduleID, dir: sel.dir}
 	d := newManageDialog(ce, m.root, m.facts, item)
 	d.openEntry() // menu cursor defaults to "create module"
 	if prefill != "" && len(d.rows) > 0 && d.rows[0].field != nil {
@@ -483,7 +483,7 @@ func (m *Compositor) openManage() {
 		return
 	}
 	sel := m.nav.selected()
-	item := treeItem{kind: kindModule, label: sel.moduleID, moduleID: sel.moduleID, dir: sel.dir}
+	item := manageSel{moduleID: sel.moduleID, dir: sel.dir}
 	if sel.layer == "" && sel.moduleID != "" {
 		for _, mod := range m.nav.modules {
 			if mod.id == sel.moduleID && len(mod.layers) > 0 {

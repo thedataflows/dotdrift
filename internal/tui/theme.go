@@ -3,7 +3,6 @@ package tui
 import (
 	"image/color"
 
-	"charm.land/bubbles/v2/tree"
 	"charm.land/lipgloss/v2"
 )
 
@@ -49,7 +48,6 @@ type theme struct {
 	headerContext lipgloss.Style // host/user context
 	dirtyMark     lipgloss.Style // the ● unsaved indicator
 	statusBar     lipgloss.Style // help hints line
-	confirmLine   lipgloss.Style // quit-with-dirty confirmation
 	applyBadge    lipgloss.Style // the ▶ apply header badge (M15)
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
 	selection     lipgloss.Style // the cursor row (M15 nav/workspace)
@@ -59,8 +57,6 @@ type theme struct {
 
 	// Tree: groups, module labels, overlay badges, origin markers.
 	groupTitle   lipgloss.Style // MODULES / ACCOUNTS / PROFILE
-	originMark   lipgloss.Style // base/, hosts/<h>/, users/<u>/ children
-	badge        lipgloss.Style // overlay-count badge
 	disabledMark lipgloss.Style // (disabled) suffix
 	reasonMark   lipgloss.Style // requires-root and other skip reasons
 
@@ -83,7 +79,6 @@ func newTheme(isDark bool) theme {
 		headerContext: lipgloss.NewStyle().Foreground(p.muted),
 		dirtyMark:     lipgloss.NewStyle().Bold(true).Foreground(p.fuchsia),
 		statusBar:     lipgloss.NewStyle().Foreground(p.dim),
-		confirmLine:   lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		applyBadge:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
 		selection:     lipgloss.NewStyle().Bold(true),
@@ -92,8 +87,6 @@ func newTheme(isDark bool) theme {
 		modalTitle:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 
 		groupTitle:   lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
-		originMark:   lipgloss.NewStyle().Foreground(p.fuchsia),
-		badge:        lipgloss.NewStyle().Foreground(p.muted),
 		disabledMark: lipgloss.NewStyle().Foreground(p.dim),
 		reasonMark:   lipgloss.NewStyle().Foreground(p.amber),
 
@@ -103,18 +96,6 @@ func newTheme(isDark bool) theme {
 		meta:         lipgloss.NewStyle().Foreground(p.muted),
 		errorMark:    lipgloss.NewStyle().Bold(true).Foreground(p.red),
 	}
-}
-
-// treeStyles maps the registry onto the bubbles tree (the registry→bubbles
-// mechanism for this milestone): plain nodes, bold selection, dim
-// enumerators.
-func (t theme) treeStyles() tree.Styles {
-	var s tree.Styles
-	s.RootNodeStyle = t.groupTitle
-	s.NodeStyle = lipgloss.NewStyle()
-	s.SelectedNodeStyle = lipgloss.NewStyle().Bold(true)
-	s.EnumeratorStyle = t.badge
-	return s
 }
 
 // The editor.Palette implementation: the editor chrome styles through the

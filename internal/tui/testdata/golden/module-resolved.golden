@@ -1,9 +1,0 @@
-MODULE shell — resolved for host myhost, user cri
-scope user
-origins   base → hosts/myhost → users/cri (later layers win)
-packages   +eza · +fd · +neovim · +ripgrep · −emacs · −nano
-tools   node=22 · python=3.12
-dotfiles   ~/.bashrc ← users/cri (copy)
-         ~/.config/fish ← hosts/myhost (symlink-each)
-hooks   pre:  echo base-pre → echo host-pre → echo user-pre
-         post: echo base-post → echo host-post → echo user-post

@@ -32,7 +32,7 @@ type manageDialog struct {
 	cfg   service.ConfigEditor
 	root  string
 	facts *facts.Facts
-	sel   treeItem // the selection the menu hangs off (module context)
+	sel   manageSel // the selection the menu hangs off (module context)
 
 	mode    manageMode
 	cur     int
@@ -44,7 +44,7 @@ type manageDialog struct {
 	err     error
 }
 
-func newManageDialog(cfg service.ConfigEditor, root string, f *facts.Facts, sel treeItem) *manageDialog {
+func newManageDialog(cfg service.ConfigEditor, root string, f *facts.Facts, sel manageSel) *manageDialog {
 	d := &manageDialog{cfg: cfg, root: root, facts: f, sel: sel}
 	d.toMenu()
 	return d

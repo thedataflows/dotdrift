@@ -1,4 +1,0 @@
-SUPERUSER root
-requires root (run with sudo)
-selectable only under sudo — run `sudo dotdrift tui` to converge it
-modules   vault

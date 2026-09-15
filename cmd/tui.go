@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 
-	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
@@ -12,26 +11,25 @@ import (
 	"github.com/thedataflows/dotdrift/internal/tui"
 )
 
-// TUICmd opens the two-pane interactive shell (M14, issue 0063's
-// approved prototype): the one interactive home (ADR-0007). It is the
-// only command that runs a TUI; everything else is strict flag mode.
-type TUICmd struct {
-	Profile    string `help:"Path to profile directory" type:"existingdir" default:"."`
-	Compositor bool   `name:"compositor" hidden:"" help:"Run the experimental M15 compositor shell."`
-}
-
 // profileLoadTolerant loads the profile for interactive use: a broken
 // module.toml greys out its row instead of killing the shell (M15). The
 // write paths (plan/apply) keep the strict profileLoad.
 var profileLoadTolerant = profile.LoadTolerant
 
-// Run builds the reads and writes areas over the adapter's pinned seams
-// and hands them to the shell through the TUI package's narrow
-// interfaces (ADR-0008). WarnLoad stays nil: the tree's skip listing is
-// the canonical surfacing for load-time nudges (the modules read's
-// contract), so the TUI never doubles them as stderr lines. The config
-// and writes areas are built lazily — they need the facts, which land
-// with the first read.
+// TUICmd opens the interactive shell (M15, issue 0073): the one
+// interactive home (ADR-0007). It is the only command that runs a TUI;
+// everything else is strict flag mode.
+type TUICmd struct {
+	Profile string `help:"Path to profile directory" type:"existingdir" default:"."`
+}
+
+// Run builds the reads area over the adapter's pinned seams and hands it
+// to the compositor through the TUI package's narrow interfaces
+// (ADR-0008). The reads area loads tolerantly — a broken module.toml
+// greys out its row instead of killing the shell (strict Load stays the
+// plan/apply path); the config and writes areas are built lazily — they
+// need the facts, which land with the first read. The sudo checker is
+// executil.SudoValidate (the elevation modal's seam).
 func (c *TUICmd) Run() error {
 	area := service.NewReadsArea(service.ReadsDeps{
 		Detect:        detectFacts,
@@ -39,62 +37,31 @@ func (c *TUICmd) Run() error {
 		Resolve:       resolvePlan,
 		OtherAccounts: otherAccounts,
 	})
-	if c.Compositor {
-		// The M15 compositor shell (issue 0073), mounted behind a hidden
-		// flag until it reaches parity and the old shell is deleted
-		// (T-tui-cleanup).
-		comp := tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
-			return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})
-		})
-		comp.SetApply(func(*facts.Facts) tui.ApplyLauncher {
-			return tuiApplyLauncher{area: service.NewApplyArea(service.ApplyDeps{
-				Detect:      detectFacts,
-				LoadProfile: profileLoad,
-				Resolve:     resolvePlan,
-				NewMise:     func() *mise.Mise { return defaultMise() },
-			})}
-		}, executil.SudoValidate)
-		comp.SetWrites(func(*facts.Facts) tui.Writes {
-			return service.NewWritesArea(service.WritesDeps{
-				Detect: detectFacts,
-				NewMise: func(verbose bool) mise.Runner {
-					m := defaultMise()
-					m.Verbose = verbose
-					return mise.NewExecMise(m)
-				},
-			})
-		})
-		return comp.Run()
-	}
-	shell := tui.New(area, tui.Options{
-		ProfilePath: c.Profile,
-		ProbesFor:   tuiProbesFor,
-		ConfigFor: func(f *facts.Facts) service.ConfigEditor {
-			return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})
-		},
-		WritesFor: func(*facts.Facts) tui.Writes {
-			return service.NewWritesArea(service.WritesDeps{
-				Detect: detectFacts,
-				NewMise: func(verbose bool) mise.Runner {
-					m := defaultMise()
-					m.Verbose = verbose
-					return mise.NewExecMise(m)
-				},
-			})
-		},
-		ApplyFor: func(*facts.Facts) tui.ApplyLauncher {
-			return tuiApplyLauncher{area: service.NewApplyArea(service.ApplyDeps{
-				Detect:      detectFacts,
-				LoadProfile: profileLoad,
-				Resolve:     resolvePlan,
-				NewMise:     func() *mise.Mise { return defaultMise() },
-			})}
-		},
+	comp := tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
+		return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})
 	})
-	return runTUIProgram(shell)
+	comp.SetApply(func(*facts.Facts) tui.ApplyLauncher {
+		return tuiApplyLauncher{area: service.NewApplyArea(service.ApplyDeps{
+			Detect:      detectFacts,
+			LoadProfile: profileLoad,
+			Resolve:     resolvePlan,
+			NewMise:     func() *mise.Mise { return defaultMise() },
+		})}
+	}, executil.SudoValidate)
+	comp.SetWrites(func(*facts.Facts) tui.Writes {
+		return service.NewWritesArea(service.WritesDeps{
+			Detect: detectFacts,
+			NewMise: func(verbose bool) mise.Runner {
+				m := defaultMise()
+				m.Verbose = verbose
+				return mise.NewExecMise(m)
+			},
+		})
+	})
+	return runTUIProgram(comp)
 }
 
-// tuiApplyLauncher adapts the apply area to the shell's launcher
+// tuiApplyLauncher adapts the apply area to the compositor's launcher
 // interface (Go has no return-type covariance: Start's concrete
 // *ApplySession satisfies ApplyRun, but the method signature doesn't).
 type tuiApplyLauncher struct{ area *service.ApplyArea }
@@ -111,17 +78,8 @@ func (l tuiApplyLauncher) Start(ctx context.Context, opts service.ApplyOpts) (tu
 	return sess, nil
 }
 
-// tuiProbesFor builds the drift probes for the status view: the same
-// backend/mise seams and sudo-elevation retry the `status` adapter uses.
-func tuiProbesFor(f *facts.Facts) drift.Probes {
-	pr := drift.DefaultProbes()
-	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
-	pr.ToolCurrent = mise.NewExecMise(defaultMise()).Current
-	return elevateProbes(pr)
-}
-
 // runTUIProgram is the program runner seam; tests swap it so the command
 // can be exercised without a terminal.
-var runTUIProgram = func(m *tui.Shell) error {
+var runTUIProgram = func(m *tui.Compositor) error {
 	return m.Run()
 }

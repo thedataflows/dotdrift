@@ -22,8 +22,8 @@ import (
 // layer's file as raw text plus a strict decode, runs the save pipeline
 // (encode → splice → strict-decode → resolve-level checks → disk-hash
 // check → atomic tmp+rename), and owns the module-management operations —
-// create/move/delete per 0065-D5. Presentation-free: the editor frame
-// (internal/tui/editor) drives it.
+// create/move/delete per 0065-D5. Presentation-free: the compositor's
+// workspace and dialogs drive it (M15).
 
 // Section families, re-exported as the save pipeline's staging
 // vocabulary: SaveRequest.Replacements is keyed by these.

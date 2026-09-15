@@ -9,6 +9,11 @@ order: 14
 
 # Goal
 
+**Status: superseded in presentation by [M15](m15-tui-compositor.md)
+(2026-09-15).** The M14 shell, view stack, and editor frames are deleted;
+the writes dialogs' domain logic survives as compositor modals. The apply
+session service and all domain work stand.
+
 Ship `dotdrift tui`: the two-pane shell (approved prototype, issue 0063)
 over the product service layer, with first-class structured editors for
 every `module.toml` section and apply streamed inside the TUI with real

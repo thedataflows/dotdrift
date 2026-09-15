@@ -9,7 +9,7 @@ timestamp: 2026-09-13T00:00:00Z
 # ISSUE 0073: TUI compositor redesign
 
 - **Type**: task
-- **Status**: open
+- **Status**: done
 - **Priority**: high
 - **Labels**: [tui, redesign]
 - **Assignee**: none
@@ -58,25 +58,32 @@ styles resolved through the ADR-0003 palette registry with adaptive
 
 ## Acceptance Criteria
 
-- [ ] One shell: header / nav / workspace / footer; overlays are modals on
+- [x] One shell: header / nav / workspace / footer; overlays are modals on
       a compositor stack; `esc` always means "get out of the topmost thing".
-- [ ] Nav shows modules with overlay layers as expandable children, dirty
+- [x] Nav shows modules with overlay layers as expandable children, dirty
       markers, and placeholders for async loads.
-- [ ] Workspace renders `module.toml` as a sectioned surface with status
+- [x] Workspace renders `module.toml` as a sectioned surface with status
       glyphs and layer tabs; every section has a designed empty state.
-- [ ] Editing is per-field inline over the 0065 draft ledger; raw-text
+- [x] Editing is per-field inline over the 0065 draft ledger; raw-text
       degraded mode for parse errors; save/discard with conflict refusal.
-- [ ] Elevation is one modal per elevation with an explicit reason list;
+- [x] Elevation is one modal per elevation with an explicit reason list;
       cancel aborts cleanly; password handled as zeroed bytes, never
       logged or drafted.
-- [ ] `/` palette indexes modules+layers, contextually valid actions, and
+- [x] `/` palette indexes modules+layers, contextually valid actions, and
       current-module fields with fzf-style ranking and in-session recents.
-- [ ] Every destructive action goes through one confirm component
+- [x] Every destructive action goes through one confirm component
       (`y` confirms, everything else cancels, full target identity).
-- [ ] Keymap is a single table: shift-for-dangerous, no undo, contextual
+- [x] Keymap is a single table: shift-for-dangerous, no undo, contextual
       `?` help.
-- [ ] The old view stack and orphaned views are deleted; `go test ./...`,
+- [x] The old view stack and orphaned views are deleted; `go test ./...`,
       `go vet ./...`, `golangci-lint run ./...` green.
+
+All criteria landed across M15's eight tasks (see
+[m15-tui-compositor](../milestones/m15-tui-compositor.md) and the log).
+Known follow-up filed as [0074](0074-structural-section-editing.md):
+the structural families (systemd units, secrets, mounts, smb, nested
+when) are read-only rows in the new workspace — their 0065 custom
+editors were deleted with the M14 editor frames.
 
 ## Out of Scope
 

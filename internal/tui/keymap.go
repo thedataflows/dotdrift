@@ -333,16 +333,18 @@ func (m *Compositor) baseMouse(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.MouseWheelMsg:
 		if msg.X < navW {
-			if msg.Button == tea.MouseWheelDown {
+			switch msg.Button {
+			case tea.MouseWheelDown:
 				m.nav.move(1)
-			} else if msg.Button == tea.MouseWheelUp {
+			case tea.MouseWheelUp:
 				m.nav.move(-1)
 			}
 			return m.syncWorkspace()
 		}
-		if msg.Button == tea.MouseWheelDown {
+		switch msg.Button {
+		case tea.MouseWheelDown:
 			m.ws.move(1)
-		} else if msg.Button == tea.MouseWheelUp {
+		case tea.MouseWheelUp:
 			m.ws.move(-1)
 		}
 	case tea.MouseClickMsg:

@@ -9,6 +9,11 @@ order: 15
 
 # Goal
 
+**Status: complete (2026-09-15).** All eight tasks landed; the compositor
+is the only `dotdrift tui`. Known follow-up: issue
+[0074](/issues/0074-structural-section-editing.md) (structural-section
+editing).
+
 Rebuild `dotdrift tui`'s presentation layer per the accepted redesign
 (issue [0073](../issues/0073-tui-compositor-redesign.md)): a compositor —
 one base shell (header / nav / workspace / footer) plus a modal stack —

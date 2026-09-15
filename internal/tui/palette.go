@@ -107,9 +107,7 @@ func (m *Compositor) paletteEntries() []paletteEntry {
 			})
 		}
 	}
-	for _, a := range m.paletteActions() {
-		out = append(out, a)
-	}
+	out = append(out, m.paletteActions()...)
 	// Fields: the current module's non-empty sections.
 	seen := map[string]int{}
 	for _, r := range m.ws.rows {

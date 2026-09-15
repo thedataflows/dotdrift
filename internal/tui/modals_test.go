@@ -87,7 +87,7 @@ func TestElevation_onePromptCoversAllPrivilegedOps(t *testing.T) {
 	require.Len(t, el.reasons, 2, "all privileged steps list as reasons — no per-action whack-a-mole")
 
 	c = typeText(c, "hunter2")
-	c = applySettle(t, c, cpressCmd(c, "enter"))
+	applySettle(t, c, cpressCmd(c, "enter"))
 	require.Equal(t, 1, l.started, "one elevation covers every privileged step")
 }
 
@@ -240,7 +240,7 @@ func TestApply_destructiveConfirmBeforeElevation(t *testing.T) {
 	require.IsType(t, &elevationModel{}, c.modals[0], "…then the elevation gate")
 
 	c = typeText(c, "pw")
-	c = applySettle(t, c, cpressCmd(c, "enter"))
+	applySettle(t, c, cpressCmd(c, "enter"))
 	require.Equal(t, 1, l.started, "both gates passed, the run starts")
 }
 
@@ -288,7 +288,7 @@ func TestApplyDetail_failed(t *testing.T) {
 func TestApplyDetail_closeNeverCancels_ctrlCInsideConfirms(t *testing.T) {
 	run := newTestRun()
 	run.events <- service.StepStarted{Name: "packages", Index: 0, Total: 1}
-	_, l, c := applyShellRun(t, []service.StepPreview{{Name: "packages"}}, run)
+	_, _, c := applyShellRun(t, []service.StepPreview{{Name: "packages"}}, run)
 
 	c = wsPress(t, c, "P")
 	require.True(t, c.applying)
@@ -302,7 +302,6 @@ func TestApplyDetail_closeNeverCancels_ctrlCInsideConfirms(t *testing.T) {
 	c = cpress(c, "a")
 	c = cpress(c, "ctrl+c")
 	require.Len(t, c.modals, 2, "ctrl+c inside asks before cancelling")
-	c = cpress(c, "y")
-	require.Equal(t, 1, l.run.(*testRun).cancelled, "the confirm cancels the session")
-	_ = run
+	cpress(c, "y")
+	require.Equal(t, 1, run.cancelled, "the confirm cancels the session")
 }

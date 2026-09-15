@@ -7,7 +7,6 @@ import (
 
 	"charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
-	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/service"
 )
@@ -232,52 +231,3 @@ func TestGenerateDialog_layerChoice(t *testing.T) {
 
 // The dialogs open from the tree's action nodes, the stub text is gone,
 // and typed keys reach the focused dialog.
-func TestDialogs_writeOnlyThroughService(t *testing.T) {
-	fake := newFakeWrites()
-	area := &fakeReads{read: editorFixture(t)}
-	m := New(area, Options{
-		ProfilePath: area.read.Profile.Root,
-		WritesFor:   func(*facts.Facts) Writes { return fake },
-	})
-	cmd := m.Init()
-	if cmd != nil {
-		cmd()
-	}
-	m.setSize(120, 40)
-	m.Update(modulesLoadedMsg{read: area.read})
-
-	item := m.actionItem("onboard")
-	require.NotNil(t, item, "the tree carries an onboard action")
-	m.walkTo(item)
-	m.syncSelection()
-	top := m.stack.top()
-	require.Equal(t, viewAction, top.id.kind)
-	require.NotContains(t, top.content, "disabled until then", "the stub is gone once the dialog opens")
-
-	// Keys route to the dialog while it is on top with main focus.
-	m.focus = focusMain
-	m.handleKey(keyPress("down"))
-	typeInto(t, keyRouter{m}, "myapp")
-	require.Contains(t, m.stack.top().content, "myapp", "typed keys reach the dialog")
-}
-
-// actionItem finds the tree's action node for an action (zero value when
-// the tree carries none).
-func (m *Shell) actionItem(action string) treeItem {
-	for _, g := range m.roots {
-		for _, k := range g.kids {
-			if k.item.kind == kindAction && k.item.action == action {
-				return k.item
-			}
-		}
-	}
-	return treeItem{}
-}
-
-// keyRouter types into whatever dialog is on top of the shell.
-type keyRouter struct{ m *Shell }
-
-func (r keyRouter) HandleKey(s string) tea.Cmd {
-	_, cmd := r.m.handleKey(keyPress(s))
-	return cmd
-}

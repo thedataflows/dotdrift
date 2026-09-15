@@ -211,7 +211,7 @@ func TestKeys_modalOverrides(t *testing.T) {
 	c = cpress(c, "P") // captured — no second apply
 	require.Len(t, c.modals, 1)
 	require.Nil(t, c.apply, "the elevation swallowed P")
-	c = cpress(c, "esc")
+	cpress(c, "esc")
 }
 
 func TestMouse_parity(t *testing.T) {

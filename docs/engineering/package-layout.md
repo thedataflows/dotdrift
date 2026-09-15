@@ -40,16 +40,13 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   ├── tomlsplice/           # module.toml section splicer: split/splice
 │   │                         # text by table family, multi-line-string
 │   │                         # aware; untouched bytes pass through (0065)
-│   ├── tui/                  # The two-pane shell (M14, charm v2): ADR-0003
-│   │                         # style registry + shell/tree/views/dialogs
-│   │                         # state machines over the service areas
-│   │                         # (reads + writes + apply doorways: gate,
-│   │                         # streamed progress, ExecProcess handover;
-│   │                         # manage.go: the module-management menu)
-│   ├── tui/editor/           # The editor suite (0065): one frame
-│   │                         # (file-scoped drafts, validation tiers,
-│   │                         # dirty-confirm) + section adapters + the
-│   │                         # dotfiles/when/hooks/systemd custom models
+│   ├── tui/                  # The compositor shell (M15, charm v2):
+│   │                         # ADR-0003 style registry + compositor, nav,
+│   │                         # sectioned workspace with inline editing,
+│   │                         # modal family (confirm/elevation/manage/
+│   │                         # writes/apply detail), fuzzy palette, the
+│   │                         # single keymap — all over the service areas
+│   │                         # (reads + config + writes + apply doorways)
 │   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts
 │   └── onboard/              # Module factory + copy

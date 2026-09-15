@@ -198,7 +198,11 @@ func classifySteps(steps []apply.Step) []StepPreview {
 		if hs, ok := st.(apply.HandoverStep); ok {
 			reason = hs.RequiresTTY()
 		}
-		previews[i] = StepPreview{Name: st.Name(), NeedsTTY: reason != "", Reason: reason}
+		var overwrites []string
+		if os, ok := st.(apply.OverwriteStep); ok {
+			overwrites = os.OverwriteTargets()
+		}
+		previews[i] = StepPreview{Name: st.Name(), NeedsTTY: reason != "", Reason: reason, Overwrites: overwrites}
 	}
 	return previews
 }

@@ -324,12 +324,18 @@ func (m *applyModel) update(msg tea.Msg) tea.Cmd {
 // absorb folds one session event into the view-model. Semantics come
 // from step boundaries and hook indexes — never from output parsing.
 func (m *applyModel) absorb(ev service.Event) {
+	absorbEvent(m.rows, m.ring, &m.backupMsg, &m.progress, ev)
+}
+
+// absorbEvent is the shared event → rows/ring translation (M14 mode and
+// the M15 compositor's apply driver).
+func absorbEvent(rows []*applyRow, _ *outputRing, backups *[]string, progress *string, ev service.Event) {
 	switch e := ev.(type) {
 	case service.BackupTaken:
-		m.backupMsg = append(m.backupMsg,
+		*backups = append(*backups,
 			fmt.Sprintf("backup: %d path(s) -> %s", e.Count, filepath.Base(e.Dir)))
 	case service.StepStarted:
-		row := m.row(e.Name)
+		row := applyRowByName(rows, e.Name)
 		if row == nil {
 			return
 		}
@@ -339,14 +345,14 @@ func (m *applyModel) absorb(ev service.Event) {
 		}
 		row.state = stepRun
 		row.needsTTY = row.needsTTY || e.NeedsTTY
-		m.progress = fmt.Sprintf("%d/%d", e.Index+1, e.Total)
+		*progress = fmt.Sprintf("%d/%d", e.Index+1, e.Total)
 	case service.StepFinished:
-		if row := m.row(e.Name); row != nil {
+		if row := applyRowByName(rows, e.Name); row != nil {
 			row.state = stepDone
 			row.sub = ""
 		}
 	case service.StepFailed:
-		row := m.row(e.Name)
+		row := applyRowByName(rows, e.Name)
 		if row == nil {
 			return
 		}
@@ -360,28 +366,44 @@ func (m *applyModel) absorb(ev service.Event) {
 	}
 }
 
-// end records the terminal state from Wait's verdict: the outcome, the
-// failing or interrupted step, and the resume cursor (contract 2).
-func (m *applyModel) end(msg applyWaitedMsg) {
-	e := applyEndedState{resumeCursor: ""}
-	if msg.res != nil {
-		e.outcome = msg.res.Outcome
-		e.resumeCursor = msg.res.FinalCursor
-		if msg.res.StepError != nil {
-			e.stepName = msg.res.StepError.Step
-			e.errText = msg.res.StepError.Err.Error()
+// applyRowByName finds a row by step name.
+func applyRowByName(rows []*applyRow, name string) *applyRow {
+	for _, r := range rows {
+		if r.name == name {
+			return r
 		}
 	}
-	if msg.err != nil {
+	return nil
+}
+
+// applyEndState is the shared terminal-verdict translation (Wait's
+// result or the cancel classification).
+func applyEndState(res *service.SessionResult, err error) applyEndedState {
+	e := applyEndedState{resumeCursor: ""}
+	if res != nil {
+		e.outcome = res.Outcome
+		e.resumeCursor = res.FinalCursor
+		if res.StepError != nil {
+			e.stepName = res.StepError.Step
+			e.errText = res.StepError.Err.Error()
+		}
+	}
+	if err != nil {
 		var sce *service.SessionCancelledError
-		if errors.As(msg.err, &sce) {
+		if errors.As(err, &sce) {
 			e.outcome = service.OutcomeCancelled
 			e.stepName = sce.StepName
 		} else if e.errText == "" {
-			e.errText = msg.err.Error()
+			e.errText = err.Error()
 		}
 	}
-	m.ended = e
+	return e
+}
+
+// end records the terminal state from Wait's verdict: the outcome, the
+// failing or interrupted step, and the resume cursor (contract 2).
+func (m *applyModel) end(msg applyWaitedMsg) {
+	m.ended = applyEndState(msg.res, msg.err)
 	m.phase = applyEnded
 }
 
@@ -501,7 +523,11 @@ func (m *applyModel) progressView() string {
 
 // renderRow is one step's progress line: state marker, name, tty marker,
 // and any hook sub-command or error text under it.
-func (m *applyModel) renderRow(r *applyRow) string {
+func (m *applyModel) renderRow(r *applyRow) string { return renderApplyRow(m.th, r) }
+
+// renderApplyRow renders one step row (M14 mode and the M15 detail
+// modal).
+func renderApplyRow(th theme, r *applyRow) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "  %-4s  %s", r.state.mark(), r.name)
 	if r.needsTTY {
@@ -510,13 +536,13 @@ func (m *applyModel) renderRow(r *applyRow) string {
 	b.WriteString("\n")
 	if r.sub != "" {
 		if r.subFail {
-			b.WriteString("  " + m.th.Error("fail") + "  " + r.sub + "\n")
+			b.WriteString("  " + th.Error("fail") + "  " + r.sub + "\n")
 		} else {
 			b.WriteString("      · " + r.sub + "\n")
 		}
 	}
 	if r.errText != "" {
-		b.WriteString(m.th.Error("      "+r.errText) + "\n")
+		b.WriteString(th.Error("      "+r.errText) + "\n")
 	}
 	return b.String()
 }

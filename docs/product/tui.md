@@ -96,6 +96,23 @@ Shipped so far (T-tui-compositor):
   check stands). Structural families beyond links/writes (systemd units,
   secrets, mounts, smb) stay read-only rows here; their 0065 custom
   editors remain in the M14 shell until T-tui-cleanup.
+- **The modal family** (T-tui-modals). One confirm component — question
+  title, consequence body with full target identity, `y` confirms and
+  every other key (or `esc`) cancels — backs dirty-quit (`q` with
+  drafts), row removal, module deletion, and the destructive-apply gate.
+  `m` on a module opens the 0072 manage menu as a modal (create / move /
+  delete with the orphan preview), domain logic untouched. `P` runs
+  apply: preview → destructive confirm when steps will overwrite
+  existing files (the new `OverwriteTargets` classification on copy-mode
+  dotfile steps) → the elevation modal when the plan carries privileged
+  steps — one prompt listing every reason, three failures abort, `esc`
+  aborts before anything is touched, the password is a zeroed `[]byte`
+  fed to `sudo -k -S -v` (`executil.SudoValidate`, injected in tests),
+  never drafted or logged. While a run lives the header badge and footer
+  carry status; `a` opens the apply detail modal (step rows, output
+  tail, verdict) — closing never cancels, `ctrl+c` inside asks first.
+  Session events are compositor-level messages: they flow while any
+  modal is open.
 
 # Stack and chrome
 

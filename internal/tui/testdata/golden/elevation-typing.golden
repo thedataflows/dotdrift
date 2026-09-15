@@ -1,0 +1,29 @@
+ dotdrift · $PROFILE · host myhost · user cri
+╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
+│MODULES                   ││demo  [base]                                                      │
+│▸ demo                    ││meta                                                              │
+│                          ││  id demo                                                         │
+│                          ││  app demo-app                                                    │
+│                          ││  description                                                     │
+│                          ││  scope user                                                      │
+│                          ││packages                                                          │
+│   ╭─────────────────────────────────────────────────────────────────────────────────────────╮│
+│   │                                                                                         ││
+│   │  sudo elevation required                                                                ││
+│   │                                                                                         ││
+│   │    • dotfiles-system: elevated system edits: edit targets are not user-writable (sudo)  ││
+│   │                                                                                         ││
+│   │    password: ••••••▏                                                                    ││
+│   │                                                                                         ││
+│   │    enter submit · esc cancel                                                            ││
+│   │                                                                                         ││
+│   ╰─────────────────────────────────────────────────────────────────────────────────────────╯│
+│                          ││tools                                                             │
+│                          ││  (none)                                                          │
+│                          ││other                                                             │
+│                          ││  (none)                                                          │
+│                          ││                                                                  │
+╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+
+ k up • j down • enter open • tab pane • ? help • q quit
+

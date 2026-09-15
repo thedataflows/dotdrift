@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 	"github.com/thedataflows/dotdrift/internal/apply"
@@ -204,4 +205,31 @@ func writeConfig(path, content string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
+}
+
+// OverwriteTargets implements apply.OverwriteStep (M15): the copy-mode
+// destinations that exist on disk — the destructive-apply confirm's
+// list, in their declared (tilde) form. Symlink replacements and
+// marker-scoped edits are not content overwrites; absent targets are
+// first applies. Pure stat reads, matching RequiresTTY's contract.
+func (s *DotfilesStep) OverwriteTargets() []string {
+	if s.Plan == nil {
+		return nil
+	}
+	var out []string
+	for _, e := range s.Plan.Dotfiles.Entries {
+		if e.Mode != "copy" || e.IsEdit() {
+			continue
+		}
+		p := e.Target
+		if strings.HasPrefix(p, "~/") {
+			if home, err := os.UserHomeDir(); err == nil {
+				p = filepath.Join(home, p[2:])
+			}
+		}
+		if _, err := os.Lstat(p); err == nil {
+			out = append(out, e.Target)
+		}
+	}
+	return out
 }

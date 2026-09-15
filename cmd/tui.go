@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/thedataflows/dotdrift/internal/drift"
+	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -42,9 +43,18 @@ func (c *TUICmd) Run() error {
 		// The M15 compositor shell (issue 0073), mounted behind a hidden
 		// flag until it reaches parity and the old shell is deleted
 		// (T-tui-cleanup).
-		return tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
+		comp := tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
 			return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})
-		}).Run()
+		})
+		comp.SetApply(func(*facts.Facts) tui.ApplyLauncher {
+			return tuiApplyLauncher{area: service.NewApplyArea(service.ApplyDeps{
+				Detect:      detectFacts,
+				LoadProfile: profileLoad,
+				Resolve:     resolvePlan,
+				NewMise:     func() *mise.Mise { return defaultMise() },
+			})}
+		}, executil.SudoValidate)
+		return comp.Run()
 	}
 	shell := tui.New(area, tui.Options{
 		ProfilePath: c.Profile,

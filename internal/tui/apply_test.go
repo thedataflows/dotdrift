@@ -57,7 +57,7 @@ type testRun struct {
 }
 
 func newTestRun() *testRun {
-	return &testRun{events: make(chan service.Event)}
+	return &testRun{events: make(chan service.Event, 64)}
 }
 
 func (r *testRun) Events() <-chan service.Event          { return r.events }

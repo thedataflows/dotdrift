@@ -80,9 +80,20 @@ type Compositor struct {
 
 	modals []modal
 
-	// pendingReload is set by the conflict modal's reload answer; the
-	// compositor schedules the layer read after the modal pops.
-	pendingReload bool
+	// afterPop is set by a modal's answer and runs after the modal pops
+	// (conflict reload, gated apply start). Deferred as a func: pushing
+	// the next modal must not happen before the pop.
+	afterPop func() tea.Cmd
+
+	// Apply wiring (T-tui-modals): the launcher and the sudo checker are
+	// injected seams (no real sudo near tests); send is the program's
+	// Send, set by Run, for the handover bridge.
+	applyFor      func(*facts.Facts) ApplyLauncher
+	sudoCheck     func(pw []byte) error
+	send          func(tea.Msg)
+	apply         *applyRunState
+	applyPreviews []service.StepPreview
+	pumpNoBlock   bool // tests: the event pump never blocks a settle loop
 
 	// Layer reads (T-tui-workspace): layerFor builds the 0065 config seam
 	// once facts land; reader is the cached instance.
@@ -126,9 +137,18 @@ func NewCompositor(area Reads, root string, layerFor func(*facts.Facts) LayerRea
 	}
 }
 
+// SetApply wires the apply launcher and sudo checker seams (the adapter
+// in cmd; tests set the fields directly).
+func (m *Compositor) SetApply(applyFor func(*facts.Facts) ApplyLauncher, sudoCheck func([]byte) error) {
+	m.applyFor = applyFor
+	m.sudoCheck = sudoCheck
+}
+
 // Run starts the program full-screen (altscreen is set on every View).
 func (m *Compositor) Run() error {
-	_, err := tea.NewProgram(m).Run()
+	p := tea.NewProgram(m)
+	m.send = p.Send
+	_, err := p.Run()
 	return err
 }
 
@@ -212,10 +232,39 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.spinTick()
 	}
 
+	// Apply session messages are compositor-level, not modal input: they
+	// flow while the detail inspector (or any modal) is open.
+	switch msg := msg.(type) {
+	case applyPreviewMsg:
+		return m, m.applyPreview(msg)
+	case applyStartedMsg:
+		return m, m.applyStarted(msg)
+	case applyEventMsg:
+		return m, m.applyEvent(msg)
+	case applyTickMsg:
+		if m.applying {
+			return m, m.waitApplyEvent()
+		}
+		return m, nil
+	case applyDrainedMsg:
+		return m, m.applyDrained()
+	case applyWaitedMsg:
+		return m, m.applyWaited(msg)
+	case applyHandoverMsg:
+		return m, tea.ExecProcess(msg.cmd, func(err error) tea.Msg {
+			msg.done <- err
+			return applyHandoverDoneMsg{}
+		})
+	}
+
 	// The modal stack owns all other input; esc pops the top layer. A
 	// modal reporting finished() pops itself after its answer.
 	if len(m.modals) > 0 {
 		if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
+			top := m.modals[len(m.modals)-1]
+			if cm, ok := top.(interface{ cancel() }); ok {
+				cm.cancel() // the elevation prompt's esc aborts the gated op
+			}
 			m.modals = m.modals[:len(m.modals)-1]
 			return m, nil
 		}
@@ -223,9 +272,10 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := top.update(msg)
 		if fm, ok := top.(interface{ finished() bool }); ok && fm.finished() {
 			m.modals = m.modals[:len(m.modals)-1]
-			if m.pendingReload {
-				m.pendingReload = false
-				return m, m.loadLayer()
+			if m.afterPop != nil {
+				fn := m.afterPop
+				m.afterPop = nil
+				return m, fn()
 			}
 		}
 		return m, cmd
@@ -256,6 +306,24 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case "esc":
 		if m.focus != focusNav {
 			m.focus = focusNav
+		}
+	case "q":
+		return m, m.quit()
+	case "P":
+		return m, m.startApply()
+	case "a":
+		// A live or ended run takes precedence: a opens its inspector;
+		// otherwise a is the workspace's add-row.
+		if m.apply != nil {
+			m.openApplyDetail()
+			return m, nil
+		}
+		if m.focus == focusWork {
+			return m, m.workKey(msg.String())
+		}
+	case "m":
+		if m.focus == focusNav {
+			m.openManage()
 		}
 	default:
 		if m.focus == focusNav {
@@ -434,6 +502,33 @@ func (m *Compositor) loadLayer() tea.Cmd {
 		r, err := m.reader.ReadModuleLayer(dir)
 		return layerLoadedMsg{dir: dir, read: r, err: err}
 	}
+}
+
+// quit implements q: a dirty draft ledger asks first; a clean shell
+// quits directly. During an apply the footer redirects to the detail
+// modal's ctrl+c (quitting mid-run is the cancel flow, not a shortcut).
+func (m *Compositor) quit() tea.Cmd {
+	if m.applying {
+		m.message, m.msgErr = "apply running — a opens the detail, ctrl+c cancels", false
+		return nil
+	}
+	if len(m.store) == 0 {
+		return tea.Quit
+	}
+	m.modals = append(m.modals, &confirmModel{
+		th:    m.th,
+		title: "quit with unsaved drafts?",
+		body: []string{
+			strconv.Itoa(len(m.store)) + " file(s) with unsaved changes",
+			"drafts live in memory only — quitting loses them",
+		},
+		onAnswer: func(ok bool) {
+			if ok {
+				m.afterPop = func() tea.Cmd { return tea.Quit }
+			}
+		},
+	})
+	return nil
 }
 
 func (m *Compositor) spinTick() tea.Cmd {

@@ -1,0 +1,29 @@
+ dotdrift · $PROFILE · host myhost · user cri  ● 1
+╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
+│MODULES                   ││demo  [base]  ●                                                   │
+│▸ demo ●                  ││meta                                                              │
+│                          ││  id demo                                                         │
+│                          ││  app demo-app-next ●                                             │
+│                          ││  description the demo module                                     │
+│                          ││  scope user                                                      │
+│                          ││packages                                                          │
+│                          ││  + neovim                                                        │
+│                      ╭────────────────────────────────────────────────────╮                  │
+│                      │                                                    │                  │
+│                      │  quit with unsaved drafts?                         │                  │
+│                      │                                                    │                  │
+│                      │  1 file(s) with unsaved changes                    │                  │
+│                      │  drafts live in memory only — quitting loses them  │                  │
+│                      │                                                    │                  │
+│                      │  y confirm · n/esc cancel                          │                  │
+│                      │                                                    │                  │
+│                      ╰────────────────────────────────────────────────────╯                  │
+│                          ││  (none)                                                          │
+│                          ││tools                                                             │
+│                          ││  node = 20                                                       │
+│                          ││other                                                             │
+│                          ││  (none)                                                          │
+╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+
+ j/k scroll • L layer • tab pane • ? help • q quit
+

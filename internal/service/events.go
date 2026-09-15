@@ -117,4 +117,8 @@ type StepPreview struct {
 	Name     string
 	NeedsTTY bool
 	Reason   string
+	// Overwrites lists existing destinations the step will overwrite
+	// (copy-mode dotfiles, backup-protected per issue 0025) — the
+	// destructive-apply confirm's data (M15).
+	Overwrites []string
 }

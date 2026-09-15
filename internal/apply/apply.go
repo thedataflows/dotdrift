@@ -15,6 +15,15 @@ type Step interface {
 	Run(ctx context.Context) error
 }
 
+// OverwriteStep is implemented by steps that can name the existing
+// destinations they will overwrite (M15's destructive-apply confirm).
+// Reads are pure predicates (stat), matching RequiresTTY's
+// classification-time contract.
+type OverwriteStep interface {
+	Step
+	OverwriteTargets() []string
+}
+
 // Observer receives pipeline step transitions. Callbacks fire on the
 // pipeline's run goroutine, in order, only for steps that actually ran —
 // steps skipped through the resume cursor never fire it. The hook

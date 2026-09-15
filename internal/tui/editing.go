@@ -776,7 +776,7 @@ func (m *Compositor) pushConflictModal(dir string) {
 			delete(m.store, dir)
 			m.ws.draft = nil
 			m.ws.loadedDir = ""
-			m.pendingReload = true
+			m.afterPop = func() tea.Cmd { return m.loadLayer() }
 		},
 	})
 }
@@ -803,7 +803,7 @@ func (c *confirmModel) update(msg tea.Msg) tea.Cmd {
 	case "y":
 		c.done = true
 		c.onAnswer(true)
-	case "n":
+	default: // y alone confirms; every other key cancels
 		c.done = true
 		if c.onAnswer != nil {
 			c.onAnswer(false)

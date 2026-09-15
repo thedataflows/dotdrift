@@ -57,9 +57,6 @@ var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧"
 
 var stripANSIRe = regexp.MustCompile(`\x1b\[[0-9;:?]*[a-zA-Z]`)
 
-var keyPane = key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "pane"))
-var keyLayer = key.NewBinding(key.WithKeys("L"), key.WithHelp("L", "layer"))
-
 // navLoadedMsg carries the modules read (T-tui-nav).
 type navLoadedMsg struct {
 	read *service.ModulesRead
@@ -97,6 +94,15 @@ type Compositor struct {
 
 	// paletteRecents: the palette's last-8 selections, session-only.
 	paletteRecents []string
+
+	// writesFor builds the writes area (T-tui-keymap's w menu);
+	// modulesRead keeps the last modules read for the restore index.
+	writesFor   func(*facts.Facts) Writes
+	modulesRead *service.ModulesRead
+
+	// lastClick tracks the workspace double-click (edit) gesture.
+	lastClickRow int
+	lastClickAt  time.Time
 
 	// Layer reads (T-tui-workspace): layerFor builds the 0065 config seam
 	// once facts land; reader is the cached instance.
@@ -138,6 +144,12 @@ func NewCompositor(area Reads, root string, layerFor func(*facts.Facts) LayerRea
 		nav:      navModel{pending: true},
 		store:    map[string]*wsDraft{},
 	}
+}
+
+// SetWrites wires the writes-area seam for the w menu (the adapter in
+// cmd; tests set the field directly).
+func (m *Compositor) SetWrites(writesFor func(*facts.Facts) Writes) {
+	m.writesFor = writesFor
 }
 
 // SetApply wires the apply launcher and sudo checker seams (the adapter
@@ -187,6 +199,7 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.facts = f
 			}
 		}
+		m.modulesRead = msg.read
 		m.nav.restore(sel)
 		return m, m.syncWorkspace()
 	case layerLoadedMsg:
@@ -253,6 +266,9 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.applyDrained()
 	case applyWaitedMsg:
 		return m, m.applyWaited(msg)
+	case planPreviewMsg:
+		m.modals = append(m.modals, &planModel{th: m.th, previews: msg.previews, err: msg.err})
+		return m, nil
 	case applyHandoverMsg:
 		return m, tea.ExecProcess(msg.cmd, func(err error) tea.Msg {
 			msg.done <- err
@@ -271,6 +287,14 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.modals = m.modals[:len(m.modals)-1]
 			return m, nil
 		}
+		// ? opens help even over a modal — except the elevation prompt,
+		// where ? is a legitimate password character.
+		if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "?" {
+			if _, isElevation := m.modals[len(m.modals)-1].(*elevationModel); !isElevation {
+				m.openHelp()
+				return m, nil
+			}
+		}
 		top := m.modals[len(m.modals)-1]
 		cmd := top.update(msg)
 		if fm, ok := top.(interface{ finished() bool }); ok && fm.finished() {
@@ -284,12 +308,23 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Edit mode owns all keys while a field input is active.
+	// Edit mode owns all keys while a field input is active (? still
+	// opens help).
 	if m.ws.editing != nil {
 		if k, ok := msg.(tea.KeyPressMsg); ok {
+			if k.String() == "?" {
+				m.openHelp()
+				return m, nil
+			}
 			return m, m.editKey(k)
 		}
 		return m, nil
+	}
+
+	// Mouse on the base panes.
+	switch msg.(type) {
+	case tea.MouseWheelMsg, tea.MouseClickMsg:
+		return m, m.baseMouse(msg)
 	}
 
 	if k, ok := msg.(tea.KeyPressMsg); ok {
@@ -303,86 +338,17 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.msgErr {
 		m.message, m.msgErr = "", false
 	}
-	switch msg.String() {
-	case "tab", "shift+tab":
-		m.focus = (m.focus + 1) % 2 // two panes: reverse is forward
-	case "esc":
+	if msg.String() == "esc" {
+		// The compositor's one esc rule on the base: focus back to nav.
 		if m.focus != focusNav {
 			m.focus = focusNav
 		}
-	case "q":
-		return m, m.quit()
-	case "P":
-		return m, m.startApply()
-	case "a":
-		// A live or ended run takes precedence: a opens its inspector;
-		// otherwise a is the workspace's add-row.
-		if m.apply != nil {
-			m.openApplyDetail()
-			return m, nil
-		}
-		if m.focus == focusWork {
-			return m, m.workKey(msg.String())
-		}
-	case "m":
-		if m.focus == focusNav {
-			m.openManage()
-		}
-	case "/":
-		m.openPalette()
-	default:
-		if m.focus == focusNav {
-			return m, m.navKey(msg.String())
-		}
-		if m.focus == focusWork {
-			return m, m.workKey(msg.String())
-		}
+		return m, nil
+	}
+	if cmd, ok := m.dispatchKey(msg.String()); ok {
+		return m, cmd
 	}
 	return m, nil
-}
-
-// navKey is the nav pane's key vocabulary: j/k move, h/l collapse/expand
-// (arrows too), and every move keeps the workspace on the selection.
-func (m *Compositor) navKey(s string) tea.Cmd {
-	switch s {
-	case "j", "down":
-		m.nav.move(1)
-	case "k", "up":
-		m.nav.move(-1)
-	case "h", "left":
-		m.nav.collapse()
-	case "l", "right":
-		m.nav.expand()
-	default:
-		return nil
-	}
-	return m.syncWorkspace()
-}
-
-// workKey is the workspace pane's key vocabulary: j/k walk entry rows,
-// L cycles the layer tabs, enter/e edits the field, a adds a row, d
-// removes with confirm, ctrl+s saves the draft, D discards it with
-// confirm.
-func (m *Compositor) workKey(s string) tea.Cmd {
-	switch s {
-	case "j", "down":
-		m.ws.move(1)
-	case "k", "up":
-		m.ws.move(-1)
-	case "L":
-		return m.cycleLayer()
-	case "enter", "e":
-		m.startEdit()
-	case "a":
-		m.startAdd()
-	case "d":
-		m.confirmRemoveRow()
-	case "D":
-		m.confirmDiscard()
-	case "ctrl+s":
-		return m.saveDraft()
-	}
-	return nil
 }
 
 // cycleLayer advances the active layer tab (base → user → host, wrapping)
@@ -540,12 +506,38 @@ func (m *Compositor) spinTick() tea.Cmd {
 	return tea.Tick(spinInterval, func(time.Time) tea.Msg { return spinTickMsg{} })
 }
 
-// ShortHelp implements help.KeyMap; hints follow the focused pane.
+// ShortHelp implements help.KeyMap: the hints render from the binding
+// table (edit mode gets the edit keys), so the footer cannot drift.
 func (m *Compositor) ShortHelp() []key.Binding {
-	if m.focus == focusWork {
-		return []key.Binding{keyScroll, keyLayer, keyPane, keyHelp, keyQuit}
+	if m.ws.editing != nil {
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "commit")),
+			key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel")),
+			key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
+		}
 	}
-	return []key.Binding{keyUp, keyDown, keyOpen, keyPane, keyHelp, keyQuit}
+	pane := "nav"
+	if m.focus == focusWork {
+		pane = "work"
+	}
+	var out []key.Binding
+	add := func(k, h string) {
+		out = append(out, key.NewBinding(key.WithKeys(k), key.WithHelp(k, h)))
+	}
+	seen := map[string]bool{}
+	for _, b := range keyTable() {
+		if b.pane == pane && !seen[b.help] {
+			seen[b.help] = true
+			add(b.key, b.help)
+			if len(out) >= 3 {
+				break
+			}
+		}
+	}
+	for _, k := range []struct{ key, help string }{{"/", "palette"}, {"?", "help"}, {"q", "quit"}} {
+		add(k.key, k.help)
+	}
+	return out
 }
 
 // FullHelp implements help.KeyMap.

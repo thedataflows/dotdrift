@@ -232,8 +232,29 @@ func (w *workspaceModel) applyEdit() bool {
 		delete(d.errs, rk)
 	}
 	w.rows = wsRows(d.cfg, w.needsRoot)
-	w.cursor = w.rowIndexOf(section, key, input)
+	// The cursor follows the row's NEW identity (a rename moves it).
+	want := key
+	if !e.add {
+		want = renamedKey(section, family, key, input)
+	}
+	w.cursor = w.rowIndexOf(section, want, input)
 	return true
+}
+
+// renamedKey computes a row's key after an edit committed input over it.
+func renamedKey(section, family, key, input string) string {
+	switch family {
+	case profile.FamilyPackages:
+		name := strings.TrimPrefix(strings.TrimSpace(input), "-")
+		if strings.HasPrefix(strings.TrimSpace(input), "-") {
+			return "absent:" + name
+		}
+		return "present:" + name
+	case profile.FamilyHooks:
+		phase, _, _ := strings.Cut(key, ":")
+		return phase + ":" + input
+	}
+	return key
 }
 
 // applyRawLine splices the edited line back into the raw text. Returns

@@ -54,6 +54,16 @@ func (c *TUICmd) Run() error {
 				NewMise:     func() *mise.Mise { return defaultMise() },
 			})}
 		}, executil.SudoValidate)
+		comp.SetWrites(func(*facts.Facts) tui.Writes {
+			return service.NewWritesArea(service.WritesDeps{
+				Detect: detectFacts,
+				NewMise: func(verbose bool) mise.Runner {
+					m := defaultMise()
+					m.Verbose = verbose
+					return mise.NewExecMise(m)
+				},
+			})
+		})
 		return comp.Run()
 	}
 	shell := tui.New(area, tui.Options{

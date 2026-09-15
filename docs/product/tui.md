@@ -126,6 +126,18 @@ Shipped so far (T-tui-compositor):
   Choosing a module jumps nav and workspace in sync (focus to the
   workspace); a dirty draft never prompts on a jump. esc restores the
   exact prior state. Mouse: wheel moves, click chooses.
+- **The keymap** (T-tui-keymap). One binding table as data
+  (`keyTable()` in keymap.go) — the base dispatcher consults it, the
+  footer hints and the contextual `?` help render from it, so docs
+  cannot drift from behavior. Shift is the dangerous version (`p` plan /
+  `P` apply, `d` remove row / `D` discard draft); esc has exactly one
+  meaning (pop the top layer: modal → edit → focus to nav); there is no
+  undo — drafts and confirms are the safety net. `p` opens the read-only
+  plan modal (step classification, sudo reasons, overwrite counts —
+  never credentials); `w` opens the writes menu (onboard / restore /
+  generate as absorbed dialogs); `n` opens module creation. Mouse parity
+  on the base: wheel scrolls the hovered pane, click selects+focuses,
+  double-click edits the field.
 
 # Stack and chrome
 

@@ -68,6 +68,41 @@ func pathKey(parts ...string) string { return strings.Join(parts, pathSep) }
 // splitPath splits a structural row key back into its path segments.
 func splitPath(key string) []string { return strings.Split(key, pathSep) }
 
+// lastPathSegment returns a structural row key's field segment (the
+// validateField switch thinks in fields, not whole paths).
+func lastPathSegment(key string) string {
+	parts := splitPath(key)
+	return parts[len(parts)-1]
+}
+
+// parseBoolInput is the two-state bool grammar: "true", "false", or ""
+// (unset means false).
+func parseBoolInput(input string) (bool, error) {
+	switch strings.TrimSpace(input) {
+	case "true":
+		return true, nil
+	case "false", "":
+		return false, nil
+	default:
+		return false, errors.New(`bool fields take "true" or "false"`)
+	}
+}
+
+// parseAvahiInput is the tri-state avahi grammar: "true", "false", or ""
+// (empty unsets to nil — the default-on semantics).
+func parseAvahiInput(input string) (bool, bool, error) {
+	switch strings.TrimSpace(input) {
+	case "true":
+		return true, true, nil
+	case "false":
+		return false, true, nil
+	case "":
+		return false, false, nil
+	default:
+		return false, false, errors.New(`avahi takes "true", "false", or empty to unset`)
+	}
+}
+
 // isStructuralFamily reports whether the family is edited through the
 // 0074 structural row grammar (containers + machine paths) rather than
 // mutateField's flat scalar/table grammar.
@@ -155,6 +190,12 @@ func encodeFamily(family string, cfg *profile.ModuleConfig) string {
 		return profile.EncodeDotfilesSection(cfg.Dotfiles)
 	case profile.FamilySystemd:
 		return profile.EncodeSystemdSection(cfg.Systemd.Units)
+	case profile.FamilySecrets:
+		return profile.EncodeSecretsSection(cfg.Secrets)
+	case profile.FamilyMounts:
+		return profile.EncodeMountsSection(cfg.Mounts)
+	case profile.FamilySmb:
+		return profile.EncodeSmbSection(cfg.Smb)
 	default:
 		return ""
 	}
@@ -187,6 +228,51 @@ func validateField(family, key, input string) string {
 		if input == "" {
 			return "directive value must not be empty (d removes the directive)"
 		}
+	case profile.FamilySecrets:
+		switch lastPathSegment(key) {
+		case "env":
+			if strings.TrimSpace(input) == "" {
+				return "env must not be empty"
+			}
+		case "allow_empty":
+			if _, err := parseBoolInput(input); err != nil {
+				return err.Error()
+			}
+		}
+	case profile.FamilyMounts:
+		switch lastPathSegment(key) {
+		case "source":
+			if input == "" {
+				return "source is required"
+			}
+		case "destination":
+			if input == "" {
+				return "destination is required"
+			}
+		case "type":
+			if input == "" {
+				return "type is required"
+			}
+		case "state":
+			if input != "" && input != "enabled" && input != "disabled" {
+				return `state must be "", "enabled", or "disabled"`
+			}
+		}
+	case profile.FamilySmb:
+		switch lastPathSegment(key) {
+		case "path":
+			if input == "" {
+				return "path is required"
+			}
+		case "avahi":
+			if _, _, err := parseAvahiInput(input); err != nil {
+				return err.Error()
+			}
+		case "writable", "public":
+			if _, err := parseBoolInput(input); err != nil {
+				return err.Error()
+			}
+		}
 	}
 	return ""
 }
@@ -216,6 +302,28 @@ func validateAdd(family, addPath, input string) string {
 		if !strings.Contains(input, "=") {
 			return `add as "Name = value"`
 		}
+	case profile.FamilySecrets:
+		name, env, _ := strings.Cut(input, "=")
+		if strings.TrimSpace(name) == "" || strings.TrimSpace(env) == "" {
+			return `add as "name = ENV"`
+		}
+	case profile.FamilyMounts:
+		return validEntryName(input, "mount")
+	case profile.FamilySmb:
+		return validEntryName(input, "share")
+	}
+	return ""
+}
+
+// validEntryName is the bare-name tier-1 for sections whose entries grow
+// their fields after the add (mounts, smb shares).
+func validEntryName(input, what string) string {
+	name := strings.TrimSpace(input)
+	if name == "" {
+		return what + " name must not be empty"
+	}
+	if strings.ContainsAny(name, " \t") {
+		return what + " name must not contain spaces"
 	}
 	return ""
 }
@@ -239,8 +347,10 @@ func validUnitName(input string) string {
 	return ""
 }
 
-// crossCheck is tier-2, authoritative at save: relationships between
-// fields. Returns the first violation, or "".
+// crossCheck is tier-2, authoritative at save: relationships and
+// structural contracts between fields (the workspace can stage an entry
+// whose required fields are still empty). Returns the first violation,
+// or "".
 func crossCheck(cfg *profile.ModuleConfig) string {
 	if cfg == nil {
 		return ""
@@ -252,6 +362,22 @@ func crossCheck(cfg *profile.ModuleConfig) string {
 	for _, p := range cfg.Packages.Present {
 		if absent[p] {
 			return fmt.Sprintf("packages: %q is both present and absent", p)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Mounts)) {
+		m := cfg.Mounts[name]
+		switch {
+		case m.Source == "":
+			return fmt.Sprintf("mounts: %q: source is required", name)
+		case m.Destination == "":
+			return fmt.Sprintf("mounts: %q: destination is required", name)
+		case m.Type == "":
+			return fmt.Sprintf("mounts: %q: type is required", name)
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(cfg.Smb.Shares)) {
+		if cfg.Smb.Shares[name].Path == "" {
+			return fmt.Sprintf("smb: share %q: path is required", name)
 		}
 	}
 	return ""
@@ -347,12 +473,18 @@ func (w *workspaceModel) applyEdit() bool {
 // structuralNewKey predicts a committed structural add's row key (the
 // addPath scopes it the same way the mutation did).
 func structuralNewKey(family, addPath, input string) string {
-	if family == profile.FamilySystemd {
+	switch family {
+	case profile.FamilySystemd:
 		if addPath == "" {
 			return strings.TrimSpace(input)
 		}
 		name, _, _ := strings.Cut(input, "=")
 		return pathKey(addPath, strings.TrimSpace(name))
+	case profile.FamilySecrets:
+		name, _, _ := strings.Cut(input, "=")
+		return strings.TrimSpace(name)
+	case profile.FamilyMounts, profile.FamilySmb:
+		return strings.TrimSpace(input)
 	}
 	return input
 }
@@ -447,6 +579,12 @@ func addFamily(section string) string {
 		return profile.FamilyDotfiles
 	case "systemd.units":
 		return profile.FamilySystemd
+	case "secrets":
+		return profile.FamilySecrets
+	case "mounts":
+		return profile.FamilyMounts
+	case "smb":
+		return profile.FamilySmb
 	}
 	return ""
 }
@@ -632,6 +770,18 @@ func (w *workspaceModel) removeRow() {
 				candidate.Systemd.Units[parts[0]] = unit
 			}
 		}
+	case profile.FamilySecrets:
+		if row.container {
+			delete(candidate.Secrets, row.key)
+		}
+	case profile.FamilyMounts:
+		if row.container {
+			delete(candidate.Mounts, row.key)
+		}
+	case profile.FamilySmb:
+		if row.container {
+			delete(candidate.Smb.Shares, row.key)
+		}
 	default:
 		return
 	}
@@ -816,6 +966,10 @@ func (m *Compositor) confirmRemoveRow() {
 	row := m.ws.rows[m.ws.cursor]
 	switch row.family {
 	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles, profile.FamilySystemd:
+	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb:
+		if !row.container {
+			return // d removes entries, not their fields
+		}
 	default:
 		return
 	}

@@ -3,13 +3,10 @@
 │MODULES                   ││demo  [base]                                                      │
 │▸ demo                    ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  ▸ bogus▏                                                        │
-│                          ││    ✗ scope must be "user" or "system"                            │
+│                          ││  description                                                     │
+│                          ││  scope user                                                      │
 │                          ││packages                                                          │
-│                          ││  + neovim                                                        │
-│                          ││  + ripgrep                                                       │
+│                          ││  (none)                                                          │
 │                          ││links                                                             │
 │                          ││  (none)                                                          │
 │                          ││writes                                                            │
@@ -21,8 +18,11 @@
 │                          ││systemd.units                                                     │
 │                          ││  (none)                                                          │
 │                          ││tools                                                             │
-│                          ││  node = 20                                                       │
+│                          ││  (none)                                                          │
 │                          ││secrets                                                           │
+│                          ││  API_KEY                                                         │
+│                          ││    env DEMO_API_KEY                                              │
+│                          ││    description demo key                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
- enter commit • esc cancel • ? help
+ j scroll down • k scroll up • enter edit field • / palette • ? help • q quit

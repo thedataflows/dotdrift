@@ -19,10 +19,10 @@
 │                          ││  (none)                                                          │
 │                          ││tools                                                             │
 │                          ││  (none)                                                          │
-│                          ││other                                                             │
+│                          ││secrets                                                           │
 │                          ││  (none)                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
+│                          ││mounts                                                            │
+│                          ││  (none)                                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j down • k up • h collapse / parent • / palette • ? help • q quit

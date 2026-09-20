@@ -100,7 +100,12 @@ view stack wholesale). Its parts:
   unit by name) whose directives render beneath it as indented rows;
   directive values are typed TOML — `ExecStart = /usr/bin/demo` needs no
   quoting, while `"x"`, `30`, `[a, b]`, and inline tables land with their
-  TOML types.
+  TOML types. Secrets, mounts, and smb shares edit the same way — one
+  container per entry, every field an always-rendered child row (an
+  empty value is a settable field, never a missing row); secrets add as
+  `name = ENV`, mounts and shares as a bare name. Entries resolve can
+  never accept are refused at save (missing mount
+  source/destination/type, empty share path) — tier-2, in place.
 - **The modal family** (T-tui-modals). One confirm component — question
   title, consequence body with full target identity, `y` confirms and
   every other key (or `esc`) cancels — backs dirty-quit (`q` with
@@ -195,6 +200,5 @@ Apply runs **inside** the shell, over the service apply session
 # Fog
 
 Previewing a *different* account's resolution, an undo system, and a
-command-line-in-the-TUI stay out. Structural-section editing (secrets,
-mounts, smb, nested when trees — systemd units have landed) continues
+command-line-in-the-TUI stay out. Nested when-tree editing continues
 under issue [0074](../issues/0074-structural-section-editing.md).

@@ -43,5 +43,5 @@ never resolve (missing env/path/source-destination-type).
 
 # Acceptance
 
-- [ ] Landed.
+- [x] Landed — commit `feat(tui): 0074 secrets/mounts/smb editing`.
 - [Definition of done](/engineering/definition-of-done.md) checklist complete.

@@ -16,6 +16,7 @@ import (
 	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -299,9 +300,8 @@ func firstLineOf(s string) string {
 
 // wsRows builds the section rows for one layer's config, carrying each
 // editable row's family/key/value for T-tui-editing. Section order is
-// fixed and matches the schema docs; schema sections outside the list
-// (secrets, mounts, smb) render in a trailing "other" group rather than
-// being dropped.
+// fixed and matches the schema docs; the structural families (0074)
+// render as container rows with field child rows.
 func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	if cfg == nil {
 		cfg = &profile.ModuleConfig{}
@@ -421,19 +421,82 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	}
 	section("tools", tools)
 
-	var other []wsRow
+	// The structural entry sections (0074): one container row per entry,
+	// its fields as indented child rows — always rendered, an empty value
+	// is a settable field, never a missing row.
+	fieldRow := func(section, family, entry, field, value string) wsRow {
+		text := "  " + field
+		if value != "" {
+			text += " " + value
+		}
+		return wsRow{section: section, text: text, family: family, key: pathKey(entry, field), value: value}
+	}
+	scalarRow := func(section, family, field, value string) wsRow {
+		text := field
+		if value != "" {
+			text += " " + value
+		}
+		return wsRow{section: section, text: text, family: family, key: field, value: value}
+	}
+
+	var secrets []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Secrets)) {
 		s := cfg.Secrets[name]
-		other = append(other, entry("other", "secret "+name+" (env "+s.Env+")", "", "", ""))
+		secrets = append(secrets, wsRow{
+			section: "secrets", text: name,
+			family: profile.FamilySecrets, key: name, container: true,
+		})
+		secrets = append(secrets,
+			fieldRow("secrets", profile.FamilySecrets, name, "env", s.Env),
+			fieldRow("secrets", profile.FamilySecrets, name, "description", s.Description),
+			fieldRow("secrets", profile.FamilySecrets, name, "allow_empty", strconv.FormatBool(s.AllowEmpty)),
+		)
 	}
+	section("secrets", secrets)
+
+	var mounts []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Mounts)) {
 		m := cfg.Mounts[name]
-		other = append(other, entry("other", "mount "+name+" → "+m.Destination, "", "", ""))
+		mounts = append(mounts, wsRow{
+			section: "mounts", text: name,
+			family: profile.FamilyMounts, key: name, container: true,
+		})
+		mounts = append(mounts,
+			fieldRow("mounts", profile.FamilyMounts, name, "source", m.Source),
+			fieldRow("mounts", profile.FamilyMounts, name, "destination", m.Destination),
+			fieldRow("mounts", profile.FamilyMounts, name, "type", m.Type),
+			fieldRow("mounts", profile.FamilyMounts, name, "options", strings.Join(m.Options, ", ")),
+			fieldRow("mounts", profile.FamilyMounts, name, "startat", m.StartAt),
+			fieldRow("mounts", profile.FamilyMounts, name, "state", m.State),
+		)
 	}
+	section("mounts", mounts)
+
+	var smb []wsRow
+	avahi := ""
+	if cfg.Smb.Avahi != nil {
+		avahi = strconv.FormatBool(*cfg.Smb.Avahi)
+	}
+	smb = append(smb,
+		scalarRow("smb", profile.FamilySmb, "group", cfg.Smb.Group),
+		scalarRow("smb", profile.FamilySmb, "users", strings.Join(cfg.Smb.Users, ", ")),
+		scalarRow("smb", profile.FamilySmb, "avahi", avahi),
+	)
 	for _, name := range slices.Sorted(maps.Keys(cfg.Smb.Shares)) {
-		other = append(other, entry("other", "smb share "+name, "", "", ""))
+		sh := cfg.Smb.Shares[name]
+		smb = append(smb, wsRow{
+			section: "smb", text: name,
+			family: profile.FamilySmb, key: name, container: true,
+		})
+		smb = append(smb,
+			fieldRow("smb", profile.FamilySmb, name, "path", sh.Path),
+			fieldRow("smb", profile.FamilySmb, name, "comment", sh.Comment),
+			fieldRow("smb", profile.FamilySmb, name, "valid_users", sh.ValidUsers),
+			fieldRow("smb", profile.FamilySmb, name, "writable", strconv.FormatBool(sh.Writable)),
+			fieldRow("smb", profile.FamilySmb, name, "public", strconv.FormatBool(sh.Public)),
+		)
 	}
-	section("other", other)
+	section("smb", smb)
 
 	return rows
 }

@@ -183,15 +183,14 @@ func TestSecrets_envEditAndBool(t *testing.T) {
 	require.Equal(t, "DEMO_API_KEY_2", c.ws.draft.cfg.Secrets["API_KEY"].Env)
 	require.Contains(t, c.ws.placeholderOrBody(), "env DEMO_API_KEY_2", "the row re-renders")
 
-	// allow_empty flips as a bool; junk refuses.
+	// allow_empty flips through the choice picker (0076) — junk values
+	// are unreachable by construction.
 	wsToKey(t, c, pathKey("API_KEY", "allow_empty"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = []rune("bogus")
+	ch := c.modals[0].(*choiceModel)
+	require.Equal(t, []string{"false", "true"}, ch.choices)
+	c = cpress(c, "up") // false
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing, "junk bool refuses")
-	require.Contains(t, c.ws.editing.err, "true", "tier-1 names the allowed values")
-	c.ws.editing.input = []rune("false")
-	c = wsPress(t, c, "enter")
 	require.False(t, c.ws.draft.cfg.Secrets["API_KEY"].AllowEmpty, "the bool lands")
 	require.NotContains(t, c.ws.placeholderOrBody(), "allow_empty", "the zeroed bool row disappears")
 }
@@ -255,14 +254,14 @@ func TestMounts_fieldEdits(t *testing.T) {
 	c = wsPress(t, c, "enter")
 	require.Equal(t, []string{"rw", "noatime"}, c.ws.draft.cfg.Mounts["media"].Options)
 
+	// state flips through the choice picker (0076) — unknown states are
+	// unreachable by construction.
 	wsToKey(t, c, pathKey("media", "state"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = []rune("paused")
+	ch := c.modals[0].(*choiceModel)
+	require.Equal(t, []string{"enabled", "disabled"}, ch.choices)
+	c = cpress(c, "right") // disabled
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing, "an unknown state refuses")
-	require.Contains(t, c.ws.editing.err, "enabled")
-	c.ws.editing.input = []rune("disabled")
-	c = wsPress(t, c, "enter")
 	require.Equal(t, "disabled", c.ws.draft.cfg.Mounts["media"].State)
 
 	// A required field refuses to empty (the mutate error keeps the field open).

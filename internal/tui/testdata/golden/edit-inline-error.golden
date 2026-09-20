@@ -5,10 +5,10 @@
 │                          ││  id demo                                                         │
 │                          ││  app demo-app                                                    │
 │                          ││  description the demo module                                     │
-│                          │││ ▸ bogus▏                                                        │
-│                          ││    ✗ scope must be "user" or "system"                            │
+│                          ││  scope user                                                      │
 │                          ││packages                                                          │
-│                          ││  + neovim                                                        │
+│                          │││ ▸ ▏                                                             │
+│                          ││    ✗ package name must not be empty                              │
 │                          ││  + ripgrep                                                       │
 │                          ││links                                                             │
 │                          ││writes                                                            │

@@ -87,14 +87,15 @@ func TestEdit_fieldEditActive(t *testing.T) {
 
 func TestEdit_inlineErrorAndWarning(t *testing.T) {
 	subs, _, c := editShell(t)
-	// Scope is a tier-1 choice: an invalid value renders at the field.
-	for i := 0; i < 2; i++ { // walk meta rows: description, scope
-		c = cpress(c, "j")
-	}
-	require.Equal(t, "scope", c.ws.rows[c.ws.cursor].key)
+	// A free-text field's tier-1 grammar renders live at the field.
+	// (0076: closed-set fields open the choice picker instead — their
+	// invalid values are unreachable by construction.)
+	c = cursorTo(t, c, "neovim")
 	c = cpress(c, "enter")
-	c = typeText(c, "bogus")
-	require.Contains(t, c.ws.editing.err, "scope", "tier-1 renders live at the field")
+	for i := 0; i < len("neovim"); i++ {
+		c, _ = cstep(c, tea.KeyPressMsg{Code: tea.KeyBackspace})
+	}
+	require.Contains(t, c.ws.editing.err, "package name", "tier-1 renders live at the field")
 	requireGolden(t, "edit-inline-error.golden", c.View().Content, subs)
 }
 
@@ -168,12 +169,13 @@ func TestEdit_saveWritesAndClearsDraft(t *testing.T) {
 func TestEdit_saveBlockedOnTier1Errors(t *testing.T) {
 	_, _, c := editShell(t)
 
-	// Commit an invalid scope: staged, marked, and blocking the save.
-	for i := 0; i < 2; i++ { // description, scope
-		c = cpress(c, "j")
+	// Commit an emptied app: staged, marked, and blocking the save.
+	// (0076: closed-set fields can no longer hold invalid values — the
+	// free-text grammar still can.)
+	c = cpress(c, "enter") // the app row
+	for i := 0; i < len("demo-app"); i++ {
+		c, _ = cstep(c, tea.KeyPressMsg{Code: tea.KeyBackspace})
 	}
-	c = cpress(c, "enter")
-	c = typeText(c, "bogus")
 	c = wsPress(t, c, "enter")
 	require.Nil(t, c.ws.editing)
 	require.NotEmpty(t, c.ws.draftErrs(), "the invalid value is staged with its error")
@@ -187,7 +189,7 @@ func TestEdit_saveBlockedOnTier1Errors(t *testing.T) {
 		c, cmd = cstep(c, msg)
 	}
 	require.True(t, c.msgErr, "the save is blocked while tier-1 errors stand")
-	require.Contains(t, c.message, "scope")
+	require.Contains(t, c.message, "app")
 	require.NotNil(t, c.ws.draft, "the blocked save keeps the draft")
 }
 

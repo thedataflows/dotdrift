@@ -876,7 +876,8 @@ func newRowKey(section, input string) string {
 
 // startEdit opens the field input on the cursor row (enter/e). Read-only
 // rows, container rows, and rows without metadata refuse silently — the
-// row already shows everything it can.
+// row already shows everything it can. A closed-set field (0076) opens
+// the choice picker instead of the text input.
 func (m *Compositor) startEdit() {
 	if m.ws.cursor >= len(m.ws.rows) {
 		return
@@ -885,7 +886,38 @@ func (m *Compositor) startEdit() {
 	if row.family == "" || row.container {
 		return
 	}
+	if set := choiceSet(row); set != nil {
+		m.openChoice(row, set)
+		return
+	}
 	m.ws.editing = &wsEdit{row: m.ws.cursor, input: []rune(row.value), cur: len([]rune(row.value))}
+}
+
+// openChoice pushes the row's picker. The seam commits through the same
+// path as the text input's enter; picking the effective value — editing
+// an unset scope to its own default, say — stages nothing.
+func (m *Compositor) openChoice(row wsRow, set []string) {
+	current := effectiveChoice(row)
+	rowIdx := m.ws.cursor
+	m.modals = append(m.modals, newChoiceModel(m.th, choiceTitle(row), set, current, func(value string) {
+		value = commitValue(value)
+		if value == current {
+			return
+		}
+		m.commitFieldAt(rowIdx, value)
+	}))
+}
+
+// commitFieldAt commits value onto row i as if the text input had
+// received it: applyEdit validates, splices, and refreshes the surface.
+// A picker never leaves an input open behind the modal.
+func (m *Compositor) commitFieldAt(row int, value string) {
+	m.ws.editing = &wsEdit{row: row, input: []rune(value), cur: len([]rune(value))}
+	if m.ws.applyEdit() {
+		m.finishFieldCommit()
+	} else {
+		m.ws.editing = nil
+	}
 }
 
 // startAdd opens the synthetic new-row input for the cursor's row (a).
@@ -935,11 +967,7 @@ func (m *Compositor) editKey(k tea.KeyPressMsg) tea.Cmd {
 		return nil
 	case "enter":
 		if m.ws.applyEdit() {
-			m.ws.editing = nil
-			m.store[m.ws.activeDir()] = m.ws.draft
-			if m.ws.draft != nil && m.ws.draft.cfg != nil && m.ws.draft.rawMode && m.ws.schemaErr == nil {
-				m.message, m.msgErr = "parses again — structured editing unlocked", false
-			}
+			m.finishFieldCommit()
 		}
 		return nil
 	case "left":
@@ -970,6 +998,16 @@ func (m *Compositor) editKey(k tea.KeyPressMsg) tea.Cmd {
 		e.err = validateAdd(addFamily(e.section), e.addPath, e.inputString())
 	}
 	return nil
+}
+
+// finishFieldCommit closes a committed field edit: the ledger takes the
+// draft, and a raw-mode file that parses again says so once.
+func (m *Compositor) finishFieldCommit() {
+	m.ws.editing = nil
+	m.store[m.ws.activeDir()] = m.ws.draft
+	if m.ws.draft != nil && m.ws.draft.cfg != nil && m.ws.draft.rawMode && m.ws.schemaErr == nil {
+		m.message, m.msgErr = "parses again — structured editing unlocked", false
+	}
 }
 
 // confirmDiscard pushes the discard-draft confirm (D): the question, the

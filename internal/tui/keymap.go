@@ -158,6 +158,8 @@ func (m *Compositor) helpRows() []helpRow {
 			return []helpRow{{"type", "password"}, {"enter", "submit"}, {"esc", "cancel (aborts the operation)"}}
 		case *confirmModel:
 			return []helpRow{{"y", "confirm"}, {"any other key", "cancel"}, {"esc", "cancel"}}
+		case *choiceModel:
+			return []helpRow{{"up/down", "pick"}, {"enter", "choose"}, {"esc", "cancel"}}
 		case *applyDetailModel:
 			return []helpRow{{"j/k", "scroll output"}, {"ctrl+c", "cancel the run"}, {"esc", "close (the run lives on)"}}
 		case *planModel:

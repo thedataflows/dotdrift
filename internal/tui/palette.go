@@ -116,7 +116,7 @@ func (m *Compositor) paletteEntries() []paletteEntry {
 		}
 		seen[r.section]++
 	}
-	for _, sec := range []string{"meta", "packages", "links", "writes", "when", "hooks", "systemd.units", "tools", "other"} {
+	for _, sec := range []string{"meta", "packages", "links", "writes", "when", "hooks", "systemd.units", "tools", "secrets", "mounts", "smb"} {
 		if n := seen[sec]; n > 0 {
 			out = append(out, paletteEntry{
 				id: "field:" + sec, section: sectionFields,

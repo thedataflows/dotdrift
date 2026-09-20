@@ -501,6 +501,35 @@ func TestWhen_emptyGroupBlocksSave(t *testing.T) {
 	require.NotNil(t, cpressCmd(c, "ctrl+s"), "the save runs once the group has content")
 }
 
+// --- T-tui-structural-cleanup: the shell's chrome catches up ---
+
+func TestPalette_structuralFieldSections(t *testing.T) {
+	_, c := entriesShell(t)
+	ids := map[string]bool{}
+	for _, e := range c.paletteEntries() {
+		ids[e.id] = true
+	}
+	require.True(t, ids["field:secrets"], "secrets is a field destination")
+	require.True(t, ids["field:mounts"], "mounts is a field destination")
+	require.True(t, ids["field:smb"], "smb is a field destination")
+	require.False(t, ids["field:other"], "the dissolved group is gone")
+}
+
+func TestPalette_structuralFieldDeepLink(t *testing.T) {
+	_, c := entriesShell(t)
+	c = cpress(c, "/")
+	require.Len(t, c.modals, 1, "/ opens the palette")
+	c = typeText(c, "secrets")
+	p := pal(t, c)
+	for i, l := range p.visibleLabels() {
+		if l == "secrets" && p.rows[i].section == sectionFields {
+			p.sel = i
+		}
+	}
+	c = cpress(c, "enter")
+	require.True(t, c.ws.atSection("secrets"), "the cursor deep-links into the structural section")
+}
+
 func TestSystemd_containerRowRefusesFieldEdit(t *testing.T) {
 	_, c := systemdShell(t)
 	wsToKey(t, c, "backup.timer")

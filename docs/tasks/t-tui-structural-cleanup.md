@@ -34,5 +34,5 @@ and close the issue.
 
 # Acceptance
 
-- [ ] Landed.
+- [x] Landed — commit `chore(tui): 0074 cleanup — palette field sweep, audits, docs`.
 - [Definition of done](/engineering/definition-of-done.md) checklist complete.

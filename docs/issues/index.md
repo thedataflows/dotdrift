@@ -61,4 +61,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0071](0071-surface-tty-handover-for-real-steps.md) | Surface TTY handover for real steps | done | high |
 | [0072](0072-module-management-dialogs.md) | Module-management dialogs in the TUI | done | high |
 | [0073](0073-tui-compositor-redesign.md) | TUI compositor redesign | done | high |
-| [0074](0074-structural-section-editing.md) | Structural-section inline editing in the M15 workspace | open | medium |
+| [0074](0074-structural-section-editing.md) | Structural-section inline editing in the M15 workspace | done | medium |

@@ -9,7 +9,7 @@ timestamp: 2026-09-15T00:00:00Z
 # ISSUE 0074: Structural-section inline editing in the M15 workspace
 
 - **Type**: task
-- **Status**: open
+- **Status**: done
 
 ## Context
 
@@ -31,20 +31,35 @@ value), how a mount's fields edit, how nested when trees expand.
 
 ## Acceptance Criteria
 
-- [ ] `systemd.units` rows edit directives in place; units add/remove with
-      confirm.
-- [ ] `secrets`, `mounts`, `smb` rows edit their fields; entries
-      add/remove.
-- [ ] Nested `when` groups (`and`/`or`/`not`) are editable as an
+- [x] `systemd.units` rows edit directives in place; units add/remove with
+      confirm. (`TestSystemd_*` — directive edits parse TOML-first with a
+      plain-string fallback; unit adds tier-1 check resolve's charset.)
+- [x] `secrets`, `mounts`, `smb` rows edit their fields; entries
+      add/remove. (`TestSecrets_*`, `TestMounts_*`, `TestSmb_*`; the
+      read-only "other" group is gone, replaced by three first-class
+      sections with always-rendered field rows.)
+- [x] Nested `when` groups (`and`/`or`/`not`) are editable as an
       expandable tree (0065-D12's builder was fog; this is its landing).
-- [ ] Each family round-trips through the encoders with the tomlsplice
+      (`TestWhen_*` — always-expanded rows: an unset condition is a
+      settable row, never a missing one; `a` grows/sets groups, d removes
+      with confirm, an empty group blocks the save like the load error it
+      is.)
+- [x] Each family round-trips through the encoders with the tomlsplice
       byte-preservation guarantees (contract 19) and the draft ledger.
-- [ ] Golden + message-driven tests per family; the "other" read-only
-      grouping in the workspace shrinks to nothing.
+      (Every commit re-encodes the family and strict-decodes the spliced
+      raw; the save pipeline is untouched.)
+- [x] Golden + message-driven tests per family; the "other" read-only
+      grouping in the workspace shrinks to nothing. (`structural-*.golden`
+      + 29 structural tests; `TestEntries_sectionsReplaceOther` pins the
+      group's absence.)
 
 ## Notes
 
 The M14 adapters (`editor/adapters.go`, `dotfiles.go`, `hooks.go`,
 `mounts.go`) carried per-family state machines with forms; the M15 shape
-should stay row-native (no pushed forms) per the redesign's inline
-principle. git history has the deleted adapters for reference.
+stays row-native (no pushed forms) per the redesign's inline principle.
+Accepted grammar (2026-09-15): container + field rows — an entry is a
+container row (d removes with confirm, a adds), its fields are
+always-rendered indented child rows; machine row paths join with the
+unit separator (`pathKey`), family mutations live in
+`internal/tui/structural.go` beside the encoders they feed.

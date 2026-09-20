@@ -91,16 +91,18 @@ func parseBoolInput(input string) (bool, error) {
 
 // parseAvahiInput is the tri-state avahi grammar: "true", "false", or ""
 // (empty unsets to nil — the default-on semantics).
-func parseAvahiInput(input string) (bool, bool, error) {
+func parseAvahiInput(input string) (*bool, error) {
 	switch strings.TrimSpace(input) {
 	case "true":
-		return true, true, nil
+		v := true
+		return &v, nil
 	case "false":
-		return false, true, nil
+		v := false
+		return &v, nil
 	case "":
-		return false, false, nil
+		return nil, nil
 	default:
-		return false, false, errors.New(`avahi takes "true", "false", or empty to unset`)
+		return nil, errors.New(`avahi takes "true", "false", or empty to unset`)
 	}
 }
 
@@ -266,7 +268,7 @@ func validateField(family, key, input string) string {
 				return "path is required"
 			}
 		case "avahi":
-			if _, _, err := parseAvahiInput(input); err != nil {
+			if _, err := parseAvahiInput(input); err != nil {
 				return err.Error()
 			}
 		case "writable", "public":

@@ -214,15 +214,11 @@ func mutateSmb(cfg *profile.ModuleConfig, key, input string, add bool) error {
 		case "users":
 			cfg.Smb.Users = splitComma(input)
 		case "avahi":
-			v, set, err := parseAvahiInput(input)
+			v, err := parseAvahiInput(input)
 			if err != nil {
 				return err
 			}
-			if set {
-				cfg.Smb.Avahi = &v
-			} else {
-				cfg.Smb.Avahi = nil
-			}
+			cfg.Smb.Avahi = v // nil unsets — the default-on semantics
 		default:
 			return fmt.Errorf("unknown smb field %q", parts[0])
 		}

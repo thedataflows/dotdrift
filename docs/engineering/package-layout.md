@@ -42,11 +42,11 @@ Each top-level `internal/` directory is a deep module with a small public API an
 │   │                         # aware; untouched bytes pass through (0065)
 │   ├── tui/                  # The compositor shell (M15, charm v2):
 │   │                         # ADR-0003 style registry + compositor, nav,
-│   │                         # sectioned workspace with inline editing,
-│   │                         # modal family (confirm/elevation/manage/
-│   │                         # writes/apply detail), fuzzy palette, the
-│   │                         # single keymap — all over the service areas
-│   │                         # (reads + config + writes + apply doorways)
+│   │                         # sectioned workspace with inline + structural
+│   │                         # editing, modal family (confirm/elevation/
+│   │                         # manage/writes/apply detail), fuzzy palette,
+│   │                         # the single keymap — all over the service
+│   │                         # areas (reads + config + writes + apply doorways)
 │   ├── facts/                # Shared Facts type (hostname/user/os/distro/gpu/backend)
 │   ├── detect/               # Host/user/os/gpu facts
 │   └── onboard/              # Module factory + copy

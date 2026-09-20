@@ -64,9 +64,9 @@ view stack wholesale). Its parts:
 - **The workspace** (T-tui-workspace). `module.toml` rendered as a
   sectioned read surface over the 0065 config seam (strict decode + raw
   text; the workspace never parses TOML): fixed-order sections — meta,
-  packages, links, writes, when, hooks, systemd.units, tools, and an
-  "other" group for the rest of the schema — with `(none)` for empty
-  sections, never a blank pane. The title line carries the layer tabs
+  packages, links, writes, when, hooks, systemd.units, tools, secrets,
+  mounts, smb — where a section shows what is set; an empty section is
+  its header alone. The title line carries the layer tabs
   (`base · user cri · host myhost`, active bracketed) in sync with the
   nav both ways: selecting a layer child moves the tab, `L` cycles the
   tabs and moves the nav cursor. A module with a superuser overlay shows
@@ -95,24 +95,28 @@ view stack wholesale). Its parts:
   check stands). The structural families all edit in place now (below);
   structural-section editing landed from issue
   [0074](../issues/0074-structural-section-editing.md).
-- **Structural editing** (issue 0074, landing task by task). The
-  structural families join the inline grammar as container + field rows:
-  a systemd unit is a container row (d removes with confirm, `a` adds a
-  unit by name) whose directives render beneath it as indented rows;
-  directive values are typed TOML — `ExecStart = /usr/bin/demo` needs no
-  quoting, while `"x"`, `30`, `[a, b]`, and inline tables land with their
-  TOML types. Secrets, mounts, and smb shares edit the same way — one
-  container per entry, every field an always-rendered child row (an
-  empty value is a settable field, never a missing row); secrets add as
-  `name = ENV`, mounts and shares as a bare name. Entries resolve can
-  never accept are refused at save (missing mount
-  source/destination/type, empty share path) — tier-2, in place. The
-  when tree is editable: root leaves always render (an unset condition
-  is settable), and `and[i]`/`or[i]`/`not` render as expanded group
-  containers whose leaves edit like the root's; `a` on a group row with
-  input `and`/`or`/`not` nests deeper, d removes a group with confirm,
-  and an empty group — nothing to evaluate, a load-time error class —
-  blocks the save until it has content.
+- **Structural editing** (0074 grammar, 0075 disclosure). The
+  structural families join the inline grammar as container + field rows,
+  and a row renders only when it differs from the zero value. A systemd
+  unit is a container row (d removes with confirm) whose SET directives
+  render beneath it as indented rows; directive values are typed TOML —
+  `ExecStart = /usr/bin/demo` needs no quoting, while `"x"`, `30`,
+  `[a, b]`, and inline tables land with their TOML types. Secrets,
+  mounts, and smb shares edit the same way — one container per entry,
+  its set fields beneath it. The add grammar reaches everything the
+  disclosure hides: `a` on a section header adds the section's entry
+  (an empty section's header is selectable; the structural families'
+  headers always are — they are the entry-level scope), `a` on a
+  container adds `field = value` INTO the entry, `a` on the smb header
+  takes `group = …`-style scalars beside bare share names, and `a` on
+  when takes `and`/`or`/`not` (nesting deeper) or `field = value` at
+  any depth. Editing a field to its zero value clears it and the row
+  disappears (required fields refuse to empty); a container with
+  nothing set yet shows a dim `· a adds "field = value"` hint. Entries
+  resolve could never accept are refused at save (missing mount
+  source/destination/type, empty share path, an empty when group —
+  nothing to evaluate) — tier-2, in place. meta keeps its description
+  and scope rows: identity, not options.
 - **The modal family** (T-tui-modals). One confirm component — question
   title, consequence body with full target identity, `y` confirms and
   every other key (or `esc`) cancels — backs dirty-quit (`q` with

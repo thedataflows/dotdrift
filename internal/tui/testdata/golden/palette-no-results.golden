@@ -17,12 +17,12 @@
 │                       │    ctrl+n creates a module named «zzzznothing»  │                    │
 │                       │                                                 │                    │
 │                       ╰─────────────────────────────────────────────────╯                    │
-│                          ││  gpu                                                             │
-│                          ││  kernel                                                          │
-│                          ││  packages                                                        │
-│                          ││  tools                                                           │
-│                          ││hooks                                                             │
-│                          ││  (none)                                                          │
+│                          ││mounts                                                            │
+│                          ││smb                                                               │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j down • k up • h collapse / parent • / palette • ? help • q quit

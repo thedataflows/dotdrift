@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]                                                      │
-││ ▸ demo                  ││  (none)                                                          │
+││ ▸ demo                  ││meta                                                              │
+│                          ││  id demo                                                         │
+│                          ││  description                                                     │
+│                          ││  scope user                                                      │
+│                          ││packages                                                          │
 │                          ││links                                                             │
-│                          ││  (none)                                                          │
 │                          ││writes                                                            │
-│                          ││  (none)                                                          │
 │                          ││when                                                              │
-│                          ││  hosts                                                           │
-│                          ││  users                                                           │
-│                          ││  os                                                              │
-│                          ││  gpu                                                             │
-│                          ││  kernel                                                          │
-│                          ││  packages                                                        │
-│                          ││  tools                                                           │
 │                          ││hooks                                                             │
-│                          ││  (none)                                                          │
 │                          ││systemd.units                                                     │
-│                          ││  (none)                                                          │
 │                          ││tools                                                             │
-│                          ││  (none)                                                          │
 │                          ││secrets                                                           │
 │                          ││  API_KEY                                                         │
 │                          │││   env DEMO_API_KEY                                              │
+│                          ││    description demo key                                          │
+│                          ││    allow_empty true                                              │
+│                          ││  TOKEN                                                           │
+│                          ││    env MISE_TOKEN                                                │
+│                          ││mounts                                                            │
+│                          ││  media                                                           │
+│                          ││    source /dev/disk/by-label/media                               │
+│                          ││    destination /media                                            │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j scroll down • k scroll up • pgup page up • / palette • ? help • q quit

@@ -369,7 +369,7 @@ func (m *Compositor) baseMouse(msg tea.Msg) tea.Cmd {
 		}
 		m.focus = focusWork
 		idx := m.ws.offset + msg.Y - 4
-		if idx >= 0 && idx < len(m.ws.rows) && !m.ws.rows[idx].header {
+		if m.ws.selectableRow(idx) {
 			m.ws.cursor = idx
 			if m.doubleClick(idx) {
 				m.startEdit()

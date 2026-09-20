@@ -228,6 +228,33 @@ func TestWorkspace_cursorWalksEntryRows(t *testing.T) {
 	require.False(t, c.ws.rows[c.ws.cursor].header, "the cursor never lands on a section header")
 }
 
+func TestWorkspace_disclosureRendersOnlySet(t *testing.T) {
+	// 0075 T-tui-disclosure: a surface shows what IS — empty sections
+	// are headers alone, meta keeps its identity rows, and every header
+	// here is selectable because its section is empty.
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	body := c.ws.placeholderOrBody()
+	require.Contains(t, body, "meta")
+	require.Contains(t, body, "description", "the identity rows stay")
+	require.Contains(t, body, "scope", "the identity rows stay")
+	require.Contains(t, body, "packages")
+	require.Contains(t, body, "when")
+	require.Contains(t, body, "smb")
+	require.NotContains(t, body, "(none)", "empty sections render the header alone")
+	for _, r := range c.ws.rows {
+		if r.header && r.section != "meta" {
+			require.True(t, r.selectable, "every empty section's header is the way in")
+		}
+	}
+
+	// a on an empty section's header opens the section's add input.
+	c = cpress(c, "tab") // focus the workspace
+	wsToHeader(t, c, "packages")
+	c = cpress(c, "a")
+	require.True(t, c.ws.editing.add, "a on an empty section's header adds its first entry")
+	cpress(c, "esc")
+}
+
 func TestWorkspace_pageKeysFollowTheCursor(t *testing.T) {
 	// 0075 T-tui-page: end/home jump across a long surface, pgdown/pgup
 	// step a page, and the visible window follows the cursor — before
@@ -247,9 +274,8 @@ func TestWorkspace_pageKeysFollowTheCursor(t *testing.T) {
 	require.Greater(t, page, 5, "the test window steps more than a screenful")
 
 	c = wsPress(t, c, "end")
-	require.Equal(t, len(c.ws.rows)-1, c.ws.cursor, "end lands on the last row")
-	require.False(t, c.ws.rows[c.ws.cursor].header, "the last row is an entry")
-	require.Contains(t, c.View().Content, "avahi", "the window follows the cursor to the tail")
+	require.Equal(t, len(c.ws.rows)-1, c.ws.cursor, "end lands on the last selectable row")
+	require.Contains(t, c.View().Content, "smb", "the window follows the cursor to the tail")
 	c = wsPress(t, c, "home")
 	start := c.ws.cursor
 	require.Equal(t, "id demo", c.ws.rows[c.ws.cursor].text, "home returns to the first row")

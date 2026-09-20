@@ -10,19 +10,19 @@
 │                          ││  + neovim                                                        │
 │                          ││  + ripgrep                                                       │
 │                          ││lin╭──────────────────────────────────╮                           │
-│                          ││  (│                                  │                           │
-│                          ││wri│  │/ demo · host▏                 │                           │
-│                          ││  (│                                  │                           │
-│                          ││whe│  │ ◆ demo · host myhost  module  │                           │
-│                          ││  h│                                  │                           │
-│                          ││  u╰──────────────────────────────────╯                           │
-│                          ││  os                                                              │
-│                          ││  gpu                                                             │
-│                          ││  kernel                                                          │
-│                          ││  packages                                                        │
-│                          ││  tools                                                           │
-│                          ││hooks                                                             │
-│                          ││  (none)                                                          │
+│                          ││wri│                                  │                           │
+│                          ││whe│  │/ demo · host▏                 │                           │
+│                          ││hoo│                                  │                           │
+│                          ││sys│  │ ◆ demo · host myhost  module  │                           │
+│                          ││too│                                  │                           │
+│                          ││  n╰──────────────────────────────────╯                           │
+│                          ││secrets                                                           │
+│                          ││mounts                                                            │
+│                          ││smb                                                               │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j down • k up • h collapse / parent • / palette • ? help • q quit

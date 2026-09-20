@@ -10,19 +10,19 @@
 │                          ││  +╭──────────────────────────────────╮                           │
 │                          ││  +│                                  │                           │
 │                          ││lin│  │/ ▏                            │                           │
-│                          ││  (│                                  │                           │
-│                          ││wri│  │ ◆ demo  module                │                           │
-│                          ││  (│    ◆ demo · user cri  module     │                           │
-│                          ││whe│    ◆ demo · host myhost  module  │                           │
-│                          ││  h│    ◆ other  module               │                           │
-│                          ││  u│    ◆ plain  module               │                           │
-│                          ││  o│                                  │                           │
-│                          ││  g╰──────────────────────────────────╯                           │
-│                          ││  kernel                                                          │
-│                          ││  packages                                                        │
-│                          ││  tools                                                           │
-│                          ││hooks                                                             │
-│                          ││  (none)                                                          │
+│                          ││wri│                                  │                           │
+│                          ││whe│  │ ◆ demo  module                │                           │
+│                          ││hoo│    ◆ demo · user cri  module     │                           │
+│                          ││sys│    ◆ demo · host myhost  module  │                           │
+│                          ││too│    ◆ other  module               │                           │
+│                          ││  n│    ◆ plain  module               │                           │
+│                          ││sec│                                  │                           │
+│                          ││mou╰──────────────────────────────────╯                           │
+│                          ││smb                                                               │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j down • k up • h collapse / parent • / palette • ? help • q quit

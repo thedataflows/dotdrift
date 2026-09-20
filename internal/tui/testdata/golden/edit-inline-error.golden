@@ -11,18 +11,18 @@
 │                          ││  + neovim                                                        │
 │                          ││  + ripgrep                                                       │
 │                          ││links                                                             │
-│                          ││  (none)                                                          │
 │                          ││writes                                                            │
-│                          ││  (none)                                                          │
 │                          ││when                                                              │
-│                          ││  hosts                                                           │
-│                          ││  users                                                           │
-│                          ││  os                                                              │
-│                          ││  gpu                                                             │
-│                          ││  kernel                                                          │
-│                          ││  packages                                                        │
-│                          ││  tools                                                           │
 │                          ││hooks                                                             │
+│                          ││systemd.units                                                     │
+│                          ││tools                                                             │
+│                          ││  node = 20                                                       │
+│                          ││secrets                                                           │
+│                          ││mounts                                                            │
+│                          ││smb                                                               │
+│                          ││                                                                  │
+│                          ││                                                                  │
+│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter commit • esc cancel • ? help

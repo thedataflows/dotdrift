@@ -306,22 +306,52 @@ func validateAdd(family, addPath, input string) string {
 			return `add as "Name = value"`
 		}
 	case profile.FamilySecrets:
-		name, env, _ := strings.Cut(input, "=")
-		if strings.TrimSpace(name) == "" || strings.TrimSpace(env) == "" {
-			return `add as "name = ENV"`
+		if addPath == "" {
+			name, env, _ := strings.Cut(input, "=")
+			if strings.TrimSpace(name) == "" || strings.TrimSpace(env) == "" {
+				return `add as "name = ENV"`
+			}
+			return ""
+		}
+		if !okFieldValue(input, "env", "description", "allow_empty") {
+			return `add as "field = value"`
 		}
 	case profile.FamilyMounts:
-		return validEntryName(input, "mount")
+		if addPath == "" {
+			return validEntryName(input, "mount")
+		}
+		if !okFieldValue(input, "source", "destination", "type", "options", "startat", "state") {
+			return `add as "field = value"`
+		}
 	case profile.FamilySmb:
-		return validEntryName(input, "share")
+		if addPath == "" {
+			// the section's root scope: a share name or a scalar
+			if okFieldValue(input, "group", "users", "avahi") {
+				return ""
+			}
+			return validEntryName(input, "share")
+		}
+		if !okFieldValue(input, "path", "comment", "valid_users", "writable", "public") {
+			return `add as "field = value"`
+		}
 	case profile.FamilyWhen:
 		switch strings.TrimSpace(input) {
 		case "and", "or", "not":
 		default:
-			return `add "and", "or", or "not"`
+			if !okFieldValue(input, "hosts", "users", "os", "gpu", "kernel", "packages", "tools") {
+				return `add "and", "or", "not" or "field = value"`
+			}
 		}
 	}
 	return ""
+}
+
+// okFieldValue checks `field = value` input against a field set: the
+// field must be known and the value must not be empty (an add that sets
+// nothing is refused — clearing happens by editing the row).
+func okFieldValue(input string, fields ...string) bool {
+	field, value, ok := strings.Cut(input, "=")
+	return ok && strings.TrimSpace(value) != "" && slices.Contains(fields, strings.TrimSpace(field))
 }
 
 // validEntryName is the bare-name tier-1 for sections whose entries grow
@@ -858,10 +888,12 @@ func (m *Compositor) startEdit() {
 	m.ws.editing = &wsEdit{row: m.ws.cursor, input: []rune(row.value), cur: len([]rune(row.value))}
 }
 
-// startAdd opens the synthetic new-row input for the cursor's section
-// (a). Sections without an add grammar refuse. A structural add lands
-// beneath the cursor row's entry: a unit container adds the unit, a
-// directive row adds a directive into its unit.
+// startAdd opens the synthetic new-row input for the cursor's row (a).
+// The row decides the scope: a header adds at the section's entry level
+// (an empty section's only way in; the when/smb headers are those
+// sections' root scope), a container adds `field = value` INTO its
+// entry, systemd directives and when leaves add into their scope, and
+// every other row adds the section's next entry.
 func (m *Compositor) startAdd() {
 	if m.ws.cursor >= len(m.ws.rows) {
 		return
@@ -872,16 +904,21 @@ func (m *Compositor) startAdd() {
 		return
 	}
 	e := &wsEdit{row: m.ws.cursor, add: true, section: section}
-	if row.family == profile.FamilySystemd && !row.container {
-		e.addPath = splitPath(row.key)[0]
-	}
-	if row.family == profile.FamilyWhen {
-		parts := splitPath(row.key)
-		if row.container {
-			e.addPath = pathKey(parts...) // a on a group nests beneath it
-		} else if len(parts) > 1 {
-			e.addPath = pathKey(parts[:len(parts)-1]...) // a on a group's leaf grows that group
-		} // a root leaf grows the root: addPath stays ""
+	switch {
+	case row.header:
+		// the section's entry-level scope: addPath stays ""
+	case row.container:
+		e.addPath = row.key
+	default:
+		switch row.family {
+		case profile.FamilySystemd:
+			e.addPath = splitPath(row.key)[0]
+		case profile.FamilyWhen:
+			parts := splitPath(row.key)
+			if len(parts) > 1 {
+				e.addPath = pathKey(parts[:len(parts)-1]...)
+			}
+		}
 	}
 	m.ws.editing = e
 }

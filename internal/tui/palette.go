@@ -108,10 +108,10 @@ func (m *Compositor) paletteEntries() []paletteEntry {
 		}
 	}
 	out = append(out, m.paletteActions()...)
-	// Fields: the current module's non-empty sections.
+	// Fields: the current module's sections that have content rows.
 	seen := map[string]int{}
 	for _, r := range m.ws.rows {
-		if r.header || r.text == "(none)" {
+		if r.header || r.hint {
 			continue
 		}
 		seen[r.section]++
@@ -363,7 +363,7 @@ func (m *Compositor) runPaletteEntry(e paletteEntry) tea.Cmd {
 		m.focus = focusWork
 		cmd := m.syncWorkspace()
 		for i, r := range m.ws.rows {
-			if r.section == e.fieldSection && !r.header && r.text != "(none)" {
+			if r.section == e.fieldSection && !r.header && !r.hint {
 				m.ws.cursor = i
 				break
 			}

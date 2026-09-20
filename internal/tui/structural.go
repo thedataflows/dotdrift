@@ -11,6 +11,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,28 @@ func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input str
 		return mutateSystemd(cfg, addPath, key, input, add)
 	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb:
 		var err error
+		// a on a container: `field = value` lands inside the entry —
+		// the edit branch is the authority on the field and its value.
+		if add && addPath != "" {
+			field, value, ok := strings.Cut(input, "=")
+			field = strings.TrimSpace(field)
+			if !ok || field == "" {
+				return "", errors.New(`add as "field = value"`)
+			}
+			key := pathKey(addPath, field)
+			switch family {
+			case profile.FamilySecrets:
+				err = mutateSecrets(cfg, key, strings.TrimSpace(value), false)
+			case profile.FamilyMounts:
+				err = mutateMounts(cfg, key, strings.TrimSpace(value), false)
+			default:
+				err = mutateSmb(cfg, key, strings.TrimSpace(value), false)
+			}
+			if err != nil {
+				return "", err
+			}
+			return key, nil
+		}
 		switch family {
 		case profile.FamilySecrets:
 			err = mutateSecrets(cfg, key, input, add)
@@ -194,11 +217,22 @@ func mutateMounts(cfg *profile.ModuleConfig, key, input string, add bool) error 
 	return nil
 }
 
-// mutateSmb: shares add bare; the [smb] scalars edit as single-segment
-// keys (group free text, users a comma list, avahi tri-state), share
-// fields as entry-scoped ones with path refusing to empty.
+// mutateSmb: the header's `a` takes a share name or a `field = value`
+// scalar (group/users/avahi); share fields add inside their entry. The
+// scalars edit as single-segment keys (group free text, users a comma
+// list, avahi tri-state), share fields as entry-scoped ones with path
+// refusing to empty.
 func mutateSmb(cfg *profile.ModuleConfig, key, input string, add bool) error {
 	if add {
+		if field, value, ok := strings.Cut(input, "="); ok {
+			field = strings.TrimSpace(field)
+			switch field {
+			case "group", "users", "avahi":
+				return mutateSmb(cfg, field, strings.TrimSpace(value), false)
+			default:
+				return errors.New(`add as "name" or "field = value" (group, users, avahi)`)
+			}
+		}
 		if cfg.Smb.Shares == nil {
 			cfg.Smb.Shares = map[string]profile.ShareSpec{}
 		}
@@ -258,8 +292,9 @@ func mutateSmb(cfg *profile.ModuleConfig, key, input string, add bool) error {
 
 // mutateWhen edits the when tree: leaves set/clear at any depth (the
 // root's plain single-segment keys included), `a` grows an and/or list
-// beneath the cursor row's group or sets its not. Returns the new group
-// row's key for adds.
+// beneath the addressed group or sets its not, and `a field = value`
+// sets a leaf on that group — an unset leaf renders nothing, the group
+// container is the way in. Returns the new row's key for adds.
 func mutateWhen(cfg *profile.ModuleConfig, addPath, key, input string, add bool) (string, error) {
 	if add {
 		var segs []string
@@ -284,7 +319,15 @@ func mutateWhen(cfg *profile.ModuleConfig, addPath, key, input string, add bool)
 			parent.Not = &profile.When{}
 			return pathKey(append(segs, "not")...), nil
 		default:
-			return "", errors.New(`add "and", "or", or "not"`)
+			field, value, ok := strings.Cut(input, "=")
+			field = strings.TrimSpace(field)
+			if !ok || !slices.Contains(whenFields, field) {
+				return "", errors.New(`add "and", "or", "not" or "field = value"`)
+			}
+			if err := setWhenLeaf(parent, field, strings.TrimSpace(value)); err != nil {
+				return "", err
+			}
+			return pathKey(append(segs, field)...), nil
 		}
 	}
 
@@ -298,6 +341,18 @@ func mutateWhen(cfg *profile.ModuleConfig, addPath, key, input string, add bool)
 	if node == nil {
 		return "", fmt.Errorf("stale when row %q", key)
 	}
+	if err := setWhenLeaf(node, field, input); err != nil {
+		return "", err
+	}
+	return "", nil
+}
+
+// whenFields are the when leaf names, in schema order.
+var whenFields = []string{"hosts", "users", "os", "gpu", "kernel", "packages", "tools"}
+
+// setWhenLeaf writes one leaf of a when node (the edit and the leaf-add
+// branches share it).
+func setWhenLeaf(node *profile.When, field, input string) error {
 	switch field {
 	case "gpu":
 		node.GPU = input
@@ -314,9 +369,9 @@ func mutateWhen(cfg *profile.ModuleConfig, addPath, key, input string, add bool)
 	case "tools":
 		node.Tools = splitComma(input)
 	default:
-		return "", fmt.Errorf("unknown when field %q", field)
+		return fmt.Errorf("unknown when field %q", field)
 	}
-	return "", nil
+	return nil
 }
 
 // whenNode walks a group path (and/or index pairs, not as a singleton)

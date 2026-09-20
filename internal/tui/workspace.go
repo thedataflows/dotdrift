@@ -47,15 +47,20 @@ type layerLoadedMsg struct {
 // value without presentation decoration. Empty family means read-only.
 // Container rows (0074) own a structural entry (a unit, a secret, a
 // mount, a share, a when group): they refuse field edits, d removes the
-// entry, a adds beneath them.
+// entry, a adds `field = value` beneath them. Disclosure (0075): rows
+// render only when they differ from the zero value — a header is
+// selectable when it is the way in (an empty section, or the when/smb
+// scope), and a hint row names the add gesture for an empty container.
 type wsRow struct {
-	section   string
-	text      string
-	header    bool
-	family    string
-	key       string
-	value     string
-	container bool
+	section    string
+	text       string
+	header     bool
+	selectable bool
+	hint       bool
+	family     string
+	key        string
+	value      string
+	container  bool
 }
 
 type workspaceModel struct {
@@ -150,15 +155,33 @@ func (w *workspaceModel) setSchemaError(err error) {
 	w.cursor = 0
 }
 
-// move walks the cursor to the next entry row in direction delta.
+// selectableRow reports whether the cursor may rest on row i (0075):
+// entry rows always; headers only when marked selectable (an empty
+// section's header is the way in, and the when/smb headers are the
+// sections' root scope); hint rows never.
+func (w *workspaceModel) selectableRow(i int) bool {
+	if i < 0 || i >= len(w.rows) {
+		return false
+	}
+	r := w.rows[i]
+	switch {
+	case r.hint:
+		return false
+	case r.header:
+		return r.selectable
+	}
+	return true
+}
+
+// move walks the cursor to the next selectable row in direction delta.
 func (w *workspaceModel) move(delta int) {
 	i := w.cursor
 	for {
 		i += delta
-		if i < 0 || i >= len(w.rows) {
+		if !w.selectableRow(i) && (i < 0 || i >= len(w.rows)) {
 			return
 		}
-		if !w.rows[i].header && !strings.HasPrefix(w.rows[i].text, "(none)") {
+		if w.selectableRow(i) {
 			w.cursor = i
 			return
 		}
@@ -178,12 +201,12 @@ func (w *workspaceModel) page(delta int) {
 	}
 }
 
-// home/end jump to the first/last entry row.
+// home/end jump to the first/last selectable row.
 func (w *workspaceModel) home() { w.cursor = w.firstEntry(0) }
 
 func (w *workspaceModel) end() {
 	for i := len(w.rows) - 1; i >= 0; i-- {
-		if !w.rows[i].header && !strings.HasPrefix(w.rows[i].text, "(none)") {
+		if w.selectableRow(i) {
 			w.cursor = i
 			return
 		}
@@ -193,7 +216,7 @@ func (w *workspaceModel) end() {
 
 func (w *workspaceModel) firstEntry(from int) int {
 	for i := from; i < len(w.rows); i++ {
-		if !w.rows[i].header && !strings.HasPrefix(w.rows[i].text, "(none)") {
+		if w.selectableRow(i) {
 			return i
 		}
 	}
@@ -280,7 +303,7 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.header {
 		return []string{th.sectionLabel.Render(r.text)}
 	}
-	if strings.HasPrefix(r.text, "(none)") {
+	if r.hint {
 		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}
 	}
 	if w.editing != nil && w.editing.row == i && !w.editing.add {
@@ -337,23 +360,30 @@ func firstLineOf(s string) string {
 
 // wsRows builds the section rows for one layer's config, carrying each
 // editable row's family/key/value for T-tui-editing. Section order is
-// fixed and matches the schema docs; the structural families (0074)
-// render as container rows with field child rows.
+// fixed and matches the schema docs. Disclosure (0075): a row renders
+// only when it differs from the zero value — an unset field is nothing
+// on the surface, an empty section is its header alone, and an empty
+// container names the add gesture. The structural families (0074)
+// render as container rows with their set field child rows.
 func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	if cfg == nil {
 		cfg = &profile.ModuleConfig{}
 	}
 	var rows []wsRow
+	// A header is selectable when it is the way in: an empty section's
+	// header takes the section's first entry, and a structural family's
+	// header is its entry-level scope (`a` adds an entry there — the
+	// containers add fields INTO their entries).
 	section := func(name string, entries []wsRow) {
-		rows = append(rows, wsRow{section: name, text: name, header: true})
-		if len(entries) == 0 {
-			rows = append(rows, wsRow{section: name, text: "(none)"})
-			return
-		}
+		rows = append(rows, wsRow{section: name, text: name, header: true,
+			selectable: len(entries) == 0 || isStructuralFamily(addFamily(name))})
 		rows = append(rows, entries...)
 	}
 	entry := func(section, text, family, key, value string) wsRow {
 		return wsRow{section: section, text: text, family: family, key: key, value: value}
+	}
+	hint := func(section string) wsRow {
+		return wsRow{section: section, text: `· a adds "field = value"`, hint: true}
 	}
 
 	var meta []wsRow
@@ -397,15 +427,15 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	section("writes", writes)
 
 	var when []wsRow
-	// The when tree (0074): root leaves always render — an unset
-	// condition is a settable row, never a missing one — and the
-	// and/or/not combinators render as expanded group containers whose
-	// leaves edit exactly like the root's.
+	// The when tree (0074 grammar, 0075 disclosure): only set leaves
+	// render; group containers always render (they exist in the config)
+	// and an empty one shows the add hint. The when header is the root
+	// scope — `a field = value` sets a leaf, `a and/or/not` grows groups.
 	whenLeaf := func(depth int, group []string, field, value string) {
-		text := strings.Repeat("  ", depth) + field
-		if value != "" {
-			text += " " + value
+		if value == "" {
+			return // an unset condition renders nothing
 		}
+		text := strings.Repeat("  ", depth) + field + " " + value
 		segs := append(append([]string{}, group...), field)
 		when = append(when, wsRow{
 			section: "when", text: text,
@@ -418,6 +448,7 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 		if label != "not" {
 			label = group[len(group)-2] + "[" + label + "]"
 		}
+		before := len(when)
 		when = append(when, wsRow{
 			section: "when", text: strings.Repeat("  ", depth) + label,
 			family: profile.FamilyWhen, key: pathKey(group...), container: true,
@@ -438,6 +469,9 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 		}
 		if w.Not != nil {
 			renderGroup(d, append(append([]string{}, group...), "not"), w.Not)
+		}
+		if len(when) == before+1 {
+			when = append(when, hint("when"))
 		}
 	}
 	whenLeaf(0, nil, "hosts", strings.Join(cfg.When.Hosts, ", "))
@@ -469,6 +503,7 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 
 	var units []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Systemd.Units)) {
+		before := len(units)
 		units = append(units, wsRow{
 			section: "systemd.units", text: name,
 			family: profile.FamilySystemd, key: name, container: true,
@@ -482,6 +517,9 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			units = append(units, entry("systemd.units", "  "+directive+" = "+encoded,
 				profile.FamilySystemd, pathKey(name, directive), editableTomlValue(unit[directive])))
 		}
+		if len(units) == before+1 {
+			units = append(units, hint("systemd.units"))
+		}
 	}
 	section("systemd.units", units)
 
@@ -491,80 +529,107 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	}
 	section("tools", tools)
 
-	// The structural entry sections (0074): one container row per entry,
-	// its fields as indented child rows — always rendered, an empty value
-	// is a settable field, never a missing row.
+	// The structural entry sections (0074), disclosed (0075): one
+	// container row per entry, its SET fields as indented child rows —
+	// an unset field renders nothing, `a` on the container adds it.
 	fieldRow := func(section, family, entry, field, value string) wsRow {
-		text := "  " + field
-		if value != "" {
-			text += " " + value
-		}
+		text := "  " + field + " " + value
 		return wsRow{section: section, text: text, family: family, key: pathKey(entry, field), value: value}
 	}
 	scalarRow := func(section, family, field, value string) wsRow {
-		text := field
-		if value != "" {
-			text += " " + value
-		}
-		return wsRow{section: section, text: text, family: family, key: field, value: value}
+		return wsRow{section: section, text: field + " " + value, family: family, key: field, value: value}
 	}
 
 	var secrets []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Secrets)) {
 		s := cfg.Secrets[name]
+		before := len(secrets)
 		secrets = append(secrets, wsRow{
 			section: "secrets", text: name,
 			family: profile.FamilySecrets, key: name, container: true,
 		})
-		secrets = append(secrets,
-			fieldRow("secrets", profile.FamilySecrets, name, "env", s.Env),
-			fieldRow("secrets", profile.FamilySecrets, name, "description", s.Description),
-			fieldRow("secrets", profile.FamilySecrets, name, "allow_empty", strconv.FormatBool(s.AllowEmpty)),
-		)
+		if s.Env != "" {
+			secrets = append(secrets, fieldRow("secrets", profile.FamilySecrets, name, "env", s.Env))
+		}
+		if s.Description != "" {
+			secrets = append(secrets, fieldRow("secrets", profile.FamilySecrets, name, "description", s.Description))
+		}
+		if s.AllowEmpty {
+			secrets = append(secrets, fieldRow("secrets", profile.FamilySecrets, name, "allow_empty", "true"))
+		}
+		if len(secrets) == before+1 {
+			secrets = append(secrets, hint("secrets"))
+		}
 	}
 	section("secrets", secrets)
 
 	var mounts []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Mounts)) {
 		m := cfg.Mounts[name]
+		before := len(mounts)
 		mounts = append(mounts, wsRow{
 			section: "mounts", text: name,
 			family: profile.FamilyMounts, key: name, container: true,
 		})
-		mounts = append(mounts,
-			fieldRow("mounts", profile.FamilyMounts, name, "source", m.Source),
-			fieldRow("mounts", profile.FamilyMounts, name, "destination", m.Destination),
-			fieldRow("mounts", profile.FamilyMounts, name, "type", m.Type),
-			fieldRow("mounts", profile.FamilyMounts, name, "options", strings.Join(m.Options, ", ")),
-			fieldRow("mounts", profile.FamilyMounts, name, "startat", m.StartAt),
-			fieldRow("mounts", profile.FamilyMounts, name, "state", m.State),
-		)
+		if m.Source != "" {
+			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "source", m.Source))
+		}
+		if m.Destination != "" {
+			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "destination", m.Destination))
+		}
+		if m.Type != "" {
+			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "type", m.Type))
+		}
+		if len(m.Options) > 0 {
+			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "options", strings.Join(m.Options, ", ")))
+		}
+		if m.StartAt != "" {
+			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "startat", m.StartAt))
+		}
+		if m.State != "" {
+			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "state", m.State))
+		}
+		if len(mounts) == before+1 {
+			mounts = append(mounts, hint("mounts"))
+		}
 	}
 	section("mounts", mounts)
 
 	var smb []wsRow
-	avahi := ""
-	if cfg.Smb.Avahi != nil {
-		avahi = strconv.FormatBool(*cfg.Smb.Avahi)
+	if cfg.Smb.Group != "" {
+		smb = append(smb, scalarRow("smb", profile.FamilySmb, "group", cfg.Smb.Group))
 	}
-	smb = append(smb,
-		scalarRow("smb", profile.FamilySmb, "group", cfg.Smb.Group),
-		scalarRow("smb", profile.FamilySmb, "users", strings.Join(cfg.Smb.Users, ", ")),
-		scalarRow("smb", profile.FamilySmb, "avahi", avahi),
-	)
+	if len(cfg.Smb.Users) > 0 {
+		smb = append(smb, scalarRow("smb", profile.FamilySmb, "users", strings.Join(cfg.Smb.Users, ", ")))
+	}
+	if cfg.Smb.Avahi != nil {
+		smb = append(smb, scalarRow("smb", profile.FamilySmb, "avahi", strconv.FormatBool(*cfg.Smb.Avahi)))
+	}
 	for _, name := range slices.Sorted(maps.Keys(cfg.Smb.Shares)) {
 		sh := cfg.Smb.Shares[name]
+		before := len(smb)
 		smb = append(smb, wsRow{
 			section: "smb", text: name,
 			family: profile.FamilySmb, key: name, container: true,
 		})
-		smb = append(smb,
-			fieldRow("smb", profile.FamilySmb, name, "path", sh.Path),
-			fieldRow("smb", profile.FamilySmb, name, "comment", sh.Comment),
-			fieldRow("smb", profile.FamilySmb, name, "valid_users", sh.ValidUsers),
-			fieldRow("smb", profile.FamilySmb, name, "writable", strconv.FormatBool(sh.Writable)),
-			fieldRow("smb", profile.FamilySmb, name, "public", strconv.FormatBool(sh.Public)),
-		)
+		if sh.Path != "" {
+			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "path", sh.Path))
+		}
+		if sh.Comment != "" {
+			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "comment", sh.Comment))
+		}
+		if sh.ValidUsers != "" {
+			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "valid_users", sh.ValidUsers))
+		}
+		if sh.Writable {
+			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "writable", "true"))
+		}
+		if sh.Public {
+			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "public", "true"))
+		}
+		if len(smb) == before+1 {
+			smb = append(smb, hint("smb"))
+		}
 	}
 	section("smb", smb)
 

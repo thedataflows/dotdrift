@@ -75,11 +75,22 @@ view stack wholesale). Its parts:
   plan/apply path) greys the module's nav row with the error, and the
   workspace opens the file read-only — the error named relative to the
   layer dir, the raw text visible, every line width-clamped. `j`/`k`
-  walk entry rows (headers and empty markers are skipped) so
-  T-tui-editing hangs edit mode off the same cursor.
+  walk selectable rows (hint rows are skipped; an empty section's
+  header and the structural families' headers are selectable rest
+  points, and a header under the cursor renders the cursor bar) so
+  T-tui-editing hangs edit mode off the same cursor, and the title line
+  names the cursor's section (`demo [base] · writes`) so an empty
+  stretch of surface still says where you are.
 - **Inline editing** (T-tui-editing). `enter`/`e` turns the field under
   the cursor into an input without leaving the workspace; the tier-1
-  error renders at the field live. Committed edits splice through the
+  error renders at the field live. Fields whose value set is closed
+  open a choice picker instead (issue [0076](../issues/0076-tui-choice-editors-and-location.md)):
+  `scope` (user/system), mount `state` (enabled/disabled), the boolean
+  fields (`false`/`true`), smb `avahi` (`true`/`false`/`unset`), and
+  the systemd `Type`/`Restart` directives — arrows walk, enter picks,
+  clicking the selected row picks, and picking the effective value
+  stages nothing, so a picker field can never hold an invalid value.
+  Committed edits splice through the
   profile family encoders into the file-scoped draft (0065), which
   re-decodes on every commit — a draft can never hold unparseable text.
   Dirty shows per row, on the tab line, and on the nav rows. Drafts are

@@ -9,7 +9,8 @@ timestamp: 2026-09-17T00:00:00Z
 # ISSUE 0076: TUI editing round — choice pickers for closed-set fields, cursor location you can see
 
 - **Type**: task
-- **Status**: open
+- **Status**: done
+- **Closing commits**: 1c297b5, 63d3fff
 - **Follow-up to**: [0074](0074-structural-section-editing.md), [0075](0075-tui-ergonomics-paging-selection-disclosure.md)
 
 ## Context
@@ -49,13 +50,13 @@ Two tasks, TDD-first, one commit each:
 
 ## Acceptance Criteria
 
-- [ ] scope, mount state, the three boolean fields, avahi, and systemd
+- [x] scope, mount state, the three boolean fields, avahi, and systemd
       Type/Restart open the picker; committing a pick splices the same
       draft path as a text edit (dirty marker, row re-render, save)
-- [ ] picking the current value stages nothing; esc stages nothing
-- [ ] free-text fields (description, app, packages, hooks, links,
+- [x] picking the current value stages nothing; esc stages nothing
+- [x] free-text fields (description, app, packages, hooks, links,
       sources, when values, directive values outside Type/Restart) are
       unchanged
-- [ ] a selectable header under the cursor renders the bar; the title
+- [x] a selectable header under the cursor renders the bar; the title
       line shows `· <section>` wherever the cursor rests
-- [ ] `?` over the picker shows its keys; the full suite stays green
+- [x] `?` over the picker shows its keys; the full suite stays green

@@ -95,3 +95,15 @@ func TestManage_backDiscipline(t *testing.T) {
 	d.toMenu()
 	require.False(t, d.back(), "the bare menu lets the shell pop")
 }
+
+func TestManage_cursorRowBar(t *testing.T) {
+	// 0075 T-tui-selection: the manage menu and its form rows use the
+	// bar cursor treatment.
+	d, _ := manageFixture(t)
+	th := newTheme(true)
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ create module",
+		"the menu cursor row renders the bar")
+	d.HandleKey("enter") // create mode: the app field row is focused
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ app",
+		"the focused form row renders the bar")
+}

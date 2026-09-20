@@ -277,31 +277,34 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 // rowView renders one row: expansion marker, label, dirty and reason
 // suffixes, truncated to the pane width. The cursor row is bold (the
 // locked Selection treatment).
+// rowView renders one row: lead/bar, the expansion marker, label, dirty
+// and reason suffixes, truncated to the pane width. The cursor row takes
+// the cursorRow treatment (bar + accent, 0075); plain rows keep the
+// two-space lead so text columns align.
 func (n *navModel) rowView(r navRow, cursor bool, th theme, drafts map[string]bool, w int) string {
-	var b strings.Builder
+	var rest string
 	if r.layer == "" {
-		if n.expanded[r.moduleID] {
-			b.WriteString("▾ ")
-		} else if n.hasLayers(r.moduleID) {
-			b.WriteString("▸ ")
-		} else {
-			b.WriteString("  ")
+		marker := " "
+		switch {
+		case n.expanded[r.moduleID]:
+			marker = "▾"
+		case n.hasLayers(r.moduleID):
+			marker = "▸"
 		}
+		rest = marker + " " + r.label
 	} else {
-		b.WriteString("    ")
+		rest = "    " + r.label
 	}
-	b.WriteString(r.label)
 	if r.reason != "" && r.layer == "" {
-		b.WriteString(" " + th.reasonMark.Render("· "+r.reason))
+		rest += " " + th.reasonMark.Render("· "+r.reason)
 	}
 	if n.rowDirty(r, drafts) {
-		b.WriteString(" " + th.dirtyMark.Render("●"))
+		rest += " " + th.dirtyMark.Render("●")
 	}
-	s := b.String()
 	if cursor {
-		return th.selection.MaxWidth(w).Render(s)
+		return th.cursorRow.MaxWidth(w).Render(" " + rest)
 	}
-	return th.rowText.MaxWidth(w).Render(s)
+	return th.rowText.MaxWidth(w).Render("  " + rest)
 }
 
 // rowDirty: a layer child is dirty when its file has a draft; a module

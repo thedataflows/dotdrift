@@ -50,7 +50,7 @@ type theme struct {
 	statusBar     lipgloss.Style // help hints line
 	applyBadge    lipgloss.Style // the ▶ apply header badge (M15)
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
-	selection     lipgloss.Style // the cursor row (M15 nav/workspace)
+	cursorRow     lipgloss.Style // the cursor row: bar + accent text (0075)
 	rowText       lipgloss.Style // plain row text (truncation carrier)
 	modalBorder   lipgloss.Style // the confirm modal's frame (M15)
 	modalTitle    lipgloss.Style // the confirm modal's question (M15)
@@ -81,10 +81,13 @@ func newTheme(isDark bool) theme {
 		statusBar:     lipgloss.NewStyle().Foreground(p.dim),
 		applyBadge:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
-		selection:     lipgloss.NewStyle().Bold(true),
-		rowText:       lipgloss.NewStyle(),
-		modalBorder:   pane.BorderForeground(p.amber),
-		modalTitle:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
+		cursorRow: lipgloss.NewStyle().
+			Bold(true).Foreground(p.fuchsia).
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(p.fuchsia), // the bubbles delegate treatment
+		rowText:     lipgloss.NewStyle(),
+		modalBorder: pane.BorderForeground(p.amber),
+		modalTitle:  lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 
 		groupTitle:   lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 		disabledMark: lipgloss.NewStyle().Foreground(p.dim),

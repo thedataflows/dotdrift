@@ -1,9 +1,9 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base] · user cri · host myhost                             │
-│▸ demo                    ││meta                                                              │
-│▸ other                   ││  id demo                                                         │
-│▸ plain                   ││  app demo-app                                                    │
+││ ▸ demo                  ││meta                                                              │
+│  ▸ other                 │││ id demo                                                         │
+│  ▸ plain                 ││  app demo-app                                                    │
 │                          ││  description the demo module                                     │
 │                          ││  scope user                                                      │
 │                          ││packages                                                          │
@@ -11,9 +11,9 @@
 │                          ││  + ripgrep                                                       │
 │                          ││lin╭──────────────────────────────────╮                           │
 │                          ││  (│                                  │                           │
-│                          ││wri│  / demo · host▏                  │                           │
+│                          ││wri│  │/ demo · host▏                 │                           │
 │                          ││  (│                                  │                           │
-│                          ││whe│    ◆ demo · host myhost  module  │                           │
+│                          ││whe│  │ ◆ demo · host myhost  module  │                           │
 │                          ││  h│                                  │                           │
 │                          ││  u╰──────────────────────────────────╯                           │
 │                          ││  os                                                              │

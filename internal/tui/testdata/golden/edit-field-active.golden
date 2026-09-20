@@ -1,9 +1,9 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]                                                      │
-│▸ demo                    ││meta                                                              │
+││ ▸ demo                  ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          ││  ▸ demo-app-next▏                                                │
+│                          │││ ▸ demo-app-next▏                                                │
 │                          ││  description the demo module                                     │
 │                          ││  scope user                                                      │
 │                          ││packages                                                          │

@@ -1,8 +1,8 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││module: shell                                                     │
-│  shell                   ││packages: 3                                                       │
-│  firefox                 ││                                                                  │
+││   shell                 ││packages: 3                                                       │
+│    firefox               ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

@@ -279,3 +279,11 @@ func clickWorkRow(t *testing.T, c *Compositor, i int) *Compositor {
 // workRowY is the screen row of workspace entry i (header + border +
 // title offsets).
 func workRowY(i int) int { return 4 + i }
+
+func TestWritesMenu_cursorRowBar(t *testing.T) {
+	// 0075 T-tui-selection: modal menus use the same cursor treatment.
+	w := &writesMenuModel{th: newTheme(true)}
+	frame := ansiRe.ReplaceAllString(w.view(40, 10), "")
+	require.Contains(t, frame, "│ onboard", "the writes menu's cursor row renders the bar")
+	require.Contains(t, frame, "  restore", "plain rows keep the two-space lead")
+}

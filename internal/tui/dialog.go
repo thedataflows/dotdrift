@@ -164,11 +164,9 @@ func (r dlgRow) backspace() {
 	}
 }
 
-func (r dlgRow) render(focused bool) string {
-	mark := "  "
-	if focused {
-		mark = "> "
-	}
+// render lays out one row: label and value, no marker — styling is
+// renderRow's business.
+func (r dlgRow) render() string {
 	var val string
 	if r.choice != nil {
 		val = r.choice.String() + "  (< > to change)"
@@ -178,7 +176,16 @@ func (r dlgRow) render(focused bool) string {
 			val = "(" + r.field.hint + ")"
 		}
 	}
-	return mark + r.rowLabel() + " " + val
+	return r.rowLabel() + " " + val
+}
+
+// renderRow styles one row through the registry: the focused row takes
+// the cursor treatment (bar + accent, 0075), plain rows keep the lead.
+func (r dlgRow) renderRow(th theme, focused bool) string {
+	if focused {
+		return th.cursorRow.Render(" " + r.render())
+	}
+	return "  " + r.render()
 }
 
 func (r dlgRow) rowLabel() string {
@@ -325,7 +332,7 @@ func (d *onboardDialog) View(th theme) string {
 	b.WriteString(th.viewTitle.Render("ONBOARD"))
 	b.WriteString("\nadopt live paths into a module, then apply it\n\n")
 	for i, r := range d.rows {
-		b.WriteString(r.render(i == d.cur))
+		b.WriteString(r.renderRow(th, i == d.cur))
 		b.WriteString("\n")
 	}
 	b.WriteString(finishView(th, "run onboard?", d.report, d.err, d.running))
@@ -742,7 +749,7 @@ func (d *generateDialog) View(th theme) string {
 	b.WriteString(th.viewTitle.Render("GENERATE"))
 	b.WriteString("\nmaterialize a new module from the fields below\n\n")
 	for i, r := range d.all() {
-		b.WriteString(r.render(i == d.cur))
+		b.WriteString(r.renderRow(th, i == d.cur))
 		b.WriteString("\n")
 	}
 	b.WriteString(finishView(th, "run generate?", d.report, d.err, d.running))

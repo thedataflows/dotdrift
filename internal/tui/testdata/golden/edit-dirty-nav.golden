@@ -1,10 +1,10 @@
  dotdrift · $PROFILE · host myhost · user cri  ● 1
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base] · user cri  ●                                        │
-│▾ demo ●                  ││meta                                                              │
-│    base ●                ││  id demo                                                         │
-│    user cri              ││  app demo-app-next ●                                             │
-│▸ other                   ││  description the demo module                                     │
+│  ▾ demo ●                ││meta                                                              │
+││     base ●              │││ id demo                                                         │
+│      user cri            ││  app demo-app-next ●                                             │
+│  ▸ other                 ││  description the demo module                                     │
 │                          ││  scope user                                                      │
 │                          ││packages                                                          │
 │                          ││  + neovim                                                        │

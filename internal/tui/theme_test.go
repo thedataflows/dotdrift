@@ -7,9 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/require"
-)
-
-// ADR-0003 discipline for the shell: every style lives in the registry
+) // ADR-0003 discipline for the shell: every style lives in the registry
 // (theme.go); shell, tree, and view files pick from it and never spell
 // their own lipgloss.NewStyle chains.
 func TestPaletteRegistry_noInlineStyles(t *testing.T) {
@@ -57,4 +55,17 @@ func TestTheme_styles(t *testing.T) {
 	focused := th.focusedBorder.Render("x")
 	unfocused := th.unfocusedBorder.Render("x")
 	require.NotEqual(t, unfocused, focused, "focus reads as a border color change")
+}
+
+// 0075 T-tui-selection: the cursor row uses the bubbles list-delegate
+// treatment — a left bar in the accent hue plus bold text — and plain
+// rows keep a two-space lead so text columns align across the two.
+func TestTheme_cursorRow(t *testing.T) {
+	th := newTheme(true)
+	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
+	cursor := strip(th.cursorRow.Render(" demo"))
+	plain := strip(th.rowText.Render("  demo"))
+	require.Equal(t, "│ demo", cursor, "the cursor row renders the bar")
+	require.Equal(t, "  demo", plain, "plain text aligns with the cursor row")
+	require.NotEqual(t, th.cursorRow.Render("x"), th.rowText.Render(" x"), "the cursor style is visible")
 }

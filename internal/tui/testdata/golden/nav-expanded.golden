@@ -1,10 +1,10 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││shell                                                             │
-│▾ shell                   ││                                                                  │
-│    base                  ││                                                                  │
-│    user cri              ││                                                                  │
-│    host myhost           ││                                                                  │
+││ ▾ shell                 ││                                                                  │
+│      base                ││                                                                  │
+│      user cri            ││                                                                  │
+│      host myhost         ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

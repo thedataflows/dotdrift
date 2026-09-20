@@ -200,3 +200,11 @@ func TestPalette_dirtyDraftNeverWarnsOnJump(t *testing.T) {
 	require.NotNil(t, c.wsDraftFor(dirty), "the draft waits where it was left")
 	require.Equal(t, "plain", c.nav.selected().moduleID)
 }
+
+func TestPalette_cursorRowBar(t *testing.T) {
+	// 0075 T-tui-selection: the palette's selected row renders the bar.
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
+	c = cpress(c, "/")
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "│ ◆", "the palette's selected row renders the bar")
+}

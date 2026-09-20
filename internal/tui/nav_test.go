@@ -181,8 +181,7 @@ func TestNav_cursorClampsWhenSelectionVanishes(t *testing.T) {
 	require.Less(t, c.nav.cursor, len(c.nav.rows()), "the cursor stays in range")
 }
 
-func TestNav_pageKeys(t *testing.T) {
-	// 0075 T-tui-page: pgup/pgdown move a visible page, home/end jump to
+func TestNav_pageKeys(t *testing.T) { // 0075 T-tui-page: pgup/pgdown move a visible page, home/end jump to
 	// the ends — the nav is longer than one screen at 100x30.
 	files := map[string]string{}
 	for i := 0; i < 30; i++ {
@@ -209,4 +208,18 @@ func TestNav_pageKeys(t *testing.T) {
 	c = cpress(c, "home")
 	c = cpress(c, "pgup")
 	require.Equal(t, 0, c.nav.cursor, "pgup clamps at the first row")
+}
+
+func TestNav_cursorRowBar(t *testing.T) {
+	// 0075 T-tui-selection: the nav's cursor row renders the bar and its
+	// label column aligns with the plain rows (marker column, then text).
+	_, c := navShell(t, "resolve")
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "│ ▸ shell", "the cursor row renders bar + marker + label")
+
+	c = cpress(c, "l")
+	c = cpress(c, "j") // onto the base child
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "│     base", "the cursor child row keeps the bar and the child indent")
+	require.Contains(t, frame, "  ▾ shell", "plain rows keep the lead and marker")
 }

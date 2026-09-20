@@ -168,6 +168,11 @@ view stack wholesale). Its parts:
   registers a style in ADR-0003's palette registry — no inline styles in
   shell code (`TestPaletteRegistry_noInlineStyles`,
   `TestNoDeadStyles`).
+- The cursor row is the bubbles list-delegate treatment: a left bar in
+  the highlight hue plus bold accent text (the `cursorRow` registry
+  entry), plain rows keeping a two-space lead so text columns align.
+  Every cursor uses it — nav rows, workspace rows, the field input, the
+  palette's query and selected row, modal menu and form rows (0075).
 - The footer: a spinner with the running operation's name or the message
   slot (success notes stand, failures persist until the next user
   action), then the focused pane's key hints rendered from the binding

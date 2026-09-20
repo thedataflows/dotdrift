@@ -257,7 +257,7 @@ func (w *workspaceModel) titleView(th theme) string {
 	var tabs []string
 	for i, t := range w.tabs {
 		if i == w.active {
-			tabs = append(tabs, th.selection.Render("["+t.label+"]"))
+			tabs = append(tabs, th.sectionLabel.Render("["+t.label+"]"))
 		} else {
 			tabs = append(tabs, th.meta.Render(t.label))
 		}
@@ -286,7 +286,7 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if w.editing != nil && w.editing.row == i && !w.editing.add {
 		return w.editLines(w.editing, th, width)
 	}
-	text := "  " + r.text
+	text := r.text
 	if w.rowDirty(r) {
 		text += " " + th.dirtyMark.Render("●")
 	}
@@ -296,22 +296,23 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		}
 	}
 	if i == w.cursor {
-		return []string{th.selection.MaxWidth(width).Render(text)}
+		return []string{th.cursorRow.MaxWidth(width).Render(" " + text)}
 	}
-	return []string{th.rowText.MaxWidth(width).Render(text)}
+	return []string{th.rowText.MaxWidth(width).Render("  " + text)}
 }
 
 // editLines renders the active input: the buffer with a cursor bar, plus
-// the live tier-1 error beneath.
+// the live tier-1 error beneath. The input row takes the cursor treatment
+// (bar + accent, 0075).
 func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
 	runes := e.input
 	cur := min(e.cur, len(runes))
 	shown := string(runes[:cur]) + "▏" + string(runes[cur:])
-	prefix := "  ▸ "
+	prefix := "▸ "
 	if e.add {
-		prefix = "  + "
+		prefix = "+ "
 	}
-	lines := []string{th.selection.MaxWidth(width).Render(prefix + shown)}
+	lines := []string{th.cursorRow.MaxWidth(width).Render(" " + prefix + shown)}
 	if e.err != "" {
 		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))
 	}

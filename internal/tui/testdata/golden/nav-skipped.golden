@@ -1,8 +1,8 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││baseonly                                                          │
-│▸ baseonly                ││                                                                  │
-│▸ vault · requires root (r││                                                                  │
+││ ▸ baseonly              ││                                                                  │
+│  ▸ vault · requires root ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

@@ -417,7 +417,7 @@ func (e paletteEntry) glyph() string {
 
 func (p *paletteModel) view(w, h int) string {
 	var b strings.Builder
-	b.WriteString(p.th.selection.Render("/ " + string(p.query) + "▏"))
+	b.WriteString(p.th.cursorRow.Render("/ " + string(p.query) + "▏"))
 	b.WriteString("\n\n")
 	if len(p.rows) == 0 {
 		b.WriteString(p.th.disabledMark.Render("  no matches") + "\n")
@@ -427,7 +427,7 @@ func (p *paletteModel) view(w, h int) string {
 			e := p.rows[i]
 			line := "  " + e.glyph() + " " + e.label + "  " + p.th.meta.Render(e.context)
 			if i == p.sel {
-				line = p.th.selection.Render("  "+e.glyph()+" "+e.label) + "  " + p.th.meta.Render(e.context)
+				line = p.th.cursorRow.Render(" "+e.glyph()+" "+e.label) + "  " + p.th.meta.Render(e.context)
 			}
 			b.WriteString(line + "\n")
 		}

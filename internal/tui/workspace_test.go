@@ -268,3 +268,18 @@ func TestWorkspace_pageKeysFollowTheCursor(t *testing.T) {
 	c = wsPress(t, c, "pgup")
 	require.Equal(t, start, c.ws.cursor, "pgup clamps at the top")
 }
+
+func TestWorkspace_cursorRowBar(t *testing.T) {
+	// 0075 T-tui-selection: the workspace's cursor row renders the bar;
+	// the active field input carries it too.
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
+	c = cpress(c, "tab")
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "│ id demo", "the cursor row renders the bar")
+	require.Contains(t, frame, "  description", "plain rows keep the two-space lead")
+
+	c = cpress(c, "j") // the app row
+	c = cpress(c, "enter")
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "│ ▸ demo-app", "the active input renders the bar")
+}

@@ -298,7 +298,7 @@ func (w *writesMenuModel) view(_, _ int) string {
 	b.WriteString(w.th.modalTitle.Render("writes") + "\n\n")
 	for i, e := range entries {
 		if i == w.cur {
-			b.WriteString(w.th.selection.Render("  "+e) + "\n")
+			b.WriteString(w.th.cursorRow.Render(" "+e) + "\n")
 		} else {
 			b.WriteString("  " + e + "\n")
 		}

@@ -1,7 +1,7 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]                                                      │
-│▸ demo                    ││meta                                                              │
+││ ▸ demo                  ││meta                                                              │
 │                          ││  id demo                                                         │
 │                          ││  description                                                     │
 │                          ││  scope user                                                      │
@@ -15,7 +15,7 @@
 │                          ││  hosts myhost                                                    │
 │                          ││  users                                                           │
 │                          ││  os                                                              │
-│                          ││  gpu                                                             │
+│                          │││ gpu                                                             │
 │                          ││  kernel                                                          │
 │                          ││  packages                                                        │
 │                          ││  tools                                                           │

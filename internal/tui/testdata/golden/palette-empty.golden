@@ -1,17 +1,17 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base] · user cri · host myhost                             │
-│▸ demo                    ││meta                                                              │
-│▸ other                   ││  id demo                                                         │
-│▸ plain                   ││  app demo-app                                                    │
+││ ▸ demo                  ││meta                                                              │
+│  ▸ other                 │││ id demo                                                         │
+│  ▸ plain                 ││  app demo-app                                                    │
 │                          ││  description the demo module                                     │
 │                          ││  scope user                                                      │
 │                          ││packages                                                          │
 │                          ││  +╭──────────────────────────────────╮                           │
 │                          ││  +│                                  │                           │
-│                          ││lin│  / ▏                             │                           │
+│                          ││lin│  │/ ▏                            │                           │
 │                          ││  (│                                  │                           │
-│                          ││wri│    ◆ demo  module                │                           │
+│                          ││wri│  │ ◆ demo  module                │                           │
 │                          ││  (│    ◆ demo · user cri  module     │                           │
 │                          ││whe│    ◆ demo · host myhost  module  │                           │
 │                          ││  h│    ◆ other  module               │                           │

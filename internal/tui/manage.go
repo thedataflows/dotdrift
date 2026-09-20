@@ -253,16 +253,16 @@ func (d *manageDialog) View(th theme) string {
 	switch d.mode {
 	case manageMenu:
 		for i, e := range d.entries() {
-			marker := "  "
 			if i == d.cur {
-				marker = "> "
+				b.WriteString(th.cursorRow.Render(" "+e) + "\n")
+			} else {
+				b.WriteString("  " + e + "\n")
 			}
-			b.WriteString(th.Label(marker+e) + "\n")
 		}
 		b.WriteString("\n" + th.meta.Render("up/down pick · enter open · esc back"))
 	case manageCreate, manageMove:
 		for i, r := range d.rows {
-			b.WriteString(r.render(i == d.cur))
+			b.WriteString(r.renderRow(th, i == d.cur))
 			b.WriteString("\n")
 		}
 		b.WriteString(finishView(th, d.confirmText(), d.report, d.err, d.running))

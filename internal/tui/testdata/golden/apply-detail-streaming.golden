@@ -1,8 +1,8 @@
  dotdrift · $PROFILE · host myhost · user cri  ▶ apply
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]                                                      │
-│▸ demo                    ││meta                                                              │
-│                          ││  id demo                                                         │
+││ ▸ demo                  ││meta                                                              │
+│                          │││ id demo                                                         │
 │                          ││  app demo-app                                                    │
 │                          ││  description                                                     │
 │                          ││  scope user                                                      │

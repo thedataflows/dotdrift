@@ -1,18 +1,18 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base] · user cri · host myhost                             │
-│▸ demo                    ││meta                                                              │
-│▸ other                   ││  id demo                                                         │
-│▸ plain                   ││  app demo-app                                                    │
+││ ▸ demo                  ││meta                                                              │
+│  ▸ other                 │││ id demo                                                         │
+│  ▸ plain                 ││  app demo-app                                                    │
 │                          ││  description the demo module                                     │
 │                          ││  scope user                                                      │
 │                          ││packages                                                          │
 │                          ││  + neovim                                                        │
 │                          ││  +╭──────────────────────────────────╮                           │
 │                          ││lin│                                  │                           │
-│                          ││  (│  / dem▏                          │                           │
+│                          ││  (│  │/ dem▏                         │                           │
 │                          ││wri│                                  │                           │
-│                          ││  (│    ◆ demo  module                │                           │
+│                          ││  (│  │ ◆ demo  module                │                           │
 │                          ││whe│    ◆ demo · user cri  module     │                           │
 │                          ││  h│    ◆ demo · host myhost  module  │                           │
 │                          ││  u│                                  │                           │

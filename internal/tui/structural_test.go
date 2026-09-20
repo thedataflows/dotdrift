@@ -37,15 +37,25 @@ func systemdShell(t *testing.T) (map[string]string, *Compositor) {
 }
 
 // wsToKey parks the cursor on the row with the given key (from the top
-// of the surface, so targets above the cursor resolve too).
-func wsToKey(t *testing.T, c *Compositor, key string) {
+// of the surface, so targets above the cursor resolve too). An optional
+// section disambiguates keys that repeat across sections (when leaves
+// vs smb scalars).
+func wsToKey(t *testing.T, c *Compositor, key string, section ...string) {
 	t.Helper()
 	c.ws.cursor = 0
-	for i := 0; c.ws.rows[c.ws.cursor].key != key; i++ {
+	for i := 0; !wsAtKey(c, key, section); i++ {
 		require.Less(t, i, 128, "row %q never came into view", key)
 		c = cpress(c, "j")
 	}
-	require.Equal(t, key, c.ws.rows[c.ws.cursor].key, "the cursor lands on the row")
+	require.True(t, wsAtKey(c, key, section), "the cursor lands on the row")
+}
+
+func wsAtKey(c *Compositor, key string, section []string) bool {
+	r := c.ws.rows[c.ws.cursor]
+	if len(section) > 0 && r.section != section[0] {
+		return false
+	}
+	return r.key == key
 }
 
 func TestSystemd_directiveRowsRender(t *testing.T) {
@@ -256,7 +266,7 @@ func TestMounts_addBlocksSaveUntilFilled(t *testing.T) {
 
 func TestSmb_scalarAndShareEdits(t *testing.T) {
 	_, c := entriesShell(t)
-	wsToKey(t, c, "users")
+	wsToKey(t, c, "users", "smb")
 	c = cpress(c, "enter")
 	c.ws.editing.input = []rune("cri")
 	c = wsPress(t, c, "enter")
@@ -309,6 +319,186 @@ func TestEntries_golden(t *testing.T) {
 	subs, c := entriesShell(t)
 	wsToKey(t, c, pathKey("API_KEY", "env"))
 	requireGolden(t, "structural-entries.golden", c.View().Content, subs)
+}
+
+// --- T-tui-structural-when: the when tree ---
+
+const whenFixture = `id = "demo"
+
+[when]
+hosts = ["myhost"]
+and = [
+  { os = ["linux"], gpu = "nvidia" },
+  { or = [{ hosts = ["work"] }, { kernel = ">= 6" }] },
+]
+not = { packages = ["emacs"] }
+`
+
+// whenRootFixture has no when section at all: the tree still renders its
+// root leaves, so an unset condition becomes settable.
+const whenRootFixture = `id = "demo"
+`
+
+func whenShell(t *testing.T, fixture string) (map[string]string, *Compositor) {
+	t.Helper()
+	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": fixture})
+	return subs, cpress(c, "tab")
+}
+
+func TestWhen_treeRenders(t *testing.T) {
+	subs, c := whenShell(t, whenFixture)
+	for i := 0; !c.ws.atSection("when"); i++ {
+		require.Less(t, i, 64, "the when section never came into view")
+		c = cpress(c, "j")
+	}
+	body := c.ws.placeholderOrBody()
+	require.Contains(t, body, "hosts myhost", "the set root leaf renders")
+	require.Contains(t, body, "and[0]", "group containers render")
+	require.Contains(t, body, "or[0]", "nested groups render")
+	require.Contains(t, body, "not", "the not group renders")
+	require.Contains(t, body, "kernel >= 6", "nested leaves render")
+
+	var containers int
+	for _, r := range c.ws.rows {
+		if r.section == "when" && r.container {
+			containers++
+		}
+	}
+	require.Equal(t, 5, containers, "and[0], and[1], or[0], or[1], not")
+
+	// Root leaf keys keep their historical plain identity.
+	wsToKey(t, c, "gpu")
+	require.False(t, c.ws.rows[c.ws.cursor].container)
+	require.Equal(t, profile.FamilyWhen, c.ws.rows[c.ws.cursor].family)
+	requireGolden(t, "structural-when.golden", c.View().Content, subs)
+}
+
+func TestWhen_rootLeavesAlwaysRender(t *testing.T) {
+	_, c := whenShell(t, whenRootFixture)
+	for i := 0; !c.ws.atSection("when"); i++ {
+		require.Less(t, i, 64, "the when section never came into view")
+		c = cpress(c, "j")
+	}
+	require.Contains(t, c.ws.placeholderOrBody(), "gpu", "the unset gpu leaf renders as a settable row")
+
+	// An unset condition becomes settable — the gap this task closes.
+	wsToKey(t, c, "gpu")
+	c = cpress(c, "enter")
+	c = typeText(c, "nvidia")
+	c = wsPress(t, c, "enter")
+	require.Equal(t, "nvidia", c.ws.draft.cfg.When.GPU)
+}
+
+func TestWhen_groupLeafEdit(t *testing.T) {
+	_, c := whenShell(t, whenFixture)
+	wsToKey(t, c, pathKey("and", "0", "gpu"))
+	c = cpress(c, "enter")
+	require.Equal(t, "nvidia", c.ws.editing.inputString(), "the leaf seeds from its group")
+	c = typeText(c, "-open")
+	c = wsPress(t, c, "enter")
+	require.Equal(t, "nvidia-open", c.ws.draft.cfg.When.And[0].GPU)
+
+	// Clearing the leaf empties it (the encoder drops it).
+	wsToKey(t, c, pathKey("and", "0", "gpu"))
+	c = cpress(c, "enter")
+	c.ws.editing.input = nil
+	c = wsPress(t, c, "enter")
+	require.Empty(t, c.ws.draft.cfg.When.And[0].GPU)
+	require.NotContains(t, c.ws.draft.raw, "nvidia-open", "the cleared leaf left the raw")
+}
+
+func TestWhen_groupAddNested(t *testing.T) {
+	_, c := whenShell(t, whenRootFixture)
+	wsToKey(t, c, "hosts")
+
+	// a on a root leaf grows the root's and-list.
+	c = cpress(c, "a")
+	c.ws.editing.input = []rune("and")
+	c = wsPress(t, c, "enter")
+	require.Len(t, c.ws.draft.cfg.When.And, 1)
+	require.Equal(t, pathKey("and", "0"), c.ws.rows[c.ws.cursor].key, "the cursor lands on the new group")
+
+	// a on the group container nests an or beneath it.
+	c = cpress(c, "a")
+	c.ws.editing.input = []rune("or")
+	c = wsPress(t, c, "enter")
+	require.Len(t, c.ws.draft.cfg.When.And[0].Or, 1)
+	require.Equal(t, pathKey("and", "0", "or", "0"), c.ws.rows[c.ws.cursor].key)
+
+	// Fill the nested or's leaf, then verify the raw encodes the tree.
+	wsToKey(t, c, pathKey("and", "0", "or", "0", "hosts"))
+	c = cpress(c, "enter")
+	c = typeText(c, "work")
+	c = wsPress(t, c, "enter")
+	require.Contains(t, c.ws.draft.raw, `or = [{ hosts = ["work"] }]`, "the nested tree encodes")
+
+	// Junk input refuses.
+	c = cpress(c, "a")
+	c.ws.editing.input = []rune("gpu")
+	c = cpress(c, "enter")
+	require.NotNil(t, c.ws.editing)
+	require.Contains(t, c.ws.editing.err, "and")
+	cpress(c, "esc")
+}
+
+func TestWhen_notAddAndDuplicateRefuse(t *testing.T) {
+	_, c := whenShell(t, whenRootFixture)
+	wsToKey(t, c, "os")
+	c = cpress(c, "a")
+	c.ws.editing.input = []rune("not")
+	c = wsPress(t, c, "enter")
+	require.NotNil(t, c.ws.draft.cfg.When.Not, "the not group lands")
+	require.Equal(t, "not", c.ws.rows[c.ws.cursor].key)
+
+	// A second not on the SAME group refuses (the not container itself
+	// nests — its `a not` is a deeper node, by grammar).
+	wsToKey(t, c, "os")
+	c = cpress(c, "a")
+	c.ws.editing.input = []rune("not")
+	c = cpress(c, "enter")
+	require.NotNil(t, c.ws.editing)
+	require.Contains(t, c.ws.editing.err, "already")
+	cpress(c, "esc")
+}
+
+func TestWhen_groupRemove(t *testing.T) {
+	_, c := whenShell(t, whenFixture)
+	wsToKey(t, c, "not")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before removing a group")
+	c = cpress(c, "y")
+	require.Nil(t, c.ws.draft.cfg.When.Not, "y removes the not group")
+	require.NotContains(t, c.ws.placeholderOrBody(), "packages emacs")
+
+	wsToKey(t, c, pathKey("and", "1"))
+	c = cpress(c, "d")
+	c = cpress(c, "y")
+	require.Len(t, c.ws.draft.cfg.When.And, 1, "y removes the and group")
+
+	// d on a leaf row refuses — leaves clear by editing to empty.
+	wsToKey(t, c, pathKey("and", "0", "gpu"))
+	cpress(c, "d")
+	require.Empty(t, c.modals, "a leaf row has no remove confirm")
+}
+
+func TestWhen_emptyGroupBlocksSave(t *testing.T) {
+	_, c := whenShell(t, whenRootFixture)
+	wsToKey(t, c, "hosts")
+	c = cpress(c, "a")
+	c.ws.editing.input = []rune("and")
+	c = wsPress(t, c, "enter")
+
+	// The empty group is a load-time error class: the save refuses it.
+	c, cmd := cstep(c, keyCtrl('s'))
+	require.Nil(t, cmd, "a blocked save schedules nothing")
+	require.Contains(t, c.message, "empty", "tier-2 names the empty group")
+
+	// Fill a leaf; the save stands down.
+	wsToKey(t, c, pathKey("and", "0", "os"))
+	c = cpress(c, "enter")
+	c = typeText(c, "linux")
+	c = wsPress(t, c, "enter")
+	require.NotNil(t, cpressCmd(c, "ctrl+s"), "the save runs once the group has content")
 }
 
 func TestSystemd_containerRowRefusesFieldEdit(t *testing.T) {

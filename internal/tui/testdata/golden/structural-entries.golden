@@ -12,17 +12,17 @@
 │                          ││writes                                                            │
 │                          ││  (none)                                                          │
 │                          ││when                                                              │
-│                          ││  (none)                                                          │
+│                          ││  hosts                                                           │
+│                          ││  users                                                           │
+│                          ││  os                                                              │
+│                          ││  gpu                                                             │
+│                          ││  kernel                                                          │
+│                          ││  packages                                                        │
+│                          ││  tools                                                           │
 │                          ││hooks                                                             │
 │                          ││  (none)                                                          │
 │                          ││systemd.units                                                     │
 │                          ││  (none)                                                          │
-│                          ││tools                                                             │
-│                          ││  (none)                                                          │
-│                          ││secrets                                                           │
-│                          ││  API_KEY                                                         │
-│                          ││    env DEMO_API_KEY                                              │
-│                          ││    description demo key                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j scroll down • k scroll up • enter edit field • / palette • ? help • q quit

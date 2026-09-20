@@ -19,10 +19,10 @@
 │                          │││  up/down pick · enter open · esc back  │                        │
 │                          │││                                        │                        │
 │                          ││╰────────────────────────────────────────╯                        │
+│                          ││  tools                                                           │
+│                          ││hooks                                                             │
 │                          ││  (none)                                                          │
-│                          ││secrets                                                           │
-│                          ││  (none)                                                          │
-│                          ││mounts                                                            │
+│                          ││systemd.units                                                     │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j down • k up • h collapse / parent • / palette • ? help • q quit

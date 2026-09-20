@@ -17,12 +17,12 @@
 │                          ││  ~/.profile (edit: block)                                        │
 │                          ││when                                                              │
 │                          ││  hosts myhost                                                    │
+│                          ││  users                                                           │
 │                          ││  os linux                                                        │
-│                          ││hooks                                                             │
-│                          ││  pre: echo pre                                                   │
-│                          ││  post: echo post                                                 │
-│                          ││systemd.units                                                     │
-│                          ││  demo.service                                                    │
+│                          ││  gpu                                                             │
+│                          ││  kernel                                                          │
+│                          ││  packages                                                        │
+│                          ││  tools                                                           │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  j down • k up • h collapse / parent • / palette • ? help • q quit

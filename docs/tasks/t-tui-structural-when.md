@@ -42,5 +42,5 @@ confirm.
 
 # Acceptance
 
-- [ ] Landed.
+- [x] Landed — commit `feat(tui): 0074 when-tree editing`.
 - [Definition of done](/engineering/definition-of-done.md) checklist complete.

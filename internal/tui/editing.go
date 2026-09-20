@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -311,6 +312,12 @@ func validateAdd(family, addPath, input string) string {
 		return validEntryName(input, "mount")
 	case profile.FamilySmb:
 		return validEntryName(input, "share")
+	case profile.FamilyWhen:
+		switch strings.TrimSpace(input) {
+		case "and", "or", "not":
+		default:
+			return `add "and", "or", or "not"`
+		}
 	}
 	return ""
 }
@@ -380,6 +387,9 @@ func crossCheck(cfg *profile.ModuleConfig) string {
 			return fmt.Sprintf("smb: share %q: path is required", name)
 		}
 	}
+	if e := checkWhenGroups("", cfg.When); e != "" {
+		return e
+	}
 	return ""
 }
 
@@ -426,8 +436,9 @@ func (w *workspaceModel) applyEdit() bool {
 		return false
 	}
 	var err error
+	newKey := ""
 	if isStructuralFamily(family) {
-		err = mutateStructural(candidate, family, addPath, key, input, e.add)
+		newKey, err = mutateStructural(candidate, family, addPath, key, input, e.add)
 	} else {
 		err = mutateField(candidate, section, family, key, row.value, input, e.add)
 	}
@@ -444,12 +455,12 @@ func (w *workspaceModel) applyEdit() bool {
 	}
 
 	// The row's post-commit identity: adds land on a predicted key, edits
-	// may rename (packages, hooks), structural rows keep their path.
+	// may rename (packages, hooks), structural adds report their key.
 	want := renamedKey(section, family, key, input)
 	if e.add {
 		want = newRowKey(section, input)
-		if isStructuralFamily(family) {
-			want = structuralNewKey(family, addPath, input)
+		if newKey != "" {
+			want = newKey
 		}
 	}
 
@@ -470,24 +481,8 @@ func (w *workspaceModel) applyEdit() bool {
 	return true
 }
 
-// structuralNewKey predicts a committed structural add's row key (the
-// addPath scopes it the same way the mutation did).
-func structuralNewKey(family, addPath, input string) string {
-	switch family {
-	case profile.FamilySystemd:
-		if addPath == "" {
-			return strings.TrimSpace(input)
-		}
-		name, _, _ := strings.Cut(input, "=")
-		return pathKey(addPath, strings.TrimSpace(name))
-	case profile.FamilySecrets:
-		name, _, _ := strings.Cut(input, "=")
-		return strings.TrimSpace(name)
-	case profile.FamilyMounts, profile.FamilySmb:
-		return strings.TrimSpace(input)
-	}
-	return input
-}
+// structuralEntryKey lives in structural.go with the mutation it
+// mirrors.
 
 // renamedKey computes a row's key after an edit committed input over it.
 func renamedKey(section, family, key, input string) string {
@@ -585,6 +580,8 @@ func addFamily(section string) string {
 		return profile.FamilyMounts
 	case "smb":
 		return profile.FamilySmb
+	case "when":
+		return profile.FamilyWhen
 	}
 	return ""
 }
@@ -637,27 +634,6 @@ func mutateField(cfg *profile.ModuleConfig, section, family, key, oldValue, inpu
 			return nil
 		}
 		cfg.Tools[key] = input
-	case profile.FamilyWhen:
-		switch key {
-		case "gpu":
-			cfg.When.GPU = input
-		case "kernel":
-			cfg.When.Kernel = input
-		default:
-			list := splitComma(input)
-			switch key {
-			case "hosts":
-				cfg.When.Hosts = list
-			case "users":
-				cfg.When.Users = list
-			case "os":
-				cfg.When.OS = list
-			case "packages":
-				cfg.When.Packages = list
-			case "tools":
-				cfg.When.Tools = list
-			}
-		}
 	case profile.FamilyHooks:
 		if add {
 			phase, cmd := splitPhase(input)
@@ -782,6 +758,35 @@ func (w *workspaceModel) removeRow() {
 		if row.container {
 			delete(candidate.Smb.Shares, row.key)
 		}
+	case profile.FamilyWhen:
+		if !row.container {
+			return // leaves clear by editing them to empty
+		}
+		parts := splitPath(row.key)
+		if parts[len(parts)-1] == "not" {
+			if parent := whenNode(&candidate.When, parts[:len(parts)-1]); parent != nil {
+				parent.Not = nil
+			}
+		} else {
+			parent := whenNode(&candidate.When, parts[:len(parts)-2])
+			if parent == nil {
+				return
+			}
+			idx, err := strconv.Atoi(parts[len(parts)-1])
+			if err != nil {
+				return
+			}
+			switch parts[len(parts)-2] {
+			case "and":
+				if idx < len(parent.And) {
+					parent.And = slices.Delete(parent.And, idx, idx+1)
+				}
+			case "or":
+				if idx < len(parent.Or) {
+					parent.Or = slices.Delete(parent.Or, idx, idx+1)
+				}
+			}
+		}
 	default:
 		return
 	}
@@ -867,6 +872,14 @@ func (m *Compositor) startAdd() {
 	e := &wsEdit{row: m.ws.cursor, add: true, section: section}
 	if row.family == profile.FamilySystemd && !row.container {
 		e.addPath = splitPath(row.key)[0]
+	}
+	if row.family == profile.FamilyWhen {
+		parts := splitPath(row.key)
+		if row.container {
+			e.addPath = pathKey(parts...) // a on a group nests beneath it
+		} else if len(parts) > 1 {
+			e.addPath = pathKey(parts[:len(parts)-1]...) // a on a group's leaf grows that group
+		} // a root leaf grows the root: addPath stays ""
 	}
 	m.ws.editing = e
 }
@@ -966,9 +979,9 @@ func (m *Compositor) confirmRemoveRow() {
 	row := m.ws.rows[m.ws.cursor]
 	switch row.family {
 	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles, profile.FamilySystemd:
-	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb:
+	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen:
 		if !row.container {
-			return // d removes entries, not their fields
+			return // d removes entries and groups, not their fields
 		}
 	default:
 		return

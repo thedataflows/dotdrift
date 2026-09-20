@@ -14,14 +14,14 @@
 │                          ││writes                                                            │
 │                          ││  (none)                                                          │
 │                          ││when                                                              │
-│                          ││  (none)                                                          │
+│                          ││  hosts                                                           │
+│                          ││  users                                                           │
+│                          ││  os                                                              │
+│                          ││  gpu                                                             │
+│                          ││  kernel                                                          │
+│                          ││  packages                                                        │
+│                          ││  tools                                                           │
 │                          ││hooks                                                             │
-│                          ││  (none)                                                          │
-│                          ││systemd.units                                                     │
-│                          ││  (none)                                                          │
-│                          ││tools                                                             │
-│                          ││  node = 20                                                       │
-│                          ││secrets                                                           │
 │                          ││  (none)                                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 

@@ -1,8 +1,8 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││plain  [base]                                                     │
+│MODULES                   ││demo  [base]                                                      │
 │▸ demo                    ││meta                                                              │
-│▸ plain                   ││  id plain                                                        │
+│                          ││  id demo                                                         │
 │                          ││  description                                                     │
 │                          ││  scope user                                                      │
 │                          ││packages                                                          │
@@ -12,17 +12,17 @@
 │                          ││writes                                                            │
 │                          ││  (none)                                                          │
 │                          ││when                                                              │
-│                          ││  hosts                                                           │
+│                          ││  hosts myhost                                                    │
 │                          ││  users                                                           │
 │                          ││  os                                                              │
 │                          ││  gpu                                                             │
 │                          ││  kernel                                                          │
 │                          ││  packages                                                        │
 │                          ││  tools                                                           │
-│                          ││hooks                                                             │
-│                          ││  (none)                                                          │
-│                          ││systemd.units                                                     │
-│                          ││  (none)                                                          │
+│                          ││  and[0]                                                          │
+│                          ││    hosts                                                         │
+│                          ││    users                                                         │
+│                          ││    os linux                                                      │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
- j down • k up • h collapse / parent • / palette • ? help • q quit
+ j scroll down • k scroll up • enter edit field • / palette • ? help • q quit

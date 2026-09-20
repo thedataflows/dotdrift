@@ -92,8 +92,9 @@ view stack wholesale). Its parts:
   (`e` on a line); a repair that parses unlocks the structured surface,
   and its save sends the whole repaired file as the raw candidate
   (`SaveRequest.Raw` — the splice step swaps out, every other pipeline
-  check stands). Secrets, mounts, smb, and nested when groups remain
-  read-only rows until their 0074 tasks land.
+  check stands). The structural families all edit in place now (below);
+  structural-section editing landed from issue
+  [0074](../issues/0074-structural-section-editing.md).
 - **Structural editing** (issue 0074, landing task by task). The
   structural families join the inline grammar as container + field rows:
   a systemd unit is a container row (d removes with confirm, `a` adds a
@@ -105,7 +106,13 @@ view stack wholesale). Its parts:
   empty value is a settable field, never a missing row); secrets add as
   `name = ENV`, mounts and shares as a bare name. Entries resolve can
   never accept are refused at save (missing mount
-  source/destination/type, empty share path) — tier-2, in place.
+  source/destination/type, empty share path) — tier-2, in place. The
+  when tree is editable: root leaves always render (an unset condition
+  is settable), and `and[i]`/`or[i]`/`not` render as expanded group
+  containers whose leaves edit like the root's; `a` on a group row with
+  input `and`/`or`/`not` nests deeper, d removes a group with confirm,
+  and an empty group — nothing to evaluate, a load-time error class —
+  blocks the save until it has content.
 - **The modal family** (T-tui-modals). One confirm component — question
   title, consequence body with full target identity, `y` confirms and
   every other key (or `esc`) cancels — backs dirty-quit (`q` with
@@ -200,5 +207,5 @@ Apply runs **inside** the shell, over the service apply session
 # Fog
 
 Previewing a *different* account's resolution, an undo system, and a
-command-line-in-the-TUI stay out. Nested when-tree editing continues
-under issue [0074](../issues/0074-structural-section-editing.md).
+command-line-in-the-TUI stay out. Structural-section editing is complete
+per issue [0074](../issues/0074-structural-section-editing.md).

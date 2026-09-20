@@ -11,6 +11,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -18,19 +19,43 @@ import (
 
 // mutateStructural applies a committed input to a structural family.
 // addPath scopes adds ("" adds the section's entry itself); for edits it
-// is empty and key carries the row's machine path.
-func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input string, add bool) error {
+// is empty and key carries the row's machine path. Returns the committed
+// row's NEW key for adds ("" for edits — a structural edit never renames).
+func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input string, add bool) (string, error) {
 	switch family {
 	case profile.FamilySystemd:
 		return mutateSystemd(cfg, addPath, key, input, add)
-	case profile.FamilySecrets:
-		return mutateSecrets(cfg, key, input, add)
-	case profile.FamilyMounts:
-		return mutateMounts(cfg, key, input, add)
-	case profile.FamilySmb:
-		return mutateSmb(cfg, key, input, add)
+	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb:
+		var err error
+		switch family {
+		case profile.FamilySecrets:
+			err = mutateSecrets(cfg, key, input, add)
+		case profile.FamilyMounts:
+			err = mutateMounts(cfg, key, input, add)
+		case profile.FamilySmb:
+			err = mutateSmb(cfg, key, input, add)
+		}
+		if err != nil {
+			return "", err
+		}
+		if add {
+			return structuralEntryKey(family, input), nil
+		}
+		return "", nil
+	case profile.FamilyWhen:
+		return mutateWhen(cfg, addPath, key, input, add)
 	}
-	return fmt.Errorf("family %q has no structural editor", family)
+	return "", fmt.Errorf("family %q has no structural editor", family)
+}
+
+// structuralEntryKey predicts an entry add's row key from the input
+// (secrets `name = ENV`, mounts/shares a bare name).
+func structuralEntryKey(family, input string) string {
+	if family == profile.FamilySecrets {
+		name, _, _ := strings.Cut(input, "=")
+		return strings.TrimSpace(name)
+	}
+	return strings.TrimSpace(input)
 }
 
 // mutateSystemd edits the systemd passthrough: units add whole (name
@@ -38,19 +63,20 @@ func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input str
 // value-only (parsed as a TOML value, plain-string fallback). An empty
 // value refuses: the encoder drops empty values, so committing one would
 // silently delete the directive.
-func mutateSystemd(cfg *profile.ModuleConfig, addPath, key, input string, add bool) error {
+func mutateSystemd(cfg *profile.ModuleConfig, addPath, key, input string, add bool) (string, error) {
 	if add {
 		if addPath == "" {
 			if cfg.Systemd.Units == nil {
 				cfg.Systemd.Units = map[string]profile.SystemdUnit{}
 			}
-			cfg.Systemd.Units[strings.TrimSpace(input)] = profile.SystemdUnit{}
-			return nil
+			name := strings.TrimSpace(input)
+			cfg.Systemd.Units[name] = profile.SystemdUnit{}
+			return name, nil
 		}
 		name, value, ok := strings.Cut(input, "=")
 		name = strings.TrimSpace(name)
 		if !ok || name == "" {
-			return errors.New(`add as "Name = value"`)
+			return "", errors.New(`add as "Name = value"`)
 		}
 		unit := cfg.Systemd.Units[addPath]
 		if unit == nil {
@@ -58,23 +84,23 @@ func mutateSystemd(cfg *profile.ModuleConfig, addPath, key, input string, add bo
 		}
 		unit[name] = parseTomlValue(value)
 		cfg.Systemd.Units[addPath] = unit
-		return nil
+		return pathKey(addPath, name), nil
 	}
 
 	parts := splitPath(key)
 	if len(parts) != 2 {
-		return fmt.Errorf("malformed directive row %q", key)
+		return "", fmt.Errorf("malformed directive row %q", key)
 	}
 	if input == "" {
-		return errors.New("directive value must not be empty (d removes the directive)")
+		return "", errors.New("directive value must not be empty (d removes the directive)")
 	}
 	unit := cfg.Systemd.Units[parts[0]]
 	if unit == nil {
-		return fmt.Errorf("unknown unit %q", parts[0])
+		return "", fmt.Errorf("unknown unit %q", parts[0])
 	}
 	unit[parts[1]] = parseTomlValue(input)
 	cfg.Systemd.Units[parts[0]] = unit
-	return nil
+	return "", nil
 }
 
 // mutateSecrets: entries add as "name = ENV" (the file's short form);
@@ -232,4 +258,147 @@ func mutateSmb(cfg *profile.ModuleConfig, key, input string, add bool) error {
 		return fmt.Errorf("malformed smb row %q", key)
 	}
 	return nil
+}
+
+// mutateWhen edits the when tree: leaves set/clear at any depth (the
+// root's plain single-segment keys included), `a` grows an and/or list
+// beneath the cursor row's group or sets its not. Returns the new group
+// row's key for adds.
+func mutateWhen(cfg *profile.ModuleConfig, addPath, key, input string, add bool) (string, error) {
+	if add {
+		var segs []string
+		if addPath != "" {
+			segs = splitPath(addPath)
+		}
+		parent := whenNode(&cfg.When, segs)
+		if parent == nil {
+			return "", fmt.Errorf("stale when row %q", addPath)
+		}
+		switch strings.TrimSpace(input) {
+		case "and":
+			parent.And = append(parent.And, profile.When{})
+			return pathKey(append(segs, "and", strconv.Itoa(len(parent.And)-1))...), nil
+		case "or":
+			parent.Or = append(parent.Or, profile.When{})
+			return pathKey(append(segs, "or", strconv.Itoa(len(parent.Or)-1))...), nil
+		case "not":
+			if parent.Not != nil {
+				return "", errors.New("not is already set here")
+			}
+			parent.Not = &profile.When{}
+			return pathKey(append(segs, "not")...), nil
+		default:
+			return "", errors.New(`add "and", "or", or "not"`)
+		}
+	}
+
+	segs := splitPath(key)
+	field := segs[len(segs)-1]
+	var group []string
+	if len(segs) > 1 {
+		group = segs[:len(segs)-1]
+	}
+	node := whenNode(&cfg.When, group)
+	if node == nil {
+		return "", fmt.Errorf("stale when row %q", key)
+	}
+	switch field {
+	case "gpu":
+		node.GPU = input
+	case "kernel":
+		node.Kernel = input
+	case "hosts":
+		node.Hosts = splitComma(input)
+	case "users":
+		node.Users = splitComma(input)
+	case "os":
+		node.OS = splitComma(input)
+	case "packages":
+		node.Packages = splitComma(input)
+	case "tools":
+		node.Tools = splitComma(input)
+	default:
+		return "", fmt.Errorf("unknown when field %q", field)
+	}
+	return "", nil
+}
+
+// whenNode walks a group path (and/or index pairs, not as a singleton)
+// from a node, returning the addressed When — nil when the path is stale
+// (the rows were rebuilt since).
+func whenNode(root *profile.When, segs []string) *profile.When {
+	node := root
+	for i := 0; i < len(segs); i++ {
+		switch segs[i] {
+		case "and", "or":
+			if i+1 >= len(segs) {
+				return nil
+			}
+			idx, err := strconv.Atoi(segs[i+1])
+			if err != nil {
+				return nil
+			}
+			if segs[i] == "and" {
+				if idx >= len(node.And) {
+					return nil
+				}
+				node = &node.And[idx]
+			} else {
+				if idx >= len(node.Or) {
+					return nil
+				}
+				node = &node.Or[idx]
+			}
+			i++
+		case "not":
+			if node.Not == nil {
+				return nil
+			}
+			node = node.Not
+		default:
+			return nil
+		}
+	}
+	return node
+}
+
+// checkWhenGroups refuses empty groups — a node with nothing to evaluate
+// is a load-time error (resolve refuses the plan); the root itself is
+// exempt, an all-empty root is simply no when section.
+func checkWhenGroups(prefix string, w profile.When) string {
+	for i, sub := range w.And {
+		p := fmt.Sprintf("%sand[%d]", prefix, i)
+		if !whenHasContent(sub) {
+			return fmt.Sprintf("when: %s: empty group (nothing to evaluate)", p)
+		}
+		if e := checkWhenGroups(p+".", sub); e != "" {
+			return e
+		}
+	}
+	for i, sub := range w.Or {
+		p := fmt.Sprintf("%sor[%d]", prefix, i)
+		if !whenHasContent(sub) {
+			return fmt.Sprintf("when: %s: empty group (nothing to evaluate)", p)
+		}
+		if e := checkWhenGroups(p+".", sub); e != "" {
+			return e
+		}
+	}
+	if w.Not != nil {
+		if !whenHasContent(*w.Not) {
+			return fmt.Sprintf("when: %snot: empty group (nothing to evaluate)", prefix)
+		}
+		if e := checkWhenGroups(prefix+"not.", *w.Not); e != "" {
+			return e
+		}
+	}
+	return ""
+}
+
+// whenHasContent reports whether a when node has anything to evaluate.
+func whenHasContent(w profile.When) bool {
+	return len(w.Hosts) > 0 || len(w.Users) > 0 || len(w.OS) > 0 ||
+		w.GPU != "" || w.Kernel != "" ||
+		len(w.Packages) > 0 || len(w.Tools) > 0 ||
+		len(w.And) > 0 || len(w.Or) > 0 || w.Not != nil
 }

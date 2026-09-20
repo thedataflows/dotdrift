@@ -14,14 +14,14 @@
 │                          ││wri│    ◆ demo  module                │                           │
 │                          ││  (│    ◆ demo · user cri  module     │                           │
 │                          ││whe│    ◆ demo · host myhost  module  │                           │
-│                          ││  (│    ◆ other  module               │                           │
-│                          ││hoo│    ◆ plain  module               │                           │
-│                          ││  (│                                  │                           │
-│                          ││sys╰──────────────────────────────────╯                           │
-│                          ││  (none)                                                          │
-│                          ││tools                                                             │
-│                          ││  node = 20                                                       │
-│                          ││secrets                                                           │
+│                          ││  h│    ◆ other  module               │                           │
+│                          ││  u│    ◆ plain  module               │                           │
+│                          ││  o│                                  │                           │
+│                          ││  g╰──────────────────────────────────╯                           │
+│                          ││  kernel                                                          │
+│                          ││  packages                                                        │
+│                          ││  tools                                                           │
+│                          ││hooks                                                             │
 │                          ││  (none)                                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 

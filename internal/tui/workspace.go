@@ -12,7 +12,6 @@ package tui
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 	"os"
 	"slices"
@@ -360,31 +359,64 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	section("writes", writes)
 
 	var when []wsRow
-	listRow := func(name string, vs []string) {
-		if len(vs) > 0 {
-			when = append(when, entry("when", name+" "+strings.Join(vs, ", "),
-				profile.FamilyWhen, name, strings.Join(vs, ", ")))
+	// The when tree (0074): root leaves always render — an unset
+	// condition is a settable row, never a missing one — and the
+	// and/or/not combinators render as expanded group containers whose
+	// leaves edit exactly like the root's.
+	whenLeaf := func(depth int, group []string, field, value string) {
+		text := strings.Repeat("  ", depth) + field
+		if value != "" {
+			text += " " + value
+		}
+		segs := append(append([]string{}, group...), field)
+		when = append(when, wsRow{
+			section: "when", text: text,
+			family: profile.FamilyWhen, key: pathKey(segs...), value: value,
+		})
+	}
+	var renderGroup func(depth int, group []string, w *profile.When)
+	renderGroup = func(depth int, group []string, w *profile.When) {
+		label := group[len(group)-1]
+		if label != "not" {
+			label = group[len(group)-2] + "[" + label + "]"
+		}
+		when = append(when, wsRow{
+			section: "when", text: strings.Repeat("  ", depth) + label,
+			family: profile.FamilyWhen, key: pathKey(group...), container: true,
+		})
+		d := depth + 1
+		whenLeaf(d, group, "hosts", strings.Join(w.Hosts, ", "))
+		whenLeaf(d, group, "users", strings.Join(w.Users, ", "))
+		whenLeaf(d, group, "os", strings.Join(w.OS, ", "))
+		whenLeaf(d, group, "gpu", w.GPU)
+		whenLeaf(d, group, "kernel", w.Kernel)
+		whenLeaf(d, group, "packages", strings.Join(w.Packages, ", "))
+		whenLeaf(d, group, "tools", strings.Join(w.Tools, ", "))
+		for i := range w.And {
+			renderGroup(d, append(append([]string{}, group...), "and", strconv.Itoa(i)), &w.And[i])
+		}
+		for i := range w.Or {
+			renderGroup(d, append(append([]string{}, group...), "or", strconv.Itoa(i)), &w.Or[i])
+		}
+		if w.Not != nil {
+			renderGroup(d, append(append([]string{}, group...), "not"), w.Not)
 		}
 	}
-	listRow("hosts", cfg.When.Hosts)
-	listRow("users", cfg.When.Users)
-	listRow("os", cfg.When.OS)
-	if cfg.When.GPU != "" {
-		when = append(when, entry("when", "gpu "+cfg.When.GPU, profile.FamilyWhen, "gpu", cfg.When.GPU))
+	whenLeaf(0, nil, "hosts", strings.Join(cfg.When.Hosts, ", "))
+	whenLeaf(0, nil, "users", strings.Join(cfg.When.Users, ", "))
+	whenLeaf(0, nil, "os", strings.Join(cfg.When.OS, ", "))
+	whenLeaf(0, nil, "gpu", cfg.When.GPU)
+	whenLeaf(0, nil, "kernel", cfg.When.Kernel)
+	whenLeaf(0, nil, "packages", strings.Join(cfg.When.Packages, ", "))
+	whenLeaf(0, nil, "tools", strings.Join(cfg.When.Tools, ", "))
+	for i := range cfg.When.And {
+		renderGroup(0, []string{"and", strconv.Itoa(i)}, &cfg.When.And[i])
 	}
-	if cfg.When.Kernel != "" {
-		when = append(when, entry("when", "kernel "+cfg.When.Kernel, profile.FamilyWhen, "kernel", cfg.When.Kernel))
-	}
-	listRow("packages", cfg.When.Packages)
-	listRow("tools", cfg.When.Tools)
-	if len(cfg.When.And) > 0 {
-		when = append(when, entry("when", fmt.Sprintf("and (%d conditions)", len(cfg.When.And)), "", "", ""))
-	}
-	if len(cfg.When.Or) > 0 {
-		when = append(when, entry("when", fmt.Sprintf("or (%d conditions)", len(cfg.When.Or)), "", "", ""))
+	for i := range cfg.When.Or {
+		renderGroup(0, []string{"or", strconv.Itoa(i)}, &cfg.When.Or[i])
 	}
 	if cfg.When.Not != nil {
-		when = append(when, entry("when", "not (1 condition)", "", "", ""))
+		renderGroup(0, []string{"not"}, cfg.When.Not)
 	}
 	section("when", when)
 

@@ -288,6 +288,11 @@ func (w *workspaceModel) titleView(th theme) string {
 	if len(tabs) > 0 {
 		s += "  " + strings.Join(tabs, th.meta.Render(" · "))
 	}
+	// The cursor's section rides the title line (0076): an empty stretch
+	// of surface still says where you are.
+	if w.cursor < len(w.rows) {
+		s += "  " + th.meta.Render("· "+w.rows[w.cursor].section)
+	}
 	if w.needsRoot {
 		s += "  " + th.reasonMark.Render("needs root")
 	}
@@ -301,6 +306,12 @@ func (w *workspaceModel) titleView(th theme) string {
 // tier-1 error render in place).
 func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.header {
+		if i == w.cursor {
+			// A selectable header under the cursor renders the bar
+			// (0076) — an empty section's header is the way in, it has
+			// to say so.
+			return []string{th.cursorRow.MaxWidth(width).Render(" " + r.text)}
+		}
 		return []string{th.sectionLabel.Render(r.text)}
 	}
 	if r.hint {

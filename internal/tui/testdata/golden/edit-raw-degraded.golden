@@ -1,6 +1,6 @@
  dotdrift · $PROFILE · host myhost · user cri  ● 1
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo  [base]  ●                                                   │
+│MODULES                   ││demo  [base]  · raw  ●                                            │
 ││ ▸ demo · invalid module.││broken module.toml — raw text mode                                │
 │                          ││  module.toml:3:8: expected '.' or ']' to end table name, but got │
 │                          ││  id = "demo"                                                     │

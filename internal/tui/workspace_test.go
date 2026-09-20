@@ -309,3 +309,33 @@ func TestWorkspace_cursorRowBar(t *testing.T) {
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "│ ▸ demo-app", "the active input renders the bar")
 }
+
+func TestWorkspace_headerCursorBar(t *testing.T) {
+	// 0076 T-tui-location: a selectable header under the cursor renders
+	// the bar — an empty section's header is the way in, it must say so.
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	c = cpress(c, "tab")
+	for i := 0; !c.ws.atSection("packages") || !c.ws.rows[c.ws.cursor].header; i++ {
+		require.Less(t, i, 32, "the packages header never took the cursor")
+		c = cpress(c, "j")
+	}
+	require.True(t, c.ws.rows[c.ws.cursor].header, "the cursor rests on the header")
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "│ packages", "the header under the cursor renders the bar")
+}
+
+func TestWorkspace_titleShowsSection(t *testing.T) {
+	// 0076 T-tui-location: the title line names the cursor's section, so
+	// an empty stretch of surface still says where you are.
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	c = cpress(c, "tab")
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "· meta", "the title names the cursor's section")
+
+	for i := 0; !c.ws.atSection("writes"); i++ {
+		require.Less(t, i, 32, "the writes header never took the cursor")
+		c = cpress(c, "j")
+	}
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "· writes", "the title follows the cursor")
+}

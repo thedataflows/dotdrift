@@ -255,6 +255,8 @@ func TestKeys_noOrphanedBindings(t *testing.T) {
 		"enter:nav", "/:both", "n:nav", "m:nav", "P:both", "p:both", "?:both", "q:both", "tab:both",
 		"j:work", "k:work", "down:work", "up:work", "enter:work", "e:work", "a:both",
 		"d:work", "D:work", "ctrl+s:work", "L:work", "w:work",
+		"pgup:nav", "pgdown:nav", "home:nav", "end:nav",
+		"pgup:work", "pgdown:work", "home:work", "end:work",
 	})
 }
 

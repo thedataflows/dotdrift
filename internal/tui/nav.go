@@ -49,6 +49,7 @@ type navModel struct {
 	expanded map[string]bool
 	cursor   int
 	offset   int
+	bodyH    int    // the visible body height from the last layout: the paging step
 	pending  bool   // a read is in flight: placeholder rows
 	loadErr  string // the last read failed: the row names it
 }
@@ -168,6 +169,23 @@ func (n *navModel) move(delta int) {
 		n.cursor = max(rows-1, 0)
 	}
 }
+
+// page moves the cursor by a visible page (the body height minus the
+// group-title line), clamped like move (0075 T-tui-page).
+func (n *navModel) page(delta int) {
+	for i, steps := 0, max(n.bodyH-1, 1); i < steps; i++ {
+		before := n.cursor
+		n.move(delta)
+		if n.cursor == before {
+			return
+		}
+	}
+}
+
+// home/end jump to the first/last row.
+func (n *navModel) home() { n.cursor = 0 }
+
+func (n *navModel) end() { n.cursor = max(len(n.rows())-1, 0) }
 
 // collapse implements h/left: on a child row it returns to the module
 // row; on an expanded module row it collapses it.

@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -178,4 +179,34 @@ func TestNav_cursorClampsWhenSelectionVanishes(t *testing.T) {
 	c.root = dir
 	c, _ = cstep(c, mustMsg(c.Init()))
 	require.Less(t, c.nav.cursor, len(c.nav.rows()), "the cursor stays in range")
+}
+
+func TestNav_pageKeys(t *testing.T) {
+	// 0075 T-tui-page: pgup/pgdown move a visible page, home/end jump to
+	// the ends — the nav is longer than one screen at 100x30.
+	files := map[string]string{}
+	for i := 0; i < 30; i++ {
+		files[fmt.Sprintf("modules/m%02d/module.toml", i)] = fmt.Sprintf("id = \"m%02d\"\n", i)
+	}
+	_, c := wsShell(t, files)
+	require.Len(t, c.nav.rows(), 30, "the profile builds a long nav")
+	require.Equal(t, 0, c.nav.cursor)
+
+	page := c.nav.bodyH - 1 // the group-title line takes one body row
+	require.Greater(t, page, 5, "the test window steps more than a screenful")
+
+	c = cpress(c, "end")
+	require.Equal(t, 29, c.nav.cursor, "end jumps to the last row")
+	c = cpress(c, "home")
+	require.Equal(t, 0, c.nav.cursor, "home jumps to the first row")
+	c = cpress(c, "pgdown")
+	require.Equal(t, page, c.nav.cursor, "pgdown moves a page")
+	c = cpress(c, "pgup")
+	require.Equal(t, 0, c.nav.cursor, "pgup moves back a page")
+	c = cpress(c, "end")
+	c = cpress(c, "pgdown")
+	require.Equal(t, 29, c.nav.cursor, "pgdown clamps at the last row")
+	c = cpress(c, "home")
+	c = cpress(c, "pgup")
+	require.Equal(t, 0, c.nav.cursor, "pgup clamps at the first row")
 }

@@ -74,6 +74,7 @@ type workspaceModel struct {
 	rows    []wsRow
 	cursor  int
 	offset  int
+	bodyH   int      // the visible body height from the last layout: the paging step
 	editing *wsEdit  // the active field/line input (T-tui-editing)
 	draft   *wsDraft // the active layer's draft, if any
 
@@ -164,6 +165,32 @@ func (w *workspaceModel) move(delta int) {
 	}
 }
 
+// page moves the cursor by a visible page of rows (the body height minus
+// the title line), walking entry rows and clamping like move (0075
+// T-tui-page).
+func (w *workspaceModel) page(delta int) {
+	for i, steps := 0, max(w.bodyH-1, 1); i < steps; i++ {
+		before := w.cursor
+		w.move(delta)
+		if w.cursor == before {
+			return
+		}
+	}
+}
+
+// home/end jump to the first/last entry row.
+func (w *workspaceModel) home() { w.cursor = w.firstEntry(0) }
+
+func (w *workspaceModel) end() {
+	for i := len(w.rows) - 1; i >= 0; i-- {
+		if !w.rows[i].header && !strings.HasPrefix(w.rows[i].text, "(none)") {
+			w.cursor = i
+			return
+		}
+	}
+	w.cursor = 0
+}
+
 func (w *workspaceModel) firstEntry(from int) int {
 	for i := from; i < len(w.rows); i++ {
 		if !w.rows[i].header && !strings.HasPrefix(w.rows[i].text, "(none)") {
@@ -201,6 +228,16 @@ func (w *workspaceModel) view(width, h int, th theme) string {
 		}
 		if w.read != nil && !w.read.Exists {
 			lines = append(lines, th.disabledMark.Render("(no module.toml in this layer)"))
+		}
+		// The scroll window follows the cursor (0075 T-tui-page) — the
+		// nav's rule: the offset clamps so the cursor row renders.
+		if avail := h - len(lines); avail > 0 {
+			if w.cursor < w.offset {
+				w.offset = w.cursor
+			}
+			if w.cursor >= w.offset+avail {
+				w.offset = w.cursor - avail + 1
+			}
 		}
 		for i := w.offset; i < len(w.rows) && len(lines) < h; i++ {
 			lines = append(lines, w.rowView(w.rows[i], i, th, width)...)

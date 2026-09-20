@@ -152,7 +152,10 @@ view stack wholesale). Its parts:
   undo — drafts and confirms are the safety net. `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /
-  generate as absorbed dialogs); `n` opens module creation. Mouse parity
+  generate as absorbed dialogs); `n` opens module creation.
+  `pgup`/`pgdown` move the cursor a visible page and `home`/`end` jump
+  to the first/last row, in both panes; the workspace's visible window
+  always follows the cursor (0075). Mouse parity
   on the base: wheel scrolls the hovered pane, click selects+focuses,
   double-click edits the field.
 

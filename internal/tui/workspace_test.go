@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -224,4 +226,45 @@ func TestWorkspace_cursorWalksEntryRows(t *testing.T) {
 	c = cpress(c, "j")
 	require.Greater(t, c.ws.cursor, start, "j walks to the next entry row")
 	require.False(t, c.ws.rows[c.ws.cursor].header, "the cursor never lands on a section header")
+}
+
+func TestWorkspace_pageKeysFollowTheCursor(t *testing.T) {
+	// 0075 T-tui-page: end/home jump across a long surface, pgdown/pgup
+	// step a page, and the visible window follows the cursor — before
+	// this task the workspace offset never moved after a load, so the
+	// tail rows were unreachable on screen.
+	var present []string
+	for i := 0; i < 40; i++ {
+		present = append(present, fmt.Sprintf("\"p%02d\"", i))
+	}
+	files := map[string]string{"modules/demo/module.toml": "id = \"demo\"\n\n[packages]\npresent = [" +
+		strings.Join(present, ", ") + "]\n"}
+	_, c := wsShell(t, files)
+	c = cpress(c, "tab")
+	require.Equal(t, "id demo", c.ws.rows[c.ws.cursor].text, "the cursor starts on the first entry")
+
+	page := c.ws.bodyH - 1 // the title line takes one body row
+	require.Greater(t, page, 5, "the test window steps more than a screenful")
+
+	c = wsPress(t, c, "end")
+	require.Equal(t, len(c.ws.rows)-1, c.ws.cursor, "end lands on the last row")
+	require.False(t, c.ws.rows[c.ws.cursor].header, "the last row is an entry")
+	require.Contains(t, c.View().Content, "avahi", "the window follows the cursor to the tail")
+	c = wsPress(t, c, "home")
+	start := c.ws.cursor
+	require.Equal(t, "id demo", c.ws.rows[c.ws.cursor].text, "home returns to the first row")
+	c = wsPress(t, c, "pgdown")
+	steps := 0
+	for i := start; i < c.ws.cursor; i++ {
+		if !c.ws.rows[i].header {
+			steps++
+		}
+	}
+	require.Equal(t, page, steps, "pgdown steps a page of entry rows")
+	require.Contains(t, c.View().Content, c.ws.rows[c.ws.cursor].text, "the window keeps the paged row visible")
+	c = wsPress(t, c, "pgup")
+	require.Equal(t, start, c.ws.cursor, "pgup steps back")
+	c = wsPress(t, c, "home")
+	c = wsPress(t, c, "pgup")
+	require.Equal(t, start, c.ws.cursor, "pgup clamps at the top")
 }

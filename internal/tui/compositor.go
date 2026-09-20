@@ -181,6 +181,8 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		_, _, paneH := m.layout()
+		m.nav.bodyH, m.ws.bodyH = paneH-2, paneH-2 // the panes' content height
 		return m, nil
 	case tea.BackgroundColorMsg:
 		m.isDark = msg.IsDark()
@@ -390,7 +392,7 @@ func (m *Compositor) syncWorkspace() tea.Cmd {
 		return nil
 	}
 	if sel.moduleID != m.ws.moduleID {
-		m.ws = workspaceModel{moduleID: sel.moduleID, placeholder: sel.moduleID}
+		m.ws = workspaceModel{moduleID: sel.moduleID, placeholder: sel.moduleID, bodyH: m.ws.bodyH}
 		for i := range m.nav.modules {
 			mod := &m.nav.modules[i]
 			if mod.id != sel.moduleID {

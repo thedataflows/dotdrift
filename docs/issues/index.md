@@ -62,3 +62,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0072](0072-module-management-dialogs.md) | Module-management dialogs in the TUI | done | high |
 | [0073](0073-tui-compositor-redesign.md) | TUI compositor redesign | done | high |
 | [0074](0074-structural-section-editing.md) | Structural-section inline editing in the M15 workspace | done | medium |
+| [0075](0075-tui-ergonomics-paging-selection-disclosure.md) | TUI ergonomics round — paging, visible selection, render-what-is disclosure | in-progress | high |

@@ -45,13 +45,17 @@ type layerLoadedMsg struct {
 // the row's splice family ("raw" marks a raw-text line of a broken
 // file), key its stable identity within the family, value the editable
 // value without presentation decoration. Empty family means read-only.
+// Container rows (0074) own a structural entry (a unit, a secret, a
+// mount, a share, a when group): they refuse field edits, d removes the
+// entry, a adds beneath them.
 type wsRow struct {
-	section string
-	text    string
-	header  bool
-	family  string
-	key     string
-	value   string
+	section   string
+	text      string
+	header    bool
+	family    string
+	key       string
+	value     string
+	container bool
 }
 
 type workspaceModel struct {
@@ -395,7 +399,19 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 
 	var units []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Systemd.Units)) {
-		units = append(units, entry("systemd.units", name, "", "", ""))
+		units = append(units, wsRow{
+			section: "systemd.units", text: name,
+			family: profile.FamilySystemd, key: name, container: true,
+		})
+		unit := cfg.Systemd.Units[name]
+		for _, directive := range slices.Sorted(maps.Keys(unit)) {
+			encoded := profile.EncodeTomlValue(unit[directive])
+			if encoded == "" {
+				continue // value shapes the encoder skips render nothing either
+			}
+			units = append(units, entry("systemd.units", "  "+directive+" = "+encoded,
+				profile.FamilySystemd, pathKey(name, directive), editableTomlValue(unit[directive])))
+		}
 	}
 	section("systemd.units", units)
 

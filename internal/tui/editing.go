@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/BurntSushi/toml"
 
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/service"
@@ -46,6 +47,7 @@ type wsEdit struct {
 	cur     int    // cursor position in the buffer
 	add     bool   // a synthetic new-row input
 	section string // the section an add commits into
+	addPath string // structural adds: the entry the add lands in ("" = the section itself)
 	err     string // live tier-1 error, rendered at the field
 }
 
@@ -54,6 +56,52 @@ func (e *wsEdit) inputString() string { return string(e.input) }
 
 // rowKey identifies one editable row for dirty markers and staged errors.
 func rowKey(family, key string) string { return family + ":" + key }
+
+// pathSep joins a structural row's machine path segments (0074). The
+// separator never appears in a rendered row, so paths round-trip through
+// the key no matter what punctuation a TOML key carries.
+const pathSep = "\x1f"
+
+// pathKey joins a structural row's machine path segments.
+func pathKey(parts ...string) string { return strings.Join(parts, pathSep) }
+
+// splitPath splits a structural row key back into its path segments.
+func splitPath(key string) []string { return strings.Split(key, pathSep) }
+
+// isStructuralFamily reports whether the family is edited through the
+// 0074 structural row grammar (containers + machine paths) rather than
+// mutateField's flat scalar/table grammar.
+func isStructuralFamily(family string) bool {
+	switch family {
+	case profile.FamilySystemd, profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen:
+		return true
+	}
+	return false
+}
+
+// editableTomlValue renders a directive value as the text a field input
+// seeds from: bare strings (the common case edits unquoted), every other
+// shape as its canonical TOML text.
+func editableTomlValue(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return profile.EncodeTomlValue(v)
+}
+
+// parseTomlValue parses input as a TOML value — quoted strings, numbers,
+// bools, lists, inline tables. Anything that is not valid TOML stands as
+// a plain string, so `ExecStart = /usr/bin/demo` needs no quoting.
+func parseTomlValue(input string) any {
+	s := strings.TrimSpace(input)
+	var doc map[string]any
+	if err := toml.Unmarshal([]byte("v = "+s+"\n"), &doc); err == nil {
+		if v, ok := doc["v"]; ok {
+			return v
+		}
+	}
+	return s
+}
 
 // forkDraft starts the draft for the active layer, or returns the
 // existing one. Structured fork: from the landed read. Raw fork: from
@@ -105,6 +153,8 @@ func encodeFamily(family string, cfg *profile.ModuleConfig) string {
 		return profile.EncodeHooksSection(profile.HookRows(cfg.Hooks.Pre), profile.HookRows(cfg.Hooks.Post))
 	case profile.FamilyDotfiles:
 		return profile.EncodeDotfilesSection(cfg.Dotfiles)
+	case profile.FamilySystemd:
+		return profile.EncodeSystemdSection(cfg.Systemd.Units)
 	default:
 		return ""
 	}
@@ -129,8 +179,26 @@ func validateField(family, key, input string) string {
 		if strings.ContainsAny(name, " \t") {
 			return "package name must not contain spaces"
 		}
+	case profile.FamilyHooks:
+		if strings.TrimSpace(input) == "" {
+			return "hook command must not be empty"
+		}
+	case profile.FamilySystemd:
+		if input == "" {
+			return "directive value must not be empty (d removes the directive)"
+		}
+	}
+	return ""
+}
+
+// validateAdd is tier-1 for the add grammar (the `a` input). addPath
+// scopes structural adds: "" adds the section's entry itself, otherwise
+// it names the entry the add lands beneath. An error refuses the add —
+// a rejected add never enters the draft.
+func validateAdd(family, addPath, input string) string {
+	switch family {
 	case profile.FamilyTools:
-		if key == "new" && !strings.Contains(input, "=") {
+		if !strings.Contains(input, "=") {
 			return `add as "name = constraint"`
 		}
 	case profile.FamilyHooks:
@@ -138,14 +206,34 @@ func validateField(family, key, input string) string {
 			return "hook command must not be empty"
 		}
 	case profile.FamilyDotfiles:
-		if key == "new" {
-			parts := strings.Fields(input)
-			if len(parts) != 2 {
-				return `add as "target source"`
-			}
-			if !strings.HasPrefix(parts[0], "~/") && !strings.HasPrefix(parts[0], "/") {
-				return "target must be an absolute or ~/ path"
-			}
+		if len(strings.Fields(input)) != 2 {
+			return `add as "target source"`
+		}
+	case profile.FamilySystemd:
+		if addPath == "" {
+			return validUnitName(input)
+		}
+		if !strings.Contains(input, "=") {
+			return `add as "Name = value"`
+		}
+	}
+	return ""
+}
+
+// validUnitName mirrors resolve's structural unit-name contract: non-empty
+// and only letters, numbers, '.', '_', '-', '@' (resolve stays the
+// authority — kind derivation runs at apply).
+func validUnitName(input string) string {
+	name := strings.TrimSpace(input)
+	if name == "" {
+		return "unit name must not be empty"
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9',
+			r == '.', r == '_', r == '-', r == '@':
+		default:
+			return `unit name must contain only letters, numbers, '.', '_', '-', or '@'`
 		}
 	}
 	return ""
@@ -183,10 +271,12 @@ func (w *workspaceModel) applyEdit() bool {
 	}
 	family, key := row.family, row.key
 	section := row.section
+	addPath := ""
 	if e.add {
 		section = e.section
 		family = addFamily(section)
 		key = "new"
+		addPath = e.addPath
 	}
 
 	// Raw mode: the row is a text line; the commit splices the line back
@@ -195,8 +285,12 @@ func (w *workspaceModel) applyEdit() bool {
 		return w.applyRawLine(e)
 	}
 
-	if e.err = validateField(family, key, input); e.err != "" && e.add {
-		return false // an add that fails tier-1 never enters the draft
+	if e.add {
+		if e.err = validateAdd(family, addPath, input); e.err != "" {
+			return false // an add that fails tier-1 never enters the draft
+		}
+	} else {
+		e.err = validateField(family, key, input)
 	}
 
 	d := w.forkDraft()
@@ -205,7 +299,13 @@ func (w *workspaceModel) applyEdit() bool {
 		e.err = "the draft no longer parses — discard it"
 		return false
 	}
-	if err := mutateField(candidate, section, family, key, row.value, input, e.add); err != nil {
+	var err error
+	if isStructuralFamily(family) {
+		err = mutateStructural(candidate, family, addPath, key, input, e.add)
+	} else {
+		err = mutateField(candidate, section, family, key, row.value, input, e.add)
+	}
+	if err != nil {
 		e.err = err.Error()
 		return false
 	}
@@ -217,14 +317,21 @@ func (w *workspaceModel) applyEdit() bool {
 		return false
 	}
 
+	// The row's post-commit identity: adds land on a predicted key, edits
+	// may rename (packages, hooks), structural rows keep their path.
+	want := renamedKey(section, family, key, input)
+	if e.add {
+		want = newRowKey(section, input)
+		if isStructuralFamily(family) {
+			want = structuralNewKey(family, addPath, input)
+		}
+	}
+
 	d.cfg = candidate
 	d.raw = spliced
 	d.touched[family] = true
 	d.changes++
-	rk := rowKey(family, key)
-	if e.add {
-		rk = rowKey(family, newRowKey(section, input))
-	}
+	rk := rowKey(family, want)
 	d.edited[rk] = true
 	if e.err != "" {
 		d.errs[rk] = e.err
@@ -233,12 +340,21 @@ func (w *workspaceModel) applyEdit() bool {
 	}
 	w.rows = wsRows(d.cfg, w.needsRoot)
 	// The cursor follows the row's NEW identity (a rename moves it).
-	want := key
-	if !e.add {
-		want = renamedKey(section, family, key, input)
-	}
 	w.cursor = w.rowIndexOf(section, want, input)
 	return true
+}
+
+// structuralNewKey predicts a committed structural add's row key (the
+// addPath scopes it the same way the mutation did).
+func structuralNewKey(family, addPath, input string) string {
+	if family == profile.FamilySystemd {
+		if addPath == "" {
+			return strings.TrimSpace(input)
+		}
+		name, _, _ := strings.Cut(input, "=")
+		return pathKey(addPath, strings.TrimSpace(name))
+	}
+	return input
 }
 
 // renamedKey computes a row's key after an edit committed input over it.
@@ -329,6 +445,8 @@ func addFamily(section string) string {
 		return profile.FamilyHooks
 	case "links":
 		return profile.FamilyDotfiles
+	case "systemd.units":
+		return profile.FamilySystemd
 	}
 	return ""
 }
@@ -500,6 +618,20 @@ func (w *workspaceModel) removeRow() {
 		}
 	case profile.FamilyDotfiles:
 		delete(candidate.Dotfiles, row.key)
+	case profile.FamilySystemd:
+		if row.container {
+			delete(candidate.Systemd.Units, row.key)
+		} else {
+			parts := splitPath(row.key)
+			if len(parts) != 2 {
+				return
+			}
+			unit := candidate.Systemd.Units[parts[0]]
+			if unit != nil {
+				delete(unit, parts[1])
+				candidate.Systemd.Units[parts[0]] = unit
+			}
+		}
 	default:
 		return
 	}
@@ -556,30 +688,37 @@ func newRowKey(section, input string) string {
 // --- Compositor-side editing actions ---
 
 // startEdit opens the field input on the cursor row (enter/e). Read-only
-// rows and rows without metadata refuse silently — the row already shows
-// everything it can.
+// rows, container rows, and rows without metadata refuse silently — the
+// row already shows everything it can.
 func (m *Compositor) startEdit() {
 	if m.ws.cursor >= len(m.ws.rows) {
 		return
 	}
 	row := m.ws.rows[m.ws.cursor]
-	if row.family == "" {
+	if row.family == "" || row.container {
 		return
 	}
 	m.ws.editing = &wsEdit{row: m.ws.cursor, input: []rune(row.value), cur: len([]rune(row.value))}
 }
 
 // startAdd opens the synthetic new-row input for the cursor's section
-// (a). Sections without an add grammar refuse.
+// (a). Sections without an add grammar refuse. A structural add lands
+// beneath the cursor row's entry: a unit container adds the unit, a
+// directive row adds a directive into its unit.
 func (m *Compositor) startAdd() {
 	if m.ws.cursor >= len(m.ws.rows) {
 		return
 	}
-	section := m.ws.rows[m.ws.cursor].section
+	row := m.ws.rows[m.ws.cursor]
+	section := row.section
 	if !addable(section) || m.ws.schemaErr != nil {
 		return
 	}
-	m.ws.editing = &wsEdit{row: m.ws.cursor, add: true, section: section}
+	e := &wsEdit{row: m.ws.cursor, add: true, section: section}
+	if row.family == profile.FamilySystemd && !row.container {
+		e.addPath = splitPath(row.key)[0]
+	}
+	m.ws.editing = e
 }
 
 // editKey routes one key to the active field input: runes insert at the
@@ -626,7 +765,7 @@ func (m *Compositor) editKey(k tea.KeyPressMsg) tea.Cmd {
 		row := m.ws.rows[e.row]
 		e.err = validateField(row.family, row.key, e.inputString())
 	} else {
-		e.err = validateField(addFamily(e.section), "new", e.inputString())
+		e.err = validateAdd(addFamily(e.section), e.addPath, e.inputString())
 	}
 	return nil
 }
@@ -676,7 +815,7 @@ func (m *Compositor) confirmRemoveRow() {
 	}
 	row := m.ws.rows[m.ws.cursor]
 	switch row.family {
-	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles:
+	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles, profile.FamilySystemd:
 	default:
 		return
 	}

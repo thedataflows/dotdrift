@@ -33,3 +33,7 @@ Each task: write failing tests first, then implement.
 * [T-tui-palette](t-tui-palette.md)
 * [T-tui-keymap](t-tui-keymap.md)
 * [T-tui-cleanup](t-tui-cleanup.md)
+* [T-tui-structural-systemd](t-tui-structural-systemd.md)
+* [T-tui-structural-entries](t-tui-structural-entries.md)
+* [T-tui-structural-when](t-tui-structural-when.md)
+* [T-tui-structural-cleanup](t-tui-structural-cleanup.md)

@@ -1,0 +1,28 @@
+ dotdrift · $PROFILE · host myhost · user cri
+╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
+│MODULES                   ││demo  [base]                                                      │
+│▸ demo                    ││meta                                                              │
+│                          ││  id demo                                                         │
+│                          ││  description                                                     │
+│                          ││  scope user                                                      │
+│                          ││packages                                                          │
+│                          ││  (none)                                                          │
+│                          ││links                                                             │
+│                          ││  (none)                                                          │
+│                          ││writes                                                            │
+│                          ││  (none)                                                          │
+│                          ││when                                                              │
+│                          ││  (none)                                                          │
+│                          ││hooks                                                             │
+│                          ││  (none)                                                          │
+│                          ││systemd.units                                                     │
+│                          ││  backup.timer                                                    │
+│                          ││    OnBootSec = 30                                                │
+│                          ││  demo.service                                                    │
+│                          ││    Description = "demo unit"                                     │
+│                          ││    Service = { ExecStart = "/usr/bin/demo", Restart = "on-failure│
+│                          ││tools                                                             │
+│                          ││  (none)                                                          │
+╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+
+ j scroll down • k scroll up • enter edit field • / palette • ? help • q quit

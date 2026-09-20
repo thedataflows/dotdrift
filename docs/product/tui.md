@@ -92,9 +92,15 @@ view stack wholesale). Its parts:
   (`e` on a line); a repair that parses unlocks the structured surface,
   and its save sends the whole repaired file as the raw candidate
   (`SaveRequest.Raw` — the splice step swaps out, every other pipeline
-  check stands). Structural families beyond links/writes (systemd units,
-  secrets, mounts, smb) stay read-only rows here; their 0065 custom
-  editors remain in the M14 shell until T-tui-cleanup.
+  check stands). Secrets, mounts, smb, and nested when groups remain
+  read-only rows until their 0074 tasks land.
+- **Structural editing** (issue 0074, landing task by task). The
+  structural families join the inline grammar as container + field rows:
+  a systemd unit is a container row (d removes with confirm, `a` adds a
+  unit by name) whose directives render beneath it as indented rows;
+  directive values are typed TOML — `ExecStart = /usr/bin/demo` needs no
+  quoting, while `"x"`, `30`, `[a, b]`, and inline tables land with their
+  TOML types.
 - **The modal family** (T-tui-modals). One confirm component — question
   title, consequence body with full target identity, `y` confirms and
   every other key (or `esc`) cancels — backs dirty-quit (`q` with
@@ -189,6 +195,6 @@ Apply runs **inside** the shell, over the service apply session
 # Fog
 
 Previewing a *different* account's resolution, an undo system, and a
-command-line-in-the-TUI stay out. Structural-section editing (systemd
-units, secrets, mounts, smb, nested when trees) is issue
-[0074](../issues/0074-structural-section-editing.md).
+command-line-in-the-TUI stay out. Structural-section editing (secrets,
+mounts, smb, nested when trees — systemd units have landed) continues
+under issue [0074](../issues/0074-structural-section-editing.md).

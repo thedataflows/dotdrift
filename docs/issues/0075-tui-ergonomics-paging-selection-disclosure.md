@@ -9,7 +9,8 @@ timestamp: 2026-09-16T00:00:00Z
 # ISSUE 0075: TUI ergonomics round — paging, visible selection, render-what-is disclosure
 
 - **Type**: task
-- **Status**: in-progress
+- **Status**: done
+- **Closing commits**: 4bf07a6, 43f87b4, a8050e3
 
 ## Context
 
@@ -67,18 +68,35 @@ Three tasks, TDD-first, one commit each:
 
 ## Acceptance Criteria
 
-- [ ] pgup/pgdown/home/end work in the nav and the workspace; the
-      workspace's visible window follows the cursor.
-- [ ] The cursor row carries a bar + accent text everywhere a cursor
+- [x] pgup/pgdown/home/end work in the nav and the workspace; the
+      workspace's visible window follows the cursor. (`TestNav_pageKeys`,
+      `TestWorkspace_pageKeysFollowTheCursor` — the window assertions
+      failed against the pre-fix offset behavior.)
+- [x] The cursor row carries a bar + accent text everywhere a cursor
       exists; the new keys appear in the footer and `?` help from the
-      one binding table.
-- [ ] A module surface shows only set values plus section headers; the
+      one binding table. (`TestTheme_cursorRow` pins the treatment and
+      the column alignment; `TestNav_cursorRowBar`,
+      `TestWorkspace_cursorRowBar`, `TestPalette_cursorRowBar`,
+      `TestWritesMenu_cursorRowBar`, `TestManage_cursorRowBar`;
+      `TestKeys_noOrphanedBindings` pins the eight new entries.)
+- [x] A module surface shows only set values plus section headers; the
       when tree shows set leaves and existing groups only; empty
-      sections render the header alone.
-- [ ] Everything hidden stays reachable through the add grammar; adds
+      sections render the header alone. (`TestWorkspace_disclosureRendersOnlySet`,
+      `TestWhen_treeRenders`, `TestEntries_sectionsReplaceOther`'s
+      disclosed counts.)
+- [x] Everything hidden stays reachable through the add grammar; adds
       and clears round-trip through the encoders with the splice
       guarantees (contract 19); saves refuse structural gaps as before.
-- [ ] Goldens regenerated and eyeballed; `go test ./...` green per task.
+      (`TestWhen_headerAddsRootLeaf`, `TestWhen_groupAddNested`,
+      `TestWhen_notAddAndDuplicateRefuse`, `TestWhen_emptyGroupBlocksSave`,
+      `TestSecrets_containerFieldAdd`, `TestSmb_containerFieldAdd`,
+      `TestSystemd_containerFieldAdd`, `TestSmb_scalarAndShareEdits`,
+      `TestMounts_addBlocksSaveUntilFilled`, `TestSecrets_envEditAndBool`'s
+      cleared-bool row, `TestWhen_groupLeafEdit`'s cleared leaf.)
+- [x] Goldens regenerated and eyeballed; `go test ./...` green per task.
+      (Final tree: 20 packages ok / 0 FAIL with `-count=1`, `go vet`
+      clean, gofmt clean on touched files, golangci-lint 0 issues, 132
+      tui tests passing.)
 
 ## Out of Scope
 

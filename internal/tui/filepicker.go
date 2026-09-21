@@ -443,8 +443,10 @@ func (p *filePicker) locKey(k tea.KeyPressMsg) {
 }
 
 // locEnter resolves the location bar: a directory navigates, a file
-// picks where the mode allows files, and a not-yet-existing leaf picks
-// where the field creates files (its parent must exist).
+// picks where the mode allows files, and a not-yet-existing path picks
+// as typed — it need not exist, not even its parents (a link target to
+// create, a server-side share path); existence rules belong to the
+// field's commit validation, which renders its refusal in the modal.
 func (p *filePicker) locEnter() {
 	home, _ := os.UserHomeDir()
 	s := expandHome(strings.TrimSpace(string(p.loc)), home)
@@ -464,14 +466,6 @@ func (p *filePicker) locEnter() {
 		p.locating = false
 		p.pick(s)
 	default:
-		// Not found: a typed leaf is a valid pick wherever the field
-		// may name something new — a file to write, a mountpoint or
-		// share directory to create — as long as its parent exists
-		// (a typo in the path's spine refuses).
-		if pst, perr := os.Stat(filepath.Dir(s)); perr != nil || !pst.IsDir() {
-			p.err = "no such directory: " + filepath.Dir(s)
-			return
-		}
 		p.locating = false
 		p.pick(s)
 	}

@@ -158,9 +158,11 @@ view stack wholesale). Its parts:
   dotfiles behind `.`) with arrows/pgup/pgdn/home/end, `/` filtering
   the current listing, `enter` picking per mode, `ctrl+enter` picking
   the shown directory, and a `ctrl+l` location bar for typed or pasted
-  paths — tilde expands, and a not-yet-existing file or directory name
-  is accepted while its parent exists (the escape hatch for new
-  mountpoints and device paths). The picker opens on the field's
+  paths — tilde expands, and a typed path is accepted exactly as typed:
+  it need not exist, not even its parents (0099; link targets to
+  create, server-side share paths) — existence rules belong to the
+  field's commit validation, which renders its refusal in the modal.
+  The picker opens on the field's
   current value (0096): a valid path shows its parent directory with
   its own entry selected — enter re-confirms it, the siblings are one
   keystroke away — a missing path climbs to the nearest existing

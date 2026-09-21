@@ -310,12 +310,6 @@ func TestPicker_locationBarRefusesBadPaths(t *testing.T) {
 	pkey(p, "enter")
 	require.False(t, p.finished())
 	require.NotEmpty(t, p.err, "picking a file in dirs mode names the problem")
-
-	pkey(p, "ctrl+u")
-	ptype(p, filepath.Join(root, "no", "such", "place"))
-	pkey(p, "enter")
-	require.False(t, p.finished())
-	require.NotEmpty(t, p.err, "a typo in the path's spine names the problem")
 	require.True(t, p.locating, "the bar stays open on a refusal")
 }
 
@@ -330,6 +324,19 @@ func TestPicker_locationBarAcceptsNewDirWithExistingParent(t *testing.T) {
 	require.True(t, p.finished(),
 		"a typed directory that does not exist yet is a valid pick (mountpoints, share dirs) when its parent exists")
 	require.Equal(t, fresh, p.picked)
+}
+
+func TestPicker_locationBarAcceptsPathWithMissingParents(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindEither, root, func(string) string { return "" })
+	pkey(p, "ctrl+l")
+	pkey(p, "ctrl+u")
+	deep := filepath.Join(root, "no", "such", "place")
+	ptype(p, deep)
+	pkey(p, "enter")
+	require.True(t, p.finished(),
+		"a typed path need not exist — not even its parents (link targets, server-side paths); commit validation owns existence rules")
+	require.Equal(t, deep, p.picked)
 }
 
 func TestPicker_locationBarExpandsTilde(t *testing.T) {

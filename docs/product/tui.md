@@ -127,7 +127,12 @@ view stack wholesale). Its parts:
   the tier-2 cross-check block in place; a disk-hash conflict opens a
   reload-or-keep modal); `D` discards with a confirm naming module,
   layer, and change count; `a` opens a labeled add form for the section
-  under the cursor (0077), `d` removes one with confirm. Enter is the
+  under the cursor (0077), `d` removes the row's thing with confirm
+  (0087) — an entry, a group, a scalar, or one field of an entry; the
+  uniform rule covers packages, tools, hooks, links/writes rows, systemd
+  units and their directives, secrets/mounts/smb containers and fields,
+  smb scalars, and when groups and leaves (meta rows, headers, and
+  hints stay dead to `d`). Enter is the
   primary action in context (0078): on a row that owns no field — an
   empty section's header or a structural container — enter falls back
   to the same add form `a` opens, so the section under the cursor is
@@ -156,7 +161,9 @@ view stack wholesale). Its parts:
   share names, and `a` on when offers leaf or `and`/`or`/`not` (nesting
   deeper) at any depth. Editing a field to its zero value clears it and
   the row
-  disappears (required fields refuse to empty); a container with
+  disappears (required fields refuse to empty); `d` on the field row
+  unsets it directly, and removing a required field leaves an invalid
+  entry the save names (0087). A container with
   nothing set yet shows a dim `· a adds "field = value"` hint. Entries
   resolve could never accept are refused at save (missing mount
   source/destination/type, empty share path, an empty when group —

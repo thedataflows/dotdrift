@@ -61,6 +61,11 @@ type wsRow struct {
 	key        string
 	value      string
 	container  bool
+	// noEdit marks a row that carries a family for removal and marking
+	// but never opens a field edit (a block write: its payload is
+	// multi-line file text, not a field). enter falls back to the add
+	// form; d removes the entry (0087).
+	noEdit bool
 }
 
 type workspaceModel struct {
@@ -309,7 +314,7 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			text += " " + th.disabledMark.Render("◂▸")
 		case r.container:
 			text += " " + th.disabledMark.Render("＋")
-		case r.family != "":
+		case r.family != "" && !r.noEdit:
 			text += " " + th.disabledMark.Render("✎")
 		}
 	}
@@ -416,7 +421,8 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			writes = append(writes, entry("writes", target+" (edit: line)",
 				profile.FamilyDotfiles, target, d.Line))
 		case d.Block != "":
-			writes = append(writes, entry("writes", target+" (edit: block)", "", target, ""))
+			writes = append(writes, wsRow{section: "writes", text: target + " (edit: block)",
+				family: profile.FamilyDotfiles, key: target, noEdit: true})
 		}
 	}
 	section("links", links)

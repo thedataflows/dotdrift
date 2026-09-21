@@ -8,10 +8,10 @@ package tui
 // decode) runs on every commit, so a draft can never hold unparseable
 // text. Semantic tier-1 errors stage visibly and block the save; the
 // save itself is the untouched 0065 pipeline (family replacements, or
-// the whole-file raw candidate for a repair). Structural families beyond
-// links/writes (systemd units, secrets, mounts, smb) stay read-only rows
-// here; their 0065 custom editors remain reachable in the M14 shell
-// until T-tui-cleanup.
+// the whole-file raw candidate for a repair). The structural families
+// (systemd units, secrets, mounts, smb, when) edit in place since 0074;
+// removal is uniform since 0087: d removes the row's thing — an entry,
+// a group, a scalar, or one field of an entry.
 
 import (
 	"errors"
@@ -889,18 +889,101 @@ func (w *workspaceModel) removeRow() {
 	case profile.FamilySecrets:
 		if row.container {
 			delete(candidate.Secrets, row.key)
+			break
 		}
+		parts := splitPath(row.key)
+		if len(parts) != 2 {
+			return
+		}
+		s := candidate.Secrets[parts[0]]
+		switch parts[1] {
+		case "env":
+			s.Env = ""
+		case "description":
+			s.Description = ""
+		case "allow_empty":
+			s.AllowEmpty = false
+		default:
+			return
+		}
+		candidate.Secrets[parts[0]] = s
 	case profile.FamilyMounts:
 		if row.container {
 			delete(candidate.Mounts, row.key)
+			break
 		}
+		parts := splitPath(row.key)
+		if len(parts) != 2 {
+			return
+		}
+		mt := candidate.Mounts[parts[0]]
+		switch parts[1] {
+		case "source":
+			mt.Source = ""
+		case "destination":
+			mt.Destination = ""
+		case "type":
+			mt.Type = ""
+		case "options":
+			mt.Options = nil
+		case "startat":
+			mt.StartAt = ""
+		case "state":
+			mt.State = ""
+		default:
+			return
+		}
+		candidate.Mounts[parts[0]] = mt
 	case profile.FamilySmb:
 		if row.container {
 			delete(candidate.Smb.Shares, row.key)
+			break
+		}
+		switch parts := splitPath(row.key); len(parts) {
+		case 1: // a section scalar
+			switch parts[0] {
+			case "group":
+				candidate.Smb.Group = ""
+			case "users":
+				candidate.Smb.Users = nil
+			case "avahi":
+				candidate.Smb.Avahi = nil
+			default:
+				return
+			}
+		case 2: // one field of a share
+			sh := candidate.Smb.Shares[parts[0]]
+			switch parts[1] {
+			case "path":
+				sh.Path = ""
+			case "comment":
+				sh.Comment = ""
+			case "valid_users":
+				sh.ValidUsers = ""
+			case "writable":
+				sh.Writable = false
+			case "public":
+				sh.Public = false
+			default:
+				return
+			}
+			candidate.Smb.Shares[parts[0]] = sh
+		default:
+			return
 		}
 	case profile.FamilyWhen:
 		if !row.container {
-			return // leaves clear by editing them to empty
+			// A leaf clears to its zero value (0087) — the same write
+			// an edit-to-empty commits; the encoder drops it.
+			segs := splitPath(row.key)
+			node := whenNode(&candidate.When, segs[:len(segs)-1])
+			if node == nil {
+				return
+			}
+			if err := setWhenLeaf(node, segs[len(segs)-1], ""); err != nil {
+				return
+			}
+			break
 		}
 		parts := splitPath(row.key)
 		if parts[len(parts)-1] == "not" {
@@ -996,7 +1079,7 @@ func (m *Compositor) startEdit() {
 		return
 	}
 	row := m.ws.rows[m.ws.cursor]
-	if row.family == "" || row.container {
+	if row.family == "" || row.container || row.noEdit {
 		m.startAdd()
 		return
 	}
@@ -1247,19 +1330,18 @@ func (m *Compositor) confirmDiscard() {
 	})
 }
 
-// confirmRemoveRow pushes the remove-row confirm (d) for table entry
-// rows.
+// confirmRemoveRow pushes the remove-row confirm (d). The rule is
+// uniform (0087): d removes the row's thing — an entry, a group, a
+// scalar, or one field of an entry. meta rows, headers, and hints carry
+// no family and stay dead to d.
 func (m *Compositor) confirmRemoveRow() {
 	if m.ws.cursor >= len(m.ws.rows) || m.ws.schemaErr != nil {
 		return
 	}
 	row := m.ws.rows[m.ws.cursor]
 	switch row.family {
-	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles, profile.FamilySystemd:
-	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen:
-		if !row.container {
-			return // d removes entries and groups, not their fields
-		}
+	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles, profile.FamilySystemd,
+		profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen:
 	default:
 		return
 	}

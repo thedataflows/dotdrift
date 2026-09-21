@@ -585,10 +585,13 @@ func TestWhen_groupRemove(t *testing.T) {
 	c = cpress(c, "y")
 	require.Len(t, c.ws.draft.cfg.When.And, 1, "y removes the and group")
 
-	// d on a leaf row refuses — leaves clear by editing to empty.
+	// d on a leaf row prompts and clears the leaf too (0087) — no
+	// silent no-op beside the group removal.
 	wsToKey(t, c, pathKey("and", "0", "gpu"))
-	cpress(c, "d")
-	require.Empty(t, c.modals, "a leaf row has no remove confirm")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "a leaf row removes with the same confirm")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.When.And[0].GPU, "y clears the leaf")
 }
 
 func TestWhen_emptyGroupBlocksSave(t *testing.T) {
@@ -784,4 +787,104 @@ func TestSystemd_unitNameTier1(t *testing.T) {
 	require.False(t, f.finished(), "an invalid unit name refuses to commit")
 	require.Contains(t, f.view(100, 30), "name", "tier-1 names the problem")
 	require.Empty(t, c.ws.draftEdits(), "the refused add staged nothing")
+}
+
+// --- 0087: d removes the row's thing, everywhere ---
+//
+// The 0074 container-only rule left d a silent no-op on smb scalars and
+// every structural field row; the writes block rows carried no family at
+// all. The uniform rule: d removes the row's thing — an entry, a group,
+// a scalar, or one field of an entry.
+
+func TestRemove_smbScalarRows(t *testing.T) {
+	_, c := entriesShell(t)
+	wsToKey(t, c, "group", "smb")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before clearing the scalar")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.Smb.Group, "y clears the group scalar")
+	require.NotContains(t, c.ws.placeholderOrBody(), "group media", "the row disappears")
+
+	wsToKey(t, c, "users", "smb")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1)
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.Smb.Users, "y clears the users scalar")
+
+	// One undo step restores the removal.
+	c.undoEdit()
+	require.Equal(t, []string{"cri", "root"}, c.ws.draft.cfg.Smb.Users, "undo restores the scalar")
+}
+
+func TestRemove_smbShareField(t *testing.T) {
+	_, c := entriesShell(t)
+	wsToKey(t, c, pathKey("media", "comment"), "smb")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before unsetting the field")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.Smb.Shares["media"].Comment, "y unsets the field")
+
+	// Removing the required path leaves an invalid share; the save
+	// cross-check names it (undo restores).
+	wsToKey(t, c, pathKey("media", "path"), "smb")
+	c = cpress(c, "d")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.Smb.Shares["media"].Path)
+	c, cmd := cstep(c, keyCtrl('s'))
+	require.Nil(t, cmd, "the invalid share blocks the save")
+	require.Contains(t, c.message, "path is required")
+}
+
+func TestRemove_secretAndMountFields(t *testing.T) {
+	_, c := entriesShell(t)
+	wsToKey(t, c, pathKey("API_KEY", "description"), "secrets")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before unsetting the secret field")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.Secrets["API_KEY"].Description)
+
+	wsToKey(t, c, pathKey("media", "options"), "mounts")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before unsetting the mount field")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.Mounts["media"].Options)
+}
+
+func TestRemove_whenLeaf(t *testing.T) {
+	_, c := whenShell(t, whenFixture)
+	wsToKey(t, c, "hosts", "when")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before clearing the leaf")
+	c = cpress(c, "y")
+	require.Empty(t, c.ws.draft.cfg.When.Hosts, "y clears the leaf")
+}
+
+func TestRemove_writesBlockRow(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
+	c = cpress(c, "tab")
+
+	// enter never opens a text edit on a block write (committing there
+	// would write into Source) — the add-form fallback stands.
+	wsToKey(t, c, "~/.profile", "writes")
+	c = cpress(c, "enter")
+	require.Nil(t, c.ws.editing, "a block write never opens a text edit")
+	cpress(c, "esc") // close the fallback
+
+	// d removes the entry with the same confirm as every other section.
+	wsToKey(t, c, "~/.profile", "writes")
+	c = cpress(c, "d")
+	require.Len(t, c.modals, 1, "d asks before removing the block entry")
+	c = cpress(c, "y")
+	require.NotContains(t, c.ws.draft.cfg.Dotfiles, "~/.profile", "y removes the entry")
+}
+
+func TestRemove_metaHeadersAndHintsStayDead(t *testing.T) {
+	_, c := entriesShell(t)
+	wsToKey(t, c, "description")
+	cpress(c, "d")
+	require.Empty(t, c.modals, "meta rows have no remove confirm (identity, not options)")
+
+	wsToHeader(t, c, "secrets")
+	cpress(c, "d")
+	require.Empty(t, c.modals, "section headers have no remove confirm")
 }

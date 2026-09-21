@@ -187,6 +187,14 @@ func (a *ConfigArea) WriteModuleLayer(req SaveRequest) (*SaveResult, error) {
 	if req.Raw != nil {
 		spliced = *req.Raw
 	}
+	// 0086: a save always lands a file ending in a newline. The
+	// splicer's verbatim contract preserves the baseline's final newline
+	// state (or lack of it) and the raw candidate is the user's text
+	// as-is — the write boundary is where the guarantee lives. Append
+	// only: an existing trailing blank line is the author's, keep it.
+	if spliced != "" && !strings.HasSuffix(spliced, "\n") {
+		spliced += "\n"
+	}
 
 	// The round-trip proof: what the splice produced must be a valid
 	// module.toml under the strict schema.

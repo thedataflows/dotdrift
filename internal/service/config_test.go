@@ -106,6 +106,71 @@ func TestWriteModuleLayer_savePipeline(t *testing.T) {
 	require.Equal(t, []string{"ripgrep", "bat"}, r2.Config.Packages.Present)
 }
 
+func TestWriteModuleLayer_trailingNewlineGuaranteed(t *testing.T) {
+	// 0086: a save always lands a file ending in exactly one newline,
+	// whatever the baseline or the candidate carried.
+
+	// Splice path: the baseline file lacks the trailing newline.
+	root, dir := configFixture(t)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(
+		"id = \"editor\"\napp = \"editor\""), 0o644))
+	area := configArea(root)
+	r, err := area.ReadModuleLayer(dir)
+	require.NoError(t, err)
+	res, err := area.WriteModuleLayer(SaveRequest{
+		Dir:      dir,
+		BaseHash: r.Hash,
+		Replacements: map[string]string{
+			FamilyPackages: profile.EncodePackagesSection(profile.PackageEntries([]string{"ripgrep"}), nil),
+		},
+	})
+	require.NoError(t, err)
+	raw, err := os.ReadFile(filepath.Join(dir, "module.toml"))
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(string(raw), "\n"), "the saved file ends in a newline")
+	require.False(t, strings.HasSuffix(string(raw), "\n\n"), "exactly one")
+	require.Equal(t, string(raw), res.Raw, "the result carries the written bytes")
+	require.Equal(t, RawHash(raw), res.Hash, "the rebase hash matches the written bytes")
+
+	// Raw-repair path: the candidate itself lacks the trailing newline.
+	root2, dir2 := configFixture(t)
+	area2 := configArea(root2)
+	r2, err := area2.ReadModuleLayer(dir2)
+	require.NoError(t, err)
+	candidate := "id = \"editor\"\napp = \"editor\""
+	res2, err := area2.WriteModuleLayer(SaveRequest{
+		Dir:      dir2,
+		BaseHash: r2.Hash,
+		Raw:      &candidate,
+	})
+	require.NoError(t, err)
+	raw2, err := os.ReadFile(filepath.Join(dir2, "module.toml"))
+	require.NoError(t, err)
+	require.Equal(t, candidate+"\n", string(raw2))
+	require.Equal(t, string(raw2), res2.Raw)
+
+	// Empty baseline: a layer with no module.toml yet saves one WITH the
+	// trailing newline.
+	root3 := t.TempDir()
+	dir3 := filepath.Join(root3, "modules", "fresh")
+	require.NoError(t, os.MkdirAll(dir3, 0o755))
+	area3 := configArea(root3)
+	r3, err := area3.ReadModuleLayer(dir3)
+	require.NoError(t, err)
+	_, err = area3.WriteModuleLayer(SaveRequest{
+		Dir:      dir3,
+		BaseHash: r3.Hash,
+		Replacements: map[string]string{
+			FamilyKeys: profile.EncodeKeysSection(profile.ModuleConfig{ID: "fresh", App: "fresh"}),
+		},
+	})
+	require.NoError(t, err)
+	raw3, err := os.ReadFile(filepath.Join(dir3, "module.toml"))
+	require.NoError(t, err)
+	require.True(t, strings.HasSuffix(string(raw3), "\n"), "a fresh module.toml ends in a newline")
+	require.False(t, strings.HasSuffix(string(raw3), "\n\n"))
+}
+
 func TestWriteModuleLayer_brokenFileReadOnly(t *testing.T) {
 	root, dir := configFixture(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(

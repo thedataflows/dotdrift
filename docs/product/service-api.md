@@ -234,11 +234,13 @@ importing any UI package (0061-D4, 0064-D9):
   `Start`, or the area's read-only `Preview` before anything exists — so
   a gate can say "N steps will take the terminal" before anything runs.
   Both walk the same `buildSteps`/`RequiresTTY` path, so the
-  classification cannot drift from behavior. The
-  `interactive = true` opt-in at config-write keys on **handover
-  availability** (`HandoverAvailable`), not raw stdin state: the CLI
-  passes its own stdin reality, a UI that can hand the terminal over
-  passes true.
+  classification cannot drift from behavior. The hook tasks are always
+  generated `interactive = true` (issue 0088) — mise degenerates the key
+  to plain execution without a terminal — while **handover availability**
+  (`HandoverAvailable`, not raw stdin state) decides whether this
+  session's hook children run through the handover seam: the CLI passes
+  its own stdin reality, a UI that can hand the terminal over passes
+  true.
 
 ## Cancel and results
 

@@ -73,5 +73,6 @@ use, plus emergent features and chores. Planned work lives in
 | [0083](0083-ponytail-audit-application.md) | Apply the ponytail over-engineering audit — delete the dead code, one lipgloss | done | medium |
 | [0084](0084-restore-dialog-plan-never-lands.md) | Restore dialog's plan resolution never lands — restorePlanMsg has no production consumer | done | high |
 | [0085](0085-writes-dialogs-refresh-the-nav.md) | Writes dialogs refresh the nav — the message-flow sweep | done | medium |
-| [0086](0086-module-toml-save-trailing-newline.md) | Saving a module.toml does not guarantee a trailing newline | open | medium |
-| [0087](0087-tui-remove-row-dead-on-structural-rows.md) | TUI `d` (remove row) is dead on smb scalars/fields, secrets/mounts fields, when leaves, and writes block rows | open | medium |
+| [0086](0086-module-toml-save-trailing-newline.md) | Saving a module.toml does not guarantee a trailing newline | done | medium |
+| [0087](0087-tui-remove-row-dead-on-structural-rows.md) | TUI `d` (remove row) is dead on smb scalars/fields, secrets/mounts fields, when leaves, and writes block rows | done | medium |
+| [0088](0088-hook-tasks-always-interactive.md) | Hook tasks are always generated `interactive = true`, not gated on the writing session's TTY | done | high |

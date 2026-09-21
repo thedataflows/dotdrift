@@ -985,6 +985,9 @@ func (m *Compositor) startAdd() {
 	}
 	section, addPath := addScope(row)
 	title, rows, build, relabel := addFormSpec(m.ws.moduleID, section, addPath)
+	if rows == nil {
+		return
+	}
 	form := newAddForm(m.th, title, rows, build, func(input string) string {
 		return m.commitAddAt(m.ws.cursor, section, addPath, input)
 	})

@@ -128,8 +128,8 @@ func TestAddForm_smbWhatRelabelsValue(t *testing.T) {
 	view := f.view(100, 30)
 	require.Contains(t, view, "what")
 	require.Contains(t, view, "share name", "the default what is a share")
-	c = cpress(c, "right") // group
-	c = cpress(c, "right") // users
+	cpress(c, "right") // group
+	cpress(c, "right") // users
 	view = f.view(100, 30)
 	require.Contains(t, view, "value", "a scalar what takes a plain value")
 }

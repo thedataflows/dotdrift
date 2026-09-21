@@ -151,10 +151,8 @@ func addScope(row wsRow) (section, addPath string) {
 
 // addFormSpec is one section's form: title, rows, a grammar
 // synthesizer, and an optional relabel hook. The identity row leads (it
-// takes the opening focus and the typing), choices follow. Sections
-// without a structured spec fall back to a single free-text row labeled
-// with the section's own grammar hint — validateAdd's refusal text for
-// the empty input.
+// takes the opening focus and the typing), choices follow. The switch
+// is exhaustive over addFamily's sections; a nil rows slice refuses.
 func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
 	switch section {
 	case "packages":
@@ -277,9 +275,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 				}
 			}
 	}
-	return "add · " + section + " · " + moduleID,
-		[]dlgRow{fieldRow(&dlgField{label: section, hint: validateAdd(addFamily(section), addPath, "")})},
-		func(rows []dlgRow) string { return rows[0].field.String() }, nil
+	return "", nil, nil, nil
 }
 
 // fieldValuePair is a container's `field = value` form: the field is a

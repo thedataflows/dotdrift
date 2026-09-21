@@ -3,26 +3,26 @@
 │MODULES                   ││demo  [base]  · meta                                              │
 ││ ▸ demo                  ││meta                                                              │
 │                          │││ id demo                                                         │
-│                          ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││  + neovim                                                        │
-│                          ││  + ripgrep                                                       │
-│                          ││  − emacs                                                         │
-│                          ││links                                                             │
-│                          ││  ~/.bashrc ← .bashrc (symlink)                                   │
-│                          ││writes                                                            │
-│                          ││  ~/.config/demo.toml (edit: line)                                │
+│                          ││  app demo-app ✎                                                  │
+│                          ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││  + neovim ✎                                                      │
+│                          ││  + ripgrep ✎                                                     │
+│                          ││  − emacs ✎                                                       │
+│                          ││links ＋                                                          │
+│                          ││  ~/.bashrc ← .bashrc (symlink) ✎                                 │
+│                          ││writes ＋                                                         │
+│                          ││  ~/.config/demo.toml (edit: line) ✎                              │
 │                          ││  ~/.profile (edit: block)                                        │
-│                          ││when                                                              │
-│                          ││  hosts myhost                                                    │
-│                          ││  os linux                                                        │
-│                          ││hooks                                                             │
-│                          ││  pre: echo pre                                                   │
-│                          ││  post: echo post                                                 │
-│                          ││systemd.units                                                     │
-│                          ││  demo.service                                                    │
+│                          ││when ＋                                                           │
+│                          ││  hosts myhost ✎                                                  │
+│                          ││  os linux ✎                                                      │
+│                          ││hooks ＋                                                          │
+│                          ││  pre: echo pre ✎                                                 │
+│                          ││  post: echo post ✎                                               │
+│                          ││systemd.units ＋                                                  │
+│                          ││  demo.service ＋                                                 │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / palette • ? help • q quit

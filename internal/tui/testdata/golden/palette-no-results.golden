@@ -3,12 +3,12 @@
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
 │  ▸ other                 │││ id demo                                                         │
-│  ▸ plain                 ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││  + neovim                                                        │
-│                          ││  + ripgrep                                                       │
+│  ▸ plain                 ││  app demo-app ✎                                                  │
+│                          ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││  + neovim ✎                                                      │
+│                          ││  + ripgrep ✎                                                     │
 │                       ╭─────────────────────────────────────────────────╮                    │
 │                       │                                                 │                    │
 │                       │  │/ zzzznothing▏                                │                    │
@@ -17,8 +17,8 @@
 │                       │    ctrl+n creates a module named «zzzznothing»  │                    │
 │                       │                                                 │                    │
 │                       ╰─────────────────────────────────────────────────╯                    │
-│                          ││mounts                                                            │
-│                          ││smb                                                               │
+│                          ││mounts ＋                                                         │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

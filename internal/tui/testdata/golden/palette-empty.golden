@@ -3,10 +3,10 @@
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
 │  ▸ other                 │││ id demo                                                         │
-│  ▸ plain                 ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
+│  ▸ plain                 ││  app demo-app ✎                                                  │
+│                          ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
 │                          ││  +╭──────────────────────────────────╮                           │
 │                          ││  +│                                  │                           │
 │                          ││lin│  │/ ▏                            │                           │
@@ -18,7 +18,7 @@
 │                          ││  n│    ◆ plain  module               │                           │
 │                          ││sec│                                  │                           │
 │                          ││mou╰──────────────────────────────────╯                           │
-│                          ││smb                                                               │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

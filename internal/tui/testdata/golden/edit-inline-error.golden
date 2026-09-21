@@ -3,23 +3,23 @@
 │MODULES                   ││demo  [base]  · packages                                          │
 ││ ▸ demo                  ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
+│                          ││  app demo-app ✎                                                  │
+│                          ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
 │                          │││ ▸ ▏                                                             │
 │                          ││    ✗ package name must not be empty                              │
-│                          ││  + ripgrep                                                       │
-│                          ││links                                                             │
-│                          ││writes                                                            │
-│                          ││when                                                              │
-│                          ││hooks                                                             │
-│                          ││systemd.units                                                     │
-│                          ││tools                                                             │
-│                          ││  node = 20                                                       │
-│                          ││secrets                                                           │
-│                          ││mounts                                                            │
-│                          ││smb                                                               │
+│                          ││  + ripgrep ✎                                                     │
+│                          ││links ＋                                                          │
+│                          ││writes ＋                                                         │
+│                          ││when ＋                                                           │
+│                          ││hooks ＋                                                          │
+│                          ││systemd.units ＋                                                  │
+│                          ││tools ＋                                                          │
+│                          ││  node = 20 ✎                                                     │
+│                          ││secrets ＋                                                        │
+│                          ││mounts ＋                                                         │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

@@ -3,26 +3,26 @@
 │MODULES                   ││demo  [base]  · when                                              │
 ││ ▸ demo                  ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          ││  description                                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││links                                                             │
-│                          ││writes                                                            │
-│                          ││when                                                              │
-│                          ││  hosts myhost                                                    │
-│                          ││  and[0]                                                          │
-│                          ││    os linux                                                      │
-│                          │││   gpu nvidia                                                    │
-│                          ││  and[1]                                                          │
-│                          ││    or[0]                                                         │
-│                          ││      hosts work                                                  │
-│                          ││    or[1]                                                         │
-│                          ││      kernel >= 6                                                 │
-│                          ││  not                                                             │
-│                          ││    packages emacs                                                │
-│                          ││hooks                                                             │
-│                          ││systemd.units                                                     │
-│                          ││tools                                                             │
+│                          ││  description  ✎                                                  │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││links ＋                                                          │
+│                          ││writes ＋                                                         │
+│                          ││when ＋                                                           │
+│                          ││  hosts myhost ✎                                                  │
+│                          ││  and[0] ＋                                                       │
+│                          ││    os linux ✎                                                    │
+│                          │││   gpu nvidia ✎                                                  │
+│                          ││  and[1] ＋                                                       │
+│                          ││    or[0] ＋                                                      │
+│                          ││      hosts work ✎                                                │
+│                          ││    or[1] ＋                                                      │
+│                          ││      kernel >= 6 ✎                                               │
+│                          ││  not ＋                                                          │
+│                          ││    packages emacs ✎                                              │
+│                          ││hooks ＋                                                          │
+│                          ││systemd.units ＋                                                  │
+│                          ││tools ＋                                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette • ? help • q quit

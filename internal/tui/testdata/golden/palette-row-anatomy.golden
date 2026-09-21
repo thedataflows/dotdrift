@@ -3,12 +3,12 @@
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
 │  ▸ other                 │││ id demo                                                         │
-│  ▸ plain                 ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││  + neovim                                                        │
-│                          ││  + ripgrep                                                       │
+│  ▸ plain                 ││  app demo-app ✎                                                  │
+│                          ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││  + neovim ✎                                                      │
+│                          ││  + ripgrep ✎                                                     │
 │                          ││lin╭──────────────────────────────────╮                           │
 │                          ││wri│                                  │                           │
 │                          ││whe│  │/ demo · host▏                 │                           │
@@ -16,9 +16,9 @@
 │                          ││sys│  │ ◆ demo · host myhost  module  │                           │
 │                          ││too│                                  │                           │
 │                          ││  n╰──────────────────────────────────╯                           │
-│                          ││secrets                                                           │
-│                          ││mounts                                                            │
-│                          ││smb                                                               │
+│                          ││secrets ＋                                                        │
+│                          ││mounts ＋                                                         │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

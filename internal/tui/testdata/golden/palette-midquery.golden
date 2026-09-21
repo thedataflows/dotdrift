@@ -3,11 +3,11 @@
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
 │  ▸ other                 │││ id demo                                                         │
-│  ▸ plain                 ││  app demo-app                                                    │
-│                          ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││  + neovim                                                        │
+│  ▸ plain                 ││  app demo-app ✎                                                  │
+│                          ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││  + neovim ✎                                                      │
 │                          ││  +╭──────────────────────────────────╮                           │
 │                          ││lin│                                  │                           │
 │                          ││wri│  │/ dem▏                         │                           │
@@ -17,8 +17,8 @@
 │                          ││too│    ◆ demo · host myhost  module  │                           │
 │                          ││  n│                                  │                           │
 │                          ││sec╰──────────────────────────────────╯                           │
-│                          ││mounts                                                            │
-│                          ││smb                                                               │
+│                          ││mounts ＋                                                         │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

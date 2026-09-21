@@ -4,21 +4,21 @@
 │  ▾ demo ●                ││meta                                                              │
 ││     base ●              │││ id demo                                                         │
 │      user cri            ││  app demo-app-next ●                                             │
-│  ▸ other                 ││  description the demo module                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││  + neovim                                                        │
-│                          ││  + ripgrep                                                       │
-│                          ││links                                                             │
-│                          ││writes                                                            │
-│                          ││when                                                              │
-│                          ││hooks                                                             │
-│                          ││systemd.units                                                     │
-│                          ││tools                                                             │
-│                          ││  node = 20                                                       │
-│                          ││secrets                                                           │
-│                          ││mounts                                                            │
-│                          ││smb                                                               │
+│  ▸ other                 ││  description the demo module ✎                                   │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││  + neovim ✎                                                      │
+│                          ││  + ripgrep ✎                                                     │
+│                          ││links ＋                                                          │
+│                          ││writes ＋                                                         │
+│                          ││when ＋                                                           │
+│                          ││hooks ＋                                                          │
+│                          ││systemd.units ＋                                                  │
+│                          ││tools ＋                                                          │
+│                          ││  node = 20 ✎                                                     │
+│                          ││secrets ＋                                                        │
+│                          ││mounts ＋                                                         │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

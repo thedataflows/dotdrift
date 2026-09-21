@@ -3,18 +3,18 @@
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
 │  ▸ plain                 │││ id demo                                                         │
-│                          ││  description                                                     │
-│                          ││  scope user                                                      │
-│                          ││packages                                                          │
-│                          ││links                                                             │
-│                          ││writes                                                            │
-│                          ││when                                                              │
-│                          ││hooks                                                             │
-│                          ││systemd.units                                                     │
-│                          ││tools                                                             │
-│                          ││secrets                                                           │
-│                          ││mounts                                                            │
-│                          ││smb                                                               │
+│                          ││  description  ✎                                                  │
+│                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
+│                          ││links ＋                                                          │
+│                          ││writes ＋                                                         │
+│                          ││when ＋                                                           │
+│                          ││hooks ＋                                                          │
+│                          ││systemd.units ＋                                                  │
+│                          ││tools ＋                                                          │
+│                          ││secrets ＋                                                        │
+│                          ││mounts ＋                                                         │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

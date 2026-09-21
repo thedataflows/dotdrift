@@ -303,16 +303,23 @@ func (w *workspaceModel) titleView(th theme) string {
 }
 
 // rowView renders one row (possibly several lines: the edit input and its
-// tier-1 error render in place).
+// tier-1 error render in place). Rows announce their gesture (0079
+// T-tui-marks), computed from the same registry that decides behavior so
+// the mark cannot lie: ✎ edits, ◂▸ cycles, ＋ grows. A committed edit's
+// ● replaces the mark.
 func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.header {
+		text := r.text
+		if addable(r.section) {
+			text += " " + th.disabledMark.Render("＋")
+		}
 		if i == w.cursor {
 			// A selectable header under the cursor renders the bar
 			// (0076) — an empty section's header is the way in, it has
 			// to say so.
-			return []string{th.cursorRow.MaxWidth(width).Render(" " + r.text)}
+			return []string{th.cursorRow.MaxWidth(width).Render(" " + text)}
 		}
-		return []string{th.sectionLabel.Render(r.text)}
+		return []string{th.sectionLabel.Render(text)}
 	}
 	if r.hint {
 		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}
@@ -323,6 +330,15 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	text := r.text
 	if w.rowDirty(r) {
 		text += " " + th.dirtyMark.Render("●")
+	} else {
+		switch {
+		case choiceSet(r) != nil:
+			text += " " + th.disabledMark.Render("◂▸")
+		case r.container:
+			text += " " + th.disabledMark.Render("＋")
+		case r.family != "":
+			text += " " + th.disabledMark.Render("✎")
+		}
 	}
 	if w.draft != nil {
 		if msg, bad := w.draft.errs[rowKey(r.family, r.key)]; bad {

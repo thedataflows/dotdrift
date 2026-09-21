@@ -165,7 +165,11 @@ view stack wholesale). Its parts:
   its own entry selected — enter re-confirms it, the siblings are one
   keystroke away — a missing path climbs to the nearest existing
   ancestor, and a dotfile path reveals hidden entries so it can be
-  selected. Form fields that take paths — onboard
+  selected. The listing's first row is `../` whenever the shown
+  directory has a parent (0097): enter and right on it navigate up
+  like left (it never picks, not even in dirs mode), home and
+  wheel-up reach it, and the default cursor skips it, landing on the
+  first real entry. Form fields that take paths — onboard
   `paths`, the link forms' `source`, the writes add form's `target`,
   the mounts/smb field forms' path values — browse with `ctrl+o`
   instead, because enter already means *commit the form*; the onboard

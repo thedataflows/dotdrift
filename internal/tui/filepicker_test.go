@@ -179,17 +179,89 @@ func TestPicker_pagingAndEnds(t *testing.T) {
 	pkey(p, "end")
 	require.Equal(t, len(p.visible())-1, p.sel)
 	pkey(p, "home")
-	require.Equal(t, 0, p.sel)
+	require.Equal(t, -1, p.sel, "home reaches the ../ row above the first entry (0097)")
 	pkey(p, "pgdown")
-	require.Equal(t, 10, p.sel, "pgdn steps one page")
+	require.Equal(t, 9, p.sel, "pgdn steps one page from the up-dir row")
 	pkey(p, "pgup")
-	require.Equal(t, 0, p.sel)
+	require.Equal(t, -1, p.sel)
 	pkey(p, "j")
-	require.Equal(t, 1, p.sel)
+	require.Equal(t, 0, p.sel, "j from ../ lands on the first entry")
 	pkey(p, "k")
-	require.Equal(t, 0, p.sel)
-	pkey(p, "k") // clamps at the top
-	require.Equal(t, 0, p.sel)
+	require.Equal(t, -1, p.sel)
+	pkey(p, "k") // clamps on the up-dir row
+	require.Equal(t, -1, p.sel)
+}
+
+// T-tui-picker-up-dir (0097): the listing's first row is ../ whenever
+// the shown directory has a parent — enter and right on it navigate up
+// (never pick, not even in dirs mode), home and wheel-up reach it, the
+// default cursor skips it, and the filesystem root has no such row.
+func TestPicker_upDirRowNavigatesUp(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindEither, root, func(string) string { return "" })
+	pkey(p, "home")
+	require.Equal(t, -1, p.sel, "home reaches the up-dir row")
+	pkey(p, "enter")
+	require.Equal(t, filepath.Dir(root), p.cwd, "enter on ../ navigates to the parent")
+	require.False(t, p.done, "navigating never picks")
+}
+
+func TestPicker_upDirRowNeverPicksInDirsMode(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindDirs, root, func(string) string { return "" })
+	pkey(p, "home")
+	require.Equal(t, -1, p.sel)
+	pkey(p, "enter")
+	require.False(t, p.done, "dirs mode: enter on ../ navigates — it never picks the parent")
+	require.Equal(t, filepath.Dir(root), p.cwd)
+}
+
+func TestPicker_upDirRowReachedByWheelAndRight(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindEither, root, func(string) string { return "" })
+	p.update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	require.Equal(t, -1, p.sel, "wheel up from the first entry lands on ../")
+	pkey(p, "right")
+	require.Equal(t, filepath.Dir(root), p.cwd, "right on ../ goes up like left")
+}
+
+func TestPicker_defaultCursorSkipsUpDirRow(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindEither, root, func(string) string { return "" })
+	require.Equal(t, 0, p.sel, "the cursor opens on the first real entry, not ../")
+	pkey(p, "enter")
+	require.Equal(t, filepath.Join(root, "alpha"), p.cwd, "enter still descends into the first directory")
+}
+
+func TestPicker_upDirRowAbsentAtRoot(t *testing.T) {
+	p := newFilePicker(newTheme(true), kindEither, "/", func(string) string { return "" })
+	require.Equal(t, "/", p.cwd)
+	pkey(p, "home")
+	require.Equal(t, 0, p.sel, "the filesystem root has no parent — no up-dir row")
+	plain := ansiRe.ReplaceAllString(p.view(100, 30), "")
+	require.NotContains(t, plain, "../")
+}
+
+func TestPicker_upDirRowSurvivesFiltering(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindEither, root, func(string) string { return "" })
+	pkey(p, "/")
+	ptype(p, "zzz") // matches nothing
+	require.Empty(t, p.visible(), "no entry matches")
+	plain := ansiRe.ReplaceAllString(p.view(100, 30), "")
+	require.Contains(t, plain, "../", "the up-dir row stays put while the listing is filtered")
+	require.Equal(t, -1, p.sel, "an emptied listing selects the up-dir row")
+	pkey(p, "enter") // commits the filter
+	pkey(p, "enter") // activates ../
+	require.Equal(t, filepath.Dir(root), p.cwd)
+}
+
+func TestPicker_emptyDirSelectsUpDirRow(t *testing.T) {
+	root := t.TempDir()
+	p := browsePicker(kindFiles, root, func(string) string { return "" })
+	require.Equal(t, -1, p.sel, "an empty listing's only row is ../")
+	pkey(p, "enter")
+	require.Equal(t, filepath.Dir(root), p.cwd)
 }
 
 func TestPicker_locationBarPicksFile(t *testing.T) {

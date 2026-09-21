@@ -12,8 +12,12 @@ package tui
 // of the filter/location bar first (onEsc), then closes. The picker
 // opens on the field's current value (0096): a valid seed shows its
 // parent directory with its own entry selected, a missing seed climbs
-// to the nearest existing ancestor. A pick commits through the caller's
-// callback; a refusal renders inside and keeps the picker open.
+// to the nearest existing ancestor. The listing's first row is ../
+// whenever the shown directory has a parent (0097) — enter and right
+// on it navigate up like left, never pick; the cursor rests on it via
+// the -1 sentinel below the first real entry. A pick commits through
+// the caller's callback; a refusal renders inside and keeps the
+// picker open.
 
 import (
 	"os"
@@ -232,13 +236,31 @@ func (p *filePicker) visible() []pickEntry {
 	return out
 }
 
+// hasUp reports whether the listing shows the pinned ../ row (0097):
+// every directory but the filesystem root has a parent.
+func (p *filePicker) hasUp() bool { return filepath.Dir(p.cwd) != p.cwd }
+
+// goUp navigates to the parent directory (left, and enter or right on
+// the ../ row). At the root it is a no-op.
+func (p *filePicker) goUp() {
+	if parent := filepath.Dir(p.cwd); parent != p.cwd {
+		p.cd(parent)
+	}
+}
+
 func (p *filePicker) clampSel() {
+	// The ../ row sits at -1 above the first real entry (0097): the
+	// cursor's floor whenever the shown directory has a parent.
+	floor := 0
+	if p.hasUp() {
+		floor = -1
+	}
 	n := len(p.visible())
 	if n == 0 {
-		p.sel = 0
+		p.sel = floor // an emptied listing's only row is ../
 		return
 	}
-	p.sel = min(max(p.sel, 0), n-1)
+	p.sel = min(max(p.sel, floor), n-1)
 }
 
 // cd navigates into a directory and re-reads the listing. A directory
@@ -316,7 +338,7 @@ func (p *filePicker) navKey(k tea.KeyPressMsg) {
 	case "pgdown":
 		p.sel += page
 	case "home", "g":
-		p.sel = 0
+		p.sel = -1 // the very top: the ../ row, clamped to 0 at the root
 	case "end", "G":
 		p.sel = len(p.visible()) - 1
 	case "enter":
@@ -328,9 +350,7 @@ func (p *filePicker) navKey(k tea.KeyPressMsg) {
 	case "right", "l":
 		p.descend()
 	case "left", "h", "backspace":
-		if parent := filepath.Dir(p.cwd); parent != p.cwd {
-			p.cd(parent)
-		}
+		p.goUp()
 	case "~":
 		home, _ := os.UserHomeDir()
 		p.cd(home)
@@ -347,8 +367,13 @@ func (p *filePicker) navKey(k tea.KeyPressMsg) {
 	p.clampSel()
 }
 
-// enter applies the mode's select rule to the highlighted entry.
+// enter applies the mode's select rule to the highlighted entry; on
+// the ../ row it navigates up in every mode — it never picks.
 func (p *filePicker) enter() {
+	if p.sel == -1 {
+		p.goUp()
+		return
+	}
 	vis := p.visible()
 	if len(vis) == 0 {
 		return
@@ -365,8 +390,13 @@ func (p *filePicker) enter() {
 	}
 }
 
-// descend enters the highlighted directory (any mode).
+// descend enters the highlighted directory (any mode); on the ../ row
+// it goes up like left.
 func (p *filePicker) descend() {
+	if p.sel == -1 {
+		p.goUp()
+		return
+	}
 	vis := p.visible()
 	if len(vis) == 0 {
 		return
@@ -476,13 +506,26 @@ func (p *filePicker) view(w, h int) string {
 	}
 	lines = append(lines, "")
 	listH := min(max(h-16, 4), 18)
+	if p.hasUp() {
+		listH-- // the pinned ../ row takes one line of the list
+	}
 	p.pageH = listH
 	vis := p.visible()
+	if p.sel < 0 {
+		p.off = 0 // the ../ row is pinned at the top
+	}
 	if p.sel < p.off {
-		p.off = p.sel
+		p.off = max(p.sel, 0)
 	}
 	if p.sel >= p.off+listH {
 		p.off = p.sel - listH + 1
+	}
+	if p.hasUp() {
+		if p.sel == -1 {
+			lines = append(lines, p.th.cursorRow.MaxWidth(max(w-16, 30)).Render(" ../"))
+		} else {
+			lines = append(lines, "  "+p.th.sectionLabel.Render("../"))
+		}
 	}
 	if len(vis) == 0 {
 		lines = append(lines, p.th.disabledMark.Render("  (no entries)"))

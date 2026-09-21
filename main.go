@@ -27,7 +27,7 @@ func main() {
 			err = schemaErr
 		}
 		style := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("1"))
-		lipgloss.Fprintln(os.Stderr, style.Render(err.Error()))
+		_, _ = lipgloss.Fprintln(os.Stderr, style.Render(err.Error()))
 		os.Exit(1)
 	}
 }

@@ -15,9 +15,9 @@
 │                          ││hoo│  │ ◆ demo  module                │                           │
 │                          ││sys│    ◆ demo · user cri  module     │                           │
 │                          ││too│    ◆ demo · host myhost  module  │                           │
-│                          ││  n│                                  │                           │
-│                          ││sec╰──────────────────────────────────╯                           │
-│                          ││mounts ＋                                                         │
+│                          ││  n│    ▶ onboard into demo  action   │                           │
+│                          ││sec│                                  │                           │
+│                          ││mou╰──────────────────────────────────╯                           │
 │                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │

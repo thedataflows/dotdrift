@@ -148,3 +148,34 @@ func TestManage_cursorRowBar(t *testing.T) {
 	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ app",
 		"the focused form row renders the bar")
 }
+
+// 0089: the create/move confirm prompt renders only while the gate is
+// armed — enter shows it, n hides it; before the gate the form has no
+// y/n tail.
+func TestManage_createGatePromptOnlyWhenArmed(t *testing.T) {
+	d, _ := manageFixture(t)
+	d.HandleKey("enter") // create module
+	for _, r := range "newapp" {
+		d.HandleKey(string(r))
+	}
+	th := newTheme(true)
+	require.NotContains(t, d.View(th), "y/n", "no confirm tail before the gate arms")
+	d.HandleKey("enter")
+	require.Contains(t, d.View(th), `create module "newapp"`, "enter arms the gate and shows its prompt")
+	require.Contains(t, d.View(th), "y runs", "the armed footer names the gate's keys")
+	d.HandleKey("n")
+	require.NotContains(t, d.View(th), "y/n", "n disarms the gate and hides the prompt")
+}
+
+// 0089: delete's n steps back to the menu — outside the gate the
+// manageDelete mode has no key handling, so disarming in place would
+// strand the dialog.
+func TestManage_deleteRefusedGateReturnsToMenu(t *testing.T) {
+	d, _ := manageFixture(t)
+	d.HandleKey("down")
+	d.HandleKey("down") // delete module
+	d.HandleKey("enter")
+	require.True(t, d.confirm, "delete sits at its gate")
+	d.HandleKey("n")
+	require.Equal(t, manageMenu, d.mode, "n backs out of delete to the menu")
+}

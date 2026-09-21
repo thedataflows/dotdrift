@@ -141,6 +141,24 @@ func confirmRun(t *testing.T, d dialog, name string) {
 	d.applyFinished(fm)
 }
 
+// 0089: the confirm prompt renders only while the gate is armed —
+// enter shows it, n hides it; before the gate the form has no y/n
+// tail, and the armed footer names the gate's keys.
+func TestOnboardDialog_gatePromptOnlyWhenArmed(t *testing.T) {
+	d := newOnboardDialog(newFakeWrites(), "/profile")
+	typeInto(t, d, "myapp")
+	d.HandleKey("down")
+	typeInto(t, d, "~/.config/app")
+	th := newTheme(true)
+	require.NotContains(t, d.View(th), "y/n", "no confirm tail before the gate arms")
+	d.HandleKey("enter")
+	require.Contains(t, d.View(th), "run onboard?", "enter arms the gate and shows its prompt")
+	require.Contains(t, d.View(th), "y runs", "the armed footer names the gate's keys")
+	require.NotContains(t, d.View(th), "type to edit", "the form hint would lie while armed")
+	d.HandleKey("n")
+	require.NotContains(t, d.View(th), "y/n", "n disarms the gate and hides the prompt")
+}
+
 // The onboard dialog gates its run behind a confirm, carries the form and
 // the dry-run choice onto the service call, and shows the report.
 func TestOnboardDialog_confirmsAndDryRun(t *testing.T) {
@@ -389,8 +407,7 @@ func TestWritesDialogs_successfulWritesReloadNav(t *testing.T) {
 
 // The reload answers success only: a failed write leaves the nav as it
 // stands and renders the error instead.
-func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {
-	_, c := wsShell(t, map[string]string{
+func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {	_, c := wsShell(t, map[string]string{
 		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
 	})
 	fake := newFakeWrites()
@@ -410,4 +427,50 @@ func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {
 	require.Nil(t, reload, "a failed write re-reads nothing")
 	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""),
 		"system path", "the error renders")
+}
+
+// 0089: the generate dialog's confirm prompt renders only while its
+// gate is armed.
+func TestGenerateDialog_gatePromptOnlyWhenArmed(t *testing.T) {
+	d := newGenerateDialog(newFakeWrites(), "/profile")
+	// Mount fields: name, source, destination, type (rows under kind+layer).
+	d.HandleKey("down")
+	d.HandleKey("down")
+	typeInto(t, d, "data")
+	d.HandleKey("down")
+	typeInto(t, d, "UUID=abc")
+	d.HandleKey("down")
+	typeInto(t, d, "/mnt/data")
+	d.HandleKey("down")
+	typeInto(t, d, "vfat")
+	th := newTheme(true)
+	require.NotContains(t, d.View(th), "y/n", "no confirm tail before the gate arms")
+	d.HandleKey("enter")
+	require.Contains(t, d.View(th), "run generate?", "enter arms the gate and shows its prompt")
+	require.Contains(t, d.View(th), "y runs", "the armed footer names the gate's keys")
+	d.HandleKey("n")
+	require.NotContains(t, d.View(th), "y/n", "n disarms the gate and hides the prompt")
+}
+
+// 0089: the restore dialog's confirm prompt renders only while its
+// gate is armed.
+func TestRestoreDialog_gatePromptOnlyWhenArmed(t *testing.T) {
+	fake := newFakeWrites()
+	target := "/home/cri/.config/app/config.toml"
+	fake.plan = []service.RestorePlanItem{
+		{Target: target, Label: "modules/app/backups/g2", Gen: "g2"},
+	}
+	d := newRestoreDialog(fake, "/profile", func() (map[string]map[string][]service.RestoreHit, error) {
+		return nil, nil
+	})
+	typeInto(t, d, target)
+	d.applyPlan(d.HandleKey("enter")().(restorePlanMsg)) // resolve
+	require.True(t, d.resolved)
+	th := newTheme(true)
+	require.NotContains(t, d.View(th), "y/n", "no confirm tail before the gate arms")
+	d.HandleKey("enter")
+	require.Contains(t, d.View(th), "run restore?", "enter arms the gate and shows its prompt")
+	require.Contains(t, d.View(th), "y runs", "the armed footer names the gate's keys")
+	d.HandleKey("n")
+	require.NotContains(t, d.View(th), "y/n", "n disarms the gate and hides the prompt")
 }

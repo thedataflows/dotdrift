@@ -241,7 +241,11 @@ view stack wholesale). Its parts:
   generate as absorbed dialogs); `n` opens module creation; `o` opens
   the onboard dialog prefilled with the selected module and layer
   (either pane, 0079); `O` overrides the selected module into your user
-  layer in one step (nav pane, 0082).
+  layer in one step (nav pane, 0082). Every form dialog gates its run
+  the same way (0089): enter arms a confirm whose prompt — and a `y
+  runs · n/esc back` footer — renders only while the gate is armed, and
+  `n` disarms back to the form (delete module's `n` steps back to the
+  manage menu).
   `pgup`/`pgdown` move the cursor a visible page and `home`/`end` jump
   to the first/last row, in both panes; the workspace's visible window
   always follows the cursor (0075). Mouse parity

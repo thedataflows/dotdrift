@@ -225,6 +225,25 @@ func finishView(th theme, confirmText, report string, err error, running bool) s
 	return ""
 }
 
+// gatePrompt returns the confirm text only while the gate is armed: the
+// prompt appears on enter and disappears on n (0089). An always-on
+// prompt made the gate invisible — enter looked like a freeze.
+func gatePrompt(armed bool, text string) string {
+	if !armed {
+		return ""
+	}
+	return text
+}
+
+// gateFooter swaps the form hint for the gate's vocabulary while armed:
+// the gate swallows every key but y/n, so the form hint would lie.
+func gateFooter(th theme, armed bool, hint string) string {
+	if armed {
+		return "\n" + th.meta.Render("y runs · n/esc back")
+	}
+	return "\n" + th.meta.Render(hint)
+}
+
 // onboardDialog adopts live paths into a module: app, paths, the layer
 // choice, and the optional declarations, with a dry-run switch.
 type onboardDialog struct {
@@ -347,8 +366,8 @@ func (d *onboardDialog) View(th theme) string {
 		b.WriteString(r.renderRow(th, i == d.cur))
 		b.WriteString("\n")
 	}
-	b.WriteString(finishView(th, "run onboard?", d.report, d.err, d.running))
-	b.WriteString("\n" + th.meta.Render("up/down pick a row · type to edit · enter runs · esc back"))
+	b.WriteString(finishView(th, gatePrompt(d.confirm, "run onboard?"), d.report, d.err, d.running))
+	b.WriteString(gateFooter(th, d.confirm, "up/down pick a row · type to edit · enter runs · esc back"))
 	return b.String()
 }
 
@@ -535,8 +554,8 @@ func (d *restoreDialog) View(th theme) string {
 		b.WriteString(d.pickLabel(item, i == d.cur))
 		b.WriteString("\n")
 	}
-	b.WriteString(finishView(th, "run restore?", d.report, d.err, d.running))
-	b.WriteString("\n" + th.meta.Render("up/down pick a target · < > pin a generation · enter runs · esc back"))
+	b.WriteString(finishView(th, gatePrompt(d.confirm, "run restore?"), d.report, d.err, d.running))
+	b.WriteString(gateFooter(th, d.confirm, "up/down pick a target · < > pin a generation · enter runs · esc back"))
 	return b.String()
 }
 
@@ -748,7 +767,7 @@ func (d *generateDialog) View(th theme) string {
 		b.WriteString(r.renderRow(th, i == d.cur))
 		b.WriteString("\n")
 	}
-	b.WriteString(finishView(th, "run generate?", d.report, d.err, d.running))
-	b.WriteString("\n" + th.meta.Render("up/down pick a row · type to edit · enter runs · esc back"))
+	b.WriteString(finishView(th, gatePrompt(d.confirm, "run generate?"), d.report, d.err, d.running))
+	b.WriteString(gateFooter(th, d.confirm, "up/down pick a row · type to edit · enter runs · esc back"))
 	return b.String()
 }

@@ -122,6 +122,9 @@ func (d *manageDialog) HandleKey(key string) tea.Cmd {
 			return d.run
 		case "n":
 			d.confirm = false
+			if d.mode == manageDelete {
+				d.toMenu() // delete has no keys outside the gate — n steps back (0089)
+			}
 		}
 		return nil
 	}
@@ -255,11 +258,11 @@ func (d *manageDialog) View(th theme) string {
 			b.WriteString(r.renderRow(th, i == d.cur))
 			b.WriteString("\n")
 		}
-		b.WriteString(finishView(th, d.confirmText(), d.report, d.err, d.running))
-		b.WriteString("\n" + th.meta.Render("up/down pick a row · type to edit · enter runs · esc back"))
+		b.WriteString(finishView(th, gatePrompt(d.confirm, d.confirmText()), d.report, d.err, d.running))
+		b.WriteString(gateFooter(th, d.confirm, "up/down pick a row · type to edit · enter runs · esc back"))
 	case manageDelete:
 		d.writeOrphans(&b, th)
-		b.WriteString(finishView(th, d.confirmText(), d.report, d.err, d.running))
+		b.WriteString(finishView(th, gatePrompt(d.confirm, d.confirmText()), d.report, d.err, d.running))
 		b.WriteString("\n" + th.meta.Render("y deletes · n/esc back"))
 	}
 	return b.String()

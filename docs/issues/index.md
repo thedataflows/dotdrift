@@ -72,3 +72,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0082](0082-tui-override-module.md) | Override module from the TUI — seeded overlays, live nav, merge-rule hint | done | medium |
 | [0083](0083-ponytail-audit-application.md) | Apply the ponytail over-engineering audit — delete the dead code, one lipgloss | done | medium |
 | [0084](0084-restore-dialog-plan-never-lands.md) | Restore dialog's plan resolution never lands — restorePlanMsg has no production consumer | done | high |
+| [0085](0085-writes-dialogs-refresh-the-nav.md) | Writes dialogs refresh the nav — the message-flow sweep | done | medium |

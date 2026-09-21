@@ -77,3 +77,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0087](0087-tui-remove-row-dead-on-structural-rows.md) | TUI `d` (remove row) is dead on smb scalars/fields, secrets/mounts fields, when leaves, and writes block rows | done | medium |
 | [0088](0088-hook-tasks-always-interactive.md) | Hook tasks are always generated `interactive = true`, not gated on the writing session's TTY | done | high |
 | [0089](0089-tui-dialog-confirm-gate-invisible.md) | Form dialogs arm an invisible confirm gate — enter freezes the dialog | done | high |
+| [0090](0090-delete-app-field-rename-app-flag.md) | Delete the `app` module.toml field; rename `--app` to `--module` | done | medium |

@@ -50,7 +50,7 @@ declared `id`: the user overlay for `hosts/<h>/modules/foo/` lives at
 
 The representative module config (the first layer in base → host → user
 order containing the directory) supplies module-level metadata such as
-`scope`, `id`, `app`, `description`, and `when`; overlays merge only packages, tools,
+`scope`, `id`, `description`, and `when`; overlays merge only packages, tools,
 dotfiles, hooks, mounts, and smb.
 
 `when` filter values match detected facts by **case-sensitive exact match**

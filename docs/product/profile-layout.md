@@ -37,7 +37,6 @@ profile/
   the `modules/` level — is never discovered; dotdrift reports it as skipped
   with a `misplaced:` reason naming the expected path (issue 0033).
 - `id` is the directory name unless overridden by `id` in `module.toml`.
-- `app` defaults to `id` unless overridden.
 
 ## Validation
 
@@ -107,7 +106,6 @@ orphan  = "94"
 
 ```toml
 id = "optional-id"
-app = "optional-app"
 scope = "user"
 description = "optional human-readable summary"
 disabled = false

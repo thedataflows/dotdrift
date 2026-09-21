@@ -133,3 +133,52 @@ func TestAddForm_smbWhatRelabelsValue(t *testing.T) {
 	view = f.view(100, 30)
 	require.Contains(t, view, "value", "a scalar what takes a plain value")
 }
+
+func TestAddForm_writesLineCommit(t *testing.T) {
+	_, dir, c := editShell(t)
+	wsToHeader(t, c, "writes")
+	c = cpress(c, "a")
+	f := addFormTop(t, c)
+	view := f.view(100, 30)
+	require.Contains(t, view, "add write · demo")
+	require.Contains(t, view, "kind")
+	require.Contains(t, view, "line text", "the default kind is a line write")
+	c = cpress(c, "down")
+	c = typeText(c, "~/.zshrc")
+	c = cpress(c, "down")
+	c = typeText(c, "export PATH=added")
+	c = wsPress(t, c, "enter")
+	require.Empty(t, c.modals)
+	d := c.wsDraftFor(dir).cfg.Dotfiles["~/.zshrc"]
+	require.Equal(t, "export PATH=added", d.Line, "the line lands — spaces and all")
+	require.Equal(t, "", d.Mode, "a line entry carries no mode")
+	require.Contains(t, c.ws.placeholderOrBody(), "~/.zshrc (edit: line)", "the writes row renders")
+}
+
+func TestAddForm_writesLinkCommit(t *testing.T) {
+	_, dir, c := editShell(t)
+	wsToHeader(t, c, "writes")
+	c = cpress(c, "a")
+	c = cpress(c, "right") // kind: line → link
+	f := addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "source", "a link kind takes a source")
+	c = cpress(c, "down")
+	c = typeText(c, "~/.b")
+	c = cpress(c, "down")
+	c = typeText(c, "b")
+	c = wsPress(t, c, "enter")
+	d := c.wsDraftFor(dir).cfg.Dotfiles["~/.b"]
+	require.Equal(t, "b", d.Source)
+	require.Equal(t, "symlink", d.Mode, "the link kind creates a symlink entry")
+}
+
+func TestAddForm_writesEmptyRefuses(t *testing.T) {
+	_, dir, c := editShell(t)
+	wsToHeader(t, c, "writes")
+	c = cpress(c, "a")
+	c = wsPress(t, c, "enter")
+	f := addFormTop(t, c)
+	require.False(t, f.finished(), "a refused add keeps the form open")
+	require.Contains(t, f.view(100, 30), "target")
+	require.Nil(t, c.wsDraftFor(dir), "a refused add stages nothing")
+}

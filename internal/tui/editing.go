@@ -354,6 +354,32 @@ func validateAdd(family, addPath, input string) string {
 	return ""
 }
 
+// validateDotLine is the writes form's line-grammar tier-1: a non-empty
+// space-free target and a non-empty line, joined by pathSep.
+func validateDotLine(input string) string {
+	target, line, _ := strings.Cut(input, pathSep)
+	target, line = strings.TrimSpace(target), strings.TrimSpace(line)
+	switch {
+	case target == "", strings.ContainsAny(target, " \t"), line == "":
+		return `add as "target = line text"`
+	}
+	return ""
+}
+
+// addDotLine creates a writes entry in line mode: the entry ensures the
+// exact line exists in the target, no mode.
+func addDotLine(cfg *profile.ModuleConfig, target, line string) error {
+	target, line = strings.TrimSpace(target), strings.TrimSpace(line)
+	if target == "" || line == "" {
+		return errors.New(`add as "target = line text"`)
+	}
+	if cfg.Dotfiles == nil {
+		cfg.Dotfiles = map[string]profile.Dotfile{}
+	}
+	cfg.Dotfiles[target] = profile.Dotfile{Line: line}
+	return nil
+}
+
 // okFieldValue checks `field = value` input against a field set: the
 // field must be known and the value must not be empty (an add that sets
 // nothing is refused — clearing happens by editing the row).
@@ -462,7 +488,15 @@ func (w *workspaceModel) applyEdit() bool {
 	}
 
 	if e.add {
-		if e.err = validateAdd(family, addPath, input); e.err != "" {
+		// The writes form's line kind travels as "target<pathSep>line":
+		// a line may hold spaces and '=', which the link grammar cannot
+		// express unambiguously.
+		if strings.Contains(input, pathSep) {
+			e.err = validateDotLine(input)
+		} else {
+			e.err = validateAdd(family, addPath, input)
+		}
+		if e.err != "" {
 			return false // an add that fails tier-1 never enters the draft
 		}
 	} else {
@@ -477,7 +511,10 @@ func (w *workspaceModel) applyEdit() bool {
 	}
 	var err error
 	newKey := ""
-	if isStructuralFamily(family) {
+	if target, line, isLine := strings.Cut(input, pathSep); e.add && isLine {
+		err = addDotLine(candidate, target, line)
+		newKey = strings.TrimSpace(target)
+	} else if isStructuralFamily(family) {
 		newKey, err = mutateStructural(candidate, family, addPath, key, input, e.add)
 	} else {
 		err = mutateField(candidate, section, family, key, row.value, input, e.add)
@@ -622,6 +659,9 @@ func addFamily(section string) string {
 		return profile.FamilySmb
 	case "when":
 		return profile.FamilyWhen
+	case "writes":
+		// 0077: a line- or link-write entry is creatable from the TUI.
+		return profile.FamilyDotfiles
 	}
 	return ""
 }

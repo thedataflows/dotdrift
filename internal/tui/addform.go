@@ -257,6 +257,25 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 				}
 				return rows[1].choice.String() + "=" + strings.TrimSpace(value.String())
 			}, nil
+	case "writes":
+		kind := newDlgChoice("kind", "line", "link")
+		target := newDlgField("target", "")
+		value := &dlgField{label: "line text"}
+		return "add write · " + moduleID, []dlgRow{choiceRow(kind), fieldRow(target), fieldRow(value)},
+			func(rows []dlgRow) string {
+				t := strings.TrimSpace(target.String())
+				if rows[0].choice.String() == "line" {
+					// the pipeline's line marker: target<pathSep>line
+					return t + pathSep + value.String()
+				}
+				return t + " " + strings.TrimSpace(value.String())
+			},
+			func(rows []dlgRow) {
+				value.label = "line text"
+				if rows[0].choice.String() == "link" {
+					value.label = "source"
+				}
+			}
 	}
 	return "add · " + section + " · " + moduleID,
 		[]dlgRow{fieldRow(&dlgField{label: section, hint: validateAdd(addFamily(section), addPath, "")})},

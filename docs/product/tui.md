@@ -32,7 +32,8 @@ view stack wholesale). Its parts:
   apply badge while a session runs. The footer has two lines: a spinner
   with the running operation's name (or the message slot), and the key
   hints for the focused pane — the pane's primary verbs (enter, a, d,
-  ctrl+s in the workspace) plus `/ ? q`, rendered from the binding
+  ctrl+s in the workspace, joined by ctrl+z while a draft holds staged
+  changes) plus `/ ? q`, rendered from the binding
   table; scrolling yields the footer to the verbs, and `?` lists
   everything (0078).
 - **The message slot.** Any operation longer than ~200 ms announces
@@ -97,7 +98,16 @@ view stack wholesale). Its parts:
   profile family encoders into the file-scoped draft (0065), which
   re-decodes on every commit — a draft can never hold unparseable text.
   Dirty shows per row, on the tab line, and on the nav rows. Drafts are
-  file-scoped: navigation and layer switches never prompt. `ctrl+s`
+  file-scoped: navigation and layer switches never prompt. `ctrl+z` /
+  `ctrl+shift+z` step the draft back and forward one committed change —
+  field edits, adds, removes, and raw-line repairs are all one undo step
+  each, the cycle caps at 50, and a new commit truncates the redo branch
+  (0079). Rows announce their gesture, computed from the same registry
+  that decides behavior so the mark cannot lie: `✎` an editable field,
+  `◂▸` a closed set that cycles, `＋` an addable header or container; a
+  committed edit's `●` replaces the mark (0079). Left/right on a
+  closed-set row cycles its value in place — wrapping, one undo step per
+  flip, no modal — while enter keeps the full picker (0079). `ctrl+s`
   saves through the untouched 0065 pipeline (staged tier-1 errors and
   the tier-2 cross-check block in place; a disk-hash conflict opens a
   reload-or-keep modal); `D` discards with a confirm naming module,
@@ -186,11 +196,16 @@ view stack wholesale). Its parts:
   footer hints and the contextual `?` help render from it, so docs
   cannot drift from behavior. Shift is the dangerous version (`p` plan /
   `P` apply, `d` remove row / `D` discard draft); esc has exactly one
-  meaning (pop the top layer: modal → edit → focus to nav); there is no
-  undo — drafts and confirms are the safety net. `p` opens the read-only
+  meaning (pop the top layer: modal → edit → focus to nav); `ctrl+z`
+  steps the active draft back one committed change and `ctrl+shift+z`
+  redoes (0079) — undoing past the first change returns the clean file,
+  and confirms remain the safety net for what undo cannot reach (saves,
+  quits). `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /
-  generate as absorbed dialogs); `n` opens module creation.
+  generate as absorbed dialogs); `n` opens module creation; `o` opens
+  the onboard dialog prefilled with the selected module and layer
+  (either pane, 0079).
   `pgup`/`pgdown` move the cursor a visible page and `home`/`end` jump
   to the first/last row, in both panes; the workspace's visible window
   always follows the cursor (0075). Mouse parity

@@ -9,13 +9,13 @@ timestamp: 2026-09-21T00:00:00Z
 # ISSUE 0079: TUI intuition round
 
 - **Type**: task
-- **Status**: in progress
+- **Status**: done
 - **Priority**: high
 - **Labels**: [tui, ergonomics]
 - **Assignee**: none
 - **Related**: [0078](0078-tui-enter-fallback-and-footer-hints.md), [0077](0077-tui-add-forms.md), [0076](0076-tui-choice-editors-and-location.md)
 - **Related code**: [`internal/tui/editing.go`](../../internal/tui/editing.go), [`internal/tui/workspace.go`](../../internal/tui/workspace.go), [`internal/tui/keymap.go`](../../internal/tui/keymap.go), [`internal/tui/dialog.go`](../../internal/tui/dialog.go)
-- **Closing commits**: (pending)
+- **Closing commits**: 90edb79, 0baf0eb, f22586e, 2908613
 
 ## Summary
 
@@ -57,11 +57,40 @@ Four tasks, TDD-first, one commit each:
 ## Acceptance
 
 - Two committed edits, ctrl+z once: the first edit is gone from the
-  draft, the surface and dirty marker follow; ctrl+z again: no draft,
-  the landed file shows; ctrl+shift+z walks forward again.
-- Undo after removing a row restores the row at its old cursor.
-- The meta scope row shows `◂▸`; left flips user→system without a modal;
-  enter still opens the picker with `(current)` marked.
-- `o` on a nav module row opens ONBOARD with `app demo` and the layer
-  choice preset to that row's layer; the form still runs dry-run first.
-- The palette lists `onboard into demo` when a module is selected.
+  draft, the surface and dirty marker follow; ctrl+z again: no staged
+  changes, the landed file shows; ctrl+shift+z walks forward again.
+  (`TestUndo_fieldEditStepsBackAndForward`.)
+- Undo after removing a row restores the row at its old cursor
+  (`TestUndo_removeRestoresRowAndCursor`, through the d/y confirm).
+- A new commit truncates the redo stack (`TestUndo_newCommitTruncatesRedo`).
+- Undoing a raw-mode repair reinstates the broken file, its rows, and
+  the banner (`TestUndo_rawModeRestoresBrokenState`).
+- The footer names ctrl+z only while a draft holds staged changes
+  (`TestUndo_footerHintsUndoOnlyWhenStaged`).
+- The meta scope row shows `◂▸`; right flips user→system without a
+  modal, the cycle wraps, left steps back, and each flip is one undo
+  step (`TestCycle_choiceRowsCycleInPlace`); free-text rows ignore the
+  keys (`TestCycle_nonChoiceRowsIgnoreLeftRight`).
+- The description row shows `✎`, the scope row `◂▸`, addable headers
+  and containers `＋`, read-only rows nothing, and a dirty row keeps `●`
+  instead of its mark (`TestMarks_rowsAnnounceTheirGesture`,
+  `TestMarks_dirtyRowShowsTheDotNotTheMark`).
+- `o` on a nav module row opens ONBOARD with `app demo` and the base
+  layer preset; on a layer child, that child's layer; from the
+  workspace, the active tab's; the fields stay editable; a shell
+  without a selection refuses loudly (`TestOnboardHere_*`).
+- The palette lists `onboard into demo` when a module is selected and
+  carries its own target (`TestOnboardHere_paletteListsTheAction`).
+
+## Verification
+
+Fresh runs on the final tree: `go test ./... -count=1` — 20 packages
+ok, 0 FAIL; `go vet ./...` clean; gofmt clean; golangci-lint
+`run ./internal/tui/...` — 0 issues. Golden sweep: 26 frames
+regenerated across the round (footer hint, marks, the palette's new
+action row); verified mark-only via stripped diff (marks removed from
+the new frames collapse onto the old ones modulo padding). Ponytail
+audit: nothing speculative to cut — one snapshot type, two small
+compositor functions sharing the `openOnboardInto` seam, marks derived
+from the behavior predicates themselves.
+

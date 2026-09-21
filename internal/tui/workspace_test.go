@@ -247,11 +247,11 @@ func TestWorkspace_disclosureRendersOnlySet(t *testing.T) {
 		}
 	}
 
-	// a on an empty section's header opens the section's add input.
+	// a on an empty section's header opens the section's add form.
 	c = cpress(c, "tab") // focus the workspace
 	wsToHeader(t, c, "packages")
 	c = cpress(c, "a")
-	require.True(t, c.ws.editing.add, "a on an empty section's header adds its first entry")
+	addFormTop(t, c)
 	cpress(c, "esc")
 }
 

@@ -208,20 +208,22 @@ func TestSecrets_addAndRemove(t *testing.T) {
 	// a on the container adds a field INTO the entry; junk refuses.
 	wsToKey(t, c, "CACHE")
 	c = cpress(c, "a")
-	c.ws.editing.input = []rune("bogus")
+	c = typeText(c, "bogus")
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing)
-	require.Contains(t, c.ws.editing.err, "field = value")
+	f := addFormTop(t, c)
+	require.False(t, f.finished(), "a refused add keeps the form open")
+	require.Contains(t, f.view(100, 30), "field = value")
 	cpress(c, "esc")
 
 	// a on a field row adds the section's next entry; malformed refuses.
 	wsToKey(t, c, pathKey("CACHE", "env"))
 	c = cpress(c, "a")
-	c.ws.editing.input = []rune("justname")
+	c = typeText(c, "justname")
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing)
-	require.Contains(t, c.ws.editing.err, "name = ENV")
+	f = addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "name = ENV")
 	c = cpress(c, "esc")
+	require.Empty(t, c.modals)
 
 	// d on the container removes the secret after the confirm.
 	wsToKey(t, c, "CACHE")
@@ -281,7 +283,7 @@ func TestMounts_addBlocksSaveUntilFilled(t *testing.T) {
 		c = cpress(c, "j")
 	}
 	c = cpress(c, "a")
-	c.ws.editing.input = []rune("backup")
+	c = typeText(c, "backup")
 	c = wsPress(t, c, "enter")
 	require.NotNil(t, c.ws.draft.cfg.Mounts["backup"], "the bare entry lands")
 	require.Contains(t, c.ws.placeholderOrBody(), `a adds "field = value"`,
@@ -349,7 +351,7 @@ func TestSmb_shareAddAndRemove(t *testing.T) {
 		c = cpress(c, "j")
 	}
 	c = cpress(c, "a")
-	c.ws.editing.input = []rune("public")
+	c = typeText(c, "public")
 	c = wsPress(t, c, "enter")
 	require.Contains(t, c.ws.draft.cfg.Smb.Shares, "public", "the bare share lands")
 
@@ -494,10 +496,11 @@ func TestWhen_groupAddNested(t *testing.T) {
 
 	// Junk input refuses.
 	c = cpress(c, "a")
-	c.ws.editing.input = []rune("gpu")
+	c = typeText(c, "gpu")
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing)
-	require.Contains(t, c.ws.editing.err, "field = value")
+	f := addFormTop(t, c)
+	require.False(t, f.finished(), "a refused add keeps the form open")
+	require.Contains(t, f.view(100, 30), "field = value")
 	cpress(c, "esc")
 }
 
@@ -516,8 +519,9 @@ func TestWhen_notAddAndDuplicateRefuse(t *testing.T) {
 	c = cpress(c, "a")
 	c = typeText(c, "not")
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing)
-	require.Contains(t, c.ws.editing.err, "already")
+	f := addFormTop(t, c)
+	require.False(t, f.finished(), "a refused add keeps the form open")
+	require.Contains(t, f.view(100, 30), "already")
 	cpress(c, "esc")
 }
 
@@ -659,10 +663,12 @@ func TestSystemd_directiveAdd(t *testing.T) {
 	_, c := systemdShell(t)
 	wsToKey(t, c, pathKey("demo.service", "Description"))
 	c = cpress(c, "a")
-	require.True(t, c.ws.editing.add, "a on a directive row adds a directive")
+	f := addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "add · systemd.units · demo",
+		"a on a directive row adds into its unit")
 	c = typeText(c, "WantedBy = default.target")
 	c = wsPress(t, c, "enter")
-	require.Nil(t, c.ws.editing)
+	require.Empty(t, c.modals)
 	require.Contains(t, c.ws.placeholderOrBody(), `WantedBy = "default.target"`, "the unquoted value lands as a string")
 	require.Contains(t, c.ws.draft.raw, `WantedBy = "default.target"`, "the splice lands in the working raw")
 }
@@ -674,10 +680,12 @@ func TestSystemd_unitAddAndRemove(t *testing.T) {
 	wsToHeader(t, c, "systemd.units")
 
 	c = cpress(c, "a")
-	require.True(t, c.ws.editing.add, "a on the header adds a unit")
-	c.ws.editing.input = []rune("extra.service")
+	f := addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "add · systemd.units · demo",
+		"a on the header adds a unit")
+	c = typeText(c, "extra.service")
 	c = wsPress(t, c, "enter")
-	require.Nil(t, c.ws.editing)
+	require.Empty(t, c.modals)
 	require.True(t, c.ws.rows[c.ws.cursor].container, "the new unit's container row exists")
 	require.Contains(t, c.ws.draft.raw, `[systemd.units."extra.service"]`, "the unit block lands in the working raw")
 	require.True(t, c.ws.draft.edited[rowKey(profile.FamilySystemd, "extra.service")])
@@ -716,9 +724,10 @@ func TestSystemd_unitNameTier1(t *testing.T) {
 	_, c := systemdShell(t)
 	wsToHeader(t, c, "systemd.units")
 	c = cpress(c, "a")
-	c.ws.editing.input = []rune("bad name!")
+	c = typeText(c, "bad name!")
 	c = cpress(c, "enter")
-	require.NotNil(t, c.ws.editing, "an invalid unit name refuses to commit")
-	require.Contains(t, c.ws.editing.err, "name", "tier-1 names the problem")
+	f := addFormTop(t, c)
+	require.False(t, f.finished(), "an invalid unit name refuses to commit")
+	require.Contains(t, f.view(100, 30), "name", "tier-1 names the problem")
 	require.Empty(t, c.ws.draftEdits(), "the refused add staged nothing")
 }

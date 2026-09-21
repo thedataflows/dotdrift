@@ -317,7 +317,7 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.hint {
 		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}
 	}
-	if w.editing != nil && w.editing.row == i && !w.editing.add {
+	if w.editing != nil && w.editing.row == i {
 		return w.editLines(w.editing, th, width)
 	}
 	text := r.text
@@ -342,11 +342,7 @@ func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
 	runes := e.input
 	cur := min(e.cur, len(runes))
 	shown := string(runes[:cur]) + "▏" + string(runes[cur:])
-	prefix := "▸ "
-	if e.add {
-		prefix = "+ "
-	}
-	lines := []string{th.cursorRow.MaxWidth(width).Render(" " + prefix + shown)}
+	lines := []string{th.cursorRow.MaxWidth(width).Render(" ▸ " + shown)}
 	if e.err != "" {
 		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))
 	}

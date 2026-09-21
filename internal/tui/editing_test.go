@@ -245,13 +245,12 @@ func TestEdit_discardRequiresConfirm(t *testing.T) {
 func TestEdit_rowAddRemove(t *testing.T) {
 	_, _, c := editShell(t)
 
-	// a on the packages section appends a new-row input.
+	// a on the packages section opens the add form; the name commits.
 	for !c.ws.atSection("packages") {
 		c = cpress(c, "j")
 	}
 	c = cpress(c, "a")
-	require.NotNil(t, c.ws.editing)
-	require.True(t, c.ws.editing.add, "a opens the add-row input")
+	addFormTop(t, c)
 	c = typeText(c, "fd")
 	c = wsPress(t, c, "enter")
 	require.Contains(t, c.ws.placeholderOrBody(), "+ fd", "the committed row joins the table")

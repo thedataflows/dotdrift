@@ -286,7 +286,15 @@ func validateField(family, key, input string) string {
 // a rejected add never enters the draft.
 func validateAdd(family, addPath, input string) string {
 	switch family {
+	case profile.FamilyPackages:
+		if strings.TrimSpace(input) == "" {
+			return "package name must not be empty"
+		}
 	case profile.FamilyTools:
+		name, _, _ := strings.Cut(input, "=")
+		if strings.TrimSpace(name) == "" {
+			return "tool name must not be empty"
+		}
 		if !strings.Contains(input, "=") {
 			return `add as "name = constraint"`
 		}
@@ -920,39 +928,40 @@ func (m *Compositor) commitFieldAt(row int, value string) {
 	}
 }
 
-// startAdd opens the synthetic new-row input for the cursor's row (a).
-// The row decides the scope: a header adds at the section's entry level
-// (an empty section's only way in; the when/smb headers are those
-// sections' root scope), a container adds `field = value` INTO its
-// entry, systemd directives and when leaves add into their scope, and
-// every other row adds the section's next entry.
+// startAdd opens the add form for the cursor row (a). The row decides
+// the scope (addScope): a header adds at the section's entry level (an
+// empty section's only way in; the when/smb headers are those sections'
+// root scope), a container adds `field = value` INTO its entry, systemd
+// directives and when leaves add into their scope, and every other row
+// adds the section's next entry. The form's commit runs the pipeline's
+// add path; the section's spec owns the rows.
 func (m *Compositor) startAdd() {
 	if m.ws.cursor >= len(m.ws.rows) {
 		return
 	}
 	row := m.ws.rows[m.ws.cursor]
-	section := row.section
-	if !addable(section) || m.ws.schemaErr != nil {
+	if !addable(row.section) || m.ws.schemaErr != nil {
 		return
 	}
-	e := &wsEdit{row: m.ws.cursor, add: true, section: section}
-	switch {
-	case row.header:
-		// the section's entry-level scope: addPath stays ""
-	case row.container:
-		e.addPath = row.key
-	default:
-		switch row.family {
-		case profile.FamilySystemd:
-			e.addPath = splitPath(row.key)[0]
-		case profile.FamilyWhen:
-			parts := splitPath(row.key)
-			if len(parts) > 1 {
-				e.addPath = pathKey(parts[:len(parts)-1]...)
-			}
-		}
+	section, addPath := addScope(row)
+	title, rows, build := addFormSpec(m.ws.moduleID, section, addPath)
+	m.modals = append(m.modals, newAddForm(m.th, title, rows, build, func(input string) string {
+		return m.commitAddAt(m.ws.cursor, section, addPath, input)
+	}))
+}
+
+// commitAddAt commits a form's synthesized input through the pipeline's
+// add path — the same wsEdit an inline input would have produced. A
+// refusal returns the tier-1 error; nothing stages.
+func (m *Compositor) commitAddAt(row int, section, addPath, input string) string {
+	m.ws.editing = &wsEdit{row: row, add: true, section: section, addPath: addPath, input: []rune(input), cur: len([]rune(input))}
+	if m.ws.applyEdit() {
+		m.finishFieldCommit()
+		return ""
 	}
-	m.ws.editing = e
+	err := m.ws.editing.err
+	m.ws.editing = nil
+	return err
 }
 
 // editKey routes one key to the active field input: runes insert at the

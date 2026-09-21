@@ -64,14 +64,14 @@ func TestKeys_table(t *testing.T) {
 	c = cpress(c, "esc")
 	require.Nil(t, c.ws.editing, "esc exits the edit")
 
-	// a adds a row input on a table section
+	// a opens the add form on a table section
 	for !c.ws.atSection("packages") {
 		c = cpress(c, "j")
 	}
 	c = cpress(c, "a")
-	require.NotNil(t, c.ws.editing)
-	require.True(t, c.ws.editing.add)
+	addFormTop(t, c)
 	c = cpress(c, "esc")
+	require.Empty(t, c.modals, "esc pops the form")
 
 	// d / D: remove-row and discard-draft confirms
 	c = cpress(c, "enter")

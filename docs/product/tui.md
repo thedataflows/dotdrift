@@ -98,8 +98,9 @@ view stack wholesale). Its parts:
   saves through the untouched 0065 pipeline (staged tier-1 errors and
   the tier-2 cross-check block in place; a disk-hash conflict opens a
   reload-or-keep modal); `D` discards with a confirm naming module,
-  layer, and change count; `a` adds a row to packages/tools/hooks/links,
-  `d` removes one with confirm. A broken file edits as raw text lines
+  layer, and change count; `a` opens a labeled add form for the section
+  under the cursor (0077), `d` removes one with confirm. A broken file
+  edits as raw text lines
   (`e` on a line); a repair that parses unlocks the structured surface,
   and its save sends the whole repaired file as the raw candidate
   (`SaveRequest.Raw` — the splice step swaps out, every other pipeline
@@ -114,20 +115,35 @@ view stack wholesale). Its parts:
   `ExecStart = /usr/bin/demo` needs no quoting, while `"x"`, `30`,
   `[a, b]`, and inline tables land with their TOML types. Secrets,
   mounts, and smb shares edit the same way — one container per entry,
-  its set fields beneath it. The add grammar reaches everything the
+  its set fields beneath it. The add forms reach everything the
   disclosure hides: `a` on a section header adds the section's entry
   (an empty section's header is selectable; the structural families'
   headers always are — they are the entry-level scope), `a` on a
-  container adds `field = value` INTO the entry, `a` on the smb header
-  takes `group = …`-style scalars beside bare share names, and `a` on
-  when takes `and`/`or`/`not` (nesting deeper) or `field = value` at
-  any depth. Editing a field to its zero value clears it and the row
+  container adds a field INTO the entry (the field is a closed choice),
+  `a` on the smb header offers share/group/users/avahi beside bare
+  share names, and `a` on when offers leaf or `and`/`or`/`not` (nesting
+  deeper) at any depth. Editing a field to its zero value clears it and
+  the row
   disappears (required fields refuse to empty); a container with
   nothing set yet shows a dim `· a adds "field = value"` hint. Entries
   resolve could never accept are refused at save (missing mount
   source/destination/type, empty share path, an empty when group —
   nothing to evaluate) — tier-2, in place. meta keeps its description
   and scope rows: identity, not options.
+- **Add forms** (issue [0077](../issues/0077-tui-add-forms.md)). `a`
+  opens a centered form titled with the entry and its destination
+  (`add package · demo`) — the inline grammar input it replaced
+  rendered nowhere, so users typed blind. Rows are labeled, identity
+  first (name, target, unit, directive), closed sets as `< >` choices
+  (packages present/absent, hooks pre/post, smb what, when kind, the
+  structural field choices), values free text; letters are never
+  navigation, so `jdk` types as itself. Enter synthesizes the
+  pipeline's grammar and commits through the same applyEdit path —
+  validation, splice, ledger, and the cursor landing on the new row —
+  and a refusal keeps the form open with the error inside it. writes is
+  addable now: a line kind (target + line text, spaces and `=` allowed)
+  or a link kind (target + source). The line lands in writes, the link
+  in links.
 - **The modal family** (T-tui-modals). One confirm component — question
   title, consequence body with full target identity, `y` confirms and
   every other key (or `esc`) cancels — backs dirty-quit (`q` with

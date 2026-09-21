@@ -54,6 +54,8 @@ func keyTable() []keyTableEntry {
 		{"n", "nav", "new module", func(m *Compositor) tea.Cmd { m.openManageCreate(""); return nil }},
 		{"m", "nav", "manage modules", func(m *Compositor) tea.Cmd { m.openManage(); return nil }},
 		{"O", "nav", "override module", func(m *Compositor) tea.Cmd { return m.overrideHere() }},
+		{"space", "nav", "yank module", func(m *Compositor) tea.Cmd { m.toggleYank(); return nil }},
+		{"y", "nav", "yank module", func(m *Compositor) tea.Cmd { m.toggleYank(); return nil }},
 		// shared
 		{"/", "work", "palette", func(m *Compositor) tea.Cmd { m.openPalette(); return nil }},
 		{"?", "both", "help", func(m *Compositor) tea.Cmd { m.openHelp(); return nil }},
@@ -198,10 +200,12 @@ func (m *Compositor) helpRows() []helpRow {
 // --- plan surface ---
 
 // planPreviewMsg carries the read-only plan classification (p) — never
-// gated, never credentialed.
+// gated, never credentialed. scoped names the yank set the preview ran
+// under (0093), nil for the whole profile.
 type planPreviewMsg struct {
 	previews []service.StepPreview
 	err      error
+	scoped   []string
 }
 
 // planModel is the read-only plan modal: the steps, the privilege
@@ -210,6 +214,7 @@ type planModel struct {
 	th       theme
 	previews []service.StepPreview
 	err      error
+	scoped   []string
 }
 
 func (p *planModel) update(msg tea.Msg) tea.Cmd { return nil }
@@ -220,7 +225,11 @@ func (p *planModel) view(w, _ int) string {
 		b.WriteString(p.th.errorMark.Render("plan failed: "+firstLineOf(p.err.Error())) + "\n")
 	} else {
 		p.th.modalTitle.Render("plan")
-		b.WriteString(p.th.modalTitle.Render("plan — "+strconv.Itoa(len(p.previews))+" step(s)") + "\n\n")
+		b.WriteString(p.th.modalTitle.Render("plan — "+strconv.Itoa(len(p.previews))+" step(s)") + "\n")
+		if len(p.scoped) > 0 {
+			b.WriteString(p.th.meta.Render("  yanked: "+strings.Join(p.scoped, ", ")) + "\n")
+		}
+		b.WriteString("\n")
 		for _, s := range p.previews {
 			line := "  " + s.Name
 			if s.NeedsTTY {
@@ -243,15 +252,17 @@ func (p *planModel) view(w, _ int) string {
 }
 
 // openPlan previews the plan (p) — the classification read, no gates.
+// A non-empty yank set scopes the preview to those modules (0093).
 func (m *Compositor) openPlan() tea.Cmd {
 	if m.applyFor == nil {
 		m.message, m.msgErr = "no apply path in this shell", true
 		return nil
 	}
 	l := m.applyFor(m.facts)
+	mods := m.nav.yankedIDs()
 	return func() tea.Msg {
-		previews, err := l.Preview(service.ApplyOpts{ProfilePath: m.root})
-		return planPreviewMsg{previews: previews, err: err}
+		previews, err := l.Preview(service.ApplyOpts{ProfilePath: m.root, Modules: mods})
+		return planPreviewMsg{previews: previews, err: err, scoped: mods}
 	}
 }
 

@@ -90,7 +90,8 @@ type Compositor struct {
 	send          func(tea.Msg)
 	apply         *applyRunState
 	applyPreviews []service.StepPreview
-	pumpNoBlock   bool // tests: the event pump never blocks a settle loop
+	applyModules  []string // the yank-set snapshot P pressed with (0093)
+	pumpNoBlock   bool     // tests: the event pump never blocks a settle loop
 
 	// paletteRecents: the palette's last-8 selections, session-only.
 	paletteRecents []string
@@ -206,6 +207,7 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.nav.modules = navModules(msg.read)
 			m.nav.loadErr = ""
+			m.nav.pruneYanked() // 0093: a deleted module loses its yank
 			if f := msg.read.Facts; f != nil {
 				m.host, m.user = f.Hostname, f.Username
 				m.facts = f
@@ -296,7 +298,7 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case applyWaitedMsg:
 		return m, m.applyWaited(msg)
 	case planPreviewMsg:
-		m.modals = append(m.modals, &planModel{th: m.th, previews: msg.previews, err: msg.err})
+		m.modals = append(m.modals, &planModel{th: m.th, previews: msg.previews, err: msg.err, scoped: msg.scoped})
 		return m, nil
 	case applyHandoverMsg:
 		return m, tea.ExecProcess(msg.cmd, func(err error) tea.Msg {
@@ -340,6 +342,10 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Edit mode owns all keys while a field input is active (? still
 	// opens help).
 	if m.ws.editing != nil {
+		if p, ok := msg.(tea.PasteMsg); ok {
+			m.pasteEdit(p.Content) // 0091: bracketed paste is a message, not keys
+			return m, nil
+		}
 		if k, ok := msg.(tea.KeyPressMsg); ok {
 			if k.String() == "?" {
 				m.openHelp()
@@ -354,6 +360,13 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// ? is a query character there, like in the palette. Other messages
 	// (mouse) fall through to the base handlers.
 	if m.nav.filtering {
+		if p, ok := msg.(tea.PasteMsg); ok {
+			// 0091: paste extends the query like typed text.
+			want := m.nav.selected().moduleID
+			m.nav.query = append(m.nav.query, pasteRunes(p.Content)...)
+			m.nav.refilter(want)
+			return m, nil
+		}
 		if k, ok := msg.(tea.KeyPressMsg); ok {
 			return m, m.navFilterKey(k)
 		}

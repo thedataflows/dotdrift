@@ -1206,14 +1206,34 @@ func (m *Compositor) editKey(k tea.KeyPressMsg) tea.Cmd {
 			e.cur += len(runes)
 		}
 	}
-	// Live tier-1 at the field while typing.
+	m.revalidateEdit()
+	return nil
+}
+
+// revalidateEdit refreshes the live tier-1 error at the field — the
+// tail of every input mutation (typing, paste).
+func (m *Compositor) revalidateEdit() {
+	e := m.ws.editing
 	if !e.add {
 		row := m.ws.rows[e.row]
 		e.err = validateField(row.family, row.key, e.inputString())
 	} else {
 		e.err = validateAdd(addFamily(e.section), e.addPath, e.inputString())
 	}
-	return nil
+}
+
+// pasteEdit inserts bracketed-paste content at the caret (0091): one
+// PasteMsg is many runes, not many keys. Control runes drop out; the
+// live validation a typed rune gets runs the same.
+func (m *Compositor) pasteEdit(content string) {
+	e := m.ws.editing
+	rs := pasteRunes(content)
+	if len(rs) == 0 {
+		return
+	}
+	e.input = append(e.input[:e.cur], append(rs, e.input[e.cur:]...)...)
+	e.cur += len(rs)
+	m.revalidateEdit()
 }
 
 // undoEdit steps the active draft back one committed change (ctrl+z).

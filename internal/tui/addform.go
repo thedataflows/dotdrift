@@ -76,6 +76,10 @@ func (f *addForm) update(msg tea.Msg) tea.Cmd {
 				}
 			}
 		}
+	case tea.PasteMsg:
+		// 0091: bracketed paste is a message, not keys — it lands in
+		// the focused row's field.
+		f.rows[f.cur].insertRunes(pasteRunes(msg.Content))
 	case tea.MouseWheelMsg:
 		if msg.Button == tea.MouseWheelUp && f.cur > 0 {
 			f.cur--

@@ -329,13 +329,20 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	return []string{th.rowText.MaxWidth(width).Render("  " + text)}
 }
 
-// editLines renders the active input: the buffer with a cursor bar, plus
+// editLines renders the active input: the buffer with a block caret, plus
 // the live tier-1 error beneath. The input row takes the cursor treatment
-// (bar + accent, 0075).
+// (bar + accent, 0075). The caret is reverse video on the cell under it
+// (0092) — never a glyph inserted into the text, which would take a cell
+// and shift the tail one column right wherever the caret rests.
 func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
 	runes := e.input
 	cur := min(e.cur, len(runes))
-	shown := string(runes[:cur]) + "▏" + string(runes[cur:])
+	at, after := " ", ""
+	if cur < len(runes) {
+		at = string(runes[cur])
+		after = string(runes[cur+1:])
+	}
+	shown := string(runes[:cur]) + th.caret.Render(at) + after
 	lines := []string{th.cursorRow.MaxWidth(width).Render(" ▸ " + shown)}
 	if e.err != "" {
 		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))

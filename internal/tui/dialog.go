@@ -74,8 +74,31 @@ func (f *dlgField) set(s string) {
 }
 
 func (f *dlgField) typeRune(r rune) {
-	f.value = append(f.value[:f.cursor], append([]rune{r}, f.value[f.cursor:]...)...)
-	f.cursor++
+	f.insertRunes([]rune{r})
+}
+
+// insertRunes inserts a run of runes at the cursor — the paste path
+// (0091): one PasteMsg is many runes, not many keys.
+func (f *dlgField) insertRunes(rs []rune) {
+	if len(rs) == 0 {
+		return
+	}
+	f.value = append(f.value[:f.cursor], append(rs, f.value[f.cursor:]...)...)
+	f.cursor += len(rs)
+}
+
+// pasteRunes sanitizes bracketed-paste content for the shell's
+// single-line inputs (0091): control runes (newlines, CR, tab) drop
+// out; everything printable, spaces included, stays.
+func pasteRunes(s string) []rune {
+	out := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 func (f *dlgField) backspace() {
@@ -152,6 +175,14 @@ func (r dlgRow) right() {
 func (r dlgRow) typeRune(rr rune) {
 	if r.field != nil {
 		r.field.typeRune(rr)
+	}
+}
+
+// insertRunes pastes into the row's field; choice rows have no text to
+// take (0091).
+func (r dlgRow) insertRunes(rs []rune) {
+	if r.field != nil {
+		r.field.insertRunes(rs)
 	}
 }
 
@@ -332,6 +363,15 @@ func (d *onboardDialog) HandleKey(key string) tea.Cmd {
 	return nil
 }
 
+// paste lands bracketed-paste content in the focused row's field
+// (0091); an armed gate swallows it like any key.
+func (d *onboardDialog) paste(s string) {
+	if d.confirm {
+		return
+	}
+	d.rows[d.cur].insertRunes(pasteRunes(s))
+}
+
 func (d *onboardDialog) run() tea.Msg {
 	layer := d.rows[2].choice.String()
 	owner := d.rows[3].field.String()
@@ -504,6 +544,16 @@ func (d *restoreDialog) HandleKey(key string) tea.Cmd {
 		d.confirm = true
 	}
 	return nil
+}
+
+// paste lands bracketed-paste content in the targets field (0091).
+// Once the plan is resolved there is no text field to take it; an
+// armed gate swallows it like any key.
+func (d *restoreDialog) paste(s string) {
+	if d.confirm || d.resolved {
+		return
+	}
+	d.targets.insertRunes(pasteRunes(s))
 }
 
 func (d *restoreDialog) resolve() tea.Msg {
@@ -701,6 +751,15 @@ func (d *generateDialog) valid() bool {
 		}
 	}
 	return true
+}
+
+// paste lands bracketed-paste content in the focused row's field
+// (0091); a choice row ignores it, an armed gate swallows it.
+func (d *generateDialog) paste(s string) {
+	if d.confirm {
+		return
+	}
+	d.all()[d.cur].insertRunes(pasteRunes(s))
 }
 
 func (d *generateDialog) run() tea.Msg {

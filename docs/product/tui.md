@@ -61,7 +61,8 @@ view stack wholesale). Its parts:
   child points the workspace at that layer file; the workspace and the
   nav never disagree. A module row is dirty (`●`) when any of its layer
   files has a draft in the 0065 ledger; the child names its own file's
-  draft. Expansion state is remembered per session, and a reload keeps
+  draft. A yanked module row carries `✓` (0093's mark set, below).
+  Expansion state is remembered per session, and a reload keeps
   the selected row selected (clamping when the row is gone). Skipped or
   failed modules stay visible, greyed, naming the reason on the row;
   while the read is in flight the pane shows placeholder rows; an empty
@@ -102,7 +103,12 @@ view stack wholesale). Its parts:
   stretch of surface still says where you are.
 - **Inline editing** (T-tui-editing). `enter`/`e` turns the field under
   the cursor into an input without leaving the workspace; the tier-1
-  error renders at the field live. Fields whose value set is closed
+  error renders at the field live. The input's caret is a reverse-video
+  block on the character under it — never a glyph inserted into the
+  text, so the tail never shifts a cell (0092) — and bracketed paste
+  lands at the caret with control runes stripped (0091); the same paste
+  reaches every text input in the shell (dialog fields, the add form,
+  the nav filter, the palette, the elevation password). Fields whose value set is closed
   open a choice picker instead (issue [0076](../issues/0076-tui-choice-editors-and-location.md)):
   `scope` (user/system), mount `state` (enabled/disabled), the boolean
   fields (`false`/`true`), smb `avahi` (`true`/`false`/`unset`), and
@@ -245,7 +251,13 @@ view stack wholesale). Its parts:
   the same way (0089): enter arms a confirm whose prompt — and a `y
   runs · n/esc back` footer — renders only while the gate is armed, and
   `n` disarms back to the form (delete module's `n` steps back to the
-  manage menu).
+  manage menu). `space`/`y` on the nav pane toggle the selected module's
+  yank mark (0093): a non-empty yank set scopes `p` and `P` to exactly
+  those modules — the set rides the CLI's module filter
+  (`ApplyOpts.Modules`), snapshots at the `P` press and rides the gates
+  into the run, the plan modal names the scope under its title, and a
+  nav reload prunes ids whose module disappeared — while an empty set
+  keeps the default: all modules.
   `pgup`/`pgdown` move the cursor a visible page and `home`/`end` jump
   to the first/last row, in both panes; the workspace's visible window
   always follows the cursor (0075). Mouse parity

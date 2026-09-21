@@ -172,6 +172,16 @@ func (d *manageDialog) HandleKey(key string) tea.Cmd {
 	return nil
 }
 
+// paste lands bracketed-paste content in the focused row's field
+// (0091). Only the create/move forms have fields; the menu and the
+// delete gate have no text to take.
+func (d *manageDialog) paste(s string) {
+	if d.confirm || (d.mode != manageCreate && d.mode != manageMove) {
+		return
+	}
+	d.rows[d.cur].insertRunes(pasteRunes(s))
+}
+
 // openEntry swaps the menu's entry in place: create/move build their
 // rows, delete pre-computes the orphan preview and sits at its gate.
 func (d *manageDialog) openEntry() {

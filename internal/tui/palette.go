@@ -295,6 +295,11 @@ func (p *paletteModel) update(msg tea.Msg) tea.Cmd {
 		if p.sel >= p.scroll+paletteMaxVisible {
 			p.scroll = p.sel - paletteMaxVisible + 1
 		}
+	case tea.PasteMsg:
+		// 0091: bracketed paste extends the query like typed text.
+		p.query = append(p.query, pasteRunes(msg.Content)...)
+		p.refilter()
+		p.sel = 0
 	case tea.MouseWheelMsg:
 		if msg.Button == tea.MouseWheelUp && p.sel > 0 {
 			p.sel--

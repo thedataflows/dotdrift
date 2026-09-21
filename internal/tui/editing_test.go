@@ -51,6 +51,25 @@ func editShell(t *testing.T) (map[string]string, string, *Compositor) {
 	return subs, dir, cpress(c, "j") // id row → description row
 }
 
+func TestEdit_caretIsBlockNotGlyph(t *testing.T) {
+	// 0092: the caret is a reverse-video block on the character under it,
+	// never a glyph inserted into the text — a mid-text caret adds no
+	// cell, so the tail never shifts.
+	th := newTheme(true)
+	w := &workspaceModel{}
+	e := &wsEdit{input: []rune("abcd"), cur: 2}
+
+	lines := w.editLines(e, th, 60)
+	plain := ansiRe.ReplaceAllString(lines[0], "")
+	require.Equal(t, "│ ▸ abcd", plain, "a mid-text caret adds no cell (the bar is the row's cursor border)")
+	require.Contains(t, lines[0], th.caret.Render("c"), "the char under the caret takes the block treatment")
+	require.NotContains(t, plain, "▏", "no caret glyph is inserted into the text")
+
+	e.cur = 4
+	lines = w.editLines(e, th, 60)
+	require.Contains(t, lines[0], th.caret.Render(" "), "end of input renders a caret cell")
+}
+
 func TestEdit_enterStartsEdit_escExits(t *testing.T) {
 	_, _, c := editShell(t)
 
@@ -200,7 +219,7 @@ func TestEdit_diskConflictRefusalSurfaces(t *testing.T) {
 	c = wsPress(t, c, "enter")
 
 	// The file changes on disk behind the draft's back.
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte("\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte("id = \"demo\"\n"), 0o644))
 
 	c, cmd := cstep(c, keyCtrl('s'))
 	for i := 0; i < 10 && cmd != nil; i++ {
@@ -239,7 +258,7 @@ func TestEdit_discardRequiresConfirm(t *testing.T) {
 	c = cpress(c, "y")
 	require.Nil(t, c.wsDraftFor(dir), "y discards the draft")
 	require.Contains(t, c.ws.placeholderOrBody(), "id demo", "the surface reverts to disk state")
-	require.NotContains(t, c.ws.placeholderOrBody(), "demo-app-next")
+	require.NotContains(t, c.ws.placeholderOrBody(), "the demo module-next")
 }
 
 func TestEdit_rowAddRemove(t *testing.T) {

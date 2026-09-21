@@ -17,10 +17,12 @@ type fakeLauncher struct {
 	startErr    error
 	run         ApplyRun
 	started     int
+	previewOpts []service.ApplyOpts
 	startedOpts []service.ApplyOpts
 }
 
-func (f *fakeLauncher) Preview(service.ApplyOpts) ([]service.StepPreview, error) {
+func (f *fakeLauncher) Preview(opts service.ApplyOpts) ([]service.StepPreview, error) {
+	f.previewOpts = append(f.previewOpts, opts)
 	return f.previews, f.previewErr
 }
 

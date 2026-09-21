@@ -61,6 +61,10 @@ type navModel struct {
 	// is the typing mode that owns the keys (0081 T-tui-navfilter).
 	filtering bool
 	query     []rune
+
+	// The yank set (0093): session-only module ids space/y toggle; p/P
+	// scope plan and apply to it (empty = all modules).
+	yanked map[string]bool
 }
 
 // navModules builds the module list from a landed read: one row per
@@ -238,6 +242,56 @@ func (m *Compositor) navFilterKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// toggleYank implements space/y on the nav pane (0093): the selected
+// row's module joins or leaves the yank set. A layer child row yanks
+// its module — the apply filter is module-granular, like the CLI's.
+func (m *Compositor) toggleYank() {
+	id := m.nav.selected().moduleID
+	if id == "" {
+		return
+	}
+	if m.nav.yanked == nil {
+		m.nav.yanked = map[string]bool{}
+	}
+	if m.nav.yanked[id] {
+		delete(m.nav.yanked, id)
+	} else {
+		m.nav.yanked[id] = true
+	}
+}
+
+// yankedIDs returns the yank set sorted (stable for ApplyOpts.Modules),
+// nil when empty — nil is the service layer's "all modules".
+func (n *navModel) yankedIDs() []string {
+	if len(n.yanked) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(n.yanked))
+	for id := range n.yanked {
+		out = append(out, id)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// pruneYanked drops yanked ids no module names anymore (a reload after
+// delete module): a stale id would surface as "unknown module(s)" from
+// LimitTo the next time p/P scoped.
+func (n *navModel) pruneYanked() {
+	if len(n.yanked) == 0 {
+		return
+	}
+	alive := make(map[string]bool, len(n.modules))
+	for _, m := range n.modules {
+		alive[m.id] = true
+	}
+	for id := range n.yanked {
+		if !alive[id] {
+			delete(n.yanked, id)
+		}
+	}
+}
+
 // selected returns the row under the cursor, or the zero row.
 func (n *navModel) selected() navRow {
 	rows := n.rows()
@@ -408,6 +462,9 @@ func (n *navModel) rowView(r navRow, cursor bool, th theme, drafts map[string]bo
 	}
 	if n.rowDirty(r, drafts) {
 		rest += " " + th.dirtyMark.Render("●")
+	}
+	if r.layer == "" && n.yanked[r.moduleID] {
+		rest += " " + th.yankMark.Render("✓")
 	}
 	if cursor {
 		return th.cursorRow.MaxWidth(w).Render(" " + rest)

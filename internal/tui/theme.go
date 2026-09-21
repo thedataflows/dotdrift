@@ -55,6 +55,7 @@ type theme struct {
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
 	cursorRow     lipgloss.Style // the cursor row: bar + accent text (0075)
 	rowText       lipgloss.Style // value/content text (0080); the truncation carrier
+	caret         lipgloss.Style // the block caret: reverse video on the cell under it (0092)
 	fieldLabel    lipgloss.Style // a dialog/form row's fixed label (0080)
 	modalBorder   lipgloss.Style // the confirm modal's frame (M15)
 	modalTitle    lipgloss.Style // the confirm modal's question (M15)
@@ -63,6 +64,7 @@ type theme struct {
 	groupTitle   lipgloss.Style // MODULES / ACCOUNTS / PROFILE
 	disabledMark lipgloss.Style // (disabled) suffix
 	reasonMark   lipgloss.Style // requires-root and other skip reasons
+	yankMark     lipgloss.Style // the ✓ yanked-module mark (0093)
 
 	// Main pane: view titles and loading/placeholder bodies.
 	viewTitle    lipgloss.Style // "MODULE shell", "STATUS", …
@@ -90,6 +92,7 @@ func newTheme(isDark bool) theme {
 			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(p.fuchsia), // the bubbles delegate treatment
 		rowText:     lipgloss.NewStyle().Foreground(p.value), // values read as content (0080)
+		caret:       lipgloss.NewStyle().Reverse(true),       // the block caret: the cell itself, no glyph (0092)
 		fieldLabel:  lipgloss.NewStyle().Foreground(p.muted), // fixed labels recede (0080)
 		modalBorder: pane.BorderForeground(p.amber),
 		modalTitle:  lipgloss.NewStyle().Bold(true).Foreground(p.amber),
@@ -97,6 +100,7 @@ func newTheme(isDark bool) theme {
 		groupTitle:   lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 		disabledMark: lipgloss.NewStyle().Foreground(p.dim),
 		reasonMark:   lipgloss.NewStyle().Foreground(p.amber),
+		yankMark:     lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 
 		viewTitle:    lipgloss.NewStyle().Bold(true),
 		loading:      lipgloss.NewStyle().Foreground(p.muted),

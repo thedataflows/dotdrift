@@ -78,3 +78,6 @@ use, plus emergent features and chores. Planned work lives in
 | [0088](0088-hook-tasks-always-interactive.md) | Hook tasks are always generated `interactive = true`, not gated on the writing session's TTY | done | high |
 | [0089](0089-tui-dialog-confirm-gate-invisible.md) | Form dialogs arm an invisible confirm gate — enter freezes the dialog | done | high |
 | [0090](0090-delete-app-field-rename-app-flag.md) | Delete the `app` module.toml field; rename `--app` to `--module` | done | medium |
+| [0091](0091-tui-text-inputs-drop-paste.md) | TUI text inputs drop bracketed paste — PasteMsg has no consumer | done | high |
+| [0092](0092-tui-field-caret-glyph-shifts-text.md) | Field editor caret glyph occupies a cell — letters right of the caret shift | done | medium |
+| [0093](0093-tui-yank-modules-scoped-plan-apply.md) | Nav yank — space/y marks modules, p/P plan and apply the yanked set only | done | medium |

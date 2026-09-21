@@ -50,6 +50,13 @@ func (e *elevationModel) cancel() {
 }
 
 func (e *elevationModel) update(msg tea.Msg) tea.Cmd {
+	if p, ok := msg.(tea.PasteMsg); ok {
+		// 0091: pasting a password (a password manager's primary move)
+		// extends the buffer; control runes drop out.
+		e.input = append(e.input, []byte(string(pasteRunes(p.Content)))...)
+		e.failed = false
+		return nil
+	}
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil
@@ -147,14 +154,16 @@ type applyRunState struct {
 type applyDrainedMsg struct{}
 
 // startApply previews the would-be session (P). The gates — destructive
-// confirm, then elevation — hang off the preview's landing.
+// confirm, then elevation — hang off the preview's landing. A non-empty
+// yank set snapshots here and rides the chain into Start (0093).
 func (m *Compositor) startApply() tea.Cmd {
 	if m.applying || m.applyFor == nil {
 		return nil
 	}
+	m.applyModules = m.nav.yankedIDs()
 	l := m.applyFor(m.facts)
 	return func() tea.Msg {
-		previews, err := l.Preview(service.ApplyOpts{ProfilePath: m.root})
+		previews, err := l.Preview(service.ApplyOpts{ProfilePath: m.root, Modules: m.applyModules})
 		return applyPreviewMsg{previews: previews, err: err}
 	}
 }
@@ -222,6 +231,7 @@ func (m *Compositor) startApplyRun() tea.Cmd {
 	opts := service.ApplyOpts{
 		ProfilePath: m.root,
 		Yes:         true,
+		Modules:     m.applyModules, // the P-press yank snapshot (0093); nil = all
 	}
 	if m.send != nil {
 		avail := true
@@ -452,6 +462,14 @@ func (m *dialogModal) view(w, h int) string {
 func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
 		return m.d.HandleKey(k.String())
+	}
+	if p, ok := msg.(tea.PasteMsg); ok {
+		// 0091: bracketed paste is a message, not keys — the dialog's
+		// paste hook lands it in the focused field.
+		if pd, ok := m.d.(interface{ paste(string) }); ok {
+			pd.paste(p.Content)
+		}
+		return nil
 	}
 	if rp, ok := msg.(restorePlanMsg); ok {
 		// 0084: the resolve cmd's message lands on the one dialog that

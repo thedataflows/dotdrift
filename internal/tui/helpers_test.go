@@ -58,6 +58,8 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
 	case "esc":
 		return tea.KeyPressMsg{Code: tea.KeyEscape}
+	case "space":
+		return tea.KeyPressMsg{Code: tea.KeySpace}
 	case "enter":
 		return tea.KeyPressMsg{Code: tea.KeyEnter}
 	case "up":

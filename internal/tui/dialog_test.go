@@ -318,7 +318,7 @@ func TestRestoreDialog_planLandsThroughCompositor(t *testing.T) {
 	msg = mustMsg(cmd)
 	fm, ok := msg.(writeFinishedMsg)
 	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
-	c, reload := cstep(c, fm)
+	_, reload := cstep(c, fm)
 	require.Nil(t, reload, "restore touches no profile dir — no nav reload")
 	require.Len(t, fake.restoreCalls, 1, "only the user-writable target restores")
 	require.Equal(t, "g1", fake.restoreCalls[0].Gen, "the pinned generation rides the call")
@@ -376,13 +376,13 @@ func TestWritesDialogs_successfulWritesReloadNav(t *testing.T) {
 	typeInto(t, g, "/mnt/data")
 	g.HandleKey("down")
 	typeInto(t, g, "vfat")
-	c, cmd = cstep(c, keyPress("enter")) // confirm gate
+	c, _ = cstep(c, keyPress("enter")) // confirm gate
 	c, cmd = cstep(c, keyPress("y"))
 	msg = mustMsg(cmd)
 	fm, ok = msg.(writeFinishedMsg)
 	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
 	require.Equal(t, "generate", fm.key)
-	c, reload = cstep(c, fm)
+	_, reload = cstep(c, fm)
 	require.NotNil(t, reload, "a successful generate re-reads the nav")
 	require.Len(t, fake.genCalls, 1, "the module was written through the service")
 }
@@ -406,7 +406,7 @@ func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {
 	msg := mustMsg(cmd)
 	fm, ok := msg.(writeFinishedMsg)
 	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
-	c, reload := cstep(c, fm)
+	_, reload := cstep(c, fm)
 	require.Nil(t, reload, "a failed write re-reads nothing")
 	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""),
 		"system path", "the error renders")

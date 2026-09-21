@@ -1,0 +1,4 @@
+internal/mise/mise.go:754:22: unreachable func: FakeRunner.EnsureAndInstall
+internal/mise/mise.go:759:22: unreachable func: FakeRunner.DotfilesApply
+internal/mise/mise.go:766:22: unreachable func: FakeRunner.Bootstrap
+internal/tui/dialog.go:384:25: unreachable func: restoreDialog.applyPlan

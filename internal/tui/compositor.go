@@ -494,9 +494,6 @@ func (m *Compositor) dirtyDrafts() int {
 	return n
 }
 
-// wsDraftFor returns the draft for a layer dir, if any.
-func (m *Compositor) wsDraftFor(dir string) *wsDraft { return m.store[dir] }
-
 // draftMarks derives the nav/header dirty marker set from the store.
 // A fully undone draft is clean — it holds only a redo stack.
 func (m *Compositor) draftMarks() map[string]bool {

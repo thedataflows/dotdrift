@@ -129,23 +129,6 @@ func ColorEnabled(w io.Writer) bool {
 	return !NoColor && IsTerminal(w)
 }
 
-// OrStdout returns w if non-nil, else os.Stdout. Replaces the repeated
-// `out := c.Out; if out == nil { out = os.Stdout }` pattern.
-func OrStdout(w io.Writer) io.Writer {
-	if w == nil {
-		return os.Stdout
-	}
-	return w
-}
-
-// OrStderr returns w if non-nil, else os.Stderr.
-func OrStderr(w io.Writer) io.Writer {
-	if w == nil {
-		return os.Stderr
-	}
-	return w
-}
-
 // PathUserWritable reports whether the current user can write to path: if
 // path exists, check it directly; otherwise walk up to the nearest existing
 // ancestor (the directory that must hold the new entry) and check that. The

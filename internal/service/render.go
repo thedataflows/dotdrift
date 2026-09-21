@@ -152,18 +152,6 @@ func RenderDiff(w io.Writer, entries []DiffEntry, tool string, color bool) error
 	return nil
 }
 
-// RenderStatusSummary writes the status surface both front ends show
-// fact-identically: the profile/state/resume header, the drift report,
-// and the other-accounts notice (ADR-0006). The CLI adapter composes the
-// same pieces around its --diff section (header → diff → note).
-func RenderStatusSummary(w io.Writer, r *StatusRead) error {
-	if err := RenderStatusHeader(w, r); err != nil {
-		return err
-	}
-	RenderStatusNote(w, r)
-	return nil
-}
-
 // RenderStatusHeader writes the profile/state/resume header and the drift
 // report. Color follows the writer (executil.ColorEnabled) and the
 // profile's palette.

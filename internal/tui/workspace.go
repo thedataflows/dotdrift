@@ -86,46 +86,12 @@ type workspaceModel struct {
 	placeholder string // pre-reader identity text (and no-reader fallback)
 }
 
-// placeholderOrBody is the assertion seam for tests: the placeholder text
-// or the joined row texts.
-func (w *workspaceModel) placeholderOrBody() string {
-	if len(w.rows) == 0 {
-		return w.placeholder
-	}
-	var b strings.Builder
-	for _, r := range w.rows {
-		b.WriteString(r.text + "\n")
-	}
-	return b.String()
-}
-
 // activeDir is the directory of the active layer tab.
 func (w *workspaceModel) activeDir() string {
 	if w.active >= len(w.tabs) {
 		return ""
 	}
 	return w.tabs[w.active].dir
-}
-
-// atSection reports whether the cursor sits in the named section.
-func (w *workspaceModel) atSection(name string) bool {
-	return w.cursor < len(w.rows) && w.rows[w.cursor].section == name
-}
-
-// draftEdits returns the committed-edit marker set, nil without a draft.
-func (w *workspaceModel) draftEdits() map[string]bool {
-	if w.draft == nil {
-		return nil
-	}
-	return w.draft.edited
-}
-
-// draftErrs returns the staged tier-1 errors, nil without a draft.
-func (w *workspaceModel) draftErrs() map[string]string {
-	if w.draft == nil {
-		return nil
-	}
-	return w.draft.errs
 }
 
 // setRead applies a landed layer read and rebuilds the rows.

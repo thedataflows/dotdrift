@@ -249,26 +249,6 @@ func (p *paletteModel) refilter() {
 	p.scroll = 0
 }
 
-// visibleLabels is the test seam: labels of the current rows.
-func (p *paletteModel) visibleLabels() []string {
-	var out []string
-	for _, r := range p.rows {
-		out = append(out, r.label)
-	}
-	return out
-}
-
-// actionLabels is the test seam: the currently valid action labels.
-func (p *paletteModel) actionLabels() []string {
-	var out []string
-	for _, e := range p.all {
-		if e.section == sectionActions {
-			out = append(out, e.label)
-		}
-	}
-	return out
-}
-
 func (p *paletteModel) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:

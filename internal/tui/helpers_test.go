@@ -92,3 +92,59 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: rune(s[0])}
 	}
 }
+
+// wsDraftFor returns the compositor's draft for a layer dir, if any.
+func (m *Compositor) wsDraftFor(dir string) *wsDraft { return m.store[dir] }
+
+// visibleLabels lists the palette's current row labels.
+func (p *paletteModel) visibleLabels() []string {
+	var out []string
+	for _, r := range p.rows {
+		out = append(out, r.label)
+	}
+	return out
+}
+
+// actionLabels lists the currently valid action labels.
+func (p *paletteModel) actionLabels() []string {
+	var out []string
+	for _, e := range p.all {
+		if e.section == sectionActions {
+			out = append(out, e.label)
+		}
+	}
+	return out
+}
+
+// placeholderOrBody renders the placeholder text or the joined row texts.
+func (w *workspaceModel) placeholderOrBody() string {
+	if len(w.rows) == 0 {
+		return w.placeholder
+	}
+	var b strings.Builder
+	for _, r := range w.rows {
+		b.WriteString(r.text + "\n")
+	}
+	return b.String()
+}
+
+// atSection reports whether the cursor sits in the named section.
+func (w *workspaceModel) atSection(name string) bool {
+	return w.cursor < len(w.rows) && w.rows[w.cursor].section == name
+}
+
+// draftEdits returns the committed-edit marker set, nil without a draft.
+func (w *workspaceModel) draftEdits() map[string]bool {
+	if w.draft == nil {
+		return nil
+	}
+	return w.draft.edited
+}
+
+// draftErrs returns the staged tier-1 errors, nil without a draft.
+func (w *workspaceModel) draftErrs() map[string]string {
+	if w.draft == nil {
+		return nil
+	}
+	return w.draft.errs
+}

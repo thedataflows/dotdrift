@@ -12,8 +12,8 @@ import (
 	"os/exec"
 )
 
-// sudoRunner is the exec seam; tests swap it via SwapSudoRunner. No test
-// runs real sudo.
+// sudoRunner is the exec seam; the in-package tests stub it directly. No
+// test runs real sudo.
 var sudoRunner = func(line []byte) error {
 	cmd := exec.Command("sudo", "-k", "-S", "-v")
 	cmd.Stdin = bytes.NewReader(line)
@@ -23,10 +23,3 @@ var sudoRunner = func(line []byte) error {
 // SudoValidate validates pw against sudo, refreshing the timestamp. The
 // password line (pw + newline, cloned) is what sudo -S reads.
 func SudoValidate(pw []byte) error { return sudoRunner(append(bytes.Clone(pw), '\n')) }
-
-// SwapSudoRunner replaces the exec seam and returns the restore func.
-func SwapSudoRunner(run func(pw []byte) error) func() {
-	prev := sudoRunner
-	sudoRunner = run
-	return func() { sudoRunner = prev }
-}

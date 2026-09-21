@@ -67,6 +67,7 @@ func TestRender_statusSummary_golden(t *testing.T) {
 	require.NoError(t, err)
 
 	var buf bytes.Buffer
-	require.NoError(t, RenderStatusSummary(&buf, r))
+	require.NoError(t, RenderStatusHeader(&buf, r))
+	RenderStatusNote(&buf, r)
 	requireGoldenSub(t, "status-summary.golden", buf.String(), map[string]string{dir: "$PROFILE"})
 }

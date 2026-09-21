@@ -108,18 +108,6 @@ func (p *Palette) Seq(r Role) string {
 	return ""
 }
 
-// BoldSeq returns the bold variant of a role's sequence ("1;" prefix).
-func (p *Palette) BoldSeq(r Role) string {
-	seq := p.Seq(r)
-	if seq == "" {
-		return ""
-	}
-	if strings.HasPrefix(seq, "1;") {
-		return seq
-	}
-	return "1;" + seq
-}
-
 // Wrap renders s in the role's hue (full escape sequence).
 func (p *Palette) Wrap(r Role, s string) string {
 	seq := p.Seq(r)

@@ -19,14 +19,13 @@ func TestDefaultPalette(t *testing.T) {
 	require.Equal(t, "\033[90mx\033[0m", p.Wrap(palette.Dim, "x"))
 }
 
-// Seq returns the raw SGR parameters, BoldSeq the bold variant.
+// Seq returns the raw SGR parameters for a role.
 func TestSeqHelpers(t *testing.T) {
 	p := palette.Default()
 	require.Equal(t, "38;5;208", p.Seq(palette.Missing))
-	require.Equal(t, "1;38;5;208", p.BoldSeq(palette.Missing), "bold shade prefixes 1;")
 	p2, err := palette.FromConfig(map[string]string{"missing": "38;5;75"})
 	require.NoError(t, err)
-	require.Equal(t, "1;38;5;75", p2.BoldSeq(palette.Missing))
+	require.Equal(t, "38;5;75", p2.Seq(palette.Missing))
 }
 
 // FromConfig applies per-role overrides; unspecified roles keep defaults.

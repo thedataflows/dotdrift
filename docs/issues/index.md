@@ -70,3 +70,5 @@ use, plus emergent features and chores. Planned work lives in
 | [0080](0080-tui-value-label-colors.md) | TUI color semantics — values read as content, fixed labels recede | done | medium |
 | [0081](0081-tui-nav-inplace-filter.md) | TUI nav quick filter — / filters the module list in place, no modal | done | medium |
 | [0082](0082-tui-override-module.md) | Override module from the TUI — seeded overlays, live nav, merge-rule hint | done | medium |
+| [0083](0083-ponytail-audit-application.md) | Apply the ponytail over-engineering audit — delete the dead code, one lipgloss | done | medium |
+| [0084](0084-restore-dialog-plan-never-lands.md) | Restore dialog's plan resolution never lands — restorePlanMsg has no production consumer | open | high |

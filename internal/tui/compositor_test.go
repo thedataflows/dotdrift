@@ -203,7 +203,7 @@ func TestHeader_dirtyCountAndApplyBadge(t *testing.T) {
 	require.NotContains(t, frame, "●", "a clean shell shows no dirty count")
 	require.NotContains(t, frame, "apply", "no badge without a running apply")
 
-	c.store = map[string]*wsDraft{"/a": {}, "/b": {}}
+	c.store = map[string]*wsDraft{"/a": {changes: 1}, "/b": {changes: 1}}
 	require.Contains(t, c.View().Content, "● 2", "the header counts dirty drafts")
 
 	c.applying = true

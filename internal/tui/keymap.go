@@ -4,8 +4,9 @@ package tui
 // it, the footer hints and the contextual ? help render from it — one
 // source of truth, so docs cannot drift from behavior. esc stays
 // compositor-owned (one meaning: pop the top layer); shift is the
-// dangerous version (p/P, d/D); there is no undo — drafts and confirms
-// are the safety net.
+// dangerous version (p/P, d/D); ctrl+z / ctrl+shift+z step a draft back
+// and forward, confirms remain the safety net for what undo cannot
+// reach (saves, quits).
 
 import (
 	"errors"
@@ -83,6 +84,8 @@ func keyTable() []keyTableEntry {
 		{"d", "work", "remove row", func(m *Compositor) tea.Cmd { m.confirmRemoveRow(); return nil }},
 		{"D", "work", "discard draft", func(m *Compositor) tea.Cmd { m.confirmDiscard(); return nil }},
 		{"ctrl+s", "work", "save draft", func(m *Compositor) tea.Cmd { return m.saveDraft() }},
+		{"ctrl+z", "work", "undo", func(m *Compositor) tea.Cmd { m.undoEdit(); return nil }},
+		{"ctrl+shift+z", "work", "redo", func(m *Compositor) tea.Cmd { m.redoEdit(); return nil }},
 		{"L", "work", "cycle layer", func(m *Compositor) tea.Cmd { return m.cycleLayer() }},
 		{"w", "work", "writes actions", func(m *Compositor) tea.Cmd { m.openWritesMenu(); return nil }},
 	}

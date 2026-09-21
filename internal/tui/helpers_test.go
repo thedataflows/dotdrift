@@ -82,6 +82,12 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'n', Mod: tea.ModCtrl}
 	case "ctrl+s":
 		return tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}
+	case "ctrl+z":
+		return tea.KeyPressMsg{Code: 'z', Mod: tea.ModCtrl}
+	case "ctrl+shift+z":
+		return tea.KeyPressMsg{Code: 'z', Mod: tea.ModCtrl | tea.ModShift}
+	case "ctrl+r":
+		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
 	default:
 		return tea.KeyPressMsg{Code: rune(s[0])}
 	}

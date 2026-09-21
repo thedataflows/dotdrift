@@ -296,7 +296,7 @@ func (w *workspaceModel) titleView(th theme) string {
 	if w.needsRoot {
 		s += "  " + th.reasonMark.Render("needs root")
 	}
-	if w.draft != nil {
+	if w.draft.dirty() {
 		s += "  " + th.dirtyMark.Render("●")
 	}
 	return s

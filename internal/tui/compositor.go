@@ -442,17 +442,31 @@ func (m *Compositor) attachDraft() {
 	}
 }
 
+// dirtyDrafts counts the store's drafts that hold staged changes.
+func (m *Compositor) dirtyDrafts() int {
+	n := 0
+	for _, d := range m.store {
+		if d.dirty() {
+			n++
+		}
+	}
+	return n
+}
+
 // wsDraftFor returns the draft for a layer dir, if any.
 func (m *Compositor) wsDraftFor(dir string) *wsDraft { return m.store[dir] }
 
 // draftMarks derives the nav/header dirty marker set from the store.
+// A fully undone draft is clean — it holds only a redo stack.
 func (m *Compositor) draftMarks() map[string]bool {
 	if len(m.store) == 0 {
 		return nil
 	}
 	marks := make(map[string]bool, len(m.store))
-	for dir := range m.store {
-		marks[dir] = true
+	for dir, d := range m.store {
+		if d.dirty() {
+			marks[dir] = true
+		}
 	}
 	return marks
 }
@@ -485,14 +499,14 @@ func (m *Compositor) quit() tea.Cmd {
 		m.message, m.msgErr = "apply running — a opens the detail, ctrl+c cancels", false
 		return nil
 	}
-	if len(m.store) == 0 {
+	if m.dirtyDrafts() == 0 {
 		return tea.Quit
 	}
 	m.modals = append(m.modals, &confirmModel{
 		th:    m.th,
 		title: "quit with unsaved drafts?",
 		body: []string{
-			strconv.Itoa(len(m.store)) + " file(s) with unsaved changes",
+			strconv.Itoa(m.dirtyDrafts()) + " file(s) with unsaved changes",
 			"drafts live in memory only — quitting loses them",
 		},
 		onAnswer: func(ok bool) {
@@ -527,6 +541,9 @@ func (m *Compositor) ShortHelp() []key.Binding {
 	if m.focus == focusWork {
 		pane = "work"
 		primary = []string{"enter", "a", "d", "ctrl+s"}
+		if m.ws.draft.dirty() {
+			primary = append(primary, "ctrl+z")
+		}
 	}
 	byKey := map[string]keyTableEntry{}
 	for _, b := range keyTable() {
@@ -620,8 +637,8 @@ func (m *Compositor) headerView() string {
 	if m.host != "" {
 		s += m.th.headerContext.Render(" · host " + m.host + " · user " + m.user)
 	}
-	if len(m.store) > 0 {
-		s += m.th.dirtyMark.Render("  ● " + strconv.Itoa(len(m.store)))
+	if m.dirtyDrafts() > 0 {
+		s += "  " + m.th.dirtyMark.Render("● "+strconv.Itoa(m.dirtyDrafts()))
 	}
 	if m.applying {
 		s += m.th.applyBadge.Render("  ▶ apply")

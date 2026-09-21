@@ -56,7 +56,7 @@ func TestNav_dirtyMarkersPerFile(t *testing.T) {
 	c = cpress(c, "l")
 	user := c.nav.modules[0].layers[1]
 	require.Equal(t, "user", user.layer)
-	c.store = map[string]*wsDraft{user.dir: {}}
+	c.store = map[string]*wsDraft{user.dir: {changes: 1}} // a staged draft marks the file
 	requireGolden(t, "nav-dirty.golden", c.View().Content, subs)
 }
 

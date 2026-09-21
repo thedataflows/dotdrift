@@ -39,7 +39,56 @@ type wsDraft struct {
 	edited   map[string]bool       // row keys with committed edits (dirty markers)
 	changes  int                   // committed edits/adds/removes (the discard confirm's count)
 	errs     map[string]string     // row key → staged tier-1 error (blocks save)
+	undo     []wsSnapshot          // states before each committed change (T-tui-undo)
+	redo     []wsSnapshot          // undone states; a new commit truncates
 }
+
+// wsSnapshot is one undo step: the draft exactly as it was before a
+// committed change. cfg is not kept — restore re-decodes from raw (the
+// cheap exact clone), so the snapshot cannot dangle on a later in-place
+// mutation. banner is the broken-file notice when rawMode.
+type wsSnapshot struct {
+	raw     string
+	rawMode bool
+	changes int
+	cursor  int
+	banner  string
+	touched map[string]bool
+	edited  map[string]bool
+	errs    map[string]string
+}
+
+// undoDepth caps the undo stack; the oldest step falls off first.
+const undoDepth = 50
+
+// snapshot captures the draft's current state with the cursor position.
+func (d *wsDraft) snapshot(cursor int, banner string) wsSnapshot {
+	return wsSnapshot{
+		raw:     d.raw,
+		rawMode: d.rawMode,
+		changes: d.changes,
+		cursor:  cursor,
+		banner:  banner,
+		touched: maps.Clone(d.touched),
+		edited:  maps.Clone(d.edited),
+		errs:    maps.Clone(d.errs),
+	}
+}
+
+// pushUndo records a pre-commit state. Called at the three mutation
+// sites (applyEdit's commit block, applyRawLine, removeRow) — nowhere
+// else stages a change.
+func (d *wsDraft) pushUndo(cursor int, banner string) {
+	d.undo = append(d.undo, d.snapshot(cursor, banner))
+	d.redo = nil // a new commit truncates the redo branch
+	if len(d.undo) > undoDepth {
+		d.undo = d.undo[len(d.undo)-undoDepth:]
+	}
+}
+
+// dirty reports whether the draft holds staged changes. A fully undone
+// draft stays alive (its redo stack is the point) but counts as clean.
+func (d *wsDraft) dirty() bool { return d != nil && d.changes > 0 }
 
 // wsEdit is the active field/line input.
 type wsEdit struct {
@@ -541,6 +590,7 @@ func (w *workspaceModel) applyEdit() bool {
 		}
 	}
 
+	d.pushUndo(w.cursor, w.bannerText())
 	d.cfg = candidate
 	d.raw = spliced
 	d.touched[family] = true
@@ -589,6 +639,7 @@ func (w *workspaceModel) applyRawLine(e *wsEdit) bool {
 		return true
 	}
 	lines[idx] = e.inputString()
+	d.pushUndo(w.cursor, w.bannerText())
 	d.raw = strings.Join(lines, "\n") + "\n"
 	d.changes++
 	d.edited[row.key] = true
@@ -612,6 +663,15 @@ func (w *workspaceModel) readPath() string {
 		return w.read.Path
 	}
 	return w.activeDir() + "/module.toml"
+}
+
+// bannerText is the broken-file notice's first line, or "" — snapshots
+// carry it so undo can reinstate the raw-mode banner.
+func (w *workspaceModel) bannerText() string {
+	if w.schemaErr == nil {
+		return ""
+	}
+	return firstLineOf(w.schemaErr.Error())
 }
 
 // rawLineIndex parses the "line:N" row key.
@@ -870,6 +930,7 @@ func (w *workspaceModel) removeRow() {
 	default:
 		return
 	}
+	d.pushUndo(w.cursor, w.bannerText())
 	block := encodeFamily(row.family, candidate)
 	d.raw = tomlsplice.Splice(d.raw, map[string]string{row.family: block})
 	d.cfg = candidate
@@ -1059,6 +1120,68 @@ func (m *Compositor) editKey(k tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
+// undoEdit steps the active draft back one committed change (ctrl+z).
+// Back past the first change lands on the clean file: the draft stays
+// (the redo stack lives there) but counts as clean everywhere.
+func (m *Compositor) undoEdit() {
+	d := m.ws.draft
+	if d == nil || len(d.undo) == 0 {
+		m.message, m.msgErr = "nothing to undo", false
+		return
+	}
+	d.redo = append(d.redo, d.snapshot(m.ws.cursor, m.ws.bannerText()))
+	snap := d.undo[len(d.undo)-1]
+	d.undo = d.undo[:len(d.undo)-1]
+	m.restoreDraft(snap, "undid")
+}
+
+// redoEdit re-applies the last undone change (ctrl+shift+z).
+func (m *Compositor) redoEdit() {
+	d := m.ws.draft
+	if d == nil || len(d.redo) == 0 {
+		m.message, m.msgErr = "nothing to redo", false
+		return
+	}
+	d.undo = append(d.undo, d.snapshot(m.ws.cursor, m.ws.bannerText()))
+	snap := d.redo[len(d.redo)-1]
+	d.redo = d.redo[:len(d.redo)-1]
+	m.restoreDraft(snap, "redid")
+}
+
+// restoreDraft reinstates a snapshot onto the surface: the draft fields,
+// the ledger entry, the rows (structured or raw), and the cursor.
+func (m *Compositor) restoreDraft(snap wsSnapshot, verb string) {
+	dir := m.ws.activeDir()
+	d := m.ws.draft
+	d.raw, d.rawMode, d.changes = snap.raw, snap.rawMode, snap.changes
+	d.touched, d.edited, d.errs = snap.touched, snap.edited, snap.errs
+	if snap.rawMode {
+		d.cfg = nil
+	} else {
+		d.cfg = decodeModule(m.ws.readPath(), snap.raw)
+	}
+	m.store[dir] = d
+	switch {
+	case snap.rawMode:
+		m.ws.schemaErr = errors.New(snap.banner)
+		m.ws.rawErr = snap.raw
+		m.ws.rows = rawRows(snap.raw)
+	case m.ws.read != nil:
+		m.ws.schemaErr, m.ws.rawErr = nil, ""
+		cfg := d.cfg
+		if cfg == nil { // the clean snapshot: the landed read's rows
+			cfg = m.ws.read.Config
+		}
+		m.ws.rows = wsRows(cfg, m.ws.needsRoot)
+	}
+	m.ws.cursor = min(max(snap.cursor, 0), max(len(m.ws.rows)-1, 0))
+	note := verb + " — " + strconv.Itoa(d.changes) + " staged"
+	if d.changes == 0 {
+		note = verb + " — the saved file is back"
+	}
+	m.message, m.msgErr = note, false
+}
+
 // finishFieldCommit closes a committed field edit: the ledger takes the
 // draft, and a raw-mode file that parses again says so once.
 func (m *Compositor) finishFieldCommit() {
@@ -1150,7 +1273,7 @@ type saveFinishedMsg struct {
 // async with the footer spinner.
 func (m *Compositor) saveDraft() tea.Cmd {
 	d := m.ws.draft
-	if d == nil {
+	if !d.dirty() {
 		m.message, m.msgErr = "no changes", false
 		return nil
 	}

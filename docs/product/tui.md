@@ -142,7 +142,11 @@ view stack wholesale). Its parts:
   primary action in context (0078): on a row that owns no field — an
   empty section's header or a structural container — enter falls back
   to the same add form `a` opens, so the section under the cursor is
-  reachable without knowing a second key. A broken file
+  reachable without knowing a second key. On a links row enter/e opens
+  the link modal instead of the inline input (0095): a link is a
+  target/source pair — the target is the dotfiles map key — so the
+  prefilled form (the add form's twin) edits both, and committing a
+  changed target renames the entry, mode preserved. A broken file
   edits as raw text lines
   (`e` on a line); a repair that parses unlocks the structured surface,
   and its save sends the whole repaired file as the raw candidate

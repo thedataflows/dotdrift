@@ -620,6 +620,14 @@ func renamedKey(section, family, key, input string) string {
 	case profile.FamilyHooks:
 		phase, _, _ := strings.Cut(key, ":")
 		return phase + ":" + input
+	case profile.FamilyDotfiles:
+		// 0095: a link may rename (its target leads the grammar); a
+		// writes line edit keeps its key.
+		if section == "links" {
+			if parts := strings.Fields(input); len(parts) == 2 {
+				return parts[0]
+			}
+		}
 	}
 	return key
 }
@@ -796,10 +804,24 @@ func mutateField(cfg *profile.ModuleConfig, section, family, key, oldValue, inpu
 		d := cfg.Dotfiles[key]
 		if d.Line != "" {
 			d.Line = input // a writes row edits its line text
-		} else {
-			d.Source = input
+			cfg.Dotfiles[key] = d
+			return nil
 		}
-		cfg.Dotfiles[key] = d
+		// 0095: a link edits as "target source" (the link modal's
+		// grammar) — the target is the map key, so changing it renames
+		// the entry; the mode rides along untouched.
+		parts := strings.Fields(input)
+		if len(parts) != 2 {
+			return fmt.Errorf(`edit as "target source"`)
+		}
+		if parts[0] != key {
+			if _, exists := cfg.Dotfiles[parts[0]]; exists {
+				return fmt.Errorf("target %q already exists", parts[0])
+			}
+			delete(cfg.Dotfiles, key)
+		}
+		d.Source = parts[1]
+		cfg.Dotfiles[parts[0]] = d
 	}
 	return nil
 }
@@ -1078,6 +1100,12 @@ func (m *Compositor) startEdit() {
 		m.startAdd()
 		return
 	}
+	if row.section == "links" {
+		// 0095: a link is a target/source pair, not one text field —
+		// enter opens the link modal (the add form's twin, prefilled).
+		m.openLinkEdit(row)
+		return
+	}
 	if set := choiceSet(row); set != nil {
 		m.openChoice(row, set)
 		return
@@ -1102,14 +1130,32 @@ func (m *Compositor) openChoice(row wsRow, set []string) {
 
 // commitFieldAt commits value onto row i as if the text input had
 // received it: applyEdit validates, splices, and refreshes the surface.
-// A picker never leaves an input open behind the modal.
-func (m *Compositor) commitFieldAt(row int, value string) {
+// A picker never leaves an input open behind the modal. Returns the
+// refusal's error ("" on success) — the link modal renders it inside
+// the form; the pickers ignore it.
+func (m *Compositor) commitFieldAt(row int, value string) string {
 	m.ws.editing = &wsEdit{row: row, input: []rune(value), cur: len([]rune(value))}
 	if m.ws.applyEdit() {
 		m.finishFieldCommit()
-	} else {
-		m.ws.editing = nil
+		return ""
 	}
+	err := m.ws.editing.err
+	m.ws.editing = nil
+	return err
+}
+
+// openLinkEdit pushes the links row's modal (0095) — the add form's
+// twin, prefilled with the entry's target and source. The commit runs
+// the field-edit seam: same validation, splice, ledger, and undo as
+// the inline input the modal replaces; a refusal keeps the form open.
+func (m *Compositor) openLinkEdit(row wsRow) {
+	title, rows, build := editLinkFormSpec(m.ws.moduleID, row.key, row.value)
+	rowIdx := m.ws.cursor
+	form := newAddForm(m.th, title, rows, build, func(input string) string {
+		return m.commitFieldAt(rowIdx, input)
+	})
+	form.verb = "commits"
+	m.modals = append(m.modals, form)
 }
 
 // cycleChoice steps the cursor row's closed-set value in place

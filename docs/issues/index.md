@@ -81,3 +81,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0091](0091-tui-text-inputs-drop-paste.md) | TUI text inputs drop bracketed paste — PasteMsg has no consumer | done | high |
 | [0092](0092-tui-field-caret-glyph-shifts-text.md) | Field editor caret glyph occupies a cell — letters right of the caret shift | done | medium |
 | [0093](0093-tui-yank-modules-scoped-plan-apply.md) | Nav yank — space/y marks modules, p/P plan and apply the yanked set only | done | medium |
+| [0095](0095-tui-links-edit-opens-link-modal.md) | Links-row edit opens the link modal (target/source pair) instead of a bare text input | done | medium |

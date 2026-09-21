@@ -31,6 +31,7 @@ type addForm struct {
 	build   func(rows []dlgRow) string // the grammar string the pipeline parses
 	relabel func(rows []dlgRow)        // optional: a choice row retunes a sibling's label
 	commit  func(input string) string  // "" on success; the error keeps the form open
+	verb    string                     // the footer's enter verb: "adds" or "commits"
 	cur     int
 	err     string
 	done    bool
@@ -38,7 +39,7 @@ type addForm struct {
 }
 
 func newAddForm(th theme, title string, rows []dlgRow, build func([]dlgRow) string, commit func(string) string) *addForm {
-	return &addForm{th: th, title: title, rows: rows, build: build, commit: commit}
+	return &addForm{th: th, title: title, rows: rows, build: build, commit: commit, verb: "adds"}
 }
 
 func (f *addForm) finished() bool { return f.done }
@@ -122,7 +123,7 @@ func (f *addForm) view(w, h int) string {
 	if f.err != "" {
 		lines = append(lines, "", f.th.errorMark.Render("✗ "+f.err))
 	}
-	lines = append(lines, "", f.th.meta.Render("up/down row · type edits · < > changes · enter adds · esc cancels"))
+	lines = append(lines, "", f.th.meta.Render("up/down row · type edits · < > changes · enter "+f.verb+" · esc cancels"))
 	box := f.th.modalBorder.Padding(1, 2).Render(strings.Join(lines, "\n"))
 	f.boxY = max((h-lipgloss.Height(box))/2, 0)
 	return box
@@ -280,6 +281,20 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 			}
 	}
 	return "", nil, nil, nil
+}
+
+// editLinkFormSpec is the links row's edit modal (0095): the add
+// form's twin, prefilled. A link is a target/source pair — the target
+// is the map key — so a bare text input on the source alone could
+// never rename an entry; the modal commits the same two-field grammar
+// the add form synthesizes.
+func editLinkFormSpec(moduleID, curTarget, curSource string) (string, []dlgRow, func([]dlgRow) string) {
+	target := newDlgField("target", curTarget)
+	source := newDlgField("source", curSource)
+	return "edit link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
+		func([]dlgRow) string {
+			return strings.TrimSpace(target.String()) + " " + strings.TrimSpace(source.String())
+		}
 }
 
 // fieldValuePair is a container's `field = value` form: the field is a

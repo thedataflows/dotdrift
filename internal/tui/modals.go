@@ -451,6 +451,15 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
 		return m.d.HandleKey(k.String())
 	}
+	if rp, ok := msg.(restorePlanMsg); ok {
+		// 0084: the resolve cmd's message lands on the one dialog that
+		// produces it — without this the dialog never passes the
+		// targets row.
+		if rd, ok := m.d.(*restoreDialog); ok {
+			rd.applyPlan(rp)
+		}
+		return nil
+	}
 	if wf, ok := msg.(writeFinishedMsg); ok {
 		m.d.applyFinished(wf)
 		if wf.err == nil && m.reload != nil {

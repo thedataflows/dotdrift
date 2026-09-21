@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
+	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/service"
 )
@@ -260,3 +261,66 @@ func TestGenerateDialog_layerChoice(t *testing.T) {
 
 // The dialogs open from the tree's action nodes, the stub text is gone,
 // and typed keys reach the focused dialog.
+
+// 0084: the plan resolution must land through the shell. Enter returns
+// the resolve cmd, and the restorePlanMsg it produces has to reach the
+// open dialog via Update — the dialog-level tests pin applyPlan; this
+// one pins the delivery, then walks the run through the same path.
+func TestRestoreDialog_planLandsThroughCompositor(t *testing.T) {
+	target := "/home/cri/.config/app/config.toml"
+	sys := "/etc/stiff.conf"
+	_, c := wsShell(t, map[string]string{
+		"modules/app/module.toml": "id = \"app\"\napp = \"app\"\n",
+		// Real backup generations, so the dialog's index (restoreIndex
+		// over the landed modules read) has generations to pin.
+		"modules/app/backups/g2/home/cri/.config/app/config.toml": "gen two",
+		"modules/app/backups/g1/home/cri/.config/app/config.toml": "gen one",
+	})
+	fake := newFakeWrites()
+	fake.plan = []service.RestorePlanItem{
+		{Target: target, Label: "modules/app/backups/g2", Gen: "g2"},
+		{Target: sys, Label: "modules/app/backups/g1", Gen: "g1", Elevated: true},
+	}
+	c.writesFor = func(*facts.Facts) Writes { return fake }
+
+	c = cpress(c, "tab")               // focus the work pane (w is a work binding)
+	c = cpress(c, "w")                 // the writes menu
+	c = cpress(c, "down")              // restore
+	c, _ = cstep(c, keyPress("enter")) // the menu pops, the dialog pushes
+	require.NotEmpty(t, c.modals, "the restore dialog opens")
+	top := c.modals[len(c.modals)-1].(*dialogModal)
+	d := top.d.(*restoreDialog)
+
+	for _, r := range target + " " + sys {
+		c = cpress(c, string(r))
+	}
+	c, cmd := cstep(c, keyPress("enter"))
+	msg := mustMsg(cmd)
+	pm, ok := msg.(restorePlanMsg)
+	require.True(t, ok, "enter returns the resolve cmd, got %T", msg)
+
+	c, _ = cstep(c, pm) // the delivery — dropped before the 0084 fix
+	require.True(t, d.resolved, "the plan lands through Update")
+	view := ansiRe.ReplaceAllString(d.View(newTheme(true)), "")
+	require.Contains(t, view, target, "the plan rows render")
+	require.Contains(t, view, "needs a terminal — run: dotdrift restore "+sys,
+		"the elevated target names what it needs")
+	require.Contains(t, view, "generation: newest", "the newest generation pins by default")
+
+	c = cpress(c, "left") // pin the older generation on the first row
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""),
+		"generation: g1", "the picked generation renders")
+
+	c, _ = cstep(c, keyPress("enter")) // the confirm gate
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""), "y/n")
+	c, cmd = cstep(c, keyPress("y"))
+	msg = mustMsg(cmd)
+	fm, ok := msg.(writeFinishedMsg)
+	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
+	c, reload := cstep(c, fm)
+	require.Nil(t, reload, "restore touches no profile dir — no nav reload")
+	require.Len(t, fake.restoreCalls, 1, "only the user-writable target restores")
+	require.Equal(t, "g1", fake.restoreCalls[0].Gen, "the pinned generation rides the call")
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""), "restored",
+		"the report renders")
+}

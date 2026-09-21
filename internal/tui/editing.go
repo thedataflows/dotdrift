@@ -1034,6 +1034,24 @@ func (m *Compositor) commitFieldAt(row int, value string) {
 	}
 }
 
+// cycleChoice steps the cursor row's closed-set value in place
+// (left/right, 0079 T-tui-cycle): no modal for a one-key flip. The
+// commit runs the same seam as the picker's pick, so validation, the
+// ledger, and undo are the pipeline's. The cycle wraps; rows without a
+// closed set ignore the keys.
+func (m *Compositor) cycleChoice(dir int) {
+	if m.ws.cursor >= len(m.ws.rows) {
+		return
+	}
+	row := m.ws.rows[m.ws.cursor]
+	set := choiceSet(row)
+	if set == nil {
+		return
+	}
+	next := (slices.Index(set, effectiveChoice(row)) + dir + len(set)) % len(set)
+	m.commitFieldAt(m.ws.cursor, commitValue(set[next]))
+}
+
 // startAdd opens the add form for the cursor row (a). The row decides
 // the scope (addScope): a header adds at the section's entry level (an
 // empty section's only way in; the when/smb headers are those sections'

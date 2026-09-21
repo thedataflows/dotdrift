@@ -69,6 +69,8 @@ func keyTable() []keyTableEntry {
 		{"end", "work", "last row", func(m *Compositor) tea.Cmd { m.ws.end(); return nil }},
 		{"enter", "work", "edit field", func(m *Compositor) tea.Cmd { m.startEdit(); return nil }},
 		{"e", "work", "edit field", func(m *Compositor) tea.Cmd { m.startEdit(); return nil }},
+		{"left", "work", "previous value", func(m *Compositor) tea.Cmd { m.cycleChoice(-1); return nil }},
+		{"right", "work", "next value", func(m *Compositor) tea.Cmd { m.cycleChoice(1); return nil }},
 		{"a", "both", "add entry / apply detail", func(m *Compositor) tea.Cmd {
 			// A live or ended run takes precedence from either pane;
 			// otherwise a is the workspace's add form.

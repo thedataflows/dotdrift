@@ -182,8 +182,10 @@ view stack wholesale). Its parts:
   drafts), row removal, module deletion, and the destructive-apply gate.
   `m` on a module opens the 0072 manage menu as a modal (create / move /
   delete with the orphan preview), domain logic untouched; any
-  successful manage write re-runs the startup profile read so the nav
-  tree shows the change without a restart. `O` on the nav overrides the
+  successful write that changes the profile — manage ops, onboard,
+  generate (0085) — re-runs the startup profile read so the nav tree
+  shows the change without a restart (restore writes live targets only,
+  so it does not reload). `O` on the nav overrides the
   selected module in one step (0082): it creates
   `users/<you>/modules/<dir>/` seeded with a comment-only `module.toml`
   — an empty overlay overrides nothing, and delete module undoes it, so

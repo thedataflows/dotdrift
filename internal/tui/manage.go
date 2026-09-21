@@ -26,6 +26,7 @@ const (
 	manageCreate
 	manageMove
 	manageDelete
+	manageOverride
 )
 
 type manageDialog struct {
@@ -58,13 +59,34 @@ func (d *manageDialog) toMenu() {
 	d.confirm, d.running, d.report, d.err = false, false, "", nil
 }
 
-// entries is the menu's rows; move and delete need a selected module.
+// entries is the menu's rows; move and delete need a selected module,
+// override additionally a higher layer to receive the overlay (0082).
 func (d *manageDialog) entries() []string {
 	e := []string{"create module"}
 	if d.sel.moduleID != "" {
 		e = append(e, "move module", "delete module")
+		if len(d.overrideTargets()) > 0 {
+			e = append(e, "override module")
+		}
 	}
 	return e
+}
+
+// overrideTargets lists the layers above the selected module's own:
+// base can be overridden in the host and user overlays, a host overlay
+// in the user overlay; a user module has nothing above it.
+func (d *manageDialog) overrideTargets() []string {
+	switch cur := d.currentLayer(); {
+	case cur == "":
+		return d.layerLabels()[1:]
+	case strings.HasPrefix(cur, "hosts/"):
+		for _, l := range d.layerLabels() {
+			if strings.HasPrefix(l, "users/") {
+				return []string{l}
+			}
+		}
+	}
+	return nil
 }
 
 // layerLabels is the create/move layer vocabulary: the base layer plus
@@ -134,7 +156,7 @@ func (d *manageDialog) HandleKey(key string) tea.Cmd {
 		case "enter":
 			d.openEntry()
 		}
-	case manageCreate, manageMove:
+	case manageCreate, manageMove, manageOverride:
 		switch key {
 		case "up":
 			if d.cur > 0 {
@@ -201,6 +223,10 @@ func (d *manageDialog) openEntry() {
 			}
 		}
 		d.rows = []dlgRow{choiceRow(newDlgChoice("move to", targets...))}
+	case "override module":
+		d.mode = manageOverride
+		d.cur = 0
+		d.rows = []dlgRow{choiceRow(newDlgChoice("override into", d.overrideTargets()...))}
 	case "delete module":
 		d.mode = manageDelete
 		d.orphans = nil
@@ -228,6 +254,11 @@ func (d *manageDialog) run() tea.Msg {
 		to := layerValue(d.rows[0].choice.String())
 		if err = d.cfg.MoveModule(d.sel.moduleID, d.currentLayer(), to); err == nil {
 			report = "moved module " + d.sel.moduleID + " to " + layerName(to)
+		}
+	case manageOverride:
+		to := layerValue(d.rows[0].choice.String())
+		if err = d.cfg.OverrideModule(d.sel.moduleID, d.currentLayer(), to); err == nil {
+			report = "created overlay of " + d.sel.moduleID + " in " + layerName(to)
 		}
 	case manageDelete:
 		if err = d.cfg.DeleteModule(d.sel.moduleID, d.currentLayer()); err == nil {
@@ -260,7 +291,7 @@ func (d *manageDialog) View(th theme) string {
 			}
 		}
 		b.WriteString("\n" + th.meta.Render("up/down pick · enter open · esc back"))
-	case manageCreate, manageMove:
+	case manageCreate, manageMove, manageOverride:
 		for i, r := range d.rows {
 			b.WriteString(r.renderRow(th, i == d.cur))
 			b.WriteString("\n")
@@ -293,6 +324,9 @@ func (d *manageDialog) confirmText() string {
 			layerName(layerValue(d.rows[1].choice.String())) + "?"
 	case manageMove:
 		return "move module \"" + d.sel.moduleID + "\" to " + d.rows[0].choice.String() + "?"
+	case manageOverride:
+		return "override module \"" + d.sel.moduleID + "\" into " +
+			d.rows[0].choice.String() + "? (the overlay starts empty)"
 	case manageDelete:
 		return "delete module \"" + d.sel.moduleID + "\"?"
 	}

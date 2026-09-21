@@ -70,6 +70,9 @@ type ConfigEditor interface {
 	WriteModuleLayer(req SaveRequest) (*SaveResult, error)
 	CreateModule(app, layer string) error
 	MoveModule(app, fromLayer, toLayer string) error
+	// OverrideModule seeds an overlay for an existing module in a higher
+	// layer (issue 0082).
+	OverrideModule(app, fromLayer, toLayer string) error
 	// DeletePreview is the orphan list the delete gate shows before
 	// DeleteModule runs.
 	DeletePreview(app, layer string) ([]string, error)

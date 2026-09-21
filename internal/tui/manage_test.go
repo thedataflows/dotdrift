@@ -30,7 +30,58 @@ func manageFixture(t *testing.T) (*manageDialog, string) {
 
 func TestManage_menuEntriesForModule(t *testing.T) {
 	d, _ := manageFixture(t)
+	require.Equal(t,
+		[]string{"create module", "move module", "delete module", "override module"}, d.entries(),
+		"the fixture module sits in base: host and user overlays can override it")
+}
+
+// T-0082-override: a user-layer module has nothing above it, so the
+// override entry hides.
+func TestManage_noOverrideEntryForUserModule(t *testing.T) {
+	d, root := manageFixture(t)
+	d.sel.dir = filepath.Join(root, "users", "cri", "modules", "demo")
 	require.Equal(t, []string{"create module", "move module", "delete module"}, d.entries())
+	require.Empty(t, d.overrideTargets())
+}
+
+func TestManage_overrideSeedsUserOverlay(t *testing.T) {
+	d, root := manageFixture(t)
+	d.HandleKey("down")
+	d.HandleKey("down")
+	d.HandleKey("down") // override module
+	d.HandleKey("enter")
+	require.Len(t, d.rows, 1, "the override target choice")
+	require.Equal(t, []string{"hosts/myhost", "users/cri"}, d.rows[0].choice.opts)
+	d.HandleKey("right") // users/cri
+	require.Contains(t, d.confirmText(), "starts empty",
+		"the gate says what an empty overlay means")
+	d.HandleKey("enter") // confirm gate
+	cmd := d.HandleKey("y")
+	require.NotNil(t, cmd)
+	d.applyFinished(cmd().(writeFinishedMsg))
+	require.Empty(t, d.err)
+	raw, err := os.ReadFile(filepath.Join(root, "users", "cri", "modules", "demo", "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "override", "the overlay is the comment seed, not a base copy")
+	require.Contains(t, d.report, "overlay")
+}
+
+func TestManage_overrideCollisionRefuses(t *testing.T) {
+	d, root := manageFixture(t)
+	dir := filepath.Join(root, "users", "cri", "modules", "demo")
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte("id = \"demo\"\n"), 0o644))
+
+	d.HandleKey("down")
+	d.HandleKey("down")
+	d.HandleKey("down") // override module
+	d.HandleKey("enter")
+	d.HandleKey("right") // users/cri — taken
+	d.HandleKey("enter") // confirm gate
+	cmd := d.HandleKey("y")
+	require.NotNil(t, cmd)
+	d.applyFinished(cmd().(writeFinishedMsg))
+	require.Error(t, d.err, "the typed collision refusal surfaces")
 }
 
 func TestManage_createScaffoldsModule(t *testing.T) {

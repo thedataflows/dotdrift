@@ -45,6 +45,23 @@ func TestTheme_lightDarkPalette(t *testing.T) {
 	require.Equal(t, lipgloss.Color("#B45309"), light.amber)
 	require.NotEqual(t, dark.dim, light.dim, "dim differs per background")
 	require.Equal(t, dark.muted, light.muted, "muted stays ANSI 245 on both backgrounds (the v1 registry's value)")
+	require.Equal(t, lipgloss.Color("255"), dark.value, "dark value = bright neutral, the brightest chrome")
+	require.Equal(t, lipgloss.Color("234"), light.value, "light value = near-black neutral")
+}
+
+// 0080 T-tui-value-color: values read as content and fixed labels recede.
+// The distinction is visible in both styles and the value hue is not one
+// of the accent hues (indigo/fuchsia/red/amber keep their semantics).
+func TestTheme_valueVsLabel(t *testing.T) {
+	for _, isDark := range []bool{true, false} {
+		th := newTheme(isDark)
+		p := paletteFor(isDark)
+		require.NotEqual(t, th.fieldLabel.Render("x"), th.rowText.Render("x"),
+			"labels and values are visibly different colors")
+		require.NotEqual(t, "x", th.rowText.Render("x"), "the value style is visible")
+		require.NotEqual(t, p.value, p.muted, "value differs from the label hue")
+		require.NotEqual(t, p.value, p.dim, "value differs from the hint hue")
+	}
 }
 
 // One style per visible shell concept; focus IS the border color

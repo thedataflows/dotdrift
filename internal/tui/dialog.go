@@ -164,28 +164,40 @@ func (r dlgRow) backspace() {
 	}
 }
 
-// render lays out one row: label and value, no marker — styling is
-// renderRow's business.
-func (r dlgRow) render() string {
-	var val string
+// segments lays out one row: the fixed label, the value text, and whether
+// that text is an empty field's placeholder hint. Styling is renderRow's
+// business.
+func (r dlgRow) segments() (label, value string, hint bool) {
+	label = r.rowLabel()
 	if r.choice != nil {
-		val = r.choice.String() + "  (< > to change)"
-	} else {
-		val = r.field.String()
-		if val == "" && r.field.hint != "" {
-			val = "(" + r.field.hint + ")"
-		}
+		return label, r.choice.String(), false
 	}
-	return r.rowLabel() + " " + val
+	v := r.field.String()
+	if v == "" && r.field.hint != "" {
+		return label, "(" + r.field.hint + ")", true
+	}
+	return label, v, false
 }
 
-// renderRow styles one row through the registry: the focused row takes
-// the cursor treatment (bar + accent, 0075), plain rows keep the lead.
+// renderRow styles one row through the registry (0080 T-tui-value-color):
+// the fixed label recedes in the muted label style, the value reads in
+// the bright value style, and a placeholder hint stays dim — filled vs
+// unfilled reads by color, backed by the hint's parentheses, never by
+// color alone. The focused row takes the cursor treatment (bar + accent,
+// 0075) around the styled segments.
 func (r dlgRow) renderRow(th theme, focused bool) string {
-	if focused {
-		return th.cursorRow.Render(" " + r.render())
+	label, value, hint := r.segments()
+	val := th.rowText.Render(value)
+	if hint {
+		val = th.disabledMark.Render(value)
+	} else if r.choice != nil {
+		val += "  " + th.disabledMark.Render("(< > to change)")
 	}
-	return "  " + r.render()
+	body := th.fieldLabel.Render(label) + " " + val
+	if focused {
+		return th.cursorRow.Render(" " + body)
+	}
+	return "  " + body
 }
 
 func (r dlgRow) rowLabel() string {

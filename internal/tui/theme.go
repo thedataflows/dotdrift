@@ -15,12 +15,14 @@ import (
 // means a new registry entry, never an inline lipgloss.NewStyle chain.
 
 type palette struct {
-	indigo, fuchsia, red, amber, muted, dim color.Color
+	indigo, fuchsia, red, amber, muted, dim, value color.Color
 }
 
 // paletteFor resolves the shared hues for one background. Light variants
 // are huh's light theme values, dark variants its dark theme values —
-// the palette the chrome has used since ADR-0003.
+// the palette the chrome has used since ADR-0003. The value hue (0080)
+// is a bright neutral, not an accent: content is the brightest thing on
+// screen, so labels and chrome recede around it.
 func paletteFor(isDark bool) palette {
 	ld := lipgloss.LightDark(isDark)
 	return palette{
@@ -30,6 +32,7 @@ func paletteFor(isDark bool) palette {
 		amber:   ld(lipgloss.Color("#B45309"), lipgloss.Color("#F59E0B")),
 		muted:   ld(lipgloss.Color("245"), lipgloss.Color("245")),
 		dim:     ld(lipgloss.Color("248"), lipgloss.Color("240")),
+		value:   ld(lipgloss.Color("234"), lipgloss.Color("255")),
 	}
 }
 
@@ -51,7 +54,8 @@ type theme struct {
 	applyBadge    lipgloss.Style // the ▶ apply header badge (M15)
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
 	cursorRow     lipgloss.Style // the cursor row: bar + accent text (0075)
-	rowText       lipgloss.Style // plain row text (truncation carrier)
+	rowText       lipgloss.Style // value/content text (0080); the truncation carrier
+	fieldLabel    lipgloss.Style // a dialog/form row's fixed label (0080)
 	modalBorder   lipgloss.Style // the confirm modal's frame (M15)
 	modalTitle    lipgloss.Style // the confirm modal's question (M15)
 
@@ -85,7 +89,8 @@ func newTheme(isDark bool) theme {
 			Bold(true).Foreground(p.fuchsia).
 			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(p.fuchsia), // the bubbles delegate treatment
-		rowText:     lipgloss.NewStyle(),
+		rowText:     lipgloss.NewStyle().Foreground(p.value), // values read as content (0080)
+		fieldLabel:  lipgloss.NewStyle().Foreground(p.muted), // fixed labels recede (0080)
 		modalBorder: pane.BorderForeground(p.amber),
 		modalTitle:  lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 

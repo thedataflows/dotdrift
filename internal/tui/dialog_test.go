@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	"charm.land/bubbletea/v2"
@@ -15,6 +16,34 @@ import (
 // their writes through the Writes interface only. The tests drive the
 // dialog models directly, then one routing test proves the shell opens
 // them and hands keys over.
+
+// 0080 T-tui-value-color: a dialog row separates its fixed label (muted)
+// from its value (bright); an empty field's placeholder hint stays dim,
+// so filled vs unfilled reads by color and the parentheses together.
+func TestDlgRow_labelValueHintColors(t *testing.T) {
+	th := newTheme(true)
+
+	typed := fieldRow(&dlgField{label: "app", hint: "detected account", value: []rune("shell")})
+	got := typed.renderRow(th, false)
+	require.Contains(t, got, th.fieldLabel.Render("app"), "the label renders in the muted label style")
+	require.Contains(t, got, th.rowText.Render("shell"), "the value renders in the bright value style")
+	require.NotContains(t, got, th.disabledMark.Render("shell"), "a typed value is not dimmed")
+
+	empty := fieldRow(&dlgField{label: "paths", hint: "detected account"})
+	got = empty.renderRow(th, false)
+	require.Contains(t, got, th.disabledMark.Render("(detected account)"), "the hint stays dim")
+	require.NotContains(t, got, th.rowText.Render("(detected account)"), "a hint is not styled as a value")
+
+	ch := choiceRow(newDlgChoice("layer", "base", "host", "user"))
+	got = ch.renderRow(th, false)
+	require.Contains(t, got, th.fieldLabel.Render("layer"))
+	require.Contains(t, got, th.rowText.Render("base"))
+	require.Contains(t, got, th.disabledMark.Render("(< > to change)"), "the cycle affordance stays dim")
+
+	focused := typed.renderRow(th, true)
+	require.True(t, strings.HasPrefix(ansiRe.ReplaceAllString(focused, ""), "│"), "the focused row keeps the cursor bar")
+	require.Contains(t, focused, th.rowText.Render("shell"), "the value keeps its style under the cursor treatment")
+}
 
 // fakeWrites records every write the dialogs attempt; it is the only
 // writer the TUI can reach. Its methods write a short report through the

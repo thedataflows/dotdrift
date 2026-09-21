@@ -15,7 +15,7 @@ timestamp: 2026-09-21T15:11:38Z
 - **Assignee**: none
 - **Related**: [0072](0072-module-management-dialogs.md), [0065](0065-full-schema-editor-suite-design.md)
 - **Related code**: [`internal/service/config.go`](../../internal/service/config.go), [`internal/tui/manage.go`](../../internal/tui/manage.go), [`internal/tui/modals.go`](../../internal/tui/modals.go), [`internal/tui/compositor.go`](../../internal/tui/compositor.go), [`internal/tui/workspace.go`](../../internal/tui/workspace.go)
-- **Closing commits**: b5ec0bd, b8af99c, 26957f7, 24bbd82
+- **Closing commits**: b5ec0bd, b8af99c, 26957f7, 24bbd82, f65d3b3
 
 ## Summary
 
@@ -27,7 +27,8 @@ refresh the nav; overlay tabs state the merge rule.
 
 ## Details
 
-Four tasks, TDD-first:
+Four tasks, TDD-first, then one simplification pass that replaced the
+second task's UI (f65d3b3):
 
 - **Service op `OverrideModule(app, fromLayer, toLayer)`** mirrors the
   0072 module ops: refused when the source layer has no such module or
@@ -37,13 +38,20 @@ Four tasks, TDD-first:
   overrides nothing, while a copied base would restate every field and
   silently pin them against later base edits (overlays win when set).
   Added to the `ConfigEditor` doorway.
-- **Manage dialog entry** (`override module`): listed only when the
-  selected module has a higher layer — base can be overridden in the
-  host and user overlays, a host overlay in the user overlay, a user
-  module has nothing above it and the entry hides. The target is one
-  `left/right` choice row reusing the move plumbing; the confirm gate
-  says `(the overlay starts empty)`. Success reports
-  `created overlay of <app> in <layer>`.
+- **Manage dialog entry** (`override module`) — **superseded by the
+  `O` key**: the first cut put override behind the `m` menu (entry, one
+  `left/right` layer choice row, confirm gate). That was five-plus
+  keystrokes of ceremony for a non-destructive one-file creation, so the
+  dialog path was deleted and `O` on the nav pane does it in one step:
+  the selected module gains a `users/<you>` overlay at once (the layer
+  that wins the merge order; a host overlay stays available through the
+  service seam but nothing in the TUI asked for it), the footer reports
+  `created overlay of <app> in users/<you>`, and the nav reload lands
+  the workspace on the new file — cursor and tab on it, ready to edit.
+  Refusals surface in the footer: `select a module first`, `<app>
+  already lives in your user layer`, the op's own taken-target error.
+  There is no confirm gate: the seed is comments only, overrides
+  nothing, and delete module undoes it.
 - **Nav reload after manage writes**: `dialogModal` gained a `reload`
   cmd hook; the manage dialogs set it to the compositor's `reloadNav`
   (the startup profile read, factored out of `Init`). A successful
@@ -60,10 +68,13 @@ Four tasks, TDD-first:
   no-op and now says so. Kept under 100 columns so it survives narrow
   panes.
 
-Deliberately out of scope: auto-jumping the workspace onto the new
-overlay (after the reload the child is one enter away), forking dotfile
-sources into the overlay (that is a fork, not an override), root-owned
-user overlays (0029's classification).
+Landing the workspace on the new overlay — rejected as scope in the
+first pass, delivered by the simplification — is the `pendTab` handoff:
+the override stashes the new layer dir, and the nav reload that reveals
+it consumes the stash, refreshes the module's tabs from the fresh read,
+and pulls the nav cursor onto the child row. Still out of scope: forking
+dotfile sources into the overlay (that is a fork, not an override),
+root-owned user overlays (0029's classification).
 
 ## Acceptance
 
@@ -71,14 +82,12 @@ user overlays (0029's classification).
   source module stays put, the seed names the merged families and
   carries no TOML keys (`TestModuleOps_overrideSeedsEmptyOverlay`).
 - [x] Collision and missing-source refusals error and create nothing.
-- [x] The menu lists `override module` for a base module with overlays
-  available and hides it for a user-layer module
-  (`TestManage_menuEntriesForModule`,
-  `TestManage_noOverrideEntryForUserModule`).
-- [x] The flow creates `users/cri/modules/demo/module.toml` with the
-  seed, the gate names the empty start, the report names the overlay
-  (`TestManage_overrideSeedsUserOverlay`); a taken target refuses
-  (`TestManage_overrideCollisionRefuses`).
+- [x] `O` on a base module creates `users/cri/modules/demo/module.toml`
+  with the seed, reports it in the footer, and after the reload the
+  workspace sits on the new overlay with the nav cursor on its child row
+  (`TestOverride_oneKeyCreatesAndLands`).
+- [x] Refusals: no selection, a module already in the user layer, a
+  taken target (`TestOverride_refusals`).
 - [x] A manage create lands in `nav.modules` after the op settles,
   without a restart (`TestManageWrite_reloadsNav`).
 - [x] The hint renders on a user tab and not on the base tab
@@ -90,14 +99,20 @@ Fresh runs on the final tree: `go test ./... -count=1` — 20 packages
 ok, 0 FAIL; `go vet ./...` exit 0; gofmt clean on touched files;
 golangci-lint `run ./internal/...` — 0 issues. Golden sweep: 1 frame
 regenerated in task 2 (`manage-menu.golden`, the diff audited — the
-modal grows one row and lists `override module`); the task 4 sweep is
-a no-op because no golden keeps an overlay tab active. TDD red→green:
-every task failed first on the missing API (`OverrideModule undefined`,
-`overrideTargets undefined`, the nav assertion, the hint assertion).
-The RED runs caught two of my test bugs (a skipped enter that arms the
-confirm gate; an `L` press with focus still on nav — the binding is
-work-scope) and no production bugs; the green run then caught the hint
-truncating at 100 columns, fixed by shortening the line.
+modal grows one row and lists `override module`), then 1 more in the
+simplification pass (the same frame shrinks back, the audited diff is
+exactly the removed `override module` row); the hint task's sweep is a
+no-op because no golden keeps an overlay tab active. TDD red→green: the
+original tasks failed first on the missing API (`OverrideModule
+undefined`, `overrideTargets undefined`, the nav assertion, the hint
+assertion); the simplification's tests failed first on the unbound `O`
+key. The RED runs caught three of my test bugs (a skipped enter that
+arms the confirm gate; an `L` press with focus still on nav; a
+user-layer-only fixture that the loader rightly never lists, so the
+"already yours" refusal must be reached from the user child row) and no
+production bugs; the green runs caught the hint truncating at 100
+columns in the first pass and my over-strict golden-width assertion in
+the second.
 
 ## Notes
 

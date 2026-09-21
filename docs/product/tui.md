@@ -181,11 +181,14 @@ view stack wholesale). Its parts:
   every other key (or `esc`) cancels — backs dirty-quit (`q` with
   drafts), row removal, module deletion, and the destructive-apply gate.
   `m` on a module opens the 0072 manage menu as a modal (create / move /
-  delete with the orphan preview / 0082 override — seeds a comment-only
-  overlay in a higher layer, entry hidden when nothing sits above),
-  domain logic untouched; any successful manage write re-runs the
-  startup profile read so the nav tree shows the change without a
-  restart. `P` runs
+  delete with the orphan preview), domain logic untouched; any
+  successful manage write re-runs the startup profile read so the nav
+  tree shows the change without a restart. `O` on the nav overrides the
+  selected module in one step (0082): it creates
+  `users/<you>/modules/<dir>/` seeded with a comment-only `module.toml`
+  — an empty overlay overrides nothing, and delete module undoes it, so
+  there is no dialog and no confirm — then the reload lands the
+  workspace on the new file, tab and cursor on it. `P` runs
   apply: preview → destructive confirm when steps will overwrite
   existing files (the new `OverwriteTargets` classification on copy-mode
   dotfile steps) → the elevation modal when the plan carries privileged
@@ -228,7 +231,8 @@ view stack wholesale). Its parts:
   never credentials); `w` opens the writes menu (onboard / restore /
   generate as absorbed dialogs); `n` opens module creation; `o` opens
   the onboard dialog prefilled with the selected module and layer
-  (either pane, 0079).
+  (either pane, 0079); `O` overrides the selected module into your user
+  layer in one step (nav pane, 0082).
   `pgup`/`pgdown` move the cursor a visible page and `home`/`end` jump
   to the first/last row, in both panes; the workspace's visible window
   always follows the cursor (0075). Mouse parity

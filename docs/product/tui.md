@@ -46,7 +46,8 @@ view stack wholesale). Its parts:
   receive nothing.
 - **One esc rule.** The compositor owns `esc`, not the views: it pops the
   top modal first, then exits workspace edit mode, then returns focus to
-  the nav. No per-view fallthrough.
+  the nav. On the base it clears an applied nav filter first (0081). No
+  per-view fallthrough.
 - **Focus.** `tab`/`shift+tab` move between nav and workspace; focus is
   the border color; exactly one pane is focused.
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
@@ -65,6 +66,17 @@ view stack wholesale). Its parts:
   failed modules stay visible, greyed, naming the reason on the row;
   while the read is in flight the pane shows placeholder rows; an empty
   profile shows `(no modules)`. Rows truncate to the pane width.
+- **The nav filter** (0081, T-tui-navfilter). `/` on the nav pane
+  filters the module list in place — no modal. Typing narrows the rows
+  live (the palette's own fuzzy matcher, declaration order kept; layer
+  children follow their module), `j`/`k`/arrows move within the
+  matches with the workspace following, and the query shows at the
+  pane bottom — the `/ demo▏` cursor bar while typing, a named
+  `/ demo · esc clears` after enter keeps the filter applied. `esc`
+  removes the filter (while typing, after enter, or from the base esc
+  rule). The cursor keeps its module across query changes while it
+  still matches; an empty result names the query. Mouse clicks work
+  on the filtered rows and commit the typing mode.
 - **The workspace** (T-tui-workspace). `module.toml` rendered as a
   sectioned read surface over the 0065 config seam (strict decode + raw
   text; the workspace never parses TOML): fixed-order sections — meta,
@@ -178,8 +190,9 @@ view stack wholesale). Its parts:
   tail, verdict) — closing never cancels, `ctrl+c` inside asks first.
   Session events are compositor-level messages: they flow while any
   modal is open.
-- **The palette** (T-tui-palette). `/` opens the fuzzy palette — the
-  teleport path: modules with overlay layers as separate entries
+- **The palette** (T-tui-palette). `/` on the workspace pane opens the
+  fuzzy palette — the teleport path (the nav pane's `/` is the 0081
+  in-place module filter): modules with overlay layers as separate entries
   (`demo · user cri`), contextually valid actions (apply, manage, new
   module, save/discard draft — only what can run right now), and the
   current module's non-empty sections as deep links. Fixed section order
@@ -195,12 +208,15 @@ view stack wholesale). Its parts:
   (`keyTable()` in keymap.go) — the base dispatcher consults it, the
   footer hints and the contextual `?` help render from it, so docs
   cannot drift from behavior. Shift is the dangerous version (`p` plan /
-  `P` apply, `d` remove row / `D` discard draft); esc has exactly one
-  meaning (pop the top layer: modal → edit → focus to nav); `ctrl+z`
+  `P` apply, `d` remove row / `D` discard draft); esc pops the top layer
+  (modal → edit → filter → focus to nav, 0081); `ctrl+z`
   steps the active draft back one committed change and `ctrl+shift+z`
   redoes (0079) — undoing past the first change returns the clean file,
   and confirms remain the safety net for what undo cannot reach (saves,
-  quits). `p` opens the read-only
+  quits). `/` is pane-scoped: the nav pane's filters the module list in
+  place, the workspace pane's opens the palette (0081) — the footer
+  hint resolves the verb from the table per focused pane.
+  `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /
   generate as absorbed dialogs); `n` opens module creation; `o` opens

@@ -65,3 +65,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0075](0075-tui-ergonomics-paging-selection-disclosure.md) | TUI ergonomics round — paging, visible selection, render-what-is disclosure | done | high |
 | [0076](0076-tui-choice-editors-and-location.md) | TUI editing round — choice pickers for closed-set fields, cursor location you can see | done | medium |
 | [0077](0077-tui-add-forms.md) | TUI add forms — `a` opens a labeled form, writes becomes addable | done | high |
+| [0078](0078-tui-enter-fallback-and-footer-hints.md) | TUI discoverability round — enter falls back to the add form, the footer hints name the primary verbs | done | high |

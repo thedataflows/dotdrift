@@ -31,7 +31,10 @@ view stack wholesale). Its parts:
   host/user context, a dirty count (`● N`) when drafts exist, and an
   apply badge while a session runs. The footer has two lines: a spinner
   with the running operation's name (or the message slot), and the key
-  hints for the focused pane.
+  hints for the focused pane — the pane's primary verbs (enter, a, d,
+  ctrl+s in the workspace) plus `/ ? q`, rendered from the binding
+  table; scrolling yields the footer to the verbs, and `?` lists
+  everything (0078).
 - **The message slot.** Any operation longer than ~200 ms announces
   itself (`opStartedMsg`) and reports (`opFinishedMsg`). A success note
   fades after 4 s. A failure renders in the Error color and persists
@@ -99,7 +102,11 @@ view stack wholesale). Its parts:
   the tier-2 cross-check block in place; a disk-hash conflict opens a
   reload-or-keep modal); `D` discards with a confirm naming module,
   layer, and change count; `a` opens a labeled add form for the section
-  under the cursor (0077), `d` removes one with confirm. A broken file
+  under the cursor (0077), `d` removes one with confirm. Enter is the
+  primary action in context (0078): on a row that owns no field — an
+  empty section's header or a structural container — enter falls back
+  to the same add form `a` opens, so the section under the cursor is
+  reachable without knowing a second key. A broken file
   edits as raw text lines
   (`e` on a line); a repair that parses unlocks the structured surface,
   and its save sends the whole repaired file as the raw candidate

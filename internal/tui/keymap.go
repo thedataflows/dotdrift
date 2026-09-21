@@ -285,7 +285,7 @@ func (m *Compositor) openOnboardInto(id, layer string) {
 	}
 	d := newOnboardDialog(m.writesFor(m.facts), m.root)
 	d.prefill(id, layer)
-	m.modals = append(m.modals, &dialogModal{d: d, th: m.th})
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, reload: m.reloadNav})
 }
 
 // openWritesMenu opens the writes actions (w): onboard / restore /
@@ -350,6 +350,9 @@ func (w *writesMenuModel) view(_, _ int) string {
 }
 
 // openWritesDialog opens the chosen M14 writes dialog as a modal.
+// Onboard and generate write into the profile, so a successful write
+// re-runs the nav read (0082's rule, writes edition); restore touches
+// no profile dir.
 func (m *Compositor) openWritesDialog(choice int) {
 	wr := m.writesFor(m.facts)
 	var d dialog
@@ -361,7 +364,11 @@ func (m *Compositor) openWritesDialog(choice int) {
 	default:
 		d = newGenerateDialog(wr, m.root)
 	}
-	m.modals = append(m.modals, &dialogModal{d: d, th: m.th})
+	reload := m.reloadNav
+	if choice == 1 {
+		reload = nil
+	}
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, reload: reload})
 }
 
 // restoreIndex feeds the restore dialog from the last modules read.

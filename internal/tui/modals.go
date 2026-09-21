@@ -438,8 +438,10 @@ func (m *Compositor) openApplyDetail() {
 type dialogModal struct {
 	d  dialog
 	th theme
-	// reload runs after a successful write; only the manage dialogs set
-	// it (0082: the nav re-reads so new dirs appear without a restart).
+	// reload runs after a successful write: every dialog whose write
+	// changes the profile sets it (manage since 0082, onboard/generate
+	// since 0084's follow-up) so the nav shows the change without a
+	// restart. Restore writes live targets only — no reload.
 	reload func() tea.Cmd
 }
 

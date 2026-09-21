@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -323,4 +324,90 @@ func TestRestoreDialog_planLandsThroughCompositor(t *testing.T) {
 	require.Equal(t, "g1", fake.restoreCalls[0].Gen, "the pinned generation rides the call")
 	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""), "restored",
 		"the report renders")
+}
+
+// Onboard and generate write into the profile, so a successful write
+// re-runs the nav read — the manage dialogs' 0082 behavior, extended to
+// the writes dialogs (restore stays reload-free: it touches no profile
+// dir, pinned in the delivery test). The o seam and the w menu are
+// separate construction sites; both get the hook.
+func TestWritesDialogs_successfulWritesReloadNav(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
+		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
+	})
+	fake := newFakeWrites()
+	c.writesFor = func(*facts.Facts) Writes { return fake }
+
+	// The o seam: onboard prefilled from the nav selection.
+	c = cpress(c, "o")
+	require.NotEmpty(t, c.modals, "the onboard dialog opens")
+	d := c.modals[len(c.modals)-1].(*dialogModal).d.(*onboardDialog)
+	d.HandleKey("down") // paths
+	typeInto(t, d, "~/.config/demo")
+	c, cmd := cstep(c, keyPress("enter")) // confirm gate
+	require.Nil(t, cmd)
+	c, cmd = cstep(c, keyPress("y"))
+	msg := mustMsg(cmd)
+	fm, ok := msg.(writeFinishedMsg)
+	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
+	require.Equal(t, "onboard", fm.key)
+	c, reload := cstep(c, fm)
+	require.NotNil(t, reload, "a successful onboard re-reads the nav")
+	navMsg := mustMsg(reload)
+	_, ok = navMsg.(navLoadedMsg)
+	require.True(t, ok, "the reload is the nav read, got %T", navMsg)
+
+	// The w menu: generate (third entry).
+	c = cpress(c, "esc")
+	c = cpress(c, "tab") // focus the work pane (w is a work binding)
+	c = cpress(c, "w")
+	c = cpress(c, "down")
+	c = cpress(c, "down")
+	c, _ = cstep(c, keyPress("enter"))
+	require.NotEmpty(t, c.modals, "the generate dialog opens")
+	g := c.modals[len(c.modals)-1].(*dialogModal).d.(*generateDialog)
+	// Mount fields: name, source, destination, type.
+	g.HandleKey("down")
+	g.HandleKey("down")
+	typeInto(t, g, "data")
+	g.HandleKey("down")
+	typeInto(t, g, "UUID=abc")
+	g.HandleKey("down")
+	typeInto(t, g, "/mnt/data")
+	g.HandleKey("down")
+	typeInto(t, g, "vfat")
+	c, cmd = cstep(c, keyPress("enter")) // confirm gate
+	c, cmd = cstep(c, keyPress("y"))
+	msg = mustMsg(cmd)
+	fm, ok = msg.(writeFinishedMsg)
+	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
+	require.Equal(t, "generate", fm.key)
+	c, reload = cstep(c, fm)
+	require.NotNil(t, reload, "a successful generate re-reads the nav")
+	require.Len(t, fake.genCalls, 1, "the module was written through the service")
+}
+
+// The reload answers success only: a failed write leaves the nav as it
+// stands and renders the error instead.
+func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
+		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
+	})
+	fake := newFakeWrites()
+	fake.onboardErr = errors.New("onboard: /etc/app.conf is a system path")
+	c.writesFor = func(*facts.Facts) Writes { return fake }
+
+	c = cpress(c, "o")
+	d := c.modals[len(c.modals)-1].(*dialogModal).d.(*onboardDialog)
+	d.HandleKey("down")
+	typeInto(t, d, "~/.config/demo")
+	c, _ = cstep(c, keyPress("enter"))
+	c, cmd := cstep(c, keyPress("y"))
+	msg := mustMsg(cmd)
+	fm, ok := msg.(writeFinishedMsg)
+	require.True(t, ok, "confirming returns the run cmd, got %T", msg)
+	c, reload := cstep(c, fm)
+	require.Nil(t, reload, "a failed write re-reads nothing")
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(newTheme(true)), ""),
+		"system path", "the error renders")
 }

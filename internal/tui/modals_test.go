@@ -172,7 +172,7 @@ func TestConfirm_yConfirmsEverythingElseCancels(t *testing.T) {
 
 func TestConfirm_dirtyQuit(t *testing.T) {
 	subs, _, c := editShell(t)
-	c = cpress(c, "enter") // edit the app field → draft exists
+	c = cpress(c, "enter") // edit the description field → draft exists
 	c = typeText(c, "-next")
 	c = wsPress(t, c, "enter")
 

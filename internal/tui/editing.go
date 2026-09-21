@@ -261,9 +261,6 @@ func validateField(family, key, input string) string {
 		if key == "scope" && input != "" && input != "user" && input != "system" {
 			return `scope must be "user" or "system"`
 		}
-		if key == "app" && strings.TrimSpace(input) == "" {
-			return "app must not be empty"
-		}
 	case profile.FamilyPackages:
 		name := strings.TrimPrefix(strings.TrimSpace(input), "-")
 		if name == "" {
@@ -738,8 +735,6 @@ func mutateField(cfg *profile.ModuleConfig, section, family, key, oldValue, inpu
 		switch key {
 		case "description":
 			cfg.Description = input
-		case "app":
-			cfg.App = input
 		case "scope":
 			cfg.Scope = input
 		}

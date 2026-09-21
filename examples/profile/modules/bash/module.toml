@@ -1,5 +1,4 @@
 id = "bash"
-app = "bash"
 
 [packages]
 present = ["bash"]

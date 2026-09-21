@@ -43,14 +43,12 @@ func TestLoadModuleTOML_defaults(t *testing.T) {
 	require.NoError(t, err)
 	m := findModule(t, p, "b")
 	require.Equal(t, "b", m.ID)
-	require.Equal(t, "b", m.App)
 }
 
 func TestLoadModuleTOML_when(t *testing.T) {
 	p, err := profile.Load(fixture(t, "simple"), &facts.Facts{})
 	require.NoError(t, err)
 	m := findModule(t, p, "named")
-	require.Equal(t, "NamedApp", m.App)
 	require.Equal(t, []string{"myhost"}, m.Config.When.Hosts)
 	require.Equal(t, []string{"cri"}, m.Config.When.Users)
 	require.Equal(t, []string{"cachyos"}, m.Config.When.OS)
@@ -313,7 +311,7 @@ func TestSelection_whenFilter(t *testing.T) {
 
 	t.Run("packages ANDed with kernel", func(t *testing.T) {
 		p, err := profile.Load(fixture(t, "whenfilter"), &facts.Facts{
-			Kernel:           "7.2.0",
+			Kernel:            "7.2.0",
 			InstalledPackages: map[string]bool{"installed-pkg": true},
 		})
 		require.NoError(t, err)

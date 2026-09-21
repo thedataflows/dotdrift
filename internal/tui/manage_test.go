@@ -90,7 +90,7 @@ func TestOverride_refusals(t *testing.T) {
 func TestManage_createScaffoldsModule(t *testing.T) {
 	d, root := manageFixture(t)
 	d.HandleKey("enter") // create module
-	require.Len(t, d.rows, 2, "app field + layer choice")
+	require.Len(t, d.rows, 2, "module field + layer choice")
 	for _, r := range "newapp" {
 		d.HandleKey(string(r))
 	}
@@ -144,8 +144,8 @@ func TestManage_cursorRowBar(t *testing.T) {
 	th := newTheme(true)
 	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ create module",
 		"the menu cursor row renders the bar")
-	d.HandleKey("enter") // create mode: the app field row is focused
-	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ app",
+	d.HandleKey("enter") // create mode: the module field row is focused
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ module",
 		"the focused form row renders the bar")
 }
 

@@ -739,7 +739,7 @@ func TestSession_sudoEditsHandover(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(root, "modules", "sysedit"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(root, "modules", "sysedit", "module.toml"), []byte(
-		"id = \"sysedit\"\napp = \"sysedit\"\nscope = \"system\"\n\n[dotfiles]\n\"/etc/dotdrift-0071-test/x.conf/anchor\" = { line = \"x\" }\n",
+		"id = \"sysedit\"\nscope = \"system\"\n\n[dotfiles]\n\"/etc/dotdrift-0071-test/x.conf/anchor\" = { line = \"x\" }\n",
 	), 0o644))
 
 	deps, events := stubSessionDeps(t, testFacts())

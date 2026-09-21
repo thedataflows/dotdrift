@@ -40,7 +40,7 @@ func TestOnboardHere_prefillsFromNavSelection(t *testing.T) {
 	// The nav cursor rests on the module row: base layer, id demo.
 	c.openOnboardHere()
 	d := onboardModalOf(t, c)
-	require.Equal(t, "demo", d.rows[0].field.String(), "the app field carries the module id")
+	require.Equal(t, "demo", d.rows[0].field.String(), "the module field carries the module id")
 	require.Equal(t, "base", d.rows[2].choice.String(), "a module row prefills the base layer")
 }
 
@@ -77,7 +77,7 @@ func TestOnboardHere_staysEditableAndRefusesWithoutModule(t *testing.T) {
 	withWrites(c)
 	c.openOnboardHere()
 	d := onboardModalOf(t, c)
-	d.HandleKey("backspace") // the prefilled app field edits like any other
+	d.HandleKey("backspace") // the prefilled module field edits like any other
 	require.Equal(t, "dem", d.rows[0].field.String())
 
 	// A shell with no selection refuses loudly.

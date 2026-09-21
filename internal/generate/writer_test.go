@@ -231,7 +231,6 @@ func TestWriter_preservesUnrelatedSections(t *testing.T) {
 	writeModuleToml(t, dir, `
 # a hand-written comment that will not survive re-encoding
 id = "media"
-app = "mediabox"
 scope = "user"
 
 [when]
@@ -256,7 +255,6 @@ post = ["echo done"]
 
 	cfg := decodeModule(t, dir)
 	require.Equal(t, "media", cfg.ID)
-	require.Equal(t, "mediabox", cfg.App)
 	require.Equal(t, []string{"linux2"}, cfg.When.Hosts)
 	require.Equal(t, []string{"nano"}, cfg.Packages.Absent)
 	require.Contains(t, cfg.Packages.Present, "curl")

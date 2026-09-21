@@ -44,7 +44,7 @@ func TestPathMap_homeAndSystem(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src, sys},
-		App:         "bash",
+		Module:      "bash",
 		Mode:        "symlink",
 		Home:        home,
 	})
@@ -77,7 +77,7 @@ func TestOnboard_relativePathIsHomeRelative(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{".bashrc"},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestOnboard_relativePathIsHomeRelative(t *testing.T) {
 	require.NotContains(t, content, home, "module.toml must not embed the absolute home path")
 }
 
-// App is mandatory (issue 0055): no first-path inference — an empty App on
+// Module is mandatory (issue 0055): no first-path inference — an empty Module on
 // a live-path run is a loud error, not a guess at the module name.
 func TestOnboard_emptyAppErrors(t *testing.T) {
 	home := t.TempDir()
@@ -106,7 +106,7 @@ func TestOnboard_emptyAppErrors(t *testing.T) {
 		Paths:       []string{src},
 		Home:        home,
 	})
-	require.ErrorContains(t, err, "--app")
+	require.ErrorContains(t, err, "--module")
 	require.NoDirExists(t, filepath.Join(profile, "modules", "nvim"), "a rejected run must not create a module")
 }
 
@@ -123,7 +123,7 @@ func TestOnboard_copiesTree(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "app",
+		Module:      "app",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -144,7 +144,7 @@ func TestOnboard_writesToml(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Mode:        "copy",
 		Packages:    []onboard.PackageEntry{{Name: "bash"}},
 		Tools:       []string{"node=20"},
@@ -182,7 +182,7 @@ func TestOnboard_packageDescriptionComments(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 		Packages: []onboard.PackageEntry{
 			{Name: "bash"},
@@ -239,7 +239,7 @@ func TestOnboard_noEnableFlagNeeded(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -262,7 +262,7 @@ func TestOnboard_orderCopyThenEnsureThenMiseApply(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -286,7 +286,7 @@ func TestOnboard_defaultModeSymlink(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -314,7 +314,7 @@ func TestOnboard_dotfilesApplyForced(t *testing.T) {
 	require.NoError(t, o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	}))
 	require.True(t, fr.DotfilesCalled)
@@ -334,12 +334,12 @@ func TestOnboard_updatesExistingFile(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{src}, App: "bash", Home: home,
+		ProfileRoot: profile, Paths: []string{src}, Module: "bash", Home: home,
 	}))
 
 	require.NoError(t, writeFile(src, "v2"))
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{src}, App: "bash", Home: home,
+		ProfileRoot: profile, Paths: []string{src}, Module: "bash", Home: home,
 	}), "re-onboarding an existing path must update, not fail")
 
 	got, err := readFile(filepath.Join(profile, "modules", "bash", "home", ".bashrc"))
@@ -360,14 +360,14 @@ func TestOnboard_updatesExistingDir(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{dir}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{dir}, Module: "app", Home: home,
 	}))
 
 	require.NoError(t, os.Remove(filepath.Join(dir, "old.conf")))
 	require.NoError(t, writeFile(filepath.Join(dir, "keep.conf"), "v2"))
 	require.NoError(t, writeFile(filepath.Join(dir, "new.conf"), "new"))
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{dir}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{dir}, Module: "app", Home: home,
 	}))
 
 	base := filepath.Join(profile, "modules", "app", "home", ".config", "app")
@@ -391,10 +391,10 @@ func TestOnboard_mergeKeepsExistingEntries(t *testing.T) {
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 	require.NoError(t, o.Run(onboard.Options{
 		ProfileRoot: profile, Paths: []string{"~/.bashrc"},
-		Packages: []onboard.PackageEntry{{Name: "bash"}}, App: "mix", Home: home,
+		Packages: []onboard.PackageEntry{{Name: "bash"}}, Module: "mix", Home: home,
 	}))
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{"~/.vimrc"}, App: "mix", Home: home,
+		ProfileRoot: profile, Paths: []string{"~/.vimrc"}, Module: "mix", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "mix", "module.toml"))
@@ -419,7 +419,7 @@ func TestOnboard_mergePreservesOtherSections(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{"~/.bashrc"}, App: "mix", Home: home,
+		ProfileRoot: profile, Paths: []string{"~/.bashrc"}, Module: "mix", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(modDir, "module.toml"))
@@ -450,7 +450,7 @@ func TestOnboard_reonboardPreservesEditEntries(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profileRoot, Paths: []string{"~/.bashrc"}, App: "mix", Home: home,
+		ProfileRoot: profileRoot, Paths: []string{"~/.bashrc"}, Module: "mix", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(modDir, "module.toml"))
@@ -477,10 +477,10 @@ func TestOnboard_mergePreservesPackageDescriptions(t *testing.T) {
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 	require.NoError(t, o.Run(onboard.Options{
 		ProfileRoot: profile, Paths: []string{"~/.bashrc"},
-		Packages: []onboard.PackageEntry{{Name: "bat", Description: "Cat clone"}}, App: "mix", Home: home,
+		Packages: []onboard.PackageEntry{{Name: "bat", Description: "Cat clone"}}, Module: "mix", Home: home,
 	}))
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{"~/.vimrc"}, App: "mix", Home: home,
+		ProfileRoot: profile, Paths: []string{"~/.vimrc"}, Module: "mix", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "mix", "module.toml"))
@@ -501,7 +501,7 @@ func TestOnboard_dryRun_noSideEffects(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 		DryRun:      true,
 	})
@@ -593,7 +593,7 @@ func TestOnboard_miseConfigInStateDir_absoluteSources(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -638,7 +638,7 @@ func TestOnboard_preservesDirTreeModes(t *testing.T) {
 	err := o.Run(onboard.Options{
 		ProfileRoot: profile,
 		Paths:       []string{dir},
-		App:         "app",
+		Module:      "app",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -676,7 +676,7 @@ func TestOnboard_yesPropagatesToDotfilesApply(t *testing.T) {
 			err := o.Run(onboard.Options{
 				ProfileRoot: profile,
 				Paths:       []string{src},
-				App:         "bash",
+				Module:      "bash",
 				Home:        home,
 				Yes:         tc.yes,
 			})
@@ -718,7 +718,7 @@ func TestOnboard_ctxPropagatesToMiseRunner(t *testing.T) {
 		Ctx:         ctx,
 		ProfileRoot: profile,
 		Paths:       []string{src},
-		App:         "bash",
+		Module:      "bash",
 		Home:        home,
 	})
 	require.NoError(t, err)
@@ -780,7 +780,7 @@ func TestOnboard_adoptsOrphans(t *testing.T) {
 	var out bytes.Buffer
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{live}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
@@ -826,7 +826,7 @@ func TestOnboard_adoptionSkipsReferencedSubtrees(t *testing.T) {
 	var out bytes.Buffer
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{live}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
@@ -859,7 +859,7 @@ func TestOnboard_adoptionSkipsBackupsDir(t *testing.T) {
 	var out bytes.Buffer
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{live}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
@@ -893,7 +893,7 @@ func TestOnboard_reOnboardChangedSourceAdoptsOld(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{liveDir}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{liveDir}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
@@ -924,7 +924,7 @@ func TestOnboard_adoptionSkipsClaimedTargets(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{live}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(profile, "modules", "app", "module.toml"))
@@ -957,7 +957,7 @@ func TestOnboard_adoptionSelfCopyGuard(t *testing.T) {
 
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{live}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(mod, "home", ".config", "orph"))
@@ -982,7 +982,7 @@ func TestOnboard_dryRunListsAdoptions(t *testing.T) {
 	var out bytes.Buffer
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{live}, App: "app", Home: home, DryRun: true,
+		ProfileRoot: profile, Paths: []string{live}, Module: "app", Home: home, DryRun: true,
 	}))
 
 	require.Contains(t, out.String(), "would adopt: ~/.config/legacy (home/.config/legacy) [base]")
@@ -1002,7 +1002,7 @@ func TestOnboard_dryRunListsAdoptions(t *testing.T) {
 // into the profile. A module file is already inside — registering it is a
 // hand-edit of that module.toml (or it rides the orphan sweep of any
 // live-path onboard). The error names the module and layer; nothing is
-// written; the --app value is never silently overridden.
+// written; the --module value is never silently overridden.
 func TestOnboard_profileInternalPathRejected(t *testing.T) {
 	home := t.TempDir()
 	profile := t.TempDir()
@@ -1028,7 +1028,7 @@ func TestOnboard_profileInternalPathRejected(t *testing.T) {
 		o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &bytes.Buffer{}}
 		err := o.Run(onboard.Options{
 			ProfileRoot: profile, Paths: []string{path},
-			App: "ignored-value", Home: home, Hostname: "cri-pc", Username: "cri",
+			Module: "ignored-value", Home: home, Hostname: "cri-pc", Username: "cri",
 		})
 		require.ErrorContains(t, err, `already inside module "easyeffects"`)
 		require.ErrorContains(t, err, wantLayer)
@@ -1068,7 +1068,7 @@ func TestOnboard_adoptionNeverClaimsSharedRoots(t *testing.T) {
 	var out bytes.Buffer
 	o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 	require.NoError(t, o.Run(onboard.Options{
-		ProfileRoot: profile, Paths: []string{sys}, App: "app", Home: home,
+		ProfileRoot: profile, Paths: []string{sys}, Module: "app", Home: home,
 	}))
 
 	content, err := readFile(filepath.Join(modDir(profile, "app"), "module.toml"))
@@ -1100,7 +1100,7 @@ func TestOnboard_userAndHostOverlays(t *testing.T) {
 		o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 		require.NoError(t, o.Run(onboard.Options{
 			ProfileRoot: profile, Paths: []string{filepath.Join(home, ".config", "app", "c.toml")},
-			App: "app", Home: home, User: true, Username: "cri",
+			Module: "app", Home: home, User: true, Username: "cri",
 		}))
 		modToml := filepath.Join(profile, "users", "cri", "modules", "app", "module.toml")
 		c, err := readFile(modToml)
@@ -1118,7 +1118,7 @@ func TestOnboard_userAndHostOverlays(t *testing.T) {
 		o := &onboard.Onboard{Mise: &mise.FakeRunner{}, Out: &out}
 		require.NoError(t, o.Run(onboard.Options{
 			ProfileRoot: profile, Paths: []string{filepath.Join(home, ".config", "app", "c.toml")},
-			App: "app", Home: home, Host: true, User: true, Hostname: "cri-pc", Username: "cri",
+			Module: "app", Home: home, Host: true, User: true, Hostname: "cri-pc", Username: "cri",
 		}))
 		for _, mod := range []string{
 			filepath.Join(profile, "hosts", "cri-pc", "modules", "app"),
@@ -1139,7 +1139,7 @@ func TestOnboard_userAndHostOverlays(t *testing.T) {
 		o := &onboard.Onboard{Mise: &mise.FakeRunner{}}
 		err := o.Run(onboard.Options{
 			ProfileRoot: profile, Paths: []string{filepath.Join(home, ".config", "app", "c.toml")},
-			App: "app", Home: home, User: true,
+			Module: "app", Home: home, User: true,
 		})
 		require.ErrorContains(t, err, "username required")
 	})

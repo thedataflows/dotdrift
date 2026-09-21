@@ -185,10 +185,10 @@ func TestPalette_recentsInSessionOnly(t *testing.T) {
 func TestPalette_dirtyDraftNeverWarnsOnJump(t *testing.T) {
 	_, c := wsShell(t, map[string]string{
 		"modules/demo/module.toml":  editFixture,
-		"modules/plain/module.toml": "id = \"plain\"\napp = \"plain\"\n",
+		"modules/plain/module.toml": "id = \"plain\"\n",
 	})
 	c = cpress(c, "tab")
-	c = cpress(c, "j") // id row → app row
+	c = cpress(c, "j") // id row → description row
 	c = cpress(c, "enter")
 	c = typeText(c, "-next")
 	c = wsPress(t, c, "enter")

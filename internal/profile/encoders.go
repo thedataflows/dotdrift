@@ -77,15 +77,12 @@ func PackageEntries(names []string) []PackageEntry {
 }
 
 // EncodeKeysSection renders the module-level keys (the preamble block:
-// id, app, description, disabled, scope). Zero values are omitted — a
+// id, description, disabled, scope). Zero values are omitted — a
 // minimal scaffold stays minimal.
 func EncodeKeysSection(cfg ModuleConfig) string {
 	var b strings.Builder
 	if cfg.ID != "" {
 		b.WriteString("id = " + tomlBasicString(cfg.ID) + "\n")
-	}
-	if cfg.App != "" {
-		b.WriteString("app = " + tomlBasicString(cfg.App) + "\n")
 	}
 	if cfg.Description != "" {
 		b.WriteString("description = " + tomlBasicString(cfg.Description) + "\n")

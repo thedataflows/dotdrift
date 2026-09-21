@@ -3,11 +3,10 @@
 │MODULES                   ││demo  [base]  · packages                                          │
 ││ ▸ demo                  ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          ││  app demo-app ✎                                                  │
 │                          ││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
-│                          │││ ▸ ▏                                                             │
+│                          │││ ▸                                                               │
 │                          ││    ✗ package name must not be empty                              │
 │                          ││  + ripgrep ✎                                                     │
 │                          ││links ＋                                                          │
@@ -20,6 +19,7 @@
 │                          ││secrets ＋                                                        │
 │                          ││mounts ＋                                                         │
 │                          ││smb ＋                                                            │
+│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

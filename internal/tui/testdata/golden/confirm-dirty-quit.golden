@@ -3,11 +3,11 @@
 │MODULES                   ││demo  [base]  · meta  ●                                           │
 ││ ▸ demo ●                ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          │││ app demo-app-next ●                                             │
-│                          ││  description the demo module ✎                                   │
+│                          │││ description the demo module-next ●                              │
 │                          ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
 │                          ││  + neovim ✎                                                      │
+│                          ││  + ripgrep ✎                                                     │
 │                      ╭────────────────────────────────────────────────────╮                  │
 │                      │                                                    │                  │
 │                      │  quit with unsaved drafts?                         │                  │
@@ -18,7 +18,7 @@
 │                      │  y confirm · n/esc cancel                          │                  │
 │                      │                                                    │                  │
 │                      ╰────────────────────────────────────────────────────╯                  │
-│                          ││smb ＋                                                            │
+│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

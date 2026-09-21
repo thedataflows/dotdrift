@@ -3,7 +3,6 @@
 │MODULES                   ││demo  [base]  · meta                                              │
 ││ ▸ demo                  ││meta                                                              │
 │                          │││ id demo                                                         │
-│                          ││  app demo-app ✎                                                  │
 │                          ││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
@@ -23,6 +22,7 @@
 │                          ││  post: echo post ✎                                               │
 │                          ││systemd.units ＋                                                  │
 │                          ││  demo.service ＋                                                 │
+│                          ││    Service = { ExecStart = "/usr/bin/demo" } ✎                   │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / filter modules • ? help • q quit

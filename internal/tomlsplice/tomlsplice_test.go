@@ -19,7 +19,6 @@ import (
 const fixtureDoc = `# hand-written module: zsh
 # managed carefully, comments matter
 id = "zsh"
-app = "zsh"
 
 [packages] # trailing header comment
 present = [
@@ -78,7 +77,6 @@ func TestSplice_untouchedSectionsByteIdentical(t *testing.T) {
 	wantPreamble := `# hand-written module: zsh
 # managed carefully, comments matter
 id = "zsh"
-app = "zsh"
 `
 	require.Equal(t, wantPreamble, strings.Split(out, "\n[")[0], "preamble must pass through verbatim")
 	// Every other section is byte-identical, position included.
@@ -134,7 +132,7 @@ func TestSplice_outputStrictDecodes(t *testing.T) {
 	// Whatever the splicer emits must remain a valid module.toml — the save
 	// pipeline's strict decode (contract 19) sits right behind it.
 	repl := map[string]string{
-		"keys":     "id = \"zsh\"\napp = \"zsh\"\ndescription = \"shell\"\ndisabled = true\nscope = \"system\"\n",
+		"keys":     "id = \"zsh\"\ndescription = \"shell\"\ndisabled = true\nscope = \"system\"\n",
 		"packages": "[packages]\npresent = [\n  \"bat\",\n]\nabsent = [\n  \"vim\",\n]\n",
 		"tools":    "[tools]\nnode = \"22\"\n",
 		"when":     "[when]\nhosts = [\"box\"]\n",

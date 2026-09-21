@@ -56,7 +56,7 @@ func TestWrites_onboard_translatesAndRuns(t *testing.T) {
 	err := area.Onboard(OnboardOpts{
 		ProfileRoot: root,
 		Paths:       []string{live},
-		App:         "myapp",
+		Module:      "myapp",
 		Mode:        "copy",
 		Packages:    []string{"ripgrep"},
 		Tools:       []string{"node=20"},
@@ -85,7 +85,7 @@ func TestWrites_onboard_translatesAndRuns(t *testing.T) {
 func TestWrites_onboard_packageParseError(t *testing.T) {
 	root, live, area, _ := onboardFixture(t)
 
-	err := area.Onboard(OnboardOpts{ProfileRoot: root, Paths: []string{live}, App: "myapp", Packages: []string{"=no name"}})
+	err := area.Onboard(OnboardOpts{ProfileRoot: root, Paths: []string{live}, Module: "myapp", Packages: []string{"=no name"}})
 	require.ErrorContains(t, err, "parse packages:")
 	_, statErr := os.Stat(filepath.Join(root, "modules", "myapp"))
 	require.True(t, os.IsNotExist(statErr), "no module is created on a parse error")
@@ -98,7 +98,7 @@ func TestWrites_onboard_dryRun(t *testing.T) {
 	var out strings.Builder
 
 	err := area.Onboard(OnboardOpts{
-		ProfileRoot: root, Paths: []string{live}, App: "myapp",
+		ProfileRoot: root, Paths: []string{live}, Module: "myapp",
 		DryRun: true, Out: &out,
 	})
 	require.NoError(t, err)

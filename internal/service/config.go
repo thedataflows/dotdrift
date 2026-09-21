@@ -68,15 +68,15 @@ func (d ConfigDeps) withDefaults() ConfigDeps {
 type ConfigEditor interface {
 	ReadModuleLayer(dir string) (*ModuleLayerRead, error)
 	WriteModuleLayer(req SaveRequest) (*SaveResult, error)
-	CreateModule(app, layer string) error
-	MoveModule(app, fromLayer, toLayer string) error
+	CreateModule(name, layer string) error
+	MoveModule(name, fromLayer, toLayer string) error
 	// OverrideModule seeds an overlay for an existing module in a higher
 	// layer (issue 0082).
-	OverrideModule(app, fromLayer, toLayer string) error
+	OverrideModule(name, fromLayer, toLayer string) error
 	// DeletePreview is the orphan list the delete gate shows before
 	// DeleteModule runs.
-	DeletePreview(app, layer string) ([]string, error)
-	DeleteModule(app, layer string) error
+	DeletePreview(name, layer string) ([]string, error)
+	DeleteModule(name, layer string) error
 }
 
 var _ ConfigEditor = (*ConfigArea)(nil)
@@ -265,11 +265,7 @@ func patchModule(p *profile.Profile, dir string, cfg *profile.ModuleConfig) erro
 	if id == "" {
 		id = filepath.Base(dir)
 	}
-	app := cfg.App
-	if app == "" {
-		app = id
-	}
-	p.Modules = append(p.Modules, profile.Module{ID: id, App: app, Path: dir, Config: *cfg})
+	p.Modules = append(p.Modules, profile.Module{ID: id, Path: dir, Config: *cfg})
 	return nil
 }
 
@@ -308,31 +304,31 @@ func RawHash(raw []byte) string {
 // an overlay layer is "hosts/<hostname>" or "users/<username>" — the same
 // labels the status report groups by (onboard's layerLabel).
 
-// ModuleDir returns the module directory for (layer, app).
-func ModuleDir(root, layer, app string) string {
+// ModuleDir returns the module directory for (layer, name).
+func ModuleDir(root, layer, name string) string {
 	if layer == "" || layer == "base" {
-		return filepath.Join(root, "modules", app)
+		return filepath.Join(root, "modules", name)
 	}
-	return filepath.Join(root, filepath.FromSlash(layer), "modules", app)
+	return filepath.Join(root, filepath.FromSlash(layer), "modules", name)
 }
 
-// CreateModule scaffolds a minimal module (id + app, nothing else —
+// CreateModule scaffolds a minimal module (id, nothing else —
 // sections are added through the editors themselves, 0065-D5) in the
 // given layer. Refused when the layer already has that module.
-func (a *ConfigArea) CreateModule(app, layer string) error {
-	if app == "" {
+func (a *ConfigArea) CreateModule(name, layer string) error {
+	if name == "" {
 		return errors.New("create module: a module name is required")
 	}
-	dir := ModuleDir(a.root, layer, app)
+	dir := ModuleDir(a.root, layer, name)
 	if _, err := os.Stat(filepath.Join(dir, "module.toml")); err == nil {
-		return fmt.Errorf("create module: %s already has module %q", layerLabelName(layer), app)
+		return fmt.Errorf("create module: %s already has module %q", layerLabelName(layer), name)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	scaffold := profile.EncodeKeysSection(profile.ModuleConfig{ID: app, App: app})
+	scaffold := profile.EncodeKeysSection(profile.ModuleConfig{ID: name})
 	if err := atomicWrite(filepath.Join(dir, "module.toml"), []byte(scaffold)); err != nil {
 		return err
 	}
@@ -342,16 +338,16 @@ func (a *ConfigArea) CreateModule(app, layer string) error {
 // MoveModule moves a module directory wholesale between layers (module
 // dirs are self-contained per contract 8 — no content merging, ever).
 // Refused when the target layer already has that module.
-func (a *ConfigArea) MoveModule(app, fromLayer, toLayer string) error {
-	src := ModuleDir(a.root, fromLayer, app)
-	dst := ModuleDir(a.root, toLayer, app)
+func (a *ConfigArea) MoveModule(name, fromLayer, toLayer string) error {
+	src := ModuleDir(a.root, fromLayer, name)
+	dst := ModuleDir(a.root, toLayer, name)
 	if _, err := os.Stat(filepath.Join(dst, "module.toml")); err == nil {
-		return fmt.Errorf("move module: %s already has module %q", layerLabelName(toLayer), app)
+		return fmt.Errorf("move module: %s already has module %q", layerLabelName(toLayer), name)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 	if _, err := os.Stat(src); err != nil {
-		return fmt.Errorf("move module: %s has no module %q", layerLabelName(fromLayer), app)
+		return fmt.Errorf("move module: %s has no module %q", layerLabelName(fromLayer), name)
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return err
@@ -364,21 +360,21 @@ func (a *ConfigArea) MoveModule(app, fromLayer, toLayer string) error {
 // empty overlay overrides nothing, and a copied base would pin its
 // fields against later base edits. Refused when the source layer has no
 // such module or the target layer already has one.
-func (a *ConfigArea) OverrideModule(app, fromLayer, toLayer string) error {
-	src := ModuleDir(a.root, fromLayer, app)
+func (a *ConfigArea) OverrideModule(name, fromLayer, toLayer string) error {
+	src := ModuleDir(a.root, fromLayer, name)
 	if _, err := os.Stat(src); err != nil {
-		return fmt.Errorf("override module: %s has no module %q", layerLabelName(fromLayer), app)
+		return fmt.Errorf("override module: %s has no module %q", layerLabelName(fromLayer), name)
 	}
-	dst := ModuleDir(a.root, toLayer, app)
+	dst := ModuleDir(a.root, toLayer, name)
 	if _, err := os.Stat(filepath.Join(dst, "module.toml")); err == nil {
-		return fmt.Errorf("override module: %s already has module %q", layerLabelName(toLayer), app)
+		return fmt.Errorf("override module: %s already has module %q", layerLabelName(toLayer), name)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 	if err := os.MkdirAll(dst, 0o755); err != nil {
 		return err
 	}
-	seed := "# overlay of " + app + " (" + layerLabelName(fromLayer) + "): fields set here override it.\n" +
+	seed := "# overlay of " + name + " (" + layerLabelName(fromLayer) + "): fields set here override it.\n" +
 		"# merged: packages, tools, dotfiles, hooks, mounts, smb\n" +
 		"# meta, scope, and when come from " + layerLabelName(fromLayer) + "\n"
 	return atomicWrite(filepath.Join(dst, "module.toml"), []byte(seed))
@@ -388,8 +384,8 @@ func (a *ConfigArea) OverrideModule(app, fromLayer, toLayer string) error {
 // references — the same orphan definition as the status report, scoped to
 // the dying directory: strays the module carries but never managed. The
 // confirm dialog shows the set before the deletion.
-func (a *ConfigArea) DeletePreview(app, layer string) ([]string, error) {
-	dir := ModuleDir(a.root, layer, app)
+func (a *ConfigArea) DeletePreview(name, layer string) ([]string, error) {
+	dir := ModuleDir(a.root, layer, name)
 	referenced := drift.ReferencedPaths(ModuleLayersAt(a.root))
 	var orphans []string
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
@@ -418,8 +414,8 @@ func (a *ConfigArea) DeletePreview(app, layer string) ([]string, error) {
 // DeleteModule removes a module directory wholesale. The caller shows the
 // orphan preview first (DeletePreview) — the service area does what it is
 // told.
-func (a *ConfigArea) DeleteModule(app, layer string) error {
-	return os.RemoveAll(ModuleDir(a.root, layer, app))
+func (a *ConfigArea) DeleteModule(name, layer string) error {
+	return os.RemoveAll(ModuleDir(a.root, layer, name))
 }
 
 // ModuleLayersAt lists EVERY module layer directory under a profile root:
@@ -444,17 +440,17 @@ func ModuleLayersAt(root string) []drift.ModuleLayer {
 		}
 		return names
 	}
-	for _, app := range entries(filepath.Join(root, "modules")) {
-		add("base", "", filepath.Join(root, "modules", app))
+	for _, name := range entries(filepath.Join(root, "modules")) {
+		add("base", "", filepath.Join(root, "modules", name))
 	}
 	for _, owner := range entries(filepath.Join(root, "hosts")) {
-		for _, app := range entries(filepath.Join(root, "hosts", owner, "modules")) {
-			add("host", owner, filepath.Join(root, "hosts", owner, "modules", app))
+		for _, name := range entries(filepath.Join(root, "hosts", owner, "modules")) {
+			add("host", owner, filepath.Join(root, "hosts", owner, "modules", name))
 		}
 	}
 	for _, owner := range entries(filepath.Join(root, "users")) {
-		for _, app := range entries(filepath.Join(root, "users", owner, "modules")) {
-			add("user", owner, filepath.Join(root, "users", owner, "modules", app))
+		for _, name := range entries(filepath.Join(root, "users", owner, "modules")) {
+			add("user", owner, filepath.Join(root, "users", owner, "modules", name))
 		}
 	}
 	return layers

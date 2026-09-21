@@ -38,7 +38,6 @@ const (
 // ModuleConfig is the base module.toml configuration.
 type ModuleConfig struct {
 	ID          string               `toml:"id"`
-	App         string               `toml:"app"`
 	Description string               `toml:"description"`
 	Disabled    bool                 `toml:"disabled"`
 	Scope       string               `toml:"scope"`
@@ -247,7 +246,6 @@ func (d Dotfile) IsEdit() bool {
 // Module is a discovered module with its resolved identity and path.
 type Module struct {
 	ID     string
-	App    string
 	Path   string
 	Config ModuleConfig
 }

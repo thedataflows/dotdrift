@@ -472,7 +472,7 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 }
 
 // openManageCreate opens the manage dialog straight in create mode, the
-// app field prefilled (the palette's ctrl+n escape from no-results —
+// module field prefilled (the palette's ctrl+n escape from no-results —
 // explicit, never auto-offered).
 func (m *Compositor) openManageCreate(prefill string) {
 	ce, ok := m.reader.(service.ConfigEditor)

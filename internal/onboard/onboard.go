@@ -26,7 +26,7 @@ type Options struct {
 	Ctx         context.Context
 	ProfileRoot string
 	Paths       []string
-	App         string
+	Module      string
 	Mode        string
 	Packages    []PackageEntry
 	Tools       []string
@@ -103,23 +103,23 @@ func (o *Onboard) Run(opts Options) error {
 	// inside a module layer of the profile is rejected (issue 0056,
 	// amending 0017): registering it is a hand-edit of that module.toml,
 	// or it rides the orphan sweep of any live-path onboard. No silent
-	// --app/--host/--user override — the flags always mean what they say.
+	// --module/--host/--user override — the flags always mean what they say.
 	var live []string
 	for _, p := range expanded {
 		if layerDir, _, ok := moduleLayerPath(profRoot, p); ok {
 			return fmt.Errorf("onboard: %s is already inside module %q (%s) — onboard adopts live paths only; declare it in that module.toml directly", p, filepath.Base(layerDir), layerLabel(profRoot, layerDir))
 		}
 		if containsPath(profRoot, p) {
-			return fmt.Errorf("onboard: %s is inside the profile but not a module file under modules/<app>[/hosts|users]/home|system; onboard takes live paths", p)
+			return fmt.Errorf("onboard: %s is inside the profile but not a module file under modules/<module>[/hosts|users]/home|system; onboard takes live paths", p)
 		}
 		live = append(live, p)
 	}
 
-	// --app is mandatory (issue 0055): the module name is always explicit,
-	// never inferred from a path.
-	app := opts.App
-	if app == "" {
-		return fmt.Errorf("onboard: --app is required (module directory name)")
+	// --module is mandatory (issue 0055): the module name is always
+	// explicit, never inferred from a path.
+	module := opts.Module
+	if module == "" {
+		return fmt.Errorf("onboard: --module is required (module directory name)")
 	}
 
 	mode := opts.Mode
@@ -140,42 +140,42 @@ func (o *Onboard) Run(opts Options) error {
 			return fmt.Errorf("username required for user overlay")
 		}
 		targets = []string{
-			filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app),
-			filepath.Join(profRoot, "users", opts.Username, "modules", app),
+			filepath.Join(profRoot, "hosts", opts.Hostname, "modules", module),
+			filepath.Join(profRoot, "users", opts.Username, "modules", module),
 		}
 	case opts.Host:
 		if opts.Hostname == "" {
 			return fmt.Errorf("hostname required for host overlay")
 		}
-		targets = []string{filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app)}
+		targets = []string{filepath.Join(profRoot, "hosts", opts.Hostname, "modules", module)}
 	case opts.User:
 		if opts.Username == "" {
 			return fmt.Errorf("username required for user overlay")
 		}
-		targets = []string{filepath.Join(profRoot, "users", opts.Username, "modules", app)}
+		targets = []string{filepath.Join(profRoot, "users", opts.Username, "modules", module)}
 	default:
-		targets = []string{filepath.Join(profRoot, "modules", app)}
+		targets = []string{filepath.Join(profRoot, "modules", module)}
 	}
 
 	// Claims: every [dotfiles] target the module already declares in any
 	// of its layers (base, this host, this user) bounds the adoption
 	// chain — a base symlink-each entry keeps a stray overlay file from
 	// collapsing into a giant ancestor unit (issue 0017).
-	appLayers := []drift.ModuleLayer{
-		{Dir: app, Layer: "base", Path: filepath.Join(profRoot, "modules", app)},
+	moduleLayers := []drift.ModuleLayer{
+		{Dir: module, Layer: "base", Path: filepath.Join(profRoot, "modules", module)},
 	}
 	if opts.Hostname != "" {
-		appLayers = append(appLayers, drift.ModuleLayer{
-			Dir: app, Layer: "host", Owner: opts.Hostname, Path: filepath.Join(profRoot, "hosts", opts.Hostname, "modules", app),
+		moduleLayers = append(moduleLayers, drift.ModuleLayer{
+			Dir: module, Layer: "host", Owner: opts.Hostname, Path: filepath.Join(profRoot, "hosts", opts.Hostname, "modules", module),
 		})
 	}
 	if opts.Username != "" {
-		appLayers = append(appLayers, drift.ModuleLayer{
-			Dir: app, Layer: "user", Owner: opts.Username, Path: filepath.Join(profRoot, "users", opts.Username, "modules", app),
+		moduleLayers = append(moduleLayers, drift.ModuleLayer{
+			Dir: module, Layer: "user", Owner: opts.Username, Path: filepath.Join(profRoot, "users", opts.Username, "modules", module),
 		})
 	}
 	declared := map[string]bool{}
-	for _, layer := range appLayers {
+	for _, layer := range moduleLayers {
 		for t := range readExistingDotfiles(layer.Path) {
 			declared[t] = true
 		}
@@ -226,10 +226,10 @@ func (o *Onboard) Run(opts Options) error {
 
 		// References: the same declaration-based set status orphans use,
 		// plus this run's copies in THIS layer.
-		refs := drift.ReferencedPaths(appLayers)
+		refs := drift.ReferencedPaths(moduleLayers)
 		// A run entry overriding a declared target strands the old source
 		// in every view: un-reference it so the orphan scan adopts it.
-		for _, layer := range appLayers {
+		for _, layer := range moduleLayers {
 			layerDeclared := readExistingDotfiles(layer.Path)
 			for target, e := range entries {
 				old, ok := layerDeclared[target]
@@ -438,8 +438,9 @@ func planAdoptions(moduleDir string, referenced, claimed map[string]bool) []adop
 }
 
 // moduleLayerPath reports whether p is a file inside a module layer
-// directory of the profile (modules/<app>/..., hosts/<h>/modules/<app>/...,
-// users/<u>/modules/<app>/...), returning that layer directory and the
+// directory of the profile (modules/<module>/...,
+// hosts/<h>/modules/<module>/..., users/<u>/modules/<module>/...),
+// returning that layer directory and the
 // path relative to it (slash-separated, possibly empty for the module
 // dir itself).
 func moduleLayerPath(profRoot, p string) (layerDir, rel string, ok bool) {
@@ -702,7 +703,7 @@ func copyFile(src, dst string, mode os.FileMode) error {
 // mergeModuleTOML writes cfg into the module's module.toml, merging with an
 // existing file instead of overwriting it. The managed sections ([packages],
 // [tools], [dotfiles]) are regenerated from merged values; every other
-// section (scope, when, hooks, mounts, smb, id/app) passes through verbatim.
+// section (scope, when, hooks, mounts, smb, id) passes through verbatim.
 // [packages]/[tools] are regenerated only when this run declares new ones, so
 // an existing package's description comment survives a re-onboard that only
 // adds a path.

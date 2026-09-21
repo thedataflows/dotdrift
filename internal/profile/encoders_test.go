@@ -13,12 +13,12 @@ import (
 // canonical fixed point: encode ∘ decode ∘ encode = encode.
 
 func TestEncodeKeysSection(t *testing.T) {
-	require.Equal(t, "id = \"zsh\"\napp = \"zsh\"\n", EncodeKeysSection(ModuleConfig{ID: "zsh", App: "zsh"}),
+	require.Equal(t, "id = \"zsh\"\n", EncodeKeysSection(ModuleConfig{ID: "zsh"}),
 		"minimal scaffold: zero values omitted")
 	require.Equal(t,
-		"id = \"zsh\"\napp = \"zsh\"\ndescription = \"my shell\"\ndisabled = true\nscope = \"system\"\n",
-		EncodeKeysSection(ModuleConfig{ID: "zsh", App: "zsh", Description: "my shell", Disabled: true, Scope: "system"}))
-	require.Equal(t, "app = \"x\"\n", EncodeKeysSection(ModuleConfig{App: "x"}),
+		"id = \"zsh\"\ndescription = \"my shell\"\ndisabled = true\nscope = \"system\"\n",
+		EncodeKeysSection(ModuleConfig{ID: "zsh", Description: "my shell", Disabled: true, Scope: "system"}))
+	require.Equal(t, "", EncodeKeysSection(ModuleConfig{}),
 		"omitted id and scope stay omitted")
 }
 
@@ -146,7 +146,7 @@ func TestEncodeSystemdSection(t *testing.T) {
 func TestEncode_canonicalFixedPoint(t *testing.T) {
 	avahi := true
 	cfg := ModuleConfig{
-		ID: "full", App: "full", Description: "every section", Disabled: true, Scope: ScopeSystem,
+		ID: "full", Description: "every section", Disabled: true, Scope: ScopeSystem,
 		When: When{
 			Hosts: []string{"box"}, Users: []string{"kim"}, OS: []string{"arch"}, GPU: "nvidia",
 			Kernel: ">= 6.1", Packages: []string{"docker.*"}, Tools: []string{"node"},

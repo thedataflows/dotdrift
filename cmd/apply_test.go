@@ -721,7 +721,6 @@ func writeCopyProfile(t *testing.T, dir, targetContent, sourceContent string) st
 	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte(sourceContent), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
-app = "demo"
 
 [dotfiles]
 "`+target+`" = { source = "files/config", mode = "copy" }

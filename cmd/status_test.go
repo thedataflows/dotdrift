@@ -39,7 +39,6 @@ func statusMinimalProfile(t *testing.T) string {
 	modDir := filepath.Join(dir, "modules", "demo")
 	require.NoError(t, os.MkdirAll(modDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
-app = "demo"
 
 [packages]
 present = ["demo-pkg"]
@@ -262,7 +261,6 @@ func TestStatus_miseMissingToolsUnknown(t *testing.T) {
 	modDir := filepath.Join(dir, "modules", "demo")
 	require.NoError(t, os.MkdirAll(modDir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
-app = "demo"
 
 [tools]
 node = "20"
@@ -331,7 +329,6 @@ func TestStatus_moduleFilterLimitsScope(t *testing.T) {
 		modDir := filepath.Join(dir, "modules", mod.dir)
 		require.NoError(t, os.MkdirAll(modDir, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "`+mod.dir+`"
-app = "`+mod.dir+`"
 
 [packages]
 present = ["`+mod.pkg+`"]
@@ -366,7 +363,6 @@ func TestStatus_diffFlagShowsDiff(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte("theme = \"dark\"\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
-app = "demo"
 
 [dotfiles]
 "`+target+`" = { source = "files/config", mode = "copy" }
@@ -399,7 +395,6 @@ func TestStatus_diffFlagToolNotFoundErrors(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte("new\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte(`id = "demo"
-app = "demo"
 
 [dotfiles]
 "`+target+`" = { source = "files/config", mode = "copy" }

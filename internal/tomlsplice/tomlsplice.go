@@ -14,7 +14,7 @@ import (
 )
 
 // FamilyKeys is the preamble's splice family — the module-level keys
-// (id, app, description, …) that live before any table header.
+// (id, description, …) that live before any table header.
 const FamilyKeys = "keys"
 
 // Section is one top-level block of a TOML document: the preamble

@@ -3,8 +3,7 @@
 │MODULES                   ││demo  [base]  · meta                                              │
 ││ ▸ demo                  ││meta                                                              │
 │                          ││  id demo                                                         │
-│                          │││ ▸ demo-app-next▏                                                │
-│                          ││  description the demo module ✎                                   │
+│                          │││ ▸ the demo module-next                                          │
 │                          ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
 │                          ││  + neovim ✎                                                      │
@@ -19,6 +18,7 @@
 │                          ││secrets ＋                                                        │
 │                          ││mounts ＋                                                         │
 │                          ││smb ＋                                                            │
+│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

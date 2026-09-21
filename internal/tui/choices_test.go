@@ -187,7 +187,7 @@ func TestChoice_systemdDirectivePickers(t *testing.T) {
 }
 
 func TestChoice_freeTextFieldsKeepTheInput(t *testing.T) {
-	_, _, c := editShell(t) // parked on the app row
+	_, _, c := editShell(t) // parked on the description row
 
 	c = cpress(c, "enter")
 	require.NotNil(t, c.ws.editing, "a free-text field still opens the input")

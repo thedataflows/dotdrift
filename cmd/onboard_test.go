@@ -31,7 +31,7 @@ func TestOnboard_mapsCommandFieldsToOptions(t *testing.T) {
 	cmd := &OnboardCmd{
 		Paths:    []string{live},
 		Profile:  profDir,
-		App:      "myapp",
+		Module:   "myapp",
 		Mode:     "copy",
 		Packages: []string{"ripgrep"},
 		Tools:    []string{"node=20"},
@@ -75,7 +75,7 @@ func TestOnboard_updatesByDefault(t *testing.T) {
 		cmd := &OnboardCmd{
 			Paths:   []string{live},
 			Profile: profDir,
-			App:     "myapp",
+			Module:  "myapp",
 			Mise:    &mise.FakeRunner{},
 		}
 		return cmd.Run()
@@ -123,7 +123,7 @@ func TestOnboard_verbosePropagation(t *testing.T) {
 			cmd := &OnboardCmd{
 				Paths:   []string{live},
 				Profile: profDir,
-				App:     "myapp",
+				Module:  "myapp",
 				Verbose: verbose,
 			}
 			require.NoError(t, cmd.Run())
@@ -140,7 +140,7 @@ func TestOnboard_modeFlag_acceptsDocumentedModes(t *testing.T) {
 			var cli CLI
 			parser, err := kong.New(&cli, kong.Name(appName))
 			require.NoError(t, err)
-			_, err = parser.Parse([]string{"onboard", "--app", "x", "--mode", mode, filepath.Join(t.TempDir(), "x")})
+			_, err = parser.Parse([]string{"onboard", "--module", "x", "--mode", mode, filepath.Join(t.TempDir(), "x")})
 			require.NoError(t, err, "--mode %s is documented in docs/product/profile-layout.md and must parse", mode)
 			require.Equal(t, mode, cli.Onboard.Mode)
 		})
@@ -154,20 +154,20 @@ func TestOnboard_modeFlag_defaultIsSymlink(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"onboard", "--app", "x", filepath.Join(t.TempDir(), "x")})
+	_, err = parser.Parse([]string{"onboard", "--module", "x", filepath.Join(t.TempDir(), "x")})
 	require.NoError(t, err)
 	require.Equal(t, "symlink", cli.Onboard.Mode, "default dotfile mode is symlink (contract.md invariant 5)")
 }
 
-// --app is required (issue 0055): the module name must be explicit — the
+// --module is required (issue 0055): the module name must be explicit — the
 // old first-path inference was a silent guess at profile structure.
-func TestKong_onboardAppRequired(t *testing.T) {
+func TestKong_onboardModuleRequired(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
 	_, err = parser.Parse([]string{"onboard", filepath.Join(t.TempDir(), "x")})
-	require.Error(t, err, "onboard without --app must fail at parse time")
-	require.Contains(t, err.Error(), "--app")
+	require.Error(t, err, "onboard without --module must fail at parse time")
+	require.Contains(t, err.Error(), "--module")
 }
 
 func TestOnboard_modeFlowsToModuleTOML(t *testing.T) {
@@ -185,7 +185,7 @@ func TestOnboard_modeFlowsToModuleTOML(t *testing.T) {
 			cmd := &OnboardCmd{
 				Paths:   []string{live},
 				Profile: profDir,
-				App:     "myapp",
+				Module:  "myapp",
 				Mode:    mode,
 				Mise:    &mise.FakeRunner{},
 			}
@@ -214,7 +214,7 @@ func TestOnboard_packagesDescriptionEndToEnd(t *testing.T) {
 	cmd := &OnboardCmd{
 		Paths:   []string{live},
 		Profile: profDir,
-		App:     "myapp",
+		Module:  "myapp",
 		// kong would split 'bat,fd="Find files"' into these two tokens.
 		Packages: []string{"bat", `fd="Find files"`},
 		Mise:     &mise.FakeRunner{},

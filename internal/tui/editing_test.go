@@ -32,7 +32,6 @@ func typeText(c *Compositor, s string) *Compositor {
 func keyCtrl(r rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: r, Mod: tea.ModCtrl} }
 
 const editFixture = `id = "demo"
-app = "demo-app"
 description = "the demo module"
 
 [packages]
@@ -43,13 +42,13 @@ node = "20"
 `
 
 // editShell loads the edit fixture, focuses the workspace, and parks the
-// cursor on the app row (the first editable field).
+// cursor on the description row (the first editable field).
 func editShell(t *testing.T) (map[string]string, string, *Compositor) {
 	t.Helper()
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": editFixture})
 	dir := c.ws.activeDir()
 	c = cpress(c, "tab")
-	return subs, dir, cpress(c, "j") // id row → app row
+	return subs, dir, cpress(c, "j") // id row → description row
 }
 
 func TestEdit_enterStartsEdit_escExits(t *testing.T) {
@@ -57,10 +56,10 @@ func TestEdit_enterStartsEdit_escExits(t *testing.T) {
 
 	c = cpress(c, "enter")
 	require.NotNil(t, c.ws.editing, "enter on an entry row starts the field edit")
-	require.Equal(t, "demo-app", c.ws.editing.inputString(), "the input seeds from the field's value")
+	require.Equal(t, "the demo module", c.ws.editing.inputString(), "the input seeds from the field's value")
 
 	c = typeText(c, " x")
-	require.Equal(t, "demo-app x", c.ws.editing.inputString())
+	require.Equal(t, "the demo module x", c.ws.editing.inputString())
 
 	c = cpress(c, "esc")
 	require.Nil(t, c.ws.editing, "esc cancels the field edit")
@@ -74,7 +73,7 @@ func TestEdit_commitSplicesIntoDraft(t *testing.T) {
 	c = typeText(c, "-next")
 	c = wsPress(t, c, "enter")
 	require.Nil(t, c.ws.editing, "enter commits the field")
-	require.Contains(t, c.ws.placeholderOrBody(), "demo-app-next", "the row re-renders from the draft")
+	require.Contains(t, c.ws.placeholderOrBody(), "the demo module-next", "the row re-renders from the draft")
 	require.NotNil(t, c.wsDraftFor(dir), "a commit forks the draft")
 }
 
@@ -129,7 +128,7 @@ func TestEdit_draftSurvivesNavigationAndLayerSwitch(t *testing.T) {
 	require.Nil(t, c.ws.draft, "the other module has no draft")
 	c = wsPress(t, c, "k") // back to demo
 	require.NotNil(t, c.wsDraftFor(active), "the draft waits where it was left")
-	require.Contains(t, c.ws.placeholderOrBody(), "demo-app-next")
+	require.Contains(t, c.ws.placeholderOrBody(), "the demo module-next")
 
 	// Layer switch: the user layer has no draft; back to base it returns.
 	c = cpress(c, "tab")
@@ -137,7 +136,7 @@ func TestEdit_draftSurvivesNavigationAndLayerSwitch(t *testing.T) {
 	require.Nil(t, c.ws.draft)
 	require.Contains(t, c.ws.placeholderOrBody(), "user layer")
 	c = wsPress(t, c, "L")
-	require.Contains(t, c.ws.placeholderOrBody(), "demo-app-next", "the draft re-renders on return")
+	require.Contains(t, c.ws.placeholderOrBody(), "the demo module-next", "the draft re-renders on return")
 
 	// The nav agrees: demo's base layer row carries the dirty marker.
 	require.True(t, c.draftMarks()[active])
@@ -161,19 +160,20 @@ func TestEdit_saveWritesAndClearsDraft(t *testing.T) {
 	require.Nil(t, c.wsDraftFor(dir), "a successful save clears the draft")
 	raw, err := os.ReadFile(filepath.Join(dir, "module.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "app = \"demo-app-next\"", "tomlsplice wrote the field")
-	require.Contains(t, string(raw), "description = \"the demo module\"", "untouched sections keep their bytes")
+	require.Contains(t, string(raw), "description = \"the demo module-next\"", "tomlsplice wrote the field")
+	require.Contains(t, string(raw), "id = \"demo\"", "untouched sections keep their bytes")
 	require.Equal(t, "saved demo", c.message, "the footer reports the save")
 }
 
 func TestEdit_saveBlockedOnTier1Errors(t *testing.T) {
 	_, _, c := editShell(t)
 
-	// Commit an emptied app: staged, marked, and blocking the save.
+	// Commit an emptied package: staged, marked, and blocking the save.
 	// (0076: closed-set fields can no longer hold invalid values — the
 	// free-text grammar still can.)
-	c = cpress(c, "enter") // the app row
-	for i := 0; i < len("demo-app"); i++ {
+	c = cursorTo(t, c, "neovim")
+	c = cpress(c, "enter") // the neovim package row
+	for i := 0; i < len("neovim"); i++ {
 		c, _ = cstep(c, tea.KeyPressMsg{Code: tea.KeyBackspace})
 	}
 	c = wsPress(t, c, "enter")
@@ -189,7 +189,7 @@ func TestEdit_saveBlockedOnTier1Errors(t *testing.T) {
 		c, cmd = cstep(c, msg)
 	}
 	require.True(t, c.msgErr, "the save is blocked while tier-1 errors stand")
-	require.Contains(t, c.message, "app")
+	require.Contains(t, c.message, "package name")
 	require.NotNil(t, c.ws.draft, "the blocked save keeps the draft")
 }
 
@@ -200,7 +200,7 @@ func TestEdit_diskConflictRefusalSurfaces(t *testing.T) {
 	c = wsPress(t, c, "enter")
 
 	// The file changes on disk behind the draft's back.
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte("id = \"demo\"\napp = \"elsewhere\"\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte("\n"), 0o644))
 
 	c, cmd := cstep(c, keyCtrl('s'))
 	for i := 0; i < 10 && cmd != nil; i++ {
@@ -238,7 +238,7 @@ func TestEdit_discardRequiresConfirm(t *testing.T) {
 	c = cpress(c, "D")
 	c = cpress(c, "y")
 	require.Nil(t, c.wsDraftFor(dir), "y discards the draft")
-	require.Contains(t, c.ws.placeholderOrBody(), "app demo", "the surface reverts to disk state")
+	require.Contains(t, c.ws.placeholderOrBody(), "id demo", "the surface reverts to disk state")
 	require.NotContains(t, c.ws.placeholderOrBody(), "demo-app-next")
 }
 

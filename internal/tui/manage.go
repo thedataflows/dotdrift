@@ -96,7 +96,7 @@ func layerName(layer string) string {
 
 // layerOfDir derives the service layer string ("", "hosts/<h>",
 // "users/<u>") from a module dir under root: the dir minus root minus
-// "modules/<app>".
+// "modules/<module>".
 func layerOfDir(root, dir string) string {
 	rel, err := filepath.Rel(root, dir)
 	if err != nil {
@@ -180,7 +180,7 @@ func (d *manageDialog) openEntry() {
 		d.mode = manageCreate
 		d.cur = 0
 		d.rows = []dlgRow{
-			fieldRow(newDlgField("app", "")),
+			fieldRow(newDlgField("module", "")),
 			choiceRow(newDlgChoice("layer", d.layerLabels()...)),
 		}
 	case "move module":
@@ -212,10 +212,10 @@ func (d *manageDialog) run() tea.Msg {
 	var report string
 	switch d.mode {
 	case manageCreate:
-		app := d.rows[0].field.String()
+		name := d.rows[0].field.String()
 		layer := layerValue(d.rows[1].choice.String())
-		if err = d.cfg.CreateModule(app, layer); err == nil {
-			report = "created module " + app + " in " + layerName(layer)
+		if err = d.cfg.CreateModule(name, layer); err == nil {
+			report = "created module " + name + " in " + layerName(layer)
 		}
 	case manageMove:
 		to := layerValue(d.rows[0].choice.String())

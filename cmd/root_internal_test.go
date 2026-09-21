@@ -34,18 +34,18 @@ func TestKong_addAliasRoutesToOnboard(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"add", "/tmp/x", "--app", "foo"})
+	_, err = parser.Parse([]string{"add", "/tmp/x", "--module", "foo"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"/tmp/x"}, cli.Onboard.Paths)
-	require.Equal(t, "foo", cli.Onboard.App)
+	require.Equal(t, "foo", cli.Onboard.Module)
 
 	cli = CLI{}
 	parser, err = kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"adopt", "/tmp/x", "--app", "foo"})
+	_, err = parser.Parse([]string{"adopt", "/tmp/x", "--module", "foo"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"/tmp/x"}, cli.Onboard.Paths)
-	require.Equal(t, "foo", cli.Onboard.App)
+	require.Equal(t, "foo", cli.Onboard.Module)
 }
 
 // onboard's --host and --user flags parse with values, alone and together.
@@ -53,7 +53,7 @@ func TestKong_onboardOverlayFlags(t *testing.T) {
 	var cli CLI
 	parser, err := kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--app=x", "--host=h", "--user=u"})
+	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--module=x", "--host=h", "--user=u"})
 	require.NoError(t, err)
 	require.Equal(t, "h", cli.Onboard.Host.Value)
 	require.Equal(t, "u", cli.Onboard.User.Value)
@@ -62,7 +62,7 @@ func TestKong_onboardOverlayFlags(t *testing.T) {
 	cli = CLI{}
 	parser, err = kong.New(&cli, kong.Name(appName))
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--app=x", "--host", "--user"})
+	_, err = parser.Parse([]string{"onboard", "/tmp/x", "--module=x", "--host", "--user"})
 	require.NoError(t, err)
 	require.True(t, cli.Onboard.Host.Set)
 	require.True(t, cli.Onboard.User.Set)
@@ -81,7 +81,7 @@ func TestKong_verboseFlagParses(t *testing.T) {
 	cli = CLI{}
 	parser, err = kong.New(&cli)
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"onboard", "--app=x", "--verbose"})
+	_, err = parser.Parse([]string{"onboard", "--module=x", "--verbose"})
 	require.NoError(t, err)
 	require.True(t, cli.Onboard.Verbose)
 	require.False(t, cli.Apply.Verbose)
@@ -113,7 +113,7 @@ func TestKong_verboseShortFlagParses(t *testing.T) {
 	cli = CLI{}
 	parser, err = kong.New(&cli)
 	require.NoError(t, err)
-	_, err = parser.Parse([]string{"onboard", "--app=x", "-v"})
+	_, err = parser.Parse([]string{"onboard", "--module=x", "-v"})
 	require.NoError(t, err)
 	require.True(t, cli.Onboard.Verbose, "-v must alias --verbose on onboard")
 	require.False(t, cli.Apply.Verbose)

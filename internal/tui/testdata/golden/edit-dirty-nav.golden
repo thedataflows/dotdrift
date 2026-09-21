@@ -3,9 +3,8 @@
 │MODULES                   ││demo  [base] · user cri  · meta  ●                                │
 │  ▾ demo ●                ││meta                                                              │
 ││     base ●              │││ id demo                                                         │
-│      user cri            ││  app demo-app-next ●                                             │
-│  ▸ other                 ││  description the demo module ✎                                   │
-│                          ││  scope user ◂▸                                                   │
+│      user cri            ││  description the demo module-next ●                              │
+│  ▸ other                 ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
 │                          ││  + neovim ✎                                                      │
 │                          ││  + ripgrep ✎                                                     │
@@ -19,6 +18,7 @@
 │                          ││secrets ＋                                                        │
 │                          ││mounts ＋                                                         │
 │                          ││smb ＋                                                            │
+│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

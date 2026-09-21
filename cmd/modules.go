@@ -56,9 +56,6 @@ func (c *ModulesCmd) Run() error {
 		if m.Config.Scope == profile.ScopeSystem {
 			b.WriteString(" [system]")
 		}
-		if m.App != m.ID {
-			fmt.Fprintf(&b, " (app: %s)", m.App)
-		}
 		writeDescription(&b, m.Config.Description, color, pal)
 		fmt.Fprintln(out, b.String())
 	}

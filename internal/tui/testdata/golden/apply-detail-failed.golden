@@ -1,12 +1,12 @@
  dotdrift · $PROFILE · host myhost · user cri
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo  [base]  · meta                                              │
-││ ▸ demo                  ││meta                                                              │
-│                          │││ id demo                                                         │
-│                          ││  app demo-app ✎                                                  │
-│                          ││  description  ✎                                                  │
-│                          ││  scope user ◂▸                                                   │
-│                          ││packages ＋                                                       │
+│MODULES                   ││demo  [base]  · raw                                               │
+││ ▸ demo · invalid module.││broken module.toml — raw text mode                                │
+│                          ││  module.toml:2: unknown key "app"                                │
+│                          │││ id = "demo" ✎                                                   │
+│                          ││  app = "demo-app" ✎                                              │
+│                          ││                                                                  │
+│                          ││                                                                  │
 │  ╭────────────────────────────────────────────────────────────────────────────────────────────╮
 │  │                                                                                            │
 │  │  apply — failed · dotfiles                                                                 │

@@ -2,23 +2,23 @@
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
-│  ▸ other                 │││ id demo                                                         │
-│  ▸ plain                 ││  app demo-app ✎                                                  │
-│                          ││  description the demo module ✎                                   │
+│  ▸ other · invalid module│││ id demo                                                         │
+│  ▸ plain · invalid module││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
 │                          ││  + neovim ✎                                                      │
 │                          ││  + ripgrep ✎                                                     │
-│                          ││lin╭──────────────────────────────────╮                           │
-│                          ││wri│                                  │                           │
-│                          ││whe│  │/ demo · host▏                 │                           │
-│                          ││hoo│                                  │                           │
-│                          ││sys│  │ ◆ demo · host myhost  module  │                           │
-│                          ││too│                                  │                           │
-│                          ││  n╰──────────────────────────────────╯                           │
-│                          ││secrets ＋                                                        │
+│                          ││links ＋                                                          │
+│                          ││wri╭──────────────────────────────────╮                           │
+│                          ││whe│                                  │                           │
+│                          ││hoo│  │/ demo · host▏                 │                           │
+│                          ││sys│                                  │                           │
+│                          ││too│  │ ◆ demo · host myhost  module  │                           │
+│                          ││  n│                                  │                           │
+│                          ││sec╰──────────────────────────────────╯                           │
 │                          ││mounts ＋                                                         │
 │                          ││smb ＋                                                            │
+│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

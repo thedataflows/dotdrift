@@ -59,8 +59,8 @@ func TestKeys_table(t *testing.T) {
 	require.Equal(t, "base", c.ws.tabs[c.ws.active].layer, "L wraps")
 
 	// editing
-	c = cpress(c, "j") // to app row
-	require.Equal(t, "app", c.ws.rows[c.ws.cursor].key)
+	c = cpress(c, "j") // to description row
+	require.Equal(t, "description", c.ws.rows[c.ws.cursor].key)
 	c = cpress(c, "e")
 	require.NotNil(t, c.ws.editing, "e edits")
 	c = cpress(c, "esc")
@@ -230,7 +230,7 @@ func TestMouse_parity(t *testing.T) {
 	require.Equal(t, 0, c.nav.cursor)
 
 	// Double-click a workspace row edits the field (demo is loaded).
-	c = clickWorkRow(t, c, 2) // the app row
+	c = clickWorkRow(t, c, 2) // the description row
 	c = clickWorkRow(t, c, 2)
 	require.NotNil(t, c.ws.editing, "double-click edits the field under the cursor")
 	c = cpress(c, "esc")

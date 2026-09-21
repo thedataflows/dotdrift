@@ -79,7 +79,7 @@ func NewWritesArea(deps WritesDeps) *WritesArea {
 type OnboardOpts struct {
 	ProfileRoot string
 	Paths       []string
-	App         string
+	Module      string
 	Mode        string
 	Packages    []string
 	Tools       []string
@@ -113,7 +113,7 @@ func (a *WritesArea) Onboard(opts OnboardOpts) error {
 	return o.Run(onboard.Options{
 		ProfileRoot: opts.ProfileRoot,
 		Paths:       opts.Paths,
-		App:         opts.App,
+		Module:      opts.Module,
 		Mode:        opts.Mode,
 		Packages:    pkgs,
 		Tools:       opts.Tools,

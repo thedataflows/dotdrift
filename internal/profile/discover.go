@@ -98,8 +98,5 @@ func loadModule(path, dirName string) (*Module, error) {
 	if err := validateWhen(cfg.ID, cfg.When); err != nil {
 		return nil, err
 	}
-	if cfg.App == "" {
-		cfg.App = cfg.ID
-	}
-	return &Module{ID: cfg.ID, App: cfg.App, Path: path, Config: cfg}, nil
+	return &Module{ID: cfg.ID, Path: path, Config: cfg}, nil
 }

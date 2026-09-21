@@ -1,5 +1,4 @@
 id = "nvim"
-app = "nvim"
 
 [packages]
 present = ["neovim"]

@@ -1,5 +1,4 @@
 id = "shell"
-app = "shell"
 
 [packages]
 present = ["neovim", "ripgrep", "nano"]

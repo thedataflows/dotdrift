@@ -187,7 +187,7 @@ func TestOnboardDialog_confirmsAndDryRun(t *testing.T) {
 	confirmRun(t, d, "onboard")
 	require.Len(t, fake.onboardCalls, 1)
 	o := fake.onboardCalls[0]
-	require.Equal(t, "myapp", o.App)
+	require.Equal(t, "myapp", o.Module)
 	require.Equal(t, []string{"~/.config/app", "/etc/app.conf"}, o.Paths)
 	require.True(t, o.HostSet, "the host layer choice maps onto the overlay flag")
 	require.True(t, o.DryRun, "the dry-run choice flows onto the call")
@@ -407,7 +407,8 @@ func TestWritesDialogs_successfulWritesReloadNav(t *testing.T) {
 
 // The reload answers success only: a failed write leaves the nav as it
 // stands and renders the error instead.
-func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {	_, c := wsShell(t, map[string]string{
+func TestWritesDialogs_failedWriteKeepsNav(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
 		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
 	})
 	fake := newFakeWrites()

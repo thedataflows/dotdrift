@@ -28,7 +28,7 @@ func configFixture(t *testing.T) (root, dir string) {
 	dir = filepath.Join(root, "modules", "editor")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(
-		"# hand-written: editor\nid = \"editor\"\napp = \"editor\"\n\n[packages]\npresent = [\n  \"ripgrep\",\n]\n"), 0o644))
+		"# hand-written: editor\nid = \"editor\"\n\n[packages]\npresent = [\n  \"ripgrep\",\n]\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "zshrc"), []byte("# the zshrc\n"), 0o644))
 	return root, dir
 }
@@ -85,7 +85,7 @@ func TestWriteModuleLayer_savePipeline(t *testing.T) {
 		Dir:      dir,
 		BaseHash: r.Hash,
 		Replacements: map[string]string{
-			FamilyKeys:     profile.EncodeKeysSection(profile.ModuleConfig{ID: "editor", App: "editor", Description: "edited"}),
+			FamilyKeys:     profile.EncodeKeysSection(profile.ModuleConfig{ID: "editor", Description: "edited"}),
 			FamilyPackages: profile.EncodePackagesSection(profile.PackageEntries([]string{"ripgrep", "bat"}), nil),
 		},
 	})
@@ -113,7 +113,7 @@ func TestWriteModuleLayer_trailingNewlineGuaranteed(t *testing.T) {
 	// Splice path: the baseline file lacks the trailing newline.
 	root, dir := configFixture(t)
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(
-		"id = \"editor\"\napp = \"editor\""), 0o644))
+		"id = \"editor\""), 0o644))
 	area := configArea(root)
 	r, err := area.ReadModuleLayer(dir)
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestWriteModuleLayer_trailingNewlineGuaranteed(t *testing.T) {
 	area2 := configArea(root2)
 	r2, err := area2.ReadModuleLayer(dir2)
 	require.NoError(t, err)
-	candidate := "id = \"editor\"\napp = \"editor\""
+	candidate := "id = \"editor\""
 	res2, err := area2.WriteModuleLayer(SaveRequest{
 		Dir:      dir2,
 		BaseHash: r2.Hash,
@@ -161,7 +161,7 @@ func TestWriteModuleLayer_trailingNewlineGuaranteed(t *testing.T) {
 		Dir:      dir3,
 		BaseHash: r3.Hash,
 		Replacements: map[string]string{
-			FamilyKeys: profile.EncodeKeysSection(profile.ModuleConfig{ID: "fresh", App: "fresh"}),
+			FamilyKeys: profile.EncodeKeysSection(profile.ModuleConfig{ID: "fresh"}),
 		},
 	})
 	require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestWriteModuleLayer_diskHashConflictRefuses(t *testing.T) {
 
 	// An external edit lands after the read.
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(
-		"id = \"editor\"\napp = \"editor\"\n"), 0o644))
+		"id = \"editor\"\n"), 0o644))
 
 	_, err = area.WriteModuleLayer(SaveRequest{
 		Dir:          dir,
@@ -215,7 +215,7 @@ func TestWriteModuleLayer_diskHashConflictRefuses(t *testing.T) {
 	// The external bytes stand — no merge, no clobber.
 	raw, err := os.ReadFile(filepath.Join(dir, "module.toml"))
 	require.NoError(t, err)
-	require.Equal(t, "id = \"editor\"\napp = \"editor\"\n", string(raw))
+	require.Equal(t, "id = \"editor\"\n", string(raw))
 }
 
 func TestWriteModuleLayer_resolveChecksRefuse(t *testing.T) {
@@ -225,7 +225,7 @@ func TestWriteModuleLayer_resolveChecksRefuse(t *testing.T) {
 	for dir, target := range map[string]string{dirA: "~/.zshrc", dirB: "~/.zshrc"} {
 		require.NoError(t, os.MkdirAll(dir, 0o755))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(
-			"id = \""+filepath.Base(dir)+"\"\napp = \""+filepath.Base(dir)+"\"\n\n[dotfiles]\n\""+target+"\" = { source = \"zshrc\", mode = \"symlink\" }\n"), 0o644))
+			"id = \""+filepath.Base(dir)+"\"\n\n[dotfiles]\n\""+target+"\" = { source = \"zshrc\", mode = \"symlink\" }\n"), 0o644))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "zshrc"), []byte("x"), 0o644))
 	}
 	area := configArea(root)
@@ -269,7 +269,7 @@ func TestModuleOps_createScaffold(t *testing.T) {
 	dir := filepath.Join(root, "modules", "notes")
 	raw, err := os.ReadFile(filepath.Join(dir, "module.toml"))
 	require.NoError(t, err)
-	require.Equal(t, "id = \"notes\"\napp = \"notes\"\n", string(raw),
+	require.Equal(t, "id = \"notes\"\n", string(raw),
 		"the scaffold is minimal: id and app, nothing else")
 
 	// Collision refused.
@@ -333,7 +333,7 @@ func TestModuleOps_deletePreviewsOrphans(t *testing.T) {
 	dir := filepath.Join(root, "modules", "dele")
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(
-		"id = \"dele\"\napp = \"dele\"\n\n[dotfiles]\n\"~/.zshrc\" = { source = \"zshrc\", mode = \"symlink\" }\n"), 0o644))
+		"id = \"dele\"\n\n[dotfiles]\n\"~/.zshrc\" = { source = \"zshrc\", mode = \"symlink\" }\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "zshrc"), []byte("# referenced\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "stray.sh"), []byte("# not referenced\n"), 0o644))
 

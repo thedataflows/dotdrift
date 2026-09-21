@@ -43,7 +43,6 @@ func TestDiscover_basePreferredRepresentative(t *testing.T) {
 	require.NoError(t, err)
 	m := findModule(t, p, "both")
 	require.Equal(t, filepath.Join(root, "modules", "both"), m.Path)
-	require.Equal(t, "base-both", m.App)
 	require.Equal(t, []string{"base-pkg"}, m.Config.Packages.Present)
 }
 

@@ -1,5 +1,4 @@
 id = "shell"
-app = "shell"
 
 [packages]
 present = ["bash", "ripgrep"]

@@ -134,7 +134,6 @@ not = { pkgages = ["p"] }
 func TestStrictModuleTOML_fullSchemaDecodes(t *testing.T) {
 	root := t.TempDir()
 	writeModule(t, root, "modules/m", `id = "m"
-app = "MyApp"
 description = "desc"
 disabled = false
 scope = "system"
@@ -199,7 +198,6 @@ public = false
 	p, err := profile.Load(root, &facts.Facts{})
 	require.NoError(t, err)
 	m := findModule(t, p, "m")
-	require.Equal(t, "MyApp", m.App)
 	require.Equal(t, "system", m.Config.Scope)
 	require.True(t, m.Config.Hooks.Post[0].Optional)
 	require.Equal(t, profile.Secret{Env: "MISE_CACHE_TOKEN"}, m.Config.Secrets["cache_token"])

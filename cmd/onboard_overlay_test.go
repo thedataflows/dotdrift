@@ -23,8 +23,8 @@ func TestKong_onboardOverlayValues(t *testing.T) {
 		var cli CLI
 		parser, err := kong.New(&cli, kong.Name(appName))
 		require.NoError(t, err)
-		// --app is required (issue 0055); these tests exercise --host/--user.
-		_, err = parser.Parse(append([]string{"onboard", "--app=x"}, args...))
+		// --module is required (issue 0055); these tests exercise --host/--user.
+		_, err = parser.Parse(append([]string{"onboard", "--module=x"}, args...))
 		require.NoError(t, err)
 		return cli.Onboard
 	}
@@ -95,7 +95,7 @@ func TestOnboard_overlayFlagsChooseLayers(t *testing.T) {
 		live := filepath.Join(t.TempDir(), "live.conf")
 		require.NoError(t, os.WriteFile(live, []byte("x\n"), 0o644))
 		cmd := &OnboardCmd{
-			Paths: []string{live}, Profile: prof, App: "app",
+			Paths: []string{live}, Profile: prof, Module: "app",
 			Host: host, User: user, Mise: &mise.FakeRunner{},
 		}
 		require.NoError(t, cmd.Run())

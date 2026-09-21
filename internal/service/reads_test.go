@@ -316,7 +316,7 @@ func statusFixture(t *testing.T) string {
 	dir := t.TempDir()
 	modDir := filepath.Join(dir, "modules", "demo")
 	require.NoError(t, os.MkdirAll(modDir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte("id = \"demo\"\napp = \"demo\"\n\n[packages]\npresent = [\"demo-pkg\"]\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte("id = \"demo\"\n\n[packages]\npresent = [\"demo-pkg\"]\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
 	return dir
 }
@@ -362,7 +362,7 @@ func diffFixture(t *testing.T) (string, *resolve.Plan) {
 	modDir := filepath.Join(dir, "modules", "demo")
 	require.NoError(t, os.MkdirAll(filepath.Join(modDir, "files"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(modDir, "files", "config"), []byte("theme = \"dark\"\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte("id = \"demo\"\napp = \"demo\"\n\n[dotfiles]\n\""+target+"\" = { source = \"files/config\", mode = \"copy\" }\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(modDir, "module.toml"), []byte("id = \"demo\"\n\n[dotfiles]\n\""+target+"\" = { source = \"files/config\", mode = \"copy\" }\n"), 0o644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "dotdrift.toml"), []byte("[modules]\ndisable = []\n"), 0o644))
 
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"}

@@ -25,19 +25,11 @@ func TestCLI_modules_listsStatus(t *testing.T) {
 	require.Contains(t, out, "- a disabled")
 }
 
-// A module with an explicit app different from its id keeps the app
-// visible, tagged; system-scope modules carry the [system] tag.
+// System-scope modules carry the [system] tag; user-scope rows stay
+// tagless. (The app tag is gone with the app field — issue 0090.)
 func TestCLI_modules_appAndScopeTags(t *testing.T) {
 	var buf bytes.Buffer
 	c := &cmd.ModulesCmd{
-		Profile: filepath.Join("..", "testdata", "profiles", "appname"),
-		Out:     &buf,
-	}
-	require.NoError(t, c.Run())
-	require.Contains(t, buf.String(), "+ foo (app: FooApp)\n")
-
-	buf.Reset()
-	c = &cmd.ModulesCmd{
 		Profile: filepath.Join("..", "testdata", "profiles", "scope"),
 		Out:     &buf,
 	}

@@ -391,9 +391,6 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	if cfg.ID != "" {
 		meta = append(meta, entry("meta", "id "+cfg.ID, "", "", ""))
 	}
-	if cfg.App != "" && cfg.App != cfg.ID {
-		meta = append(meta, entry("meta", "app "+cfg.App, profile.FamilyKeys, "app", cfg.App))
-	}
 	meta = append(meta, entry("meta", "description "+cfg.Description, profile.FamilyKeys, "description", cfg.Description))
 	meta = append(meta, entry("meta", "scope "+cfg.ScopeOrDefault(), profile.FamilyKeys, "scope", cfg.Scope))
 	if cfg.Disabled {

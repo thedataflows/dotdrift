@@ -70,7 +70,6 @@ func wsSettle(t *testing.T, c *Compositor, cmd tea.Cmd) *Compositor {
 }
 
 const wsAllSections = `id = "demo"
-app = "demo-app"
 description = "the demo module"
 scope = "user"
 
@@ -108,7 +107,7 @@ func TestWorkspace_allSections(t *testing.T) {
 }
 
 func TestWorkspace_emptyStatesDesigned(t *testing.T) {
-	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	requireGolden(t, "workspace-empty.golden", c.View().Content, subs)
 }
 
@@ -118,7 +117,7 @@ func TestWorkspace_statusGlyphs(t *testing.T) {
 	// plan-fed elevation set lands with T-tui-modals).
 	_, c := wsShell(t, map[string]string{
 		"modules/.keep":                        "",
-		"users/root/modules/vault/module.toml": "id = \"vault\"\napp = \"vault\"\n",
+		"users/root/modules/vault/module.toml": "id = \"vault\"\n",
 	})
 	require.True(t, c.ws.needsRoot, "a superuser overlay marks the workspace")
 	require.Contains(t, c.View().Content, "needs root")
@@ -129,8 +128,8 @@ func TestWorkspace_statusGlyphs(t *testing.T) {
 // in an overlay would otherwise be a silent no-op).
 func TestWorkspace_overlayHintOnNonBaseTab(t *testing.T) {
 	_, c := wsShell(t, map[string]string{
-		"modules/demo/module.toml":           "id = \"demo\"\napp = \"demo-app\"\n",
-		"users/cri/modules/demo/module.toml": "id = \"demo\"\napp = \"demo-app\"\n",
+		"modules/demo/module.toml":           "id = \"demo\"\n",
+		"users/cri/modules/demo/module.toml": "id = \"demo\"\n",
 	})
 
 	frame := c.ws.view(100, 30, c.th)
@@ -145,10 +144,10 @@ func TestWorkspace_overlayHintOnNonBaseTab(t *testing.T) {
 
 func TestWorkspace_layerTabsWithAndWithoutOverlays(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{
-		"modules/demo/module.toml":              "id = \"demo\"\napp = \"demo\"\n",
+		"modules/demo/module.toml":              "id = \"demo\"\n",
 		"users/cri/modules/demo/module.toml":    "id = \"demo\"\n",
 		"hosts/myhost/modules/demo/module.toml": "id = \"demo\"\n",
-		"modules/plain/module.toml":             "id = \"plain\"\napp = \"plain\"\n",
+		"modules/plain/module.toml":             "id = \"plain\"\n",
 	})
 	requireGolden(t, "workspace-tabs.golden", c.View().Content, subs)
 	// The plain module has no overlays: one tab.
@@ -251,7 +250,7 @@ func TestWorkspace_disclosureRendersOnlySet(t *testing.T) {
 	// 0075 T-tui-disclosure: a surface shows what IS — empty sections
 	// are headers alone, meta keeps its identity rows, and every header
 	// here is selectable because its section is empty.
-	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	body := c.ws.placeholderOrBody()
 	require.Contains(t, body, "meta")
 	require.Contains(t, body, "description", "the identity rows stay")
@@ -323,16 +322,16 @@ func TestWorkspace_cursorRowBar(t *testing.T) {
 	require.Contains(t, frame, "│ id demo", "the cursor row renders the bar")
 	require.Contains(t, frame, "  description", "plain rows keep the two-space lead")
 
-	c = cpress(c, "j") // the app row
+	c = cpress(c, "j") // the description row
 	c = cpress(c, "enter")
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "│ ▸ demo-app", "the active input renders the bar")
+	require.Contains(t, frame, "│ ▸ the demo module", "the active input renders the bar")
 }
 
 func TestWorkspace_headerCursorBar(t *testing.T) {
 	// 0076 T-tui-location: a selectable header under the cursor renders
 	// the bar — an empty section's header is the way in, it must say so.
-	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	c = cpress(c, "tab")
 	for i := 0; !c.ws.atSection("packages") || !c.ws.rows[c.ws.cursor].header; i++ {
 		require.Less(t, i, 32, "the packages header never took the cursor")
@@ -346,7 +345,7 @@ func TestWorkspace_headerCursorBar(t *testing.T) {
 func TestWorkspace_titleShowsSection(t *testing.T) {
 	// 0076 T-tui-location: the title line names the cursor's section, so
 	// an empty stretch of surface still says where you are.
-	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n"})
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	c = cpress(c, "tab")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "· meta", "the title names the cursor's section")

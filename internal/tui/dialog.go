@@ -244,8 +244,8 @@ func gateFooter(th theme, armed bool, hint string) string {
 	return "\n" + th.meta.Render(hint)
 }
 
-// onboardDialog adopts live paths into a module: app, paths, the layer
-// choice, and the optional declarations, with a dry-run switch.
+// onboardDialog adopts live paths into a module: the module name, paths,
+// the layer choice, and the optional declarations, with a dry-run switch.
 type onboardDialog struct {
 	w       Writes
 	profile string
@@ -262,7 +262,7 @@ func newOnboardDialog(w Writes, profilePath string) *onboardDialog {
 		w:       w,
 		profile: profilePath,
 		rows: []dlgRow{
-			fieldRow(newDlgField("app", "")),
+			fieldRow(newDlgField("module", "")),
 			fieldRow(newDlgField("paths", "")),
 			choiceRow(newDlgChoice("layer", "base", "host", "user")),
 			fieldRow(&dlgField{label: "owner", hint: "detected account"}),
@@ -278,8 +278,8 @@ func newOnboardDialog(w Writes, profilePath string) *onboardDialog {
 // prefill seeds the dialog from the selection (0079 T-tui-onboard-here):
 // the module's id and its layer. Every field stays editable — prefill,
 // not preset. An unknown layer keeps the base default.
-func (d *onboardDialog) prefill(app, layer string) {
-	d.rows[0].field.set(app)
+func (d *onboardDialog) prefill(module, layer string) {
+	d.rows[0].field.set(module)
 	for i, opt := range d.rows[2].choice.opts {
 		if opt == layer {
 			d.rows[2].choice.cur = i
@@ -317,9 +317,9 @@ func (d *onboardDialog) HandleKey(key string) tea.Cmd {
 	case "backspace":
 		d.rows[d.cur].backspace()
 	case "enter":
-		app := d.rows[0].field.String()
+		module := d.rows[0].field.String()
 		paths := d.rows[1].field.String()
-		if app == "" || paths == "" {
+		if module == "" || paths == "" {
 			return nil
 		}
 		d.confirm = true
@@ -339,7 +339,7 @@ func (d *onboardDialog) run() tea.Msg {
 	err := d.w.Onboard(service.OnboardOpts{
 		ProfileRoot: d.profile,
 		Paths:       splitList(d.rows[1].field.String()),
-		App:         d.rows[0].field.String(),
+		Module:      d.rows[0].field.String(),
 		Mode:        d.rows[4].choice.String(),
 		Packages:    splitList(d.rows[5].field.String()),
 		Tools:       splitList(d.rows[6].field.String()),

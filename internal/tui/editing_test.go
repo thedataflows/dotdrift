@@ -306,3 +306,26 @@ func TestEdit_rawTextDegradedMode(t *testing.T) {
 	require.Contains(t, string(raw), "[packages]")
 	require.Nil(t, c.wsDraftFor(dir), "the save clears the draft")
 }
+
+// 0078: enter is the primary action in context. A row that owns no
+// field (a section header, a structural container) grows rows instead:
+// enter opens the same add form `a` opens, so an empty section is
+// reachable without knowing a second key.
+
+func TestEdit_enterOnEmptyHeaderOpensAddForm(t *testing.T) {
+	_, dir, c := editShell(t)
+	wsToHeader(t, c, "hooks") // an empty section: no field to edit
+	c = wsPress(t, c, "enter")
+	f := addFormTop(t, c)
+	require.Nil(t, c.ws.editing, "no invisible inline input behind the form")
+	require.Contains(t, f.view(100, 30), "add hook · demo")
+	require.Nil(t, c.wsDraftFor(dir), "opening a form stages nothing")
+}
+
+func TestEdit_enterOnContainerAddsIntoEntry(t *testing.T) {
+	_, c := systemdShell(t)
+	wsToKey(t, c, "demo.service") // the unit container row
+	c = wsPress(t, c, "enter")
+	f := addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "add directive · demo.service")
+}

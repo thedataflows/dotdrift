@@ -923,15 +923,20 @@ func newRowKey(section, input string) string {
 // --- Compositor-side editing actions ---
 
 // startEdit opens the field input on the cursor row (enter/e). Read-only
-// rows, container rows, and rows without metadata refuse silently — the
-// row already shows everything it can. A closed-set field (0076) opens
-// the choice picker instead of the text input.
+// rows and rows without metadata refuse silently — the row already shows
+// everything it can. A closed-set field (0076) opens the choice picker
+// instead of the text input. A row that owns no field — a section header
+// or a structural container (0078) — grows rows instead: enter falls
+// back to the add form, so the empty section under the cursor is
+// reachable without knowing a second key; startAdd refuses what is not
+// addable.
 func (m *Compositor) startEdit() {
 	if m.ws.cursor >= len(m.ws.rows) {
 		return
 	}
 	row := m.ws.rows[m.ws.cursor]
 	if row.family == "" || row.container {
+		m.startAdd()
 		return
 	}
 	if set := choiceSet(row); set != nil {

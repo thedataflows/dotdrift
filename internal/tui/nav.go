@@ -1,10 +1,12 @@
 package tui
 
-// The M15 nav pane (T-tui-nav): modules as rows, overlay layers
-// (base / user / host) as expandable children. A pure state machine over
-// the modules read — the compositor feeds it navLoadedMsg, asks it for
-// rows, and renders its view. The tree position is the layer picker:
-// selecting a child points the workspace at that layer file.
+// T-tui-nav: the M15 nav pane (T-tui-nav): modules as rows, overlay
+// layers (base / user / host) as expandable children. A pure state
+// machine over the modules read — the compositor feeds it navLoadedMsg,
+// asks it for rows, and renders its view. The tree position is the layer
+// picker: selecting a child points the workspace at that layer file.
+// `/` here filters the list in place (0081, T-tui-navfilter): the typed
+// query narrows rows live and shows at the pane bottom; esc removes it.
 
 import (
 	"cmp"
@@ -12,6 +14,8 @@ import (
 	"slices"
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/sahilm/fuzzy"
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/service"
@@ -52,6 +56,11 @@ type navModel struct {
 	bodyH    int    // the visible body height from the last layout: the paging step
 	pending  bool   // a read is in flight: placeholder rows
 	loadErr  string // the last read failed: the row names it
+
+	// The in-place modules filter (0081): query narrows rows(), filtering
+	// is the typing mode that owns the keys (0081 T-tui-navfilter).
+	filtering bool
+	query     []rune
 }
 
 // navModules builds the module list from a landed read: one row per
@@ -132,11 +141,16 @@ func orderLayers(ls []navLayer) {
 	})
 }
 
-// rows returns the visible rows: every module, plus the layer children of
-// expanded modules.
+// rows returns the visible rows: every module that matches the active
+// filter (all of them without one), plus the layer children of expanded
+// modules.
 func (n *navModel) rows() []navRow {
+	match := n.matchSet()
 	var out []navRow
 	for _, m := range n.modules {
+		if match != nil && !match[m.id] {
+			continue
+		}
 		out = append(out, navRow{moduleID: m.id, label: m.id, reason: m.reason})
 		if n.expanded[m.id] {
 			for _, l := range m.layers {
@@ -148,6 +162,80 @@ func (n *navModel) rows() []navRow {
 		}
 	}
 	return out
+}
+
+// matchSet is the module-id match set for the active query, or nil when
+// no filter is set. sahilm/fuzzy, the palette's matcher, so both agree
+// on what "matches" means.
+func (n *navModel) matchSet() map[string]bool {
+	if len(n.query) == 0 {
+		return nil
+	}
+	ids := make([]string, len(n.modules))
+	for i, m := range n.modules {
+		ids[i] = m.id
+	}
+	set := map[string]bool{}
+	for _, r := range fuzzy.Find(string(n.query), ids) {
+		set[n.modules[r.Index].id] = true
+	}
+	return set
+}
+
+// refilter re-clamps the cursor after the query changed: the module the
+// cursor was on keeps it while it still matches, otherwise the first
+// match takes the cursor.
+func (n *navModel) refilter(want string) {
+	if want != "" {
+		for i, r := range n.rows() {
+			if r.moduleID == want {
+				n.cursor = i
+				return
+			}
+		}
+	}
+	n.cursor = 0
+}
+
+// clearFilter removes the query and the typing mode (esc, 0081).
+func (n *navModel) clearFilter() {
+	n.filtering = false
+	n.query = nil
+	n.cursor = 0
+}
+
+// navFilterKey runs the filter's typing mode (0081): printable
+// characters extend the query, backspace trims it, j/k and the arrows
+// move within the matches, enter keeps the filter and leaves the mode,
+// esc removes the filter. Every other key is a query character.
+func (m *Compositor) navFilterKey(k tea.KeyPressMsg) tea.Cmd {
+	switch k.String() {
+	case "esc":
+		m.nav.clearFilter()
+		return m.syncWorkspace()
+	case "enter":
+		m.nav.filtering = false
+		return nil
+	case "backspace":
+		if len(m.nav.query) > 0 {
+			want := m.nav.selected().moduleID
+			m.nav.query = m.nav.query[:len(m.nav.query)-1]
+			m.nav.refilter(want)
+		}
+		return nil
+	case "up", "k":
+		m.nav.move(-1)
+		return m.syncWorkspace()
+	case "down", "j":
+		m.nav.move(1)
+		return m.syncWorkspace()
+	}
+	if k.Text != "" {
+		want := m.nav.selected().moduleID
+		m.nav.query = append(m.nav.query, []rune(k.Text)...)
+		m.nav.refilter(want)
+	}
+	return nil
 }
 
 // selected returns the row under the cursor, or the zero row.
@@ -259,7 +347,12 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 		lines = append(lines, th.disabledMark.Render("  (no modules)"))
 	default:
 		rows := n.rows()
-		if avail := h - 1; avail > 0 { // the header line takes one row
+		// An active filter reserves the pane's last line for the query.
+		hCap := h
+		if n.filtering || len(n.query) > 0 {
+			hCap--
+		}
+		if avail := hCap - 1; avail > 0 { // the header line takes one row
 			if n.cursor < n.offset {
 				n.offset = n.cursor
 			}
@@ -267,11 +360,26 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 				n.offset = n.cursor - avail + 1
 			}
 		}
-		for i := n.offset; i < len(rows) && len(lines) < h; i++ {
+		for i := n.offset; i < len(rows) && len(lines) < hCap; i++ {
 			lines = append(lines, n.rowView(rows[i], i == n.cursor, th, drafts, w))
+		}
+		if len(rows) == 0 && len(n.query) > 0 {
+			lines = append(lines, th.disabledMark.Render("  no modules match «"+string(n.query)+"»"))
+		}
+		if hCap < h {
+			lines = append(lines, n.filterView(th))
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// filterView is the pane-bottom query line: the cursor bar while typing,
+// a named applied filter after enter.
+func (n *navModel) filterView(th theme) string {
+	if n.filtering {
+		return th.cursorRow.Render(" / " + string(n.query) + "▏")
+	}
+	return th.meta.Render(" / " + string(n.query) + " · esc clears")
 }
 
 // rowView renders one row: expansion marker, label, dirty and reason

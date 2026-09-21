@@ -1,13 +1,14 @@
 package tui
 
-// T-tui-palette: the `/` fuzzy palette. Three indexed scopes in fixed
-// section order — modules+layers, contextually valid actions, the
-// current module's fields — ranked by sahilm/fuzzy (vendored) within a
-// section, with in-session recents as tiebreak. The palette is a modal:
-// it captures all keys while open, esc pops and restores the exact prior
-// state (a navigator, not a command line). Choosing runs through the
-// compositor's afterPop so the palette is gone before jumps/confirm
-// modals land.
+// T-tui-palette: the fuzzy palette, on the workspace pane's `/` (the
+// nav pane's `/` filters the module list in place, 0081). Three indexed
+// scopes in fixed section order — modules+layers, contextually valid
+// actions, the current module's fields — ranked by sahilm/fuzzy
+// (vendored) within a section, with in-session recents as tiebreak. The
+// palette is a modal: it captures all keys while open, esc pops and
+// restores the exact prior state (a navigator, not a command line).
+// Choosing runs through the compositor's afterPop so the palette is
+// gone before jumps/confirm modals land.
 
 import (
 	"slices"

@@ -3,10 +3,10 @@ package tui
 // T-tui-keymap: the binding table as data. The base dispatcher consults
 // it, the footer hints and the contextual ? help render from it — one
 // source of truth, so docs cannot drift from behavior. esc stays
-// compositor-owned (one meaning: pop the top layer); shift is the
-// dangerous version (p/P, d/D); ctrl+z / ctrl+shift+z step a draft back
-// and forward, confirms remain the safety net for what undo cannot
-// reach (saves, quits).
+// compositor-owned (pop the top layer; on the base it also clears an
+// applied nav filter, 0081); shift is the dangerous version (p/P, d/D);
+// ctrl+z / ctrl+shift+z step a draft back and forward, confirms remain
+// the safety net for what undo cannot reach (saves, quits).
 
 import (
 	"errors"
@@ -49,10 +49,11 @@ func keyTable() []keyTableEntry {
 		{"home", "nav", "first row", func(m *Compositor) tea.Cmd { m.nav.home(); return m.syncWorkspace() }},
 		{"end", "nav", "last row", func(m *Compositor) tea.Cmd { m.nav.end(); return m.syncWorkspace() }},
 		{"enter", "nav", "open in workspace", func(m *Compositor) tea.Cmd { m.focus = focusWork; return m.syncWorkspace() }},
+		{"/", "nav", "filter modules", func(m *Compositor) tea.Cmd { m.nav.filtering = true; return nil }},
 		{"n", "nav", "new module", func(m *Compositor) tea.Cmd { m.openManageCreate(""); return nil }},
 		{"m", "nav", "manage modules", func(m *Compositor) tea.Cmd { m.openManage(); return nil }},
 		// shared
-		{"/", "both", "palette", func(m *Compositor) tea.Cmd { m.openPalette(); return nil }},
+		{"/", "work", "palette", func(m *Compositor) tea.Cmd { m.openPalette(); return nil }},
 		{"?", "both", "help", func(m *Compositor) tea.Cmd { m.openHelp(); return nil }},
 		{"q", "both", "quit", func(m *Compositor) tea.Cmd { return m.quit() }},
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
@@ -398,6 +399,7 @@ func (m *Compositor) baseMouse(msg tea.Msg) tea.Cmd {
 		if msg.Button != tea.MouseLeft {
 			return nil
 		}
+		m.nav.filtering = false // a click commits the typing mode; the filter stays
 		if msg.X < navW {
 			m.focus = focusNav
 			idx := m.nav.offset + msg.Y - 3

@@ -323,6 +323,15 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// The nav filter's typing mode owns key input while active (0081):
+	// ? is a query character there, like in the palette. Other messages
+	// (mouse) fall through to the base handlers.
+	if m.nav.filtering {
+		if k, ok := msg.(tea.KeyPressMsg); ok {
+			return m, m.navFilterKey(k)
+		}
+	}
+
 	// Mouse on the base panes.
 	switch msg.(type) {
 	case tea.MouseWheelMsg, tea.MouseClickMsg:
@@ -341,7 +350,12 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.message, m.msgErr = "", false
 	}
 	if msg.String() == "esc" {
-		// The compositor's one esc rule on the base: focus back to nav.
+		// The compositor's base esc rule: an applied nav filter clears
+		// first (0081), then focus returns to the nav.
+		if len(m.nav.query) > 0 {
+			m.nav.clearFilter()
+			return m, m.syncWorkspace()
+		}
 		if m.focus != focusNav {
 			m.focus = focusNav
 		}
@@ -562,7 +576,12 @@ func (m *Compositor) ShortHelp() []key.Binding {
 			add(b.key, b.help)
 		}
 	}
-	for _, k := range []struct{ key, help string }{{"/", "palette"}, {"?", "help"}, {"q", "quit"}} {
+	// "/" is pane-scoped (nav filter, work palette, 0081): its help
+	// resolves from the table like every other verb's.
+	if b, ok := byKey["/"]; ok {
+		add(b.key, b.help)
+	}
+	for _, k := range []struct{ key, help string }{{"?", "help"}, {"q", "quit"}} {
 		add(k.key, k.help)
 	}
 	return out

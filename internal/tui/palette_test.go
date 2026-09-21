@@ -26,6 +26,7 @@ func paletteShell(t *testing.T) (map[string]string, *Compositor) {
 		"modules/other/module.toml":             "id = \"other\"\napp = \"other\"\n",
 	})
 	c.applyFor = func(*facts.Facts) ApplyLauncher { return &fakeLauncher{} }
+	c = cpress(c, "tab") // the palette lives on the workspace pane (nav / filters)
 	c = cpress(c, "/")
 	require.Len(t, c.modals, 1, "/ opens the palette")
 	require.IsType(t, &paletteModel{}, c.modals[0])
@@ -100,9 +101,9 @@ func TestPalette_actionsContextual(t *testing.T) {
 	require.Contains(t, actions, "new module")
 	require.NotContains(t, actions, "save draft", "nothing dirty → no save action")
 
-	// Dirty a draft: save/discard appear.
+	// Dirty a draft: save/discard appear. (After esc the palette
+	// restores focus to the workspace pane.)
 	c = cpress(c, "esc")
-	c = cpress(c, "tab")
 	c = cpress(c, "j")
 	c = cpress(c, "enter")
 	c = typeText(c, "-x")
@@ -204,6 +205,7 @@ func TestPalette_dirtyDraftNeverWarnsOnJump(t *testing.T) {
 func TestPalette_cursorRowBar(t *testing.T) {
 	// 0075 T-tui-selection: the palette's selected row renders the bar.
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
+	c = cpress(c, "tab") // the palette lives on the workspace pane (nav / filters)
 	c = cpress(c, "/")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "│ ◆", "the palette's selected row renders the bar")

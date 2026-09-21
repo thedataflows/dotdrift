@@ -944,10 +944,12 @@ func (m *Compositor) startAdd() {
 		return
 	}
 	section, addPath := addScope(row)
-	title, rows, build := addFormSpec(m.ws.moduleID, section, addPath)
-	m.modals = append(m.modals, newAddForm(m.th, title, rows, build, func(input string) string {
+	title, rows, build, relabel := addFormSpec(m.ws.moduleID, section, addPath)
+	form := newAddForm(m.th, title, rows, build, func(input string) string {
 		return m.commitAddAt(m.ws.cursor, section, addPath, input)
-	}))
+	})
+	form.relabel = relabel
+	m.modals = append(m.modals, form)
 }
 
 // commitAddAt commits a form's synthesized input through the pipeline's

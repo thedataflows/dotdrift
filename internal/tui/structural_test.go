@@ -197,25 +197,32 @@ func TestSecrets_envEditAndBool(t *testing.T) {
 
 func TestSecrets_addAndRemove(t *testing.T) {
 	_, c := entriesShell(t)
-	// The section header is the section-level scope: a adds a new entry.
+	// The section header is the section-level scope: a adds a new entry
+	// through the name/env rows.
 	wsToHeader(t, c, "secrets")
 	c = cpress(c, "a")
-	c = typeText(c, "CACHE = MISE_CACHE")
+	c = typeText(c, "CACHE")
+	c = cpress(c, "down")
+	c = typeText(c, "MISE_CACHE")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, "MISE_CACHE", c.ws.draft.cfg.Secrets["CACHE"].Env, "the short form lands")
 	require.Contains(t, c.ws.placeholderOrBody(), "CACHE", "the container row renders")
 
-	// a on the container adds a field INTO the entry; junk refuses.
+	// a on the container adds a field INTO the entry. The field is a
+	// closed choice now: an unknown field is unreachable, an empty value
+	// still refuses loudly.
 	wsToKey(t, c, "CACHE")
 	c = cpress(c, "a")
-	c = typeText(c, "bogus")
-	c = cpress(c, "enter")
 	f := addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "add field · CACHE")
+	c = cpress(c, "enter") // env chosen, no value typed
+	f = addFormTop(t, c)
 	require.False(t, f.finished(), "a refused add keeps the form open")
 	require.Contains(t, f.view(100, 30), "field = value")
 	cpress(c, "esc")
 
-	// a on a field row adds the section's next entry; malformed refuses.
+	// a on a field row adds the section's next entry; a missing env
+	// refuses.
 	wsToKey(t, c, pathKey("CACHE", "env"))
 	c = cpress(c, "a")
 	c = typeText(c, "justname")
@@ -241,7 +248,9 @@ func TestSecrets_containerFieldAdd(t *testing.T) {
 	wsToKey(t, c, "TOKEN")
 	require.NotContains(t, c.ws.placeholderOrBody(), "description token", "the unset field is hidden")
 	c = cpress(c, "a")
-	c = typeText(c, "description = token desc")
+	c = cpress(c, "right") // env → description
+	c = cpress(c, "down")
+	c = typeText(c, "token desc")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, "token desc", c.ws.draft.cfg.Secrets["TOKEN"].Description, "the field lands in the entry")
 	require.Contains(t, c.ws.placeholderOrBody(), "description token desc", "the field row now renders")
@@ -295,13 +304,24 @@ func TestMounts_addBlocksSaveUntilFilled(t *testing.T) {
 	require.Contains(t, c.message, "source is required", "tier-2 names the first gap")
 
 	// Fill the required fields through the container's a — the unset
-	// fields are hidden, the container is the way in.
-	for _, f := range []struct{ field, value string }{
-		{"source", "/dev/disk/by-label/bak"}, {"destination", "/mnt/bak"}, {"type", "ext4"},
+	// fields are hidden, the container is the way in. The field is a
+	// choice now: cycle to it (source, destination, type), type the
+	// value.
+	for _, f := range []struct {
+		rights int
+		value  string
+	}{
+		{0, "/dev/disk/by-label/bak"}, // source
+		{1, "/mnt/bak"},               // destination
+		{2, "ext4"},                   // type
 	} {
 		wsToKey(t, c, "backup")
 		c = cpress(c, "a")
-		c = typeText(c, f.field+" = "+f.value)
+		for i := 0; i < f.rights; i++ {
+			c = cpress(c, "right")
+		}
+		c = cpress(c, "down")
+		c = typeText(c, f.value)
 		c = wsPress(t, c, "enter")
 	}
 	require.NotNil(t, cpressCmd(c, "ctrl+s"), "the save runs once the required fields stand")
@@ -315,11 +335,15 @@ func TestSmb_scalarAndShareEdits(t *testing.T) {
 	c = wsPress(t, c, "enter")
 	require.Equal(t, []string{"cri"}, c.ws.draft.cfg.Smb.Users)
 
-	// avahi is unset and hidden: a on the smb header takes field = value
-	// for the section scalars.
+	// avahi is unset and hidden: a on the smb header takes the what
+	// choice (share/group/users/avahi) and a value.
 	wsToHeader(t, c, "smb")
 	c = cpress(c, "a")
-	c = typeText(c, "avahi = false")
+	for i := 0; i < 3; i++ {
+		c = cpress(c, "right") // share → group → users → avahi
+	}
+	c = cpress(c, "down")
+	c = typeText(c, "false")
 	c = wsPress(t, c, "enter")
 	require.NotNil(t, c.ws.draft.cfg.Smb.Avahi)
 	require.False(t, *c.ws.draft.cfg.Smb.Avahi, "the tri-state lands")
@@ -335,10 +359,14 @@ func TestSmb_scalarAndShareEdits(t *testing.T) {
 
 func TestSmb_containerFieldAdd(t *testing.T) {
 	_, c := entriesShell(t)
-	// a on the share container adds a field INTO it.
+	// a on the share container adds a field INTO it: the field is a
+	// choice (path, comment, valid_users, ...), the value is text.
 	wsToKey(t, c, "media", "smb")
 	c = cpress(c, "a")
-	c = typeText(c, "valid_users = cri, root")
+	c = cpress(c, "right")
+	c = cpress(c, "right") // path → comment → valid_users
+	c = cpress(c, "down")
+	c = typeText(c, "cri, root")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, "cri, root", c.ws.draft.cfg.Smb.Shares["media"].ValidUsers, "the field lands in the share")
 	require.Contains(t, c.ws.placeholderOrBody(), "valid_users cri, root", "the field row renders")
@@ -351,6 +379,9 @@ func TestSmb_shareAddAndRemove(t *testing.T) {
 		c = cpress(c, "j")
 	}
 	c = cpress(c, "a")
+	f := addFormTop(t, c)
+	require.Contains(t, f.view(100, 30), "add smb · demo", "the what choice opens on the header")
+	c = cpress(c, "down") // the share name lands in the value row
 	c = typeText(c, "public")
 	c = wsPress(t, c, "enter")
 	require.Contains(t, c.ws.draft.cfg.Smb.Shares, "public", "the bare share lands")
@@ -361,10 +392,12 @@ func TestSmb_shareAddAndRemove(t *testing.T) {
 	require.Contains(t, c.message, "path is required")
 
 	// Fill it through the container (the unset fields are hidden), then
-	// remove the share again through the confirm.
+	// remove the share again through the confirm. Path is the field
+	// choice's first option.
 	wsToKey(t, c, "public")
 	c = cpress(c, "a")
-	c = typeText(c, "path = /srv/public")
+	c = cpress(c, "down")
+	c = typeText(c, "/srv/public")
 	c = wsPress(t, c, "enter")
 	wsToKey(t, c, "public")
 	c = cpress(c, "d")
@@ -441,7 +474,13 @@ func TestWhen_headerAddsRootLeaf(t *testing.T) {
 
 	wsToHeader(t, c, "when")
 	c = cpress(c, "a")
-	c = typeText(c, "gpu = nvidia")
+	// rows: kind (leaf/and/or/not), field, value
+	c = cpress(c, "down")    // field
+	for i := 0; i < 3; i++ { // hosts → users → os → gpu
+		c = cpress(c, "right")
+	}
+	c = cpress(c, "down") // value
+	c = typeText(c, "nvidia")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, "nvidia", c.ws.draft.cfg.When.GPU, "field = value sets the root leaf")
 	require.Equal(t, "gpu", c.ws.rows[c.ws.cursor].key, "the cursor lands on the new leaf")
@@ -472,32 +511,35 @@ func TestWhen_groupAddNested(t *testing.T) {
 	_, c := whenShell(t, whenRootFixture)
 	wsToHeader(t, c, "when")
 
-	// a on the header grows the root's and-list.
+	// a on the header grows the root's and-list: kind right once.
 	c = cpress(c, "a")
-	c = typeText(c, "and")
+	c = cpress(c, "right")
 	c = wsPress(t, c, "enter")
 	require.Len(t, c.ws.draft.cfg.When.And, 1)
 	require.Equal(t, pathKey("and", "0"), c.ws.rows[c.ws.cursor].key, "the cursor lands on the new group")
 
-	// a on the group container nests an or beneath it.
+	// a on the group container nests an or beneath it: kind right twice.
 	c = cpress(c, "a")
-	c = typeText(c, "or")
+	c = cpress(c, "right")
+	c = cpress(c, "right")
 	c = wsPress(t, c, "enter")
 	require.Len(t, c.ws.draft.cfg.When.And[0].Or, 1)
 	require.Equal(t, pathKey("and", "0", "or", "0"), c.ws.rows[c.ws.cursor].key)
 
-	// a on the group adds a leaf with field = value — the nested or's
-	// unset leaves are hidden, the container is the way in.
+	// a on the group adds a leaf — the nested or's unset leaves are
+	// hidden, the container is the way in. Leaf is the default kind;
+	// hosts is the default field.
 	c = cpress(c, "a")
-	c = typeText(c, "hosts = work")
+	c = cpress(c, "down")
+	c = cpress(c, "down")
+	c = typeText(c, "work")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, []string{"work"}, c.ws.draft.cfg.When.And[0].Or[0].Hosts)
 	require.Contains(t, c.ws.draft.raw, `or = [{ hosts = ["work"] }]`, "the nested tree encodes")
 
-	// Junk input refuses.
+	// An empty value refuses.
 	c = cpress(c, "a")
-	c = typeText(c, "gpu")
-	c = cpress(c, "enter")
+	c = wsPress(t, c, "enter")
 	f := addFormTop(t, c)
 	require.False(t, f.finished(), "a refused add keeps the form open")
 	require.Contains(t, f.view(100, 30), "field = value")
@@ -508,7 +550,9 @@ func TestWhen_notAddAndDuplicateRefuse(t *testing.T) {
 	_, c := whenShell(t, whenRootFixture)
 	wsToHeader(t, c, "when")
 	c = cpress(c, "a")
-	c = typeText(c, "not")
+	for i := 0; i < 3; i++ { // leaf → and → or → not
+		c = cpress(c, "right")
+	}
 	c = wsPress(t, c, "enter")
 	require.NotNil(t, c.ws.draft.cfg.When.Not, "the not group lands")
 	require.Equal(t, "not", c.ws.rows[c.ws.cursor].key)
@@ -517,7 +561,9 @@ func TestWhen_notAddAndDuplicateRefuse(t *testing.T) {
 	// nests — its `a not` is a deeper node, by grammar).
 	wsToHeader(t, c, "when")
 	c = cpress(c, "a")
-	c = typeText(c, "not")
+	for i := 0; i < 3; i++ { // leaf → and → or → not
+		c = cpress(c, "right")
+	}
 	c = cpress(c, "enter")
 	f := addFormTop(t, c)
 	require.False(t, f.finished(), "a refused add keeps the form open")
@@ -549,7 +595,7 @@ func TestWhen_emptyGroupBlocksSave(t *testing.T) {
 	_, c := whenShell(t, whenRootFixture)
 	wsToHeader(t, c, "when")
 	c = cpress(c, "a")
-	c = typeText(c, "and")
+	c = cpress(c, "right") // kind: and
 	c = wsPress(t, c, "enter")
 
 	// The empty group is a load-time error class: the save refuses it.
@@ -560,7 +606,11 @@ func TestWhen_emptyGroupBlocksSave(t *testing.T) {
 	// Fill a leaf through the group container; the save stands down.
 	wsToKey(t, c, pathKey("and", "0"))
 	c = cpress(c, "a")
-	c = typeText(c, "os = linux")
+	c = cpress(c, "down")  // field
+	c = cpress(c, "right") // hosts → users → os
+	c = cpress(c, "right")
+	c = cpress(c, "down") // value
+	c = typeText(c, "linux")
 	c = wsPress(t, c, "enter")
 	require.NotNil(t, cpressCmd(c, "ctrl+s"), "the save runs once the group has content")
 }
@@ -664,9 +714,11 @@ func TestSystemd_directiveAdd(t *testing.T) {
 	wsToKey(t, c, pathKey("demo.service", "Description"))
 	c = cpress(c, "a")
 	f := addFormTop(t, c)
-	require.Contains(t, f.view(100, 30), "add · systemd.units · demo",
-		"a on a directive row adds into its unit")
-	c = typeText(c, "WantedBy = default.target")
+	require.Contains(t, f.view(100, 30), "add directive · demo.service",
+		"a on a directive row adds a directive into its unit")
+	c = typeText(c, "WantedBy")
+	c = cpress(c, "down")
+	c = typeText(c, "default.target")
 	c = wsPress(t, c, "enter")
 	require.Empty(t, c.modals)
 	require.Contains(t, c.ws.placeholderOrBody(), `WantedBy = "default.target"`, "the unquoted value lands as a string")
@@ -681,7 +733,7 @@ func TestSystemd_unitAddAndRemove(t *testing.T) {
 
 	c = cpress(c, "a")
 	f := addFormTop(t, c)
-	require.Contains(t, f.view(100, 30), "add · systemd.units · demo",
+	require.Contains(t, f.view(100, 30), "add unit · demo",
 		"a on the header adds a unit")
 	c = typeText(c, "extra.service")
 	c = wsPress(t, c, "enter")
@@ -714,7 +766,9 @@ func TestSystemd_containerFieldAdd(t *testing.T) {
 	// in once unset directives stop rendering.
 	wsToKey(t, c, "backup.timer")
 	c = cpress(c, "a")
-	c = typeText(c, "OnUnitActiveSec = 5")
+	c = typeText(c, "OnUnitActiveSec")
+	c = cpress(c, "down")
+	c = typeText(c, "5")
 	c = wsPress(t, c, "enter")
 	require.Contains(t, c.ws.placeholderOrBody(), `OnUnitActiveSec = 5`, "the directive lands in the unit")
 	require.Contains(t, c.ws.draft.raw, "OnUnitActiveSec = 5", "the splice lands in the working raw")

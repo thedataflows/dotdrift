@@ -119,3 +119,17 @@ func TestAddForm_linksCommit(t *testing.T) {
 	require.Equal(t, "fd", d.Source)
 	require.Equal(t, "symlink", d.Mode, "an add creates a symlink entry")
 }
+
+func TestAddForm_smbWhatRelabelsValue(t *testing.T) {
+	_, c := entriesShell(t)
+	wsToHeader(t, c, "smb")
+	c = cpress(c, "a")
+	f := addFormTop(t, c)
+	view := f.view(100, 30)
+	require.Contains(t, view, "what")
+	require.Contains(t, view, "share name", "the default what is a share")
+	c = cpress(c, "right") // group
+	c = cpress(c, "right") // users
+	view = f.view(100, 30)
+	require.Contains(t, view, "value", "a scalar what takes a plain value")
+}

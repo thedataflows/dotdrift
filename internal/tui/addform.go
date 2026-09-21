@@ -25,15 +25,16 @@ import (
 // navigation — j/k type like any other rune while a text row holds the
 // focus.
 type addForm struct {
-	th     theme
-	title  string
-	rows   []dlgRow
-	build  func(rows []dlgRow) string // the grammar string the pipeline parses
-	commit func(input string) string  // "" on success; the error keeps the form open
-	cur    int
-	err    string
-	done   bool
-	boxY   int // the last render's box origin, for row hit-testing
+	th      theme
+	title   string
+	rows    []dlgRow
+	build   func(rows []dlgRow) string // the grammar string the pipeline parses
+	relabel func(rows []dlgRow)        // optional: a choice row retunes a sibling's label
+	commit  func(input string) string  // "" on success; the error keeps the form open
+	cur     int
+	err     string
+	done    bool
+	boxY    int // the last render's box origin, for row hit-testing
 }
 
 func newAddForm(th theme, title string, rows []dlgRow, build func([]dlgRow) string, commit func(string) string) *addForm {
@@ -56,8 +57,10 @@ func (f *addForm) update(msg tea.Msg) tea.Cmd {
 			}
 		case "left":
 			f.rows[f.cur].left()
+			f.retune()
 		case "right":
 			f.rows[f.cur].right()
+			f.retune()
 		case "backspace":
 			f.rows[f.cur].backspace()
 		case "enter":
@@ -88,6 +91,13 @@ func (f *addForm) update(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// retune runs the spec's relabel hook, if one is set.
+func (f *addForm) retune() {
+	if f.relabel != nil {
+		f.relabel(f.rows)
+	}
 }
 
 // hitRow maps a click Y to a row index, or -1: one padding line, the
@@ -139,12 +149,13 @@ func addScope(row wsRow) (section, addPath string) {
 	return section, addPath
 }
 
-// addFormSpec is one section's form: title, rows, and the grammar
-// synthesizer. The identity row leads (it takes the opening focus and
-// the typing), choices follow. Sections without a structured spec fall
-// back to a single free-text row labeled with the section's own grammar
-// hint — validateAdd's refusal text for the empty input.
-func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dlgRow) string) {
+// addFormSpec is one section's form: title, rows, a grammar
+// synthesizer, and an optional relabel hook. The identity row leads (it
+// takes the opening focus and the typing), choices follow. Sections
+// without a structured spec fall back to a single free-text row labeled
+// with the section's own grammar hint — validateAdd's refusal text for
+// the empty input.
+func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
 	switch section {
 	case "packages":
 		name := newDlgField("name", "")
@@ -157,21 +168,21 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 					return "-" + pkg
 				}
 				return pkg
-			}
+			}, nil
 	case "links":
 		target := newDlgField("target", "")
 		source := newDlgField("source", "")
 		return "add link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 			func([]dlgRow) string {
 				return strings.TrimSpace(target.String()) + " " + strings.TrimSpace(source.String())
-			}
+			}, nil
 	case "tools":
 		name := newDlgField("name", "")
 		constraint := &dlgField{label: "constraint", hint: "empty = any"}
 		return "add tool · " + moduleID, []dlgRow{fieldRow(name), fieldRow(constraint)},
 			func([]dlgRow) string {
 				return strings.TrimSpace(name.String()) + "=" + strings.TrimSpace(constraint.String())
-			}
+			}, nil
 	case "hooks":
 		cmd := newDlgField("command", "")
 		return "add hook · " + moduleID, []dlgRow{
@@ -182,9 +193,93 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 					return "post: " + strings.TrimSpace(cmd.String())
 				}
 				return strings.TrimSpace(cmd.String())
-			}
+			}, nil
+	case "systemd.units":
+		if addPath == "" {
+			unit := newDlgField("unit", "")
+			return "add unit · " + moduleID, []dlgRow{fieldRow(unit)},
+				func([]dlgRow) string { return strings.TrimSpace(unit.String()) }, nil
+		}
+		directive := newDlgField("directive", "")
+		value := newDlgField("value", "")
+		return "add directive · " + addPath, []dlgRow{fieldRow(directive), fieldRow(value)},
+			func([]dlgRow) string {
+				return strings.TrimSpace(directive.String()) + "=" + strings.TrimSpace(value.String())
+			}, nil
+	case "secrets":
+		if addPath == "" {
+			name := newDlgField("name", "")
+			env := newDlgField("env", "")
+			return "add secret · " + moduleID, []dlgRow{fieldRow(name), fieldRow(env)},
+				func([]dlgRow) string {
+					return strings.TrimSpace(name.String()) + "=" + strings.TrimSpace(env.String())
+				}, nil
+		}
+		return fieldValuePair("add field · "+addPath, "env", "description", "allow_empty")
+	case "mounts":
+		if addPath == "" {
+			name := newDlgField("name", "")
+			return "add mount · " + moduleID, []dlgRow{fieldRow(name)},
+				func([]dlgRow) string { return strings.TrimSpace(name.String()) }, nil
+		}
+		return fieldValuePair("add field · "+addPath, "source", "destination", "type", "options", "startat", "state")
+	case "smb":
+		if addPath == "" {
+			what := newDlgChoice("what", "share", "group", "users", "avahi")
+			value := &dlgField{label: "share name"}
+			return "add smb · " + moduleID, []dlgRow{choiceRow(what), fieldRow(value)},
+				func(rows []dlgRow) string {
+					if what.String() == "share" {
+						return strings.TrimSpace(value.String())
+					}
+					return what.String() + "=" + strings.TrimSpace(value.String())
+				},
+				func([]dlgRow) {
+					value.label = "share name"
+					if what.String() != "share" {
+						value.label = "value"
+					}
+				}
+		}
+		return fieldValuePair("add field · "+addPath, "path", "comment", "valid_users", "writable", "public")
+	case "when":
+		kind := newDlgChoice("kind", "leaf", "and", "or", "not")
+		field := newDlgChoice("field", whenFields...)
+		value := newDlgField("value", "")
+		title := "add when · " + moduleID
+		if addPath != "" {
+			title = "add when · " + whenGroupLabel(addPath)
+		}
+		return title, []dlgRow{choiceRow(kind), choiceRow(field), fieldRow(value)},
+			func(rows []dlgRow) string {
+				if k := rows[0].choice.String(); k != "leaf" {
+					return k
+				}
+				return rows[1].choice.String() + "=" + strings.TrimSpace(value.String())
+			}, nil
 	}
 	return "add · " + section + " · " + moduleID,
 		[]dlgRow{fieldRow(&dlgField{label: section, hint: validateAdd(addFamily(section), addPath, "")})},
-		func(rows []dlgRow) string { return rows[0].field.String() }
+		func(rows []dlgRow) string { return rows[0].field.String() }, nil
+}
+
+// fieldValuePair is a container's `field = value` form: the field is a
+// closed choice, the value free text.
+func fieldValuePair(title string, fields ...string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
+	value := newDlgField("value", "")
+	return title, []dlgRow{choiceRow(newDlgChoice("field", fields...)), fieldRow(value)},
+		func(rows []dlgRow) string {
+			return rows[0].choice.String() + "=" + strings.TrimSpace(value.String())
+		}, nil
+}
+
+// whenGroupLabel names a when group the way its row renders: and[0],
+// and[0].or[1], not.
+func whenGroupLabel(addPath string) string {
+	segs := splitPath(addPath)
+	label := segs[len(segs)-1]
+	if len(segs) > 1 && label != "not" {
+		label = segs[len(segs)-2] + "[" + label + "]"
+	}
+	return label
 }

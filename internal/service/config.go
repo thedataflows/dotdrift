@@ -348,6 +348,31 @@ func (a *ConfigArea) MoveModule(app, fromLayer, toLayer string) error {
 	return os.Rename(src, dst)
 }
 
+// OverrideModule seeds an overlay for an existing module in a higher
+// layer (issue 0082): the new module.toml carries comments only — an
+// empty overlay overrides nothing, and a copied base would pin its
+// fields against later base edits. Refused when the source layer has no
+// such module or the target layer already has one.
+func (a *ConfigArea) OverrideModule(app, fromLayer, toLayer string) error {
+	src := ModuleDir(a.root, fromLayer, app)
+	if _, err := os.Stat(src); err != nil {
+		return fmt.Errorf("override module: %s has no module %q", layerLabelName(fromLayer), app)
+	}
+	dst := ModuleDir(a.root, toLayer, app)
+	if _, err := os.Stat(filepath.Join(dst, "module.toml")); err == nil {
+		return fmt.Errorf("override module: %s already has module %q", layerLabelName(toLayer), app)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	seed := "# overlay of " + app + " (" + layerLabelName(fromLayer) + "): fields set here override it.\n" +
+		"# merged: packages, tools, dotfiles, hooks, mounts, smb\n" +
+		"# meta, scope, and when come from " + layerLabelName(fromLayer) + "\n"
+	return atomicWrite(filepath.Join(dst, "module.toml"), []byte(seed))
+}
+
 // DeletePreview lists the module's own files that no declaration
 // references — the same orphan definition as the status report, scoped to
 // the dying directory: strays the module carries but never managed. The

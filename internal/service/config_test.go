@@ -217,6 +217,34 @@ func TestModuleOps_createScaffold(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// T-0082-override: an overlay for an existing module seeds a comment-only
+// module.toml — an empty overlay overrides nothing, and a copied base
+// would pin its fields against later base edits.
+func TestModuleOps_overrideSeedsEmptyOverlay(t *testing.T) {
+	root := t.TempDir()
+	area := configArea(root)
+	require.NoError(t, area.CreateModule("m", ""))
+
+	require.NoError(t, area.OverrideModule("m", "", "users/kim"))
+	raw, err := os.ReadFile(filepath.Join(root, "users", "kim", "modules", "m", "module.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(raw), "override", "the seed names its purpose")
+	require.Contains(t, string(raw), "packages, tools, dotfiles, hooks, mounts, smb",
+		"the seed names the merged families")
+	require.NotContains(t, string(raw), "id =", "the overlay stays empty: meta comes from the base")
+	require.FileExists(t, filepath.Join(root, "modules", "m", "module.toml"),
+		"the source module stays put")
+
+	// The target layer already having the module refuses.
+	err = area.OverrideModule("m", "", "users/kim")
+	require.Error(t, err, "users/kim already has module m")
+
+	// The source layer lacking the module refuses and creates nothing.
+	err = area.OverrideModule("nope", "", "hosts/box")
+	require.Error(t, err, "base has no module nope")
+	require.NoDirExists(t, filepath.Join(root, "hosts", "box", "modules", "nope"))
+}
+
 func TestModuleOps_moveRefusedOnCollision(t *testing.T) {
 	root := t.TempDir()
 	area := configArea(root)

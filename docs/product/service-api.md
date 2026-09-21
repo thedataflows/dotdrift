@@ -45,8 +45,6 @@ type Service struct {
     Reads *ReadsArea
     // Writes areas as migration lands them (below)
 }
-
-func New() *Service
 ```
 
 | Area | Covers | Status |

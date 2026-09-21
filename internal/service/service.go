@@ -10,11 +10,3 @@ type Service struct {
 	Apply *ApplyArea
 	Reads *ReadsArea
 }
-
-// New builds a Service wired with real dependencies.
-func New() *Service {
-	return &Service{
-		Apply: NewApplyArea(ApplyDeps{}),
-		Reads: NewReadsArea(ReadsDeps{}),
-	}
-}

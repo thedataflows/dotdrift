@@ -433,8 +433,8 @@ func (m *Compositor) openApplyDetail() {
 
 // dialogModal adapts an M14 dialog (manage, writes) to the compositor's
 // modal interface: the domain logic is untouched, the shell changes from
-// pushed view to modal layer. The dialog's back() esc semantics fold
-// into the compositor's pop rule.
+// pushed view to modal layer, and esc pops the dialog through the
+// compositor's pop rule.
 type dialogModal struct {
 	d  dialog
 	th theme

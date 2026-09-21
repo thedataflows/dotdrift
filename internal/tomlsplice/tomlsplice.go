@@ -49,20 +49,6 @@ func Split(text string) []Section {
 	return secs
 }
 
-// Families lists the document's section families in first-appearance
-// order (FamilyKeys first when any preamble exists).
-func Families(text string) []string {
-	var out []string
-	seen := map[string]bool{}
-	for _, s := range Split(text) {
-		if !seen[s.Family] {
-			seen[s.Family] = true
-			out = append(out, s.Family)
-		}
-	}
-	return out
-}
-
 // Splice returns text with every section whose family is a key of
 // replacements replaced by that key's block: the block is inserted where
 // the family first appeared, later sections of the same family are

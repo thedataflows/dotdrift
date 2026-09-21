@@ -169,21 +169,6 @@ func (d *manageDialog) HandleKey(key string) tea.Cmd {
 	return nil
 }
 
-// back is the esc discipline (issue 0072): a confirm gate consumes esc
-// (clears, stays), a form steps back to the menu, a bare menu lets the
-// shell pop.
-func (d *manageDialog) back() bool {
-	if d.confirm {
-		d.confirm = false
-		return true
-	}
-	if d.mode != manageMenu {
-		d.toMenu()
-		return true
-	}
-	return false
-}
-
 // openEntry swaps the menu's entry in place: create/move build their
 // rows, delete pre-computes the orphan preview and sits at its gate.
 func (d *manageDialog) openEntry() {

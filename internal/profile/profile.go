@@ -412,14 +412,6 @@ func (w When) isEmpty() bool {
 		w.And == nil && w.Or == nil && w.Not == nil
 }
 
-// ModuleDir returns the path to a module directory under the given profile root.
-func ModuleDir(root, layer, id string) string {
-	if layer == "" || layer == "module" {
-		return filepath.Join(root, "modules", id)
-	}
-	return filepath.Join(root, layer, id, "modules", id)
-}
-
 // Select re-evaluates which modules are selected or skipped.
 func (p *Profile) Select(f *facts.Facts) {
 	if f == nil {

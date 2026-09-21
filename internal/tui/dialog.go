@@ -36,15 +36,12 @@ type restorePlanMsg struct {
 	err  error
 }
 
-// dialog is one Profile action's interactive model.
+// dialog is one Profile action's interactive model. esc is the shell's:
+// the compositor's pop rule owns the back step (modals.go).
 type dialog interface {
 	HandleKey(string) tea.Cmd
 	View(th theme) string
 	applyFinished(writeFinishedMsg)
-	// back is the esc discipline (issue 0072): true when the dialog
-	// consumed the back step (a confirm gate clears and stays, a form
-	// steps back), false when the shell should pop the view.
-	back() bool
 }
 
 // tuiRestoreHandover refuses privileged children: the TUI has no
@@ -342,16 +339,6 @@ func (d *onboardDialog) applyFinished(m writeFinishedMsg) {
 	d.report, d.err = m.report, m.err
 }
 
-// back is the shared esc discipline (issue 0072): the gate consumes esc,
-// the form's back step pops the dialog.
-func (d *onboardDialog) back() bool {
-	if d.confirm {
-		d.confirm = false
-		return true
-	}
-	return false
-}
-
 func (d *onboardDialog) View(th theme) string {
 	var b strings.Builder
 	b.WriteString(th.viewTitle.Render("ONBOARD"))
@@ -532,14 +519,6 @@ func (d *restoreDialog) run() tea.Msg {
 func (d *restoreDialog) applyFinished(m writeFinishedMsg) {
 	d.running = false
 	d.report, d.err = m.report, m.err
-}
-
-func (d *restoreDialog) back() bool {
-	if d.confirm {
-		d.confirm = false
-		return true
-	}
-	return false
 }
 
 func (d *restoreDialog) View(th theme) string {
@@ -759,14 +738,6 @@ func (d *generateDialog) run() tea.Msg {
 func (d *generateDialog) applyFinished(m writeFinishedMsg) {
 	d.running = false
 	d.report, d.err = m.report, m.err
-}
-
-func (d *generateDialog) back() bool {
-	if d.confirm {
-		d.confirm = false
-		return true
-	}
-	return false
 }
 
 func (d *generateDialog) View(th theme) string {

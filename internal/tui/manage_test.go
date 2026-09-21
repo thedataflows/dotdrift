@@ -137,19 +137,6 @@ func TestManage_deletePreviewThenDelete(t *testing.T) {
 	require.Contains(t, d.report, "deleted")
 }
 
-func TestManage_backDiscipline(t *testing.T) {
-	d, _ := manageFixture(t)
-	d.HandleKey("enter") // into create
-	require.True(t, d.back(), "a form steps back")
-	require.False(t, d.confirm)
-	d.HandleKey("enter")
-	d.HandleKey("enter") // confirm gate
-	require.True(t, d.back(), "a confirm gate consumes esc and stays")
-	require.False(t, d.confirm)
-	d.toMenu()
-	require.False(t, d.back(), "the bare menu lets the shell pop")
-}
-
 func TestManage_cursorRowBar(t *testing.T) {
 	// 0075 T-tui-selection: the manage menu and its form rows use the
 	// bar cursor treatment.

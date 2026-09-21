@@ -138,8 +138,10 @@ func TestTyped_smbPathRowOpensPickerAndCommits(t *testing.T) {
 	c = cpress(c, "enter")
 	p := topModal[*filePicker](t, c)
 	require.Equal(t, kindDirs, p.mode, "a share path picks directories")
-	require.Equal(t, share, p.cwd, "the picker opens over the field's current value")
+	require.Equal(t, filepath.Dir(share), p.cwd, "the picker opens on the field's current value (0096)")
+	require.Equal(t, filepath.Base(share), p.visible()[p.sel].name, "with the value's own entry selected")
 
+	c = cpress(c, "right") // into media
 	c = cpress(c, "right") // into sub
 	c = cpress(c, "ctrl+enter")
 	require.Empty(t, c.modals, "a pick closes the picker")

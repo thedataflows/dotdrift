@@ -83,3 +83,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0093](0093-tui-yank-modules-scoped-plan-apply.md) | Nav yank — space/y marks modules, p/P plan and apply the yanked set only | done | medium |
 | [0094](0094-tui-typed-inputs-multiline-filepicker.md) | Typed inputs — multi-line editor (optional coloring), file picker on enter, ctrl+o browse in forms | done | medium |
 | [0095](0095-tui-links-edit-opens-link-modal.md) | Links-row edit opens the link modal (target/source pair) instead of a bare text input | done | medium |
+| [0096](0096-tui-picker-opens-on-current-value.md) | File picker opens on the field's current value, its own entry selected | done | medium |

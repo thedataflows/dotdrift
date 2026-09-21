@@ -9,9 +9,11 @@ package tui
 // the current listing with the nav filter's semantics, and a ctrl+l
 // location bar takes typed or pasted paths — the escape hatch for
 // device paths, tilde paths, and not-yet-existing files. esc backs out
-// of the filter/location bar first (onEsc), then closes. A pick commits
-// through the caller's callback; a refusal renders inside and keeps
-// the picker open.
+// of the filter/location bar first (onEsc), then closes. The picker
+// opens on the field's current value (0096): a valid seed shows its
+// parent directory with its own entry selected, a missing seed climbs
+// to the nearest existing ancestor. A pick commits through the caller's
+// callback; a refusal renders inside and keeps the picker open.
 
 import (
 	"os"
@@ -65,14 +67,21 @@ type filePicker struct {
 	done       bool
 }
 
-// newFilePicker opens the picker over the seed's directory: a directory
-// seed opens it, a file seed opens its parent, a missing path climbs to
-// the nearest existing ancestor, and empty or unresolvable seeds open
-// the home directory.
+// newFilePicker opens the picker on the seed (0096): an existing seed
+// shows its parent directory with the seed's own entry selected — enter
+// re-confirms the current value, the siblings are one keystroke away —
+// a missing seed climbs to the nearest existing ancestor, and empty or
+// unresolvable seeds open the home directory. A hidden seed reveals
+// dotfiles so the listing can select it.
 func newFilePicker(th theme, mode editKind, seed string, commit func(string) string) *filePicker {
 	p := &filePicker{th: th, mode: mode, commit: commit, pageH: 10}
-	p.cwd = pickStartDir(seed)
+	dir, name := pickStart(seed)
+	p.cwd = dir
+	if strings.HasPrefix(name, ".") {
+		p.showHidden = true
+	}
 	p.readDir()
+	p.selectName(name)
 	return p
 }
 
@@ -110,27 +119,46 @@ func expandHome(s, home string) string {
 	return s
 }
 
-// pickStartDir resolves the directory the picker opens over.
-func pickStartDir(seed string) string {
+// pickStart resolves where the picker opens and which entry to select
+// (0096): an existing path opens its parent and selects its own name —
+// the filesystem root opens itself, there is no parent to select in — a
+// missing path climbs to the nearest existing ancestor and selects
+// nothing, and an empty seed opens home.
+func pickStart(seed string) (dir, name string) {
 	home, _ := os.UserHomeDir()
 	s := expandHome(strings.TrimSpace(seed), home)
 	if s == "" {
-		return home
+		return home, ""
 	}
-	if st, err := os.Stat(s); err == nil {
-		if st.IsDir() {
-			return s
+	if _, err := os.Stat(s); err == nil {
+		if parent := filepath.Dir(s); parent != s {
+			return parent, filepath.Base(s)
 		}
-		return filepath.Dir(s)
+		return s, ""
 	}
 	for {
 		parent := filepath.Dir(s)
 		if parent == s {
-			return home
+			return home, ""
 		}
 		s = parent
 		if st, err := os.Stat(s); err == nil && st.IsDir() {
-			return s
+			return s, ""
+		}
+	}
+}
+
+// selectName moves the cursor onto the named entry — the seeded path's
+// own row. A name the listing does not show (filtered by the mode, or
+// a missing seed) leaves the cursor at the top.
+func (p *filePicker) selectName(name string) {
+	if name == "" {
+		return
+	}
+	for i, e := range p.visible() {
+		if e.name == name {
+			p.sel = i
+			return
 		}
 	}
 }

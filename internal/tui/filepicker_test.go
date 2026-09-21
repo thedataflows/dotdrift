@@ -38,6 +38,13 @@ func pickerFixture(t *testing.T) string {
 
 func pkey(p *filePicker, s string) { p.update(keyPress(s)) }
 
+// browsePicker opens the picker over root in the plain browsing state
+// (cursor at the top, nothing selected): a missing leaf seed climbs to
+// root without selecting (0096).
+func browsePicker(mode editKind, root string, commit func(string) string) *filePicker {
+	return newFilePicker(newTheme(true), mode, filepath.Join(root, "missing"), commit)
+}
+
 // ptype sends each rune as a key with Text set — what a real terminal
 // delivers while a text input is active.
 func ptype(p *filePicker, s string) {
@@ -56,7 +63,7 @@ func pickNames(entries []pickEntry) []string {
 
 func TestPicker_dirsFirstCaseInsensitive(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	require.Equal(t, root, p.cwd)
 	require.Equal(t,
 		[]string{"alpha", "Beta", "linkdir", "broken", "delta.sh", "gamma.txt"},
@@ -70,14 +77,14 @@ func TestPicker_dirsFirstCaseInsensitive(t *testing.T) {
 
 func TestPicker_dirsModeListsDirsOnly(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindDirs, root, func(string) string { return "" })
+	p := browsePicker(kindDirs, root, func(string) string { return "" })
 	require.Equal(t, []string{"alpha", "Beta", "linkdir"}, pickNames(p.visible()),
 		"a directory pick lists directories only — a file is never a valid answer")
 }
 
 func TestPicker_hiddenToggle(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	require.NotContains(t, pickNames(p.visible()), ".hidden")
 	pkey(p, ".")
 	require.True(t, p.showHidden)
@@ -88,7 +95,7 @@ func TestPicker_hiddenToggle(t *testing.T) {
 
 func TestPicker_filterNarrowsAndEscClears(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	pkey(p, "/")
 	require.True(t, p.filtering)
 	ptype(p, "ga")
@@ -101,7 +108,7 @@ func TestPicker_filterNarrowsAndEscClears(t *testing.T) {
 
 func TestPicker_filterKeepsSelectionInBounds(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	p.sel = 5 // gamma.txt
 	pkey(p, "/")
 	ptype(p, "al") // alpha only
@@ -110,7 +117,7 @@ func TestPicker_filterKeepsSelectionInBounds(t *testing.T) {
 
 func TestPicker_enterSelectsDirInDirsMode(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindDirs, root, func(string) string { return "" })
+	p := browsePicker(kindDirs, root, func(string) string { return "" })
 	pkey(p, "enter") // alpha is first
 	require.True(t, p.finished())
 	require.Equal(t, filepath.Join(root, "alpha"), p.picked, "enter on a directory picks it in dirs mode")
@@ -118,7 +125,7 @@ func TestPicker_enterSelectsDirInDirsMode(t *testing.T) {
 
 func TestPicker_enterDescendsDirInFilesMode(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindFiles, root, func(string) string { return "" })
+	p := browsePicker(kindFiles, root, func(string) string { return "" })
 	pkey(p, "enter") // alpha is first: a dir descends, never picks
 	require.False(t, p.finished())
 	require.Equal(t, filepath.Join(root, "alpha"), p.cwd)
@@ -134,7 +141,7 @@ func TestPicker_enterDescendsDirInFilesMode(t *testing.T) {
 
 func TestPicker_eitherModeAndCtrlEnter(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	pkey(p, "enter") // a dir descends in either mode
 	require.False(t, p.finished())
 	require.Equal(t, filepath.Join(root, "alpha"), p.cwd)
@@ -145,7 +152,7 @@ func TestPicker_eitherModeAndCtrlEnter(t *testing.T) {
 
 func TestPicker_navigation(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 
 	pkey(p, "right") // descend into alpha
 	require.Equal(t, filepath.Join(root, "alpha"), p.cwd)
@@ -167,7 +174,7 @@ func TestPicker_pagingAndEnds(t *testing.T) {
 		name := filepath.Join(root, "f"+string(rune('a'+i%26))+string(rune('0'+i/26)))
 		require.NoError(t, os.WriteFile(name, []byte("x"), 0o644))
 	}
-	p := newFilePicker(newTheme(true), kindFiles, root, func(string) string { return "" })
+	p := browsePicker(kindFiles, root, func(string) string { return "" })
 	p.pageH = 10
 	pkey(p, "end")
 	require.Equal(t, len(p.visible())-1, p.sel)
@@ -187,7 +194,7 @@ func TestPicker_pagingAndEnds(t *testing.T) {
 
 func TestPicker_locationBarPicksFile(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindFiles, root, func(string) string { return "" })
+	p := browsePicker(kindFiles, root, func(string) string { return "" })
 	pkey(p, "ctrl+l")
 	require.True(t, p.locating, "ctrl+l opens the location bar")
 	pkey(p, "ctrl+u") // a real terminal pastes over: clear the seeded cwd
@@ -199,7 +206,7 @@ func TestPicker_locationBarPicksFile(t *testing.T) {
 
 func TestPicker_locationBarCdsIntoDir(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	pkey(p, "ctrl+l")
 	pkey(p, "ctrl+u")
 	ptype(p, filepath.Join(root, "alpha"))
@@ -211,7 +218,7 @@ func TestPicker_locationBarCdsIntoDir(t *testing.T) {
 
 func TestPicker_locationBarAcceptsNewFileWhereAllowed(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindFiles, root, func(string) string { return "" })
+	p := browsePicker(kindFiles, root, func(string) string { return "" })
 	pkey(p, "ctrl+l")
 	pkey(p, "ctrl+u")
 	fresh := filepath.Join(root, "alpha", "newfile.conf")
@@ -223,7 +230,7 @@ func TestPicker_locationBarAcceptsNewFileWhereAllowed(t *testing.T) {
 
 func TestPicker_locationBarRefusesBadPaths(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindDirs, root, func(string) string { return "" })
+	p := browsePicker(kindDirs, root, func(string) string { return "" })
 
 	pkey(p, "ctrl+l")
 	pkey(p, "ctrl+u")
@@ -242,7 +249,7 @@ func TestPicker_locationBarRefusesBadPaths(t *testing.T) {
 
 func TestPicker_locationBarAcceptsNewDirWithExistingParent(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindDirs, root, func(string) string { return "" })
+	p := browsePicker(kindDirs, root, func(string) string { return "" })
 	pkey(p, "ctrl+l")
 	pkey(p, "ctrl+u")
 	fresh := filepath.Join(root, "newdir")
@@ -255,7 +262,7 @@ func TestPicker_locationBarAcceptsNewDirWithExistingParent(t *testing.T) {
 
 func TestPicker_locationBarExpandsTilde(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	home, _ := os.UserHomeDir()
 	pkey(p, "ctrl+l")
 	pkey(p, "ctrl+u")
@@ -271,7 +278,8 @@ func TestPicker_seedResolution(t *testing.T) {
 	require.Equal(t, root, p.cwd, "a file seed opens its directory")
 
 	p = newFilePicker(newTheme(true), kindEither, filepath.Join(root, "alpha"), func(string) string { return "" })
-	require.Equal(t, filepath.Join(root, "alpha"), p.cwd, "a directory seed opens it")
+	require.Equal(t, root, p.cwd, "a directory seed opens its parent (0096)")
+	require.Equal(t, "alpha", p.visible()[p.sel].name, "with the seed's own entry selected (0096)")
 
 	p = newFilePicker(newTheme(true), kindEither, filepath.Join(root, "alpha", "no", "deeper"), func(string) string { return "" })
 	require.Equal(t, filepath.Join(root, "alpha"), p.cwd, "a missing seed climbs to the nearest existing ancestor")
@@ -281,12 +289,70 @@ func TestPicker_seedResolution(t *testing.T) {
 	require.Equal(t, home, p.cwd, "an empty seed opens the home directory")
 
 	p = newFilePicker(newTheme(true), kindEither, "~/", func(string) string { return "" })
-	require.Equal(t, home, p.cwd, "a tilde seed expands")
+	if parent := filepath.Dir(home); parent != home {
+		require.Equal(t, parent, p.cwd, "a tilde seed expands, then selects like any directory (0096)")
+		require.Equal(t, filepath.Base(home), p.visible()[p.sel].name)
+	} else {
+		require.Equal(t, home, p.cwd, "a root home opens itself")
+	}
+}
+
+// T-tui-picker-selects-seed (0096): a valid seed opens its parent
+// directory with the seed's own entry selected, so enter re-confirms
+// the current value and the siblings are one keystroke away.
+func TestPicker_seedDirOpensParentWithEntrySelected(t *testing.T) {
+	root := pickerFixture(t)
+	seed := filepath.Join(root, "alpha")
+	var picked string
+	p := newFilePicker(newTheme(true), kindDirs, seed, func(s string) string { picked = s; return "" })
+	require.Equal(t, root, p.cwd, "a directory seed opens its parent")
+	require.Equal(t, "alpha", p.visible()[p.sel].name, "the seed's entry is selected")
+	pkey(p, "enter")
+	require.Equal(t, seed, picked, "enter re-picks the seeded directory")
+}
+
+func TestPicker_seedFileOpensParentWithEntrySelected(t *testing.T) {
+	root := pickerFixture(t)
+	seed := filepath.Join(root, "gamma.txt")
+	var picked string
+	p := newFilePicker(newTheme(true), kindEither, seed, func(s string) string { picked = s; return "" })
+	require.Equal(t, root, p.cwd, "a file seed opens its parent")
+	require.Equal(t, "gamma.txt", p.visible()[p.sel].name, "the seed's entry is selected")
+	pkey(p, "enter")
+	require.Equal(t, seed, picked, "enter re-picks the seeded file")
+}
+
+func TestPicker_seedDirInEitherModeEnterDescends(t *testing.T) {
+	root := pickerFixture(t)
+	seed := filepath.Join(root, "alpha")
+	p := newFilePicker(newTheme(true), kindEither, seed, func(string) string { return "" })
+	require.Equal(t, "alpha", p.visible()[p.sel].name)
+	pkey(p, "enter")
+	require.Equal(t, seed, p.cwd, "either mode: enter on the selected directory descends")
+}
+
+func TestPicker_missingSeedSelectsNothing(t *testing.T) {
+	root := pickerFixture(t)
+	p := newFilePicker(newTheme(true), kindEither, filepath.Join(root, "alpha", "no", "deeper"), func(string) string { return "" })
+	require.Equal(t, filepath.Join(root, "alpha"), p.cwd, "a missing seed climbs to the nearest ancestor")
+	require.Equal(t, 0, p.sel, "and leaves the cursor at the top")
+}
+
+func TestPicker_hiddenSeedRevealsDotfiles(t *testing.T) {
+	root := pickerFixture(t)
+	p := newFilePicker(newTheme(true), kindEither, filepath.Join(root, ".hidden"), func(string) string { return "" })
+	require.True(t, p.showHidden, "a hidden seed reveals dotfiles so it can be selected")
+	require.Equal(t, ".hidden", p.visible()[p.sel].name)
+}
+
+func TestPicker_rootSeedDoesNotPanic(t *testing.T) {
+	p := newFilePicker(newTheme(true), kindDirs, "/", func(string) string { return "" })
+	require.Equal(t, "/", p.cwd, "the filesystem root opens itself — there is no parent to select in")
 }
 
 func TestPicker_commitRefusalStaysOpen(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "field says no" })
+	p := browsePicker(kindEither, root, func(string) string { return "field says no" })
 	pkey(p, "ctrl+enter")
 	require.False(t, p.finished(), "a refused pick keeps the picker open")
 	require.Equal(t, "field says no", p.err)
@@ -300,7 +366,7 @@ func TestPicker_unreadableDirNamesTheProblem(t *testing.T) {
 	locked := filepath.Join(root, "Beta")
 	require.NoError(t, os.Chmod(locked, 0o000))
 	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	p.sel = 1 // Beta
 	pkey(p, "right")
 	require.Equal(t, root, p.cwd, "an unreadable directory is not entered")
@@ -309,7 +375,7 @@ func TestPicker_unreadableDirNamesTheProblem(t *testing.T) {
 
 func TestPicker_ownsTextOnlyWhileTyping(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	require.False(t, p.ownsText(), "plain browsing leaves ? to the help modal")
 	pkey(p, "/")
 	require.True(t, p.ownsText(), "the filter owns text (? is a query character)")
@@ -320,7 +386,7 @@ func TestPicker_ownsTextOnlyWhileTyping(t *testing.T) {
 
 func TestPicker_pasteIntoLocationBar(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindFiles, root, func(string) string { return "" })
+	p := browsePicker(kindFiles, root, func(string) string { return "" })
 	pkey(p, "ctrl+l")
 	pkey(p, "ctrl+u")
 	p.update(tea.PasteMsg{Content: filepath.Join(root, "delta.sh") + "\n"})
@@ -331,7 +397,7 @@ func TestPicker_pasteIntoLocationBar(t *testing.T) {
 
 func TestPicker_mouseWheelScrolls(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	p.update(tea.MouseWheelMsg{Button: tea.MouseWheelDown})
 	require.Equal(t, 1, p.sel)
 	p.update(tea.MouseWheelMsg{Button: tea.MouseWheelUp})
@@ -340,7 +406,7 @@ func TestPicker_mouseWheelScrolls(t *testing.T) {
 
 func TestPicker_viewNamesCwdAndEntries(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindDirs, root, func(string) string { return "" })
+	p := browsePicker(kindDirs, root, func(string) string { return "" })
 	plain := ansiRe.ReplaceAllString(p.view(100, 30), "")
 	require.Contains(t, plain, root, "the current directory is named")
 	require.Contains(t, plain, "alpha/", "directories render with a trailing slash")
@@ -349,7 +415,7 @@ func TestPicker_viewNamesCwdAndEntries(t *testing.T) {
 
 func TestPicker_tildeSeedSortsStable(t *testing.T) {
 	root := pickerFixture(t)
-	p := newFilePicker(newTheme(true), kindEither, root, func(string) string { return "" })
+	p := browsePicker(kindEither, root, func(string) string { return "" })
 	first := pickNames(p.visible())
 	pkey(p, ".") // hidden on
 	pkey(p, ".") // and off again

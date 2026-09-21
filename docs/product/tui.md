@@ -160,7 +160,12 @@ view stack wholesale). Its parts:
   the shown directory, and a `ctrl+l` location bar for typed or pasted
   paths — tilde expands, and a not-yet-existing file or directory name
   is accepted while its parent exists (the escape hatch for new
-  mountpoints and device paths). Form fields that take paths — onboard
+  mountpoints and device paths). The picker opens on the field's
+  current value (0096): a valid path shows its parent directory with
+  its own entry selected — enter re-confirms it, the siblings are one
+  keystroke away — a missing path climbs to the nearest existing
+  ancestor, and a dotfile path reveals hidden entries so it can be
+  selected. Form fields that take paths — onboard
   `paths`, the link forms' `source`, the writes add form's `target`,
   the mounts/smb field forms' path values — browse with `ctrl+o`
   instead, because enter already means *commit the form*; the onboard

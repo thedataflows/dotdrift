@@ -438,6 +438,9 @@ func (m *Compositor) openApplyDetail() {
 type dialogModal struct {
 	d  dialog
 	th theme
+	// reload runs after a successful write; only the manage dialogs set
+	// it (0082: the nav re-reads so new dirs appear without a restart).
+	reload func() tea.Cmd
 }
 
 func (m *dialogModal) view(w, h int) string {
@@ -450,6 +453,9 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	}
 	if wf, ok := msg.(writeFinishedMsg); ok {
 		m.d.applyFinished(wf)
+		if wf.err == nil && m.reload != nil {
+			return m.reload()
+		}
 	}
 	return nil
 }
@@ -471,7 +477,7 @@ func (m *Compositor) openManageCreate(prefill string) {
 		d.rows[0].field.value = []rune(prefill)
 		d.rows[0].field.cursor = len([]rune(prefill))
 	}
-	m.modals = append(m.modals, &dialogModal{d: d, th: m.th})
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, reload: m.reloadNav})
 }
 
 // openManage opens the module-management menu (m) as a modal over the
@@ -491,5 +497,5 @@ func (m *Compositor) openManage() {
 			}
 		}
 	}
-	m.modals = append(m.modals, &dialogModal{d: newManageDialog(ce, m.root, m.facts, item), th: m.th})
+	m.modals = append(m.modals, &dialogModal{d: newManageDialog(ce, m.root, m.facts, item), th: m.th, reload: m.reloadNav})
 }

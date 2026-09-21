@@ -221,6 +221,31 @@ func TestConfirm_removeModuleWithOrphanPreview(t *testing.T) {
 	require.Contains(t, c.View().Content, "deleted", "the report surfaces")
 }
 
+// T-0082-override: a manage write re-runs the startup profile read so
+// the nav tree shows the new directory without a restart.
+func TestManageWrite_reloadsNav(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
+		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo-app\"\n",
+	})
+
+	// The manage dialog creates a second module.
+	c = cpress(c, "m")
+	c = cpress(c, "enter") // create module (menu cursor 0)
+	c = typeText(c, "extra")
+	c = cpress(c, "enter") // confirm gate
+	c = applySettle(t, c, cpressCmd(c, "y"))
+	require.Contains(t, c.View().Content, "created", "the op ran")
+
+	// The nav re-read landed: extra sits beside demo without a restart.
+	found := false
+	for _, mod := range c.nav.modules {
+		if mod.id == "extra" {
+			found = true
+		}
+	}
+	require.True(t, found, "the nav re-read after the create")
+}
+
 func TestApply_destructiveConfirmBeforeElevation(t *testing.T) {
 	l := &fakeLauncher{previews: []service.StepPreview{
 		{Name: "dotfiles", Overwrites: []string{"~/.bashrc", "~/.zshrc"}},

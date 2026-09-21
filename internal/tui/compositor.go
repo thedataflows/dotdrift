@@ -168,6 +168,12 @@ func (m *Compositor) Run() error {
 }
 
 func (m *Compositor) Init() tea.Cmd {
+	return m.reloadNav()
+}
+
+// reloadNav re-runs the startup profile read (0082): manage writes
+// return it so the nav tree shows the new directory without a restart.
+func (m *Compositor) reloadNav() tea.Cmd {
 	if m.area == nil {
 		return nil
 	}

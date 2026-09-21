@@ -9,13 +9,13 @@ timestamp: 2026-09-21T18:30:00Z
 # ISSUE 0084: Restore dialog's plan resolution never lands
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: high
 - **Labels**: [tui, dogfooded]
 - **Assignee**: none
 - **Related**: [0083](0083-ponytail-audit-application.md) (found during the audit pass), [0073](0073-tui-compositor-redesign.md)
 - **Related code**: [`internal/tui/modals.go`](../../internal/tui/modals.go), [`internal/tui/dialog.go`](../../internal/tui/dialog.go), [`internal/tui/compositor.go`](../../internal/tui/compositor.go)
-- **Closing commits**: none
+- **Closing commits**: 66eae7a
 
 ## Summary
 
@@ -53,10 +53,10 @@ so the delivery is pinned, not just the method.
 
 ## Acceptance Criteria
 
-- [ ] A compositor-level test drives enter on the restore dialog's targets row through `Update` (not `applyPlan` directly) and reaches the resolved plan view
-- [ ] The elevated-target marker and generation pinning render from that resolved plan in the same test
-- [ ] Confirming the dialog runs the restore write through the existing `writeFinishedMsg` path (unchanged)
-- [ ] The CLI `dotdrift restore` output is untouched (no shared code changed)
+- [x] A compositor-level test drives enter on the restore dialog's targets row through `Update` (not `applyPlan` directly) and reaches the resolved plan view
+- [x] The elevated-target marker and generation pinning render from that resolved plan in the same test
+- [x] Confirming the dialog runs the restore write through the existing `writeFinishedMsg` path (unchanged)
+- [x] The CLI `dotdrift restore` output is untouched (no shared code changed)
 
 ## Out of Scope
 
@@ -69,3 +69,14 @@ so the delivery is pinned, not just the method.
 The 0083 audit left `applyPlan` in place deliberately: it is
 load-bearing-intent code with a missing wire, not dead flexibility —
 deleting it would have completed the break instead of fixing it.
+
+## Resolution
+
+The first fix shape, as preferred: `dialogModal.update` routes
+`restorePlanMsg` to the one dialog that produces it (a type assertion,
+not an interface method — the other three dialogs would carry no-ops).
+The delivery test walks the whole flow through `Update` — enter →
+resolve cmd → message → resolved plan → the elevated marker and a
+pinned generation off the real backup index (fixture generations) →
+confirm → run — so the method and its delivery are pinned together.
+Restore returns no nav reload (it touches no profile dir), asserted.

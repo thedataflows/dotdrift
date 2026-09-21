@@ -124,6 +124,25 @@ func TestWorkspace_statusGlyphs(t *testing.T) {
 	require.Contains(t, c.View().Content, "needs root")
 }
 
+// T-0082-override: an overlay tab says what merging means — only the six
+// families merge, meta/scope/when come from the base file (editing those
+// in an overlay would otherwise be a silent no-op).
+func TestWorkspace_overlayHintOnNonBaseTab(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
+		"modules/demo/module.toml":           "id = \"demo\"\napp = \"demo-app\"\n",
+		"users/cri/modules/demo/module.toml": "id = \"demo\"\napp = \"demo-app\"\n",
+	})
+
+	frame := c.ws.view(100, 30, c.th)
+	require.NotContains(t, frame, "merge", "the base tab carries no overlay hint")
+
+	c = wsPress(t, c, "enter") // focus the workspace
+	c = wsPress(t, c, "L")     // the user tab
+	frame = c.ws.view(100, 30, c.th)
+	require.Contains(t, frame, "packages, tools, dotfiles, hooks, mounts, smb")
+	require.Contains(t, frame, "the rest comes from base")
+}
+
 func TestWorkspace_layerTabsWithAndWithoutOverlays(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{
 		"modules/demo/module.toml":              "id = \"demo\"\napp = \"demo\"\n",

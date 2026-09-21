@@ -232,6 +232,13 @@ func (w *workspaceModel) view(width, h int, th theme) string {
 	}
 	var lines []string
 	lines = append(lines, w.titleView(th))
+	// An overlay tab states the merge rule (0082): only these families
+	// merge; meta, scope, and when come from the base file, so editing
+	// them here would be a silent no-op.
+	if len(w.tabs) > 0 && w.tabs[w.active].layer != "base" {
+		lines = append(lines, th.meta.MaxWidth(width).Render(
+			"overlay: only packages, tools, dotfiles, hooks, mounts, smb merge; the rest comes from base"))
+	}
 	switch {
 	case w.pending:
 		lines = append(lines, th.loading.Render("loading "+w.moduleID+"…"))

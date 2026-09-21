@@ -85,7 +85,10 @@ view stack wholesale). Its parts:
   its header alone. The title line carries the layer tabs
   (`base · user cri · host myhost`, active bracketed) in sync with the
   nav both ways: selecting a layer child moves the tab, `L` cycles the
-  tabs and moves the nav cursor. A module with a superuser overlay shows
+  tabs and moves the nav cursor. An overlay tab (anything not base)
+  states the merge rule under the title — only packages, tools,
+  dotfiles, hooks, mounts, smb merge; meta, scope, description, and
+  when come from the base file. A module with a superuser overlay shows
   `needs root`. A broken `module.toml` no longer kills the shell: the
   interactive load (`profile.LoadTolerant`; strict `Load` stays the
   plan/apply path) greys the module's nav row with the error, and the
@@ -178,7 +181,11 @@ view stack wholesale). Its parts:
   every other key (or `esc`) cancels — backs dirty-quit (`q` with
   drafts), row removal, module deletion, and the destructive-apply gate.
   `m` on a module opens the 0072 manage menu as a modal (create / move /
-  delete with the orphan preview), domain logic untouched. `P` runs
+  delete with the orphan preview / 0082 override — seeds a comment-only
+  overlay in a higher layer, entry hidden when nothing sits above),
+  domain logic untouched; any successful manage write re-runs the
+  startup profile read so the nav tree shows the change without a
+  restart. `P` runs
   apply: preview → destructive confirm when steps will overwrite
   existing files (the new `OverwriteTargets` classification on copy-mode
   dotfile steps) → the elevation modal when the plan carries privileged

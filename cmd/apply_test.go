@@ -239,11 +239,12 @@ func TestApply_resumeSkipsStepsThroughCursor(t *testing.T) {
 	require.True(t, os.IsNotExist(statErr), "state file must be removed after the resumed apply completes")
 }
 
-// When dotdrift's stdin is a terminal, the generated hook tasks are marked
-// interactive so a hook running an interactive command (e.g. sudo) reaches a
-// controlling terminal and can disable echo; when stdin is not a terminal the
-// key is omitted so mise runs normally.
-func TestApply_hookTaskInteractiveReflectsStdinTTY(t *testing.T) {
+// Hook tasks are always generated with mise's interactive = true (issue
+// 0088): interactivity is the task's intrinsic property — a hook may run an
+// interactive command (e.g. sudo) — not a function of the writing session's
+// TTY. mise degenerates the key to plain execution without a terminal, so
+// piped/CI runs are unchanged.
+func TestApply_hookTasksAlwaysInteractive(t *testing.T) {
 	run := func(t *testing.T, tty bool) string {
 		t.Helper()
 		dir := t.TempDir()
@@ -266,8 +267,8 @@ func TestApply_hookTaskInteractiveReflectsStdinTTY(t *testing.T) {
 	t.Run("tty marks tasks interactive", func(t *testing.T) {
 		require.Contains(t, run(t, true), "interactive = true")
 	})
-	t.Run("no tty omits the key", func(t *testing.T) {
-		require.NotContains(t, run(t, false), "interactive")
+	t.Run("no tty still marks tasks interactive", func(t *testing.T) {
+		require.Contains(t, run(t, false), "interactive = true")
 	})
 }
 

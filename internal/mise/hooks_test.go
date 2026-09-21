@@ -48,7 +48,7 @@ func TestGenerateHookTasks_perCommandTasks(t *testing.T) {
 		Pre:  []profile.HookCommand{{Command: "echo base-pre"}, {Command: "echo host-pre"}},
 		Post: []profile.HookCommand{{Command: "echo base-post"}},
 	}
-	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts, false)
+	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
 
 	require.Contains(t, out, `[tasks."hooks-pre-0"]`)
 	require.Contains(t, out, `[tasks."hooks-pre-1"]`)
@@ -71,12 +71,12 @@ func TestGenerateHookTasks_perCommandTasks(t *testing.T) {
 
 // No hook commands → no [tasks] section at all.
 func TestGenerateHookTasks_empty(t *testing.T) {
-	require.Empty(t, mise.GenerateHookTasks(resolve.HooksStep{}, "/profiles/main", testFacts, false))
+	require.Empty(t, mise.GenerateHookTasks(resolve.HooksStep{}, "/profiles/main", testFacts))
 }
 
 // Only the non-empty side is emitted.
 func TestGenerateHookTasks_preOnly(t *testing.T) {
-	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo hi"}}}, "/profiles/main", testFacts, false)
+	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo hi"}}}, "/profiles/main", testFacts)
 	tasks := decodeHookTasks(t, out)
 	require.Contains(t, tasks, "hooks-pre-0")
 	require.NotContains(t, tasks, "hooks-post-0")
@@ -86,37 +86,41 @@ func TestGenerateHookTasks_preOnly(t *testing.T) {
 func TestGenerateHookTasks_escapesCommands(t *testing.T) {
 	raw := `echo "a b" && sed -i 's\x\y\g' f`
 	hooks := resolve.HooksStep{Pre: []profile.HookCommand{{Command: raw}}}
-	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts, false)
+	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
 	require.Equal(t, []string{raw}, decodeHookTasks(t, out)["hooks-pre-0"].Run)
 }
 
-// interactive=true marks each hook task interactive so mise connects it to the
+// Every emitted hook task carries interactive=true so mise connects it to the
 // terminal — a hook running sudo can then disable echo instead of echoing the
-// password.
+// password. (Always, not conditionally — see 0088 and the sibling test.)
 func TestGenerateHookTasks_interactiveTrue(t *testing.T) {
 	hooks := resolve.HooksStep{
 		Pre:  []profile.HookCommand{{Command: "echo pre"}},
 		Post: []profile.HookCommand{{Command: "echo post"}},
 	}
-	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts, true)
+	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
 	require.Contains(t, out, "interactive = true")
 	tasks := decodeHookTasks(t, out)
 	require.True(t, tasks["hooks-pre-0"].Interactive, "pre task must be interactive")
 	require.True(t, tasks["hooks-post-0"].Interactive, "post task must be interactive")
 }
 
-// When not interactive the key is omitted entirely (mise defaults to false).
-func TestGenerateHookTasks_notInteractiveOmitsKey(t *testing.T) {
-	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo pre"}}}, "/profiles/main", testFacts, false)
-	require.NotContains(t, out, "interactive")
-	require.False(t, decodeHookTasks(t, out)["hooks-pre-0"].Interactive)
+// Hook tasks are always interactive (issue 0088) — even when the writing
+// session has no terminal: interactivity is the hook task's intrinsic
+// property, not a function of how the config-writing run was attached. When
+// mise runs such a task without a TTY it behaves exactly like a plain task
+// (verified against mise 2026.9.10), so piped/CI runs are unchanged.
+func TestGenerateHookTasks_interactiveEvenWhenSessionIsNot(t *testing.T) {
+	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo pre"}}}, "/profiles/main", testFacts)
+	require.Contains(t, out, "interactive = true")
+	require.True(t, decodeHookTasks(t, out)["hooks-pre-0"].Interactive)
 }
 
-// The interactive flag flows through the full apply config, not just the
-// standalone task generator.
+// The always-interactive rule flows through the full apply config, not just
+// the standalone task generator.
 func TestGenerateApplyConfig_interactiveFlowsThrough(t *testing.T) {
 	plan := &resolve.Plan{Hooks: resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo pre"}}}}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts, true)
+	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
 	require.Contains(t, out, "interactive = true")
 }
 
@@ -132,7 +136,7 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 			Post: []profile.HookCommand{{Command: "echo post"}},
 		},
 	}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts, false)
+	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
 
 	require.Contains(t, out, "[tools]")
 	require.Contains(t, out, "[dotfiles]")
@@ -147,7 +151,7 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 // A plan without hooks keeps the apply config task-free.
 func TestGenerateApplyConfig_noHooks(t *testing.T) {
 	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts, false)
+	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
 	require.Contains(t, out, "[tools]")
 	require.NotContains(t, out, "[tasks]")
 }

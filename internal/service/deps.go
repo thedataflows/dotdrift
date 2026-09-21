@@ -24,9 +24,11 @@ type ApplyDeps struct {
 	PackagesFor  func(backend string) packages.Backend
 	NewSmbRunner func() smb.Runner
 	// StdinIsTerminal reports whether the consumer's stdin is a terminal.
-	// It keys the interactive-hook opt-in at config-write (0064-D4): the
-	// CLI passes its own reality; a UI that can hand the terminal over
-	// sets ApplyOpts.HandoverAvailable instead.
+	// It keys the session-side interactive-hook routing (0064-D4): the CLI
+	// passes its own reality; a UI that can hand the terminal over sets
+	// ApplyOpts.HandoverAvailable instead. The generated hook tasks are
+	// always `interactive = true` (issue 0088) — this decides only whether
+	// the children run through the handover seam or piped.
 	StdinIsTerminal func() bool
 }
 

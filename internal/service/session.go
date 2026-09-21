@@ -167,10 +167,12 @@ func (a *ApplyArea) prepare(opts ApplyOpts) (*prepared, error) {
 		misePluginsDir = mise.PluginsDirFromEnv()
 	}
 
-	// D4: the interactive-hook opt-in keys on handover availability, not
+	// D4: the interactive-hook routing keys on handover availability, not
 	// raw stdin — CLI passes its own reality via deps, a UI that can hand
 	// the terminal over sets HandoverAvailable. Decided once, here: it
-	// drives both the config-write (runSpec) and the hook classification.
+	// drives the hook classification. Config-write is unconditional since
+	// issue 0088 — hook tasks are always `interactive = true`; this decides
+	// only whether the children run through the handover seam or piped.
 	interactive := a.deps.StdinIsTerminal()
 	if opts.HandoverAvailable != nil {
 		interactive = *opts.HandoverAvailable
@@ -429,7 +431,7 @@ func (r *sessionRunner) run(ctx context.Context, spec *runSpec) {
 	// the tools/dotfiles steps rewrite it per-section later, so a crash
 	// leaves an on-disk config mirroring the whole resolved plan for crash
 	// recovery and manual mise runs.
-	if err := writeBootstrapConfig(spec.paths.shared, mise.GenerateApplyConfig(spec.plan, spec.profileRoot, spec.facts, spec.interactive)); err != nil {
+	if err := writeBootstrapConfig(spec.paths.shared, mise.GenerateApplyConfig(spec.plan, spec.profileRoot, spec.facts)); err != nil {
 		r.finishPreStepFailure(res, &StepError{Step: "config", Err: fmt.Errorf("write mise config: %w", err)})
 		return
 	}

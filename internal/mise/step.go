@@ -120,10 +120,11 @@ type HooksStep struct {
 	ConfigPath string
 	Task       string // mise task-name prefix, e.g. "hooks-pre"; per-command tasks are <Task>-<i>
 	StepName   string // pipeline step name, e.g. "hooks-pre"
-	// Interactive mirrors the interactive = true opt-in written into the
-	// tasks at config-write (0064-D4): interactive commands must reach the
-	// real terminal, so with a Handover callback every task runs through it
-	// (issue 0071) instead of the piped runner.
+	// Interactive says this session can put a real terminal under the hook
+	// child: with a Handover callback every task runs through it (issue
+	// 0071) instead of the piped runner. The tasks are always generated
+	// `interactive = true` (issue 0088) — without a terminal mise degenerates
+	// the key to plain execution, so the piped path is unchanged.
 	Interactive bool
 	// Handover runs one child command on the consumer's terminal. Injected
 	// by the apply session; nil (no session) keeps the piped runner path.

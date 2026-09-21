@@ -61,12 +61,14 @@ func (l *LockedWriter) Write(p []byte) (int, error) {
 }
 
 // IsStdinTerminal reports whether stdin is connected to a terminal. dotdrift
-// uses it to decide whether a generated mise hook task may opt into
-// interactive mode (interactive = true): when stdin is a TTY, an interactive
-// command inside a hook (e.g. sudo) gets a controlling terminal so it can
-// disable echo, instead of reading the password with echo on. Stdlib-only
-// char-device check (golang.org/x/term is not vendored). A variable so tests
-// and callers can substitute it.
+// uses it to decide how hook children run in this session (0064-D4): with a
+// TTY — or a UI that can hand the terminal over — interactive hook commands
+// run on the consumer's terminal, where an interactive command (e.g. sudo)
+// can disable echo instead of reading the password with echo on. The
+// generated hook tasks themselves are always `interactive = true` (issue
+// 0088); this only keys the session-side routing. Stdlib-only char-device
+// check (golang.org/x/term is not vendored). A variable so tests and callers
+// can substitute it.
 var IsStdinTerminal = func() bool {
 	fi, err := os.Stdin.Stat()
 	if err != nil {

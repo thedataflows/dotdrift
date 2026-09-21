@@ -874,19 +874,21 @@ func GenerateConfig(plan *resolve.Plan) string {
 // task per command lets HooksStep run and tolerate them individually while
 // preserving order (an optional hook that fails does not skip later ones).
 // Each task runs from dir (the absolute profile root) with the DOTDRIFT_*
-// facts environment. When interactive is true each task is marked
-// `interactive = true` so mise connects it to the terminal's stdin/stdout/
-// stderr — a hook running an interactive command (e.g. sudo) can then reach a
-// controlling terminal and disable echo instead of echoing the password.
-// Returns "" when both lists are empty.
-func GenerateHookTasks(hooks resolve.HooksStep, profileRoot string, f *facts.Facts, interactive bool) string {
+// facts environment. Every task is marked `interactive = true` (issue 0088):
+// interactivity is the hook task's intrinsic property — a hook may run an
+// interactive command (e.g. sudo) — so mise connects it to the terminal's
+// stdin/stdout/stderr whenever one exists and sudo can disable echo instead
+// of echoing the password. Without a terminal mise runs the task exactly as
+// if the key were absent (verified against mise 2026.9.10), so piped/CI runs
+// are unchanged. Returns "" when both lists are empty.
+func GenerateHookTasks(hooks resolve.HooksStep, profileRoot string, f *facts.Facts) string {
 	var b strings.Builder
-	writeHookTask(&b, "hooks-pre", hooks.Pre, profileRoot, f, interactive)
-	writeHookTask(&b, "hooks-post", hooks.Post, profileRoot, f, interactive)
+	writeHookTask(&b, "hooks-pre", hooks.Pre, profileRoot, f)
+	writeHookTask(&b, "hooks-post", hooks.Post, profileRoot, f)
 	return b.String()
 }
 
-func writeHookTask(b *strings.Builder, prefix string, commands []profile.HookCommand, profileRoot string, f *facts.Facts, interactive bool) {
+func writeHookTask(b *strings.Builder, prefix string, commands []profile.HookCommand, profileRoot string, f *facts.Facts) {
 	for i, c := range commands {
 		if b.Len() > 0 {
 			b.WriteString("\n")
@@ -896,19 +898,16 @@ func writeHookTask(b *strings.Builder, prefix string, commands []profile.HookCom
 		fmt.Fprintf(b, "dir = \"%s\"\n", tomlEscape(profileRoot))
 		fmt.Fprintf(b, "env = { DOTDRIFT_PROFILE = \"%s\", DOTDRIFT_HOSTNAME = \"%s\", DOTDRIFT_USERNAME = \"%s\", DOTDRIFT_OS = \"%s\", DOTDRIFT_BACKEND = \"%s\" }\n",
 			tomlEscape(profileRoot), tomlEscape(f.Hostname), tomlEscape(f.Username), tomlEscape(f.OS), tomlEscape(f.Backend))
-		if interactive {
-			b.WriteString("interactive = true\n")
-		}
+		b.WriteString("interactive = true\n")
 	}
 }
 
 // GenerateApplyConfig emits the full apply-time mise.toml: tools, dotfiles,
 // and hook tasks. The hook tasks need facts and the absolute profile root, so
-// only apply uses this; onboard keeps using GenerateConfig. interactive flows
-// through to GenerateHookTasks.
-func GenerateApplyConfig(plan *resolve.Plan, profileRoot string, f *facts.Facts, interactive bool) string {
+// only apply uses this; onboard keeps using GenerateConfig.
+func GenerateApplyConfig(plan *resolve.Plan, profileRoot string, f *facts.Facts) string {
 	out := GenerateConfig(plan)
-	if tasks := GenerateHookTasks(plan.Hooks, profileRoot, f, interactive); tasks != "" {
+	if tasks := GenerateHookTasks(plan.Hooks, profileRoot, f); tasks != "" {
 		out += tasks + "\n"
 	}
 	return out

@@ -509,7 +509,11 @@ func (m *Compositor) spinTick() tea.Cmd {
 }
 
 // ShortHelp implements help.KeyMap: the hints render from the binding
-// table (edit mode gets the edit keys), so the footer cannot drift.
+// table, so the footer cannot drift. The focused pane shows its primary
+// verbs (resolved through the table, never a second copy of the help
+// text) plus the shared escapes; the full table stays under ?. Scrolling
+// yields the footer to the verbs — arrows are universally known, enter
+// and a were not (0078).
 func (m *Compositor) ShortHelp() []key.Binding {
 	if m.ws.editing != nil {
 		return []key.Binding{
@@ -519,21 +523,26 @@ func (m *Compositor) ShortHelp() []key.Binding {
 		}
 	}
 	pane := "nav"
+	primary := []string{"enter"}
 	if m.focus == focusWork {
 		pane = "work"
+		primary = []string{"enter", "a", "d", "ctrl+s"}
+	}
+	byKey := map[string]keyTableEntry{}
+	for _, b := range keyTable() {
+		if b.pane == pane || b.pane == "both" {
+			if _, ok := byKey[b.key]; !ok {
+				byKey[b.key] = b
+			}
+		}
 	}
 	var out []key.Binding
 	add := func(k, h string) {
 		out = append(out, key.NewBinding(key.WithKeys(k), key.WithHelp(k, h)))
 	}
-	seen := map[string]bool{}
-	for _, b := range keyTable() {
-		if b.pane == pane && !seen[b.help] {
-			seen[b.help] = true
+	for _, k := range primary {
+		if b, ok := byKey[k]; ok {
 			add(b.key, b.help)
-			if len(out) >= 3 {
-				break
-			}
 		}
 	}
 	for _, k := range []struct{ key, help string }{{"/", "palette"}, {"?", "help"}, {"q", "quit"}} {

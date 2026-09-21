@@ -6,8 +6,10 @@ package tui
 // has one meaning; no undo (drafts + confirms are the safety net).
 
 import (
+	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
@@ -286,4 +288,32 @@ func TestWritesMenu_cursorRowBar(t *testing.T) {
 	frame := ansiRe.ReplaceAllString(w.view(40, 10), "")
 	require.Contains(t, frame, "│ onboard", "the writes menu's cursor row renders the bar")
 	require.Contains(t, frame, "  restore", "plain rows keep the two-space lead")
+}
+
+// 0078: the footer hints name the pane's primary verbs. enter and a
+// were never rendered (the short help took the first three table rows,
+// all scrolling), so the two most important keys were undiscoverable.
+func TestKeys_footerHintsShowPrimaryActions(t *testing.T) {
+	_, _, c := editShell(t)
+	joined := func(bindings []key.Binding) string {
+		var parts []string
+		for _, b := range bindings {
+			if h := b.Help(); h.Key != "" {
+				parts = append(parts, h.Key+" "+h.Desc)
+			}
+		}
+		return strings.Join(parts, " · ")
+	}
+
+	c.focus = focusWork
+	work := joined(c.ShortHelp())
+	require.Contains(t, work, "enter edit field", "enter is hinted in the workspace")
+	require.Contains(t, work, "a add entry / apply detail", "a is hinted in the workspace")
+	require.Contains(t, work, "ctrl+s save draft", "save is hinted in the workspace")
+	require.NotContains(t, work, "page up", "scroll hints yield the footer to the verbs")
+
+	c.focus = focusNav
+	nav := joined(c.ShortHelp())
+	require.Contains(t, nav, "enter open in workspace", "enter is hinted in the nav")
+	require.NotContains(t, nav, "add entry", "a does nothing from the nav pane, so it is not hinted")
 }

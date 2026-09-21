@@ -254,7 +254,7 @@ func TestKeys_noOrphanedBindings(t *testing.T) {
 	}
 	require.ElementsMatch(t, keys, []string{
 		"j:nav", "k:nav", "down:nav", "up:nav", "h:nav", "l:nav", "left:nav", "right:nav",
-		"enter:nav", "/:both", "n:nav", "m:nav", "P:both", "p:both", "?:both", "q:both", "tab:both",
+		"enter:nav", "/:both", "n:nav", "m:nav", "P:both", "p:both", "?:both", "q:both", "tab:both", "o:both",
 		"j:work", "k:work", "down:work", "up:work", "enter:work", "e:work", "a:both",
 		"d:work", "D:work", "ctrl+s:work", "ctrl+z:work", "ctrl+shift+z:work", "L:work", "w:work",
 		"pgup:nav", "pgdown:nav", "home:nav", "end:nav",

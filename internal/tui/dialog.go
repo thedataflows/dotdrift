@@ -247,6 +247,19 @@ func newOnboardDialog(w Writes, profilePath string) *onboardDialog {
 	return d
 }
 
+// prefill seeds the dialog from the selection (0079 T-tui-onboard-here):
+// the module's id and its layer. Every field stays editable — prefill,
+// not preset. An unknown layer keeps the base default.
+func (d *onboardDialog) prefill(app, layer string) {
+	d.rows[0].field.set(app)
+	for i, opt := range d.rows[2].choice.opts {
+		if opt == layer {
+			d.rows[2].choice.cur = i
+			break
+		}
+	}
+}
+
 func (d *onboardDialog) HandleKey(key string) tea.Cmd {
 	if d.confirm {
 		switch key {

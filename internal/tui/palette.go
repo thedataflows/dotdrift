@@ -142,6 +142,13 @@ func (m *Compositor) paletteActions() []paletteEntry {
 		act("manage", "manage modules", "create / move / delete")
 		act("new-module", "new module", "scaffold a module")
 	}
+	if sel := m.nav.selected(); sel.moduleID != "" {
+		out = append(out, paletteEntry{
+			id: "act:onboard", section: sectionActions,
+			label: "onboard into " + sel.moduleID, context: "action",
+			action: "onboard", moduleID: sel.moduleID, layer: sel.layer,
+		})
+	}
 	if m.ws.draft != nil {
 		act("save", "save draft", "write "+m.ws.moduleID+" changes")
 		act("discard", "discard draft", "drop "+m.ws.moduleID+" changes")
@@ -381,6 +388,8 @@ func (m *Compositor) runPaletteEntry(e paletteEntry) tea.Cmd {
 			m.openManage()
 		case "new-module":
 			m.openManageCreate("")
+		case "onboard":
+			m.openOnboardInto(e.moduleID, e.layer)
 		}
 	}
 	return nil

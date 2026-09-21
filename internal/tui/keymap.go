@@ -88,6 +88,7 @@ func keyTable() []keyTableEntry {
 		{"ctrl+shift+z", "work", "redo", func(m *Compositor) tea.Cmd { m.redoEdit(); return nil }},
 		{"L", "work", "cycle layer", func(m *Compositor) tea.Cmd { return m.cycleLayer() }},
 		{"w", "work", "writes actions", func(m *Compositor) tea.Cmd { m.openWritesMenu(); return nil }},
+		{"o", "both", "onboard into module", func(m *Compositor) tea.Cmd { m.openOnboardHere(); return nil }},
 	}
 }
 
@@ -250,6 +251,37 @@ func (m *Compositor) openPlan() tea.Cmd {
 }
 
 // --- writes menu ---
+
+// openOnboardHere opens the onboard dialog prefilled from the selection
+// (o, 0079 T-tui-onboard-here): the nav row's module and layer, or the
+// workspace's active module and tab.
+func (m *Compositor) openOnboardHere() {
+	sel := m.nav.selected()
+	if m.focus == focusWork {
+		sel.moduleID = m.ws.moduleID
+		if m.ws.active < len(m.ws.tabs) {
+			sel.layer = m.ws.tabs[m.ws.active].layer
+		}
+	}
+	m.openOnboardInto(sel.moduleID, sel.layer)
+}
+
+// openOnboardInto opens the onboard dialog for a named module and layer
+// (the `o` seam and the palette's action share it). Refuses loudly
+// without a module or a writes path.
+func (m *Compositor) openOnboardInto(id, layer string) {
+	if id == "" {
+		m.message, m.msgErr = "select a module first", true
+		return
+	}
+	if m.writesFor == nil {
+		m.message, m.msgErr = "no writes path in this shell", true
+		return
+	}
+	d := newOnboardDialog(m.writesFor(m.facts), m.root)
+	d.prefill(id, layer)
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th})
+}
 
 // openWritesMenu opens the writes actions (w): onboard / restore /
 // generate, each its M14 dialog absorbed as a modal.

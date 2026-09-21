@@ -107,8 +107,10 @@ runs, and a summary (module dir + written files) is printed. `--tui`/
 `--no-tui` are gone — an unknown-flag error is the whole answer. The
 interactive path is `dotdrift tui` (editor suite, issue 0065), which
 prefills from the same builders; the same logical inputs produce a
-byte-identical module tree either way (contract invariant 15, locked by
-`TestGenerate_cliTuiEquivalence_*`).
+byte-identical module tree either way (contract invariant 15; both
+front ends call the same builders and the same `WriteModule`, and the
+tree's byte-identity across runs is pinned by
+`TestWriter_rerunByteIdentical`).
 
 ## Examples
 

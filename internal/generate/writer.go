@@ -173,13 +173,6 @@ func WriteModule(root string, sel Selection, input Input) error {
 	return nil
 }
 
-// ModuleDir resolves the target directory for the selection without
-// writing. Exported for the generate wizard (internal/tui), which
-// locates the target module to mark already-managed volumes.
-func ModuleDir(root string, sel Selection) (string, error) {
-	return moduleDir(root, sel)
-}
-
 // moduleDir resolves the target directory for the selection, validating
 // the layer and the facts it needs.
 func moduleDir(root string, sel Selection) (string, error) {

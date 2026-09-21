@@ -19,7 +19,7 @@ func TestExistingMountSources(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, sources, "absent module yields nil, nil")
 
-	dir, err := ModuleDir(root, sel)
+	dir, err := moduleDir(root, sel)
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(dir, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte(`
@@ -49,7 +49,7 @@ type = "nfs"
 func TestPrintSummary(t *testing.T) {
 	root := t.TempDir()
 	sel := Selection{Layer: LayerBase, ModuleID: "media"}
-	dir, err := ModuleDir(root, sel)
+	dir, err := moduleDir(root, sel)
 	require.NoError(t, err)
 
 	var out bytes.Buffer

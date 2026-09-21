@@ -38,7 +38,7 @@ func InvokingUser() (uid int, gid int, username string, err error) {
 // already manages (for MANAGED volume marking), sorted by mount name. An
 // absent module yields nil, nil; a malformed module.toml is a loud error.
 func ExistingMountSources(root string, sel Selection) ([]string, error) {
-	dir, err := ModuleDir(root, sel)
+	dir, err := moduleDir(root, sel)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func ExistingMountSources(root string, sel Selection) ([]string, error) {
 // and its files, name-sorted, written to the caller's writer (stdout for
 // the CLI, stderr for an interactive flow).
 func PrintSummary(out io.Writer, root string, sel Selection) error {
-	dir, err := ModuleDir(root, sel)
+	dir, err := moduleDir(root, sel)
 	if err != nil {
 		return err
 	}

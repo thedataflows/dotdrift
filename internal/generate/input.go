@@ -8,8 +8,8 @@ import (
 )
 
 // Shared spec assembly: every producer of a generate module — the
-// flag-driven CLI (cmd) and each interactive machine — builds Input
-// through these helpers, which is what keeps contract invariant 15's
+// flag-driven CLI (cmd) and the tui editors — builds Input through
+// these helpers, which is what keeps contract invariant 15's
 // single-path assembly true.
 
 // MountsInput assembles a mounts Input, defaulting each mount's empty
@@ -17,7 +17,9 @@ import (
 func MountsInput(mounts map[string]profile.MountSpec, uid, gid int) Input {
 	out := make(map[string]profile.MountSpec, len(mounts))
 	for name, spec := range mounts {
-		spec.State = DefaultState(spec.State)
+		if spec.State == "" {
+			spec.State = "enabled"
+		}
 		out[name] = spec
 	}
 	return Input{Mounts: out, UID: uid, GID: gid}

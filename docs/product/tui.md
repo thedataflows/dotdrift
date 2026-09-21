@@ -221,6 +221,13 @@ view stack wholesale). Its parts:
   registers a style in ADR-0003's palette registry — no inline styles in
   shell code (`TestPaletteRegistry_noInlineStyles`,
   `TestNoDeadStyles`).
+- **Values read as content, labels recede** (0080). The `value` hue is a
+  bright neutral (255 on dark, 234 on light — the brightest chrome on
+  screen, never an accent hue): it colors `rowText` — dialog/form
+  values, picker rows, workspace and nav rows — while fixed labels use
+  `fieldLabel` (muted) and placeholder hints stay dim. Filled vs unfilled
+  reads by color, backed by the hint's parentheses; chrome and run
+  output stay default.
 - The cursor row is the bubbles list-delegate treatment: a left bar in
   the highlight hue plus bold accent text (the `cursorRow` registry
   entry), plain rows keeping a two-space lead so text columns align.

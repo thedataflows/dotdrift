@@ -67,3 +67,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0077](0077-tui-add-forms.md) | TUI add forms — `a` opens a labeled form, writes becomes addable | done | high |
 | [0078](0078-tui-enter-fallback-and-footer-hints.md) | TUI discoverability round — enter falls back to the add form, the footer hints name the primary verbs | done | high |
 | [0079](0079-tui-undo-marks-onboard-cycle.md) | TUI intuition round — undo/redo, gesture marks, prefilled onboard, in-place choice cycling | done | high |
+| [0080](0080-tui-value-label-colors.md) | TUI color semantics — values read as content, fixed labels recede | done | medium |

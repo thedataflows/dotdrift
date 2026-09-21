@@ -187,6 +187,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 	case "links":
 		target := newDlgField("target", "")
 		source := newDlgField("source", "")
+		target.browse = kindEither // 0098: ^o browses too — a link target may be a dir symlink
 		source.browse = kindEither // 0094: ^o browses for the linked file/dir
 		return "add link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 			func([]dlgRow) string {
@@ -318,6 +319,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 func editLinkFormSpec(moduleID, curTarget, curSource string) (string, []dlgRow, func([]dlgRow) string) {
 	target := newDlgField("target", curTarget)
 	source := newDlgField("source", curSource)
+	target.browse = kindEither // 0098: ^o browses too (0096 seeds it on the current target)
 	source.browse = kindEither // 0094: ^o browses for the linked file/dir
 	return "edit link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 		func([]dlgRow) string {

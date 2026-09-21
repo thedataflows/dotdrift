@@ -246,6 +246,28 @@ func TestTyped_linkFormsSourceBrowse(t *testing.T) {
 	require.Equal(t, kindEither, topModal[*filePicker](t, c).mode, "the edit modal's source browses too")
 }
 
+func TestTyped_linkFormsTargetBrowse(t *testing.T) {
+	picked := filepath.Join(t.TempDir(), "linked.conf")
+	require.NoError(t, os.WriteFile(picked, []byte("x"), 0o644))
+	c := typedShell(t)
+	c = cursorTo(t, c, "←")
+	c = cpress(c, "a") // add link form; the target row is first
+	c = cpress(c, "ctrl+o")
+	require.Equal(t, kindEither, topModal[*filePicker](t, c).mode, "the add form's target browses (a link target may be a dir symlink)")
+	c = cpress(c, "ctrl+l")
+	c = cpress(c, "ctrl+u")
+	c = typeText(c, picked)
+	c = cpress(c, "enter")
+	f := topModal[*addForm](t, c)
+	require.Equal(t, picked, f.rows[0].field.String(), "the pick fills the target field; the form stays open")
+	c = cpress(c, "esc")
+
+	c = cursorTo(t, c, "←")
+	c = cpress(c, "enter") // the 0095 edit-link modal; target row first
+	c = cpress(c, "ctrl+o")
+	require.Equal(t, kindEither, topModal[*filePicker](t, c).mode, "the edit modal's target browses too")
+}
+
 func TestTyped_writesAddTargetBrowse(t *testing.T) {
 	c := typedShell(t)
 	c = cursorTo(t, c, "edit: line")

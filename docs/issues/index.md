@@ -85,3 +85,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0095](0095-tui-links-edit-opens-link-modal.md) | Links-row edit opens the link modal (target/source pair) instead of a bare text input | done | medium |
 | [0096](0096-tui-picker-opens-on-current-value.md) | File picker opens on the field's current value, its own entry selected | done | medium |
 | [0097](0097-tui-picker-up-dir-row.md) | File picker lists a `../` up-dir row whenever the directory has a parent | done | medium |
+| [0098](0098-tui-link-forms-target-browse.md) | Link forms' `target` field browses with ctrl+o, mirroring `source` | done | low |

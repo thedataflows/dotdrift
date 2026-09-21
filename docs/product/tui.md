@@ -170,7 +170,8 @@ view stack wholesale). Its parts:
   like left (it never picks, not even in dirs mode), home and
   wheel-up reach it, and the default cursor skips it, landing on the
   first real entry. Form fields that take paths — onboard
-  `paths`, the link forms' `source`, the writes add form's `target`,
+  `paths`, the link forms' `target` and `source` (a target may be a
+  directory symlink, so it browses in either mode too), the writes add form's `target`,
   the mounts/smb field forms' path values — browse with `ctrl+o`
   instead, because enter already means *commit the form*; the onboard
   pick appends to its space-separated list. Every pick and every editor

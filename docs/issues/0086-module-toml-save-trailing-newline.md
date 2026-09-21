@@ -9,13 +9,13 @@ timestamp: 2026-09-21T00:00:00Z
 # ISSUE 0086: Saving a module.toml does not guarantee a trailing newline
 
 - **Type**: bug
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [tui, service, dogfooded]
 - **Assignee**: none
 - **Related**: [0065-D7's save pipeline](../milestones/), [0087](0087-tui-remove-row-dead-on-structural-rows.md)
 - **Related code**: [`internal/service/config.go`](../../internal/service/config.go) (`WriteModuleLayer`), [`internal/tomlsplice/`](../../internal/tomlsplice/)
-- **Closing commits**: none
+- **Closing commits**: 66c0a50
 
 ## Summary
 
@@ -51,15 +51,15 @@ normalized bytes so the draft rebases onto what was actually written.
 
 ## Acceptance Criteria
 
-- [ ] A save whose baseline file lacks a trailing newline writes the file
+- [x] A save whose baseline file lacks a trailing newline writes the file
   with one (splice path)
-- [ ] A raw-repair save whose candidate lacks a trailing newline writes
+- [x] A raw-repair save whose candidate lacks a trailing newline writes
   the file with one (raw path)
-- [ ] A save from an empty baseline (no module.toml) creates the file
+- [x] A save from an empty baseline (no module.toml) creates the file
   with a trailing newline
-- [ ] `SaveResult.Raw` equals the bytes on disk (hash and rebase
+- [x] `SaveResult.Raw` equals the bytes on disk (hash and rebase
   consistent)
-- [ ] Files already ending in a newline save byte-identical otherwise
+- [x] Files already ending in a newline save byte-identical otherwise
   (no double newline, no other churn)
 
 ## Out of Scope

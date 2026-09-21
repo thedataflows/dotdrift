@@ -9,13 +9,13 @@ timestamp: 2026-09-21T00:00:00Z
 # ISSUE 0087: TUI `d` (remove row) is dead on smb scalars/fields, secrets/mounts fields, when leaves, and writes block rows
 
 - **Type**: bug
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [tui, dogfooded]
 - **Assignee**: none
 - **Related**: [0074](0074-structural-section-editing.md) (the container/field grammar this amends), [0075](0075-tui-ergonomics-paging-selection-disclosure.md)
 - **Related code**: [`internal/tui/editing.go`](../../internal/tui/editing.go) (`confirmRemoveRow`, `removeRow`), [`internal/tui/workspace.go`](../../internal/tui/workspace.go) (`wsRows`)
-- **Closing commits**: none
+- **Closing commits**: 66c0a50
 
 ## Summary
 
@@ -74,19 +74,19 @@ allows it.
 
 ## Acceptance Criteria
 
-- [ ] `d` on an smb scalar row (group/users/avahi) prompts; yes clears
+- [x] `d` on an smb scalar row (group/users/avahi) prompts; yes clears
   the scalar and the row disappears
-- [ ] `d` on an smb share field row prompts; yes unsets the field
-- [ ] `d` on secrets and mounts field rows prompts; yes unsets the field
-- [ ] `d` on a when leaf prompts; yes clears the leaf
-- [ ] `d` on a writes block row prompts; yes removes the dotfile entry,
+- [x] `d` on an smb share field row prompts; yes unsets the field
+- [x] `d` on secrets and mounts field rows prompts; yes unsets the field
+- [x] `d` on a when leaf prompts; yes clears the leaf
+- [x] `d` on a writes block row prompts; yes removes the dotfile entry,
   and enter on it still does not open a text edit
-- [ ] Container removals (shares, secrets, mounts, when groups, systemd
+- [x] Container removals (shares, secrets, mounts, when groups, systemd
   units) are unchanged
-- [ ] meta rows, section headers, and hint rows still have no remove
+- [x] meta rows, section headers, and hint rows still have no remove
   confirm
-- [ ] Every new removal is one undo step (ctrl+z restores)
-- [ ] [`docs/product/tui.md`](../product/tui.md) states the uniform rule
+- [x] Every new removal is one undo step (ctrl+z restores)
+- [x] [`docs/product/tui.md`](../product/tui.md) states the uniform rule
 
 ## Out of Scope
 

@@ -4,8 +4,9 @@ package tui
 // it, the footer hints and the contextual ? help render from it — one
 // source of truth, so docs cannot drift from behavior. esc stays
 // compositor-owned (pop the top layer; on the base it also clears an
-// applied nav filter, 0081); shift is the dangerous version (p/P, d/D);
-// ctrl+z / ctrl+shift+z step a draft back and forward, confirms remain
+// applied nav filter, 0081); shift is the dangerous version (p/P, d/D)
+// and o/O pairs onboard with its bigger sibling override; ctrl+z /
+// ctrl+shift+z step a draft back and forward, confirms remain
 // the safety net for what undo cannot reach (saves, quits).
 
 import (
@@ -52,6 +53,7 @@ func keyTable() []keyTableEntry {
 		{"/", "nav", "filter modules", func(m *Compositor) tea.Cmd { m.nav.filtering = true; return nil }},
 		{"n", "nav", "new module", func(m *Compositor) tea.Cmd { m.openManageCreate(""); return nil }},
 		{"m", "nav", "manage modules", func(m *Compositor) tea.Cmd { m.openManage(); return nil }},
+		{"O", "nav", "override module", func(m *Compositor) tea.Cmd { return m.overrideHere() }},
 		// shared
 		{"/", "work", "palette", func(m *Compositor) tea.Cmd { m.openPalette(); return nil }},
 		{"?", "both", "help", func(m *Compositor) tea.Cmd { m.openHelp(); return nil }},

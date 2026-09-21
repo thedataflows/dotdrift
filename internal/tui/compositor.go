@@ -104,6 +104,10 @@ type Compositor struct {
 	lastClickRow int
 	lastClickAt  time.Time
 
+	// pendTab is the layer dir a just-finished override (O, 0082) wants
+	// the workspace on; the nav reload that reveals it consumes it.
+	pendTab string
+
 	// Layer reads (T-tui-workspace): layerFor builds the 0065 config seam
 	// once facts land; reader is the cached instance.
 	layerFor func(*facts.Facts) LayerReader
@@ -209,6 +213,23 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.modulesRead = msg.read
 		m.nav.restore(sel)
+		if dir := m.pendTab; dir != "" && sel.moduleID != "" {
+			// An override just landed (O, 0082): refresh the module's
+			// tabs from the fresh read, sit on the new layer, and pull
+			// the nav cursor onto its child row.
+			m.pendTab = ""
+			for i := range m.nav.modules {
+				if m.nav.modules[i].id == sel.moduleID {
+					m.ws.tabs = m.nav.modules[i].layers
+				}
+			}
+			for i, t := range m.ws.tabs {
+				if t.dir == dir {
+					m.ws.active = i
+				}
+			}
+			m.syncNavToActiveLayer()
+		}
 		return m, m.syncWorkspace()
 	case layerLoadedMsg:
 		if msg.dir != m.ws.activeDir() {

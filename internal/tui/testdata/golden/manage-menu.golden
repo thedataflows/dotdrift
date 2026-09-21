@@ -6,6 +6,7 @@
 │                          ││  app demo-app ✎                                                  │
 │                          ││  description  ✎                                                  │
 │                          ││  scope user ◂▸                                                   │
+│                          ││packages ＋                                                       │
 │                          ││╭────────────────────────────────────────╮                        │
 │                          │││                                        │                        │
 │                          │││  MODULES                               │                        │
@@ -14,7 +15,6 @@
 │                          │││  │ create module                       │                        │
 │                          │││    move module                         │                        │
 │                          │││    delete module                       │                        │
-│                          │││    override module                     │                        │
 │                          │││                                        │                        │
 │                          │││  up/down pick · enter open · esc back  │                        │
 │                          │││                                        │                        │

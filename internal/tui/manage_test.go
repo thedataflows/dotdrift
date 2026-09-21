@@ -31,57 +31,60 @@ func manageFixture(t *testing.T) (*manageDialog, string) {
 func TestManage_menuEntriesForModule(t *testing.T) {
 	d, _ := manageFixture(t)
 	require.Equal(t,
-		[]string{"create module", "move module", "delete module", "override module"}, d.entries(),
-		"the fixture module sits in base: host and user overlays can override it")
+		[]string{"create module", "move module", "delete module"}, d.entries(),
+		"override lives on its own key (O) now, not in the menu")
 }
 
-// T-0082-override: a user-layer module has nothing above it, so the
-// override entry hides.
-func TestManage_noOverrideEntryForUserModule(t *testing.T) {
-	d, root := manageFixture(t)
-	d.sel.dir = filepath.Join(root, "users", "cri", "modules", "demo")
-	require.Equal(t, []string{"create module", "move module", "delete module"}, d.entries())
-	require.Empty(t, d.overrideTargets())
-}
-
-func TestManage_overrideSeedsUserOverlay(t *testing.T) {
-	d, root := manageFixture(t)
-	d.HandleKey("down")
-	d.HandleKey("down")
-	d.HandleKey("down") // override module
-	d.HandleKey("enter")
-	require.Len(t, d.rows, 1, "the override target choice")
-	require.Equal(t, []string{"hosts/myhost", "users/cri"}, d.rows[0].choice.opts)
-	d.HandleKey("right") // users/cri
-	require.Contains(t, d.confirmText(), "starts empty",
-		"the gate says what an empty overlay means")
-	d.HandleKey("enter") // confirm gate
-	cmd := d.HandleKey("y")
-	require.NotNil(t, cmd)
-	d.applyFinished(cmd().(writeFinishedMsg))
-	require.Empty(t, d.err)
-	raw, err := os.ReadFile(filepath.Join(root, "users", "cri", "modules", "demo", "module.toml"))
+// T-0082-override, simplified: O replaces the manage-dialog flow — one
+// key creates the user-layer overlay, the nav reload lands the workspace
+// on the new file. The seed is comments only, so there is nothing to
+// confirm; delete module undoes it.
+func TestOverride_oneKeyCreatesAndLands(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
+		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
+	})
+	c, cmd := cstep(c, keyPress("O"))
+	require.Contains(t, c.message, "created overlay of demo in users/cri",
+		"the footer names what happened")
+	require.FileExists(t, filepath.Join(c.root, "users", "cri", "modules", "demo", "module.toml"))
+	raw, err := os.ReadFile(filepath.Join(c.root, "users", "cri", "modules", "demo", "module.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(raw), "override", "the overlay is the comment seed, not a base copy")
-	require.Contains(t, d.report, "overlay")
+	require.Contains(t, string(raw), "# overlay of demo", "the seed is comments, not a base copy")
+
+	c = wsSettle(t, c, cmd)
+	require.Equal(t, "user", c.ws.tabs[c.ws.active].layer, "the workspace lands on the new overlay")
+	require.Equal(t, "user", c.nav.selected().layer, "the nav cursor follows onto the child row")
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""),
+		"hooks, mounts, smb merge", "the overlay tab states the merge rule")
 }
 
-func TestManage_overrideCollisionRefuses(t *testing.T) {
-	d, root := manageFixture(t)
-	dir := filepath.Join(root, "users", "cri", "modules", "demo")
-	require.NoError(t, os.MkdirAll(dir, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "module.toml"), []byte("id = \"demo\"\n"), 0o644))
-
-	d.HandleKey("down")
-	d.HandleKey("down")
-	d.HandleKey("down") // override module
-	d.HandleKey("enter")
-	d.HandleKey("right") // users/cri — taken
-	d.HandleKey("enter") // confirm gate
-	cmd := d.HandleKey("y")
-	require.NotNil(t, cmd)
-	d.applyFinished(cmd().(writeFinishedMsg))
-	require.Error(t, d.err, "the typed collision refusal surfaces")
+func TestOverride_refusals(t *testing.T) {
+	t.Run("no selection", func(t *testing.T) {
+		_, c := wsShell(t, nil)
+		c = cpress(c, "O")
+		require.Contains(t, c.message, "select a module first")
+		require.Empty(t, c.nav.modules, "the shell is empty, nothing was created")
+	})
+	t.Run("already user", func(t *testing.T) {
+		_, c := wsShell(t, map[string]string{
+			"modules/demo/module.toml":           "id = \"demo\"\napp = \"demo\"\n",
+			"users/cri/modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
+		})
+		c = wsPress(t, c, "l") // expand demo
+		c = wsPress(t, c, "j")
+		c = wsPress(t, c, "j") // the user child row
+		require.Equal(t, "user", c.nav.selected().layer)
+		c = cpress(c, "O")
+		require.Contains(t, c.message, "already lives in your user layer")
+	})
+	t.Run("target taken", func(t *testing.T) {
+		_, c := wsShell(t, map[string]string{
+			"modules/demo/module.toml":           "id = \"demo\"\napp = \"demo\"\n",
+			"users/cri/modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
+		})
+		c = cpress(c, "O")
+		require.Contains(t, c.message, "already has module", "the op's refusal surfaces")
+	})
 }
 
 func TestManage_createScaffoldsModule(t *testing.T) {

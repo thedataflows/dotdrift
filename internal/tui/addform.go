@@ -32,10 +32,13 @@ type addForm struct {
 	relabel func(rows []dlgRow)        // optional: a choice row retunes a sibling's label
 	commit  func(input string) string  // "" on success; the error keeps the form open
 	verb    string                     // the footer's enter verb: "adds" or "commits"
-	cur     int
-	err     string
-	done    bool
-	boxY    int // the last render's box origin, for row hit-testing
+	// onBrowse opens the file picker for a path-kind field (0094):
+	// ctrl+o is the gesture — enter already means "commit the form".
+	onBrowse func(mode editKind, f *dlgField)
+	cur      int
+	err      string
+	done     bool
+	boxY     int // the last render's box origin, for row hit-testing
 }
 
 func newAddForm(th theme, title string, rows []dlgRow, build func([]dlgRow) string, commit func(string) string) *addForm {
@@ -64,6 +67,11 @@ func (f *addForm) update(msg tea.Msg) tea.Cmd {
 			f.retune()
 		case "backspace":
 			f.rows[f.cur].backspace()
+		case "ctrl+o":
+			// 0094: a path-kind field browses; the pick fills the field.
+			if r := f.rows[f.cur]; r.field != nil && r.field.browse != kindText && f.onBrowse != nil {
+				f.onBrowse(r.field.browse, r.field)
+			}
 		case "enter":
 			if err := f.commit(f.build(f.rows)); err != "" {
 				f.err = err
@@ -123,7 +131,11 @@ func (f *addForm) view(w, h int) string {
 	if f.err != "" {
 		lines = append(lines, "", f.th.errorMark.Render("✗ "+f.err))
 	}
-	lines = append(lines, "", f.th.meta.Render("up/down row · type edits · < > changes · enter "+f.verb+" · esc cancels"))
+	hint := "up/down row · type edits · < > changes · enter " + f.verb + " · esc cancels"
+	if r := f.rows[f.cur]; r.field != nil && r.field.browse != kindText {
+		hint = "up/down row · type edits · ^o browse · enter " + f.verb + " · esc cancels"
+	}
+	lines = append(lines, "", f.th.meta.Render(hint))
 	box := f.th.modalBorder.Padding(1, 2).Render(strings.Join(lines, "\n"))
 	f.boxY = max((h-lipgloss.Height(box))/2, 0)
 	return box
@@ -175,6 +187,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 	case "links":
 		target := newDlgField("target", "")
 		source := newDlgField("source", "")
+		source.browse = kindEither // 0094: ^o browses for the linked file/dir
 		return "add link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 			func([]dlgRow) string {
 				return strings.TrimSpace(target.String()) + " " + strings.TrimSpace(source.String())
@@ -218,14 +231,22 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 					return strings.TrimSpace(name.String()) + "=" + strings.TrimSpace(env.String())
 				}, nil
 		}
-		return fieldValuePair("add field · "+addPath, "env", "description", "allow_empty")
+		return fieldValuePair("add field · "+addPath, nil, "env", "description", "allow_empty")
 	case "mounts":
 		if addPath == "" {
 			name := newDlgField("name", "")
 			return "add mount · " + moduleID, []dlgRow{fieldRow(name)},
 				func([]dlgRow) string { return strings.TrimSpace(name.String()) }, nil
 		}
-		return fieldValuePair("add field · "+addPath, "source", "destination", "type", "options", "startat", "state")
+		return fieldValuePair("add field · "+addPath, func(field string) editKind {
+			switch field {
+			case "source":
+				return kindEither
+			case "destination":
+				return kindDirs
+			}
+			return kindText
+		}, "source", "destination", "type", "options", "startat", "state")
 	case "smb":
 		if addPath == "" {
 			what := newDlgChoice("what", "share", "group", "users", "avahi")
@@ -244,7 +265,12 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 					}
 				}
 		}
-		return fieldValuePair("add field · "+addPath, "path", "comment", "valid_users", "writable", "public")
+		return fieldValuePair("add field · "+addPath, func(field string) editKind {
+			if field == "path" {
+				return kindDirs
+			}
+			return kindText
+		}, "path", "comment", "valid_users", "writable", "public")
 	case "when":
 		kind := newDlgChoice("kind", "leaf", "and", "or", "not")
 		field := newDlgChoice("field", whenFields...)
@@ -263,6 +289,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 	case "writes":
 		kind := newDlgChoice("kind", "line", "link")
 		target := newDlgField("target", "")
+		target.browse = kindFiles // 0094: ^o browses for the target file
 		value := &dlgField{label: "line text"}
 		return "add write · " + moduleID, []dlgRow{choiceRow(kind), fieldRow(target), fieldRow(value)},
 			func(rows []dlgRow) string {
@@ -291,6 +318,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 func editLinkFormSpec(moduleID, curTarget, curSource string) (string, []dlgRow, func([]dlgRow) string) {
 	target := newDlgField("target", curTarget)
 	source := newDlgField("source", curSource)
+	source.browse = kindEither // 0094: ^o browses for the linked file/dir
 	return "edit link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 		func([]dlgRow) string {
 			return strings.TrimSpace(target.String()) + " " + strings.TrimSpace(source.String())
@@ -298,13 +326,21 @@ func editLinkFormSpec(moduleID, curTarget, curSource string) (string, []dlgRow, 
 }
 
 // fieldValuePair is a container's `field = value` form: the field is a
-// closed choice, the value free text.
-func fieldValuePair(title string, fields ...string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
+// closed choice, the value free text. browseFor (0094, nil for none)
+// marks the value field's browse mode per chosen field — a mount's
+// destination browses directories, its source either, its type never.
+func fieldValuePair(title string, browseFor func(string) editKind, fields ...string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
 	value := newDlgField("value", "")
-	return title, []dlgRow{choiceRow(newDlgChoice("field", fields...)), fieldRow(value)},
+	rows := []dlgRow{choiceRow(newDlgChoice("field", fields...)), fieldRow(value)}
+	var relabel func([]dlgRow)
+	if browseFor != nil {
+		relabel = func(rows []dlgRow) { value.browse = browseFor(rows[0].choice.String()) }
+		relabel(rows) // the initial choice sets the initial browse mode
+	}
+	return title, rows,
 		func(rows []dlgRow) string {
 			return rows[0].choice.String() + "=" + strings.TrimSpace(value.String())
-		}, nil
+		}, relabel
 }
 
 // whenGroupLabel names a when group the way its row renders: and[0],

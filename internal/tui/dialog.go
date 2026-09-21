@@ -59,6 +59,9 @@ type dlgField struct {
 	value  []rune
 	cursor int
 	hint   string
+	// browse marks a path-kind field (0094): ctrl+o opens the file
+	// picker with that pick mode and the pick fills the field.
+	browse editKind
 }
 
 func newDlgField(label, value string) *dlgField {
@@ -363,6 +366,27 @@ func (d *onboardDialog) HandleKey(key string) tea.Cmd {
 	return nil
 }
 
+// browse is the dialogModal's ctrl+o hook (0094): the paths row opens
+// the file picker (files or directories — onboard adopts both); a pick
+// appends to the space-separated list the field holds.
+func (d *onboardDialog) browse() (editKind, string, func(string), bool) {
+	if d.confirm || d.cur != 1 {
+		return kindText, "", nil, false
+	}
+	f := d.rows[1].field
+	seed := ""
+	if parts := strings.Fields(f.String()); len(parts) > 0 {
+		seed = parts[len(parts)-1]
+	}
+	return kindEither, seed, func(s string) {
+		if strings.TrimSpace(f.String()) == "" {
+			f.set(s)
+		} else {
+			f.set(f.String() + " " + s)
+		}
+	}, true
+}
+
 // paste lands bracketed-paste content in the focused row's field
 // (0091); an armed gate swallows it like any key.
 func (d *onboardDialog) paste(s string) {
@@ -407,7 +431,11 @@ func (d *onboardDialog) View(th theme) string {
 		b.WriteString("\n")
 	}
 	b.WriteString(finishView(th, gatePrompt(d.confirm, "run onboard?"), d.report, d.err, d.running))
-	b.WriteString(gateFooter(th, d.confirm, "up/down pick a row · type to edit · enter runs · esc back"))
+	hint := "up/down pick a row · type to edit · enter runs · esc back"
+	if d.cur == 1 && !d.confirm {
+		hint = "up/down pick a row · type to edit · ^o browse · enter runs · esc back"
+	}
+	b.WriteString(gateFooter(th, d.confirm, hint))
 	return b.String()
 }
 

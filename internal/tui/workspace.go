@@ -61,11 +61,10 @@ type wsRow struct {
 	key        string
 	value      string
 	container  bool
-	// noEdit marks a row that carries a family for removal and marking
-	// but never opens a field edit (a block write: its payload is
-	// multi-line file text, not a field). enter falls back to the add
-	// form; d removes the entry (0087).
-	noEdit bool
+	// kind is the row's input type (0094): kindText (zero) is the
+	// inline single-line input, kindMulti opens the multi-line editor
+	// (a writes block, a hook), the path kinds open the file picker.
+	kind editKind
 }
 
 type workspaceModel struct {
@@ -314,7 +313,7 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			text += " " + th.disabledMark.Render("◂▸")
 		case r.container:
 			text += " " + th.disabledMark.Render("＋")
-		case r.family != "" && !r.noEdit:
+		case r.family != "":
 			text += " " + th.disabledMark.Render("✎")
 		}
 	}
@@ -425,8 +424,11 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			writes = append(writes, entry("writes", target+" (edit: line)",
 				profile.FamilyDotfiles, target, d.Line))
 		case d.Block != "":
+			// 0094: a block edits in the multi-line editor, seeded
+			// with its content — its payload is many lines, never a
+			// single-line field.
 			writes = append(writes, wsRow{section: "writes", text: target + " (edit: block)",
-				family: profile.FamilyDotfiles, key: target, noEdit: true})
+				family: profile.FamilyDotfiles, key: target, value: d.Block, kind: kindMulti})
 		}
 	}
 	section("links", links)
@@ -500,10 +502,12 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 
 	var hooks []wsRow
 	for _, h := range cfg.Hooks.Pre {
-		hooks = append(hooks, entry("hooks", "pre: "+h.Command, profile.FamilyHooks, "pre:"+h.Command, h.Command))
+		hooks = append(hooks, wsRow{section: "hooks", text: "pre: " + h.Command,
+			family: profile.FamilyHooks, key: "pre:" + h.Command, value: h.Command, kind: kindMulti})
 	}
 	for _, h := range cfg.Hooks.Post {
-		hooks = append(hooks, entry("hooks", "post: "+h.Command, profile.FamilyHooks, "post:"+h.Command, h.Command))
+		hooks = append(hooks, wsRow{section: "hooks", text: "post: " + h.Command,
+			family: profile.FamilyHooks, key: "post:" + h.Command, value: h.Command, kind: kindMulti})
 	}
 	section("hooks", hooks)
 
@@ -578,10 +582,14 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			family: profile.FamilyMounts, key: name, container: true,
 		})
 		if m.Source != "" {
-			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "source", m.Source))
+			r := fieldRow("mounts", profile.FamilyMounts, name, "source", m.Source)
+			r.kind = kindEither // 0094: a device, an image file, or a directory
+			mounts = append(mounts, r)
 		}
 		if m.Destination != "" {
-			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "destination", m.Destination))
+			r := fieldRow("mounts", profile.FamilyMounts, name, "destination", m.Destination)
+			r.kind = kindDirs
+			mounts = append(mounts, r)
 		}
 		if m.Type != "" {
 			mounts = append(mounts, fieldRow("mounts", profile.FamilyMounts, name, "type", m.Type))
@@ -619,7 +627,9 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			family: profile.FamilySmb, key: name, container: true,
 		})
 		if sh.Path != "" {
-			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "path", sh.Path))
+			r := fieldRow("smb", profile.FamilySmb, name, "path", sh.Path)
+			r.kind = kindDirs
+			smb = append(smb, r)
 		}
 		if sh.Comment != "" {
 			smb = append(smb, fieldRow("smb", profile.FamilySmb, name, "comment", sh.Comment))

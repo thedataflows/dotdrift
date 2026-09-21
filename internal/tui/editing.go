@@ -802,6 +802,17 @@ func mutateField(cfg *profile.ModuleConfig, section, family, key, oldValue, inpu
 			return nil
 		}
 		d := cfg.Dotfiles[key]
+		// 0094: a block write edits its whole payload in the
+		// multi-line editor — the commit is many lines and must never
+		// reach the link grammar below.
+		if d.Block != "" {
+			if strings.TrimSpace(input) == "" {
+				return fmt.Errorf("block content must not be empty (d removes the entry)")
+			}
+			d.Block = input
+			cfg.Dotfiles[key] = d
+			return nil
+		}
 		if d.Line != "" {
 			d.Line = input // a writes row edits its line text
 			cfg.Dotfiles[key] = d
@@ -1096,7 +1107,7 @@ func (m *Compositor) startEdit() {
 		return
 	}
 	row := m.ws.rows[m.ws.cursor]
-	if row.family == "" || row.container || row.noEdit {
+	if row.family == "" || row.container {
 		m.startAdd()
 		return
 	}
@@ -1110,7 +1121,47 @@ func (m *Compositor) startEdit() {
 		m.openChoice(row, set)
 		return
 	}
+	// 0094: the row's input kind decides the editor — a block or hook
+	// is many lines (the multi-line editor), a path field browses
+	// (the file picker), everything else takes the inline input.
+	switch row.kind {
+	case kindDirs, kindFiles, kindEither:
+		m.openPathPicker(row)
+		return
+	case kindMulti:
+		m.openMultiEdit(row)
+		return
+	}
 	m.ws.editing = &wsEdit{row: m.ws.cursor, input: []rune(row.value), cur: len([]rune(row.value))}
+}
+
+// openPathPicker pushes the file picker for a path-kind row (0094).
+// The pick commits through the field-edit seam — same validation,
+// splice, ledger, and undo as a typed commit; a refusal renders inside
+// the picker.
+func (m *Compositor) openPathPicker(row wsRow) {
+	rowIdx := m.ws.cursor
+	m.modals = append(m.modals, newFilePicker(m.th, row.kind, row.value, func(s string) string {
+		return m.commitFieldAt(rowIdx, s)
+	}))
+}
+
+// openMultiEdit pushes the multi-line editor for a multi-kind row
+// (0094): a writes block seeds with its content (the target names the
+// coloring lexer), a hook seeds with its full command.
+func (m *Compositor) openMultiEdit(row wsRow) {
+	rowIdx := m.ws.cursor
+	title, hint := "edit "+row.section, ""
+	if row.section == "writes" {
+		title, hint = "edit block · "+row.key, row.key
+	}
+	if row.section == "hooks" {
+		phase, _, _ := strings.Cut(row.key, ":")
+		title = "edit hook · " + phase
+	}
+	m.modals = append(m.modals, newMultiline(m.th, title, row.value, hint, func(s string) string {
+		return m.commitFieldAt(rowIdx, s)
+	}))
 }
 
 // openChoice pushes the row's picker. The seam commits through the same
@@ -1155,7 +1206,18 @@ func (m *Compositor) openLinkEdit(row wsRow) {
 		return m.commitFieldAt(rowIdx, input)
 	})
 	form.verb = "commits"
+	form.onBrowse = m.browseField
 	m.modals = append(m.modals, form)
+}
+
+// browseField opens the file picker over a form field's current text
+// (0094): the pick fills the field — the form's own commit still
+// validates the synthesized grammar on enter.
+func (m *Compositor) browseField(mode editKind, f *dlgField) {
+	m.modals = append(m.modals, newFilePicker(m.th, mode, f.String(), func(s string) string {
+		f.set(s)
+		return ""
+	}))
 }
 
 // cycleChoice steps the cursor row's closed-set value in place
@@ -1200,6 +1262,7 @@ func (m *Compositor) startAdd() {
 		return m.commitAddAt(m.ws.cursor, section, addPath, input)
 	})
 	form.relabel = relabel
+	form.onBrowse = m.browseField
 	m.modals = append(m.modals, form)
 }
 

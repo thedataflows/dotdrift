@@ -52,9 +52,12 @@ func TestMarks_rowsAnnounceTheirGesture(t *testing.T) {
 	id := wsRowBySectionText(c, "meta", "id demo")
 	require.NotContains(t, plainRowView(c, id), "✎")
 	require.NotContains(t, plainRowView(c, id), "＋")
+
+	// A block write shows ✎ like any editable row (0094: it edits in
+	// the multi-line editor — the mark cannot lie).
 	block := wsRowBySectionText(c, "writes", "~/.profile")
 	require.GreaterOrEqual(t, block, 0)
-	require.NotContains(t, plainRowView(c, block), "✎", "a block write is not editable here")
+	require.Contains(t, plainRowView(c, block), "✎")
 }
 
 func TestMarks_dirtyRowShowsTheDotNotTheMark(t *testing.T) {

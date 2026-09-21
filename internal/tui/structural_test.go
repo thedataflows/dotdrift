@@ -12,6 +12,7 @@ package tui
 // commit).
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -276,7 +277,9 @@ func TestMounts_fieldEdits(t *testing.T) {
 	require.Equal(t, "disabled", c.ws.draft.cfg.Mounts["media"].State)
 
 	// A required field refuses to empty (the mutate error keeps the field open).
-	wsToKey(t, c, pathKey("media", "source"))
+	// (source/destination browse since 0094 — the picker cannot produce an
+	// empty value; the text-kind type field pins the refusal.)
+	wsToKey(t, c, pathKey("media", "type"))
 	c = cpress(c, "enter")
 	c.ws.editing.input = nil
 	c = cpress(c, "enter")
@@ -349,12 +352,18 @@ func TestSmb_scalarAndShareEdits(t *testing.T) {
 	require.False(t, *c.ws.draft.cfg.Smb.Avahi, "the tri-state lands")
 	require.Contains(t, c.ws.placeholderOrBody(), "avahi false", "the scalar row now renders")
 
+	// 0094: the share path browses — enter opens the picker, and the
+	// location bar types the new path (a share dir that does not exist
+	// yet picks while its parent does).
+	newPath := filepath.Join(t.TempDir(), "media2")
 	wsToKey(t, c, pathKey("media", "path"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = []rune("/srv/media2")
+	c = cpress(c, "ctrl+l")
+	c = cpress(c, "ctrl+u")
+	c = typeText(c, newPath)
 	c = wsPress(t, c, "enter")
-	require.Equal(t, "/srv/media2", c.ws.draft.cfg.Smb.Shares["media"].Path)
-	require.Contains(t, c.ws.placeholderOrBody(), "path /srv/media2")
+	require.Equal(t, newPath, c.ws.draft.cfg.Smb.Shares["media"].Path)
+	require.Contains(t, c.ws.placeholderOrBody(), "path "+newPath)
 }
 
 func TestSmb_containerFieldAdd(t *testing.T) {

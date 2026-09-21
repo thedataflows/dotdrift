@@ -171,6 +171,12 @@ func (m *Compositor) helpRows() []helpRow {
 			return []helpRow{{"y", "confirm"}, {"any other key", "cancel"}, {"esc", "cancel"}}
 		case *choiceModel:
 			return []helpRow{{"up/down", "pick"}, {"enter", "choose"}, {"esc", "cancel"}}
+		case *filePicker:
+			return []helpRow{
+				{"up/down/pgup/pgdn/home/end", "move"}, {"enter", "pick / descend"},
+				{"ctrl+enter", "pick the shown directory"}, {"right/left", "in / up"},
+				{"/", "filter"}, {"ctrl+l", "type a path"}, {".", "hidden files"}, {"esc", "back / close"},
+			}
 		case *applyDetailModel:
 			return []helpRow{{"j/k", "scroll output"}, {"ctrl+c", "cancel the run"}, {"esc", "close (the run lives on)"}}
 		case *planModel:
@@ -296,7 +302,7 @@ func (m *Compositor) openOnboardInto(id, layer string) {
 	}
 	d := newOnboardDialog(m.writesFor(m.facts), m.root)
 	d.prefill(id, layer)
-	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, reload: m.reloadNav})
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, c: m, reload: m.reloadNav})
 }
 
 // openWritesMenu opens the writes actions (w): onboard / restore /
@@ -379,7 +385,7 @@ func (m *Compositor) openWritesDialog(choice int) {
 	if choice == 1 {
 		reload = nil
 	}
-	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, reload: reload})
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, c: m, reload: reload})
 }
 
 // restoreIndex feeds the restore dialog from the last modules read.

@@ -448,6 +448,7 @@ func (m *Compositor) openApplyDetail() {
 type dialogModal struct {
 	d  dialog
 	th theme
+	c  *Compositor // the ctrl+o browse hook pushes the picker (0094)
 	// reload runs after a successful write: every dialog whose write
 	// changes the profile sets it (manage since 0082, onboard/generate
 	// since 0084's follow-up) so the nav shows the change without a
@@ -461,6 +462,21 @@ func (m *dialogModal) view(w, h int) string {
 
 func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
+		// 0094: ctrl+o on a path-kind dialog field opens the picker;
+		// the pick lands through the dialog's own sink.
+		if k.String() == "ctrl+o" && m.c != nil {
+			if bd, ok := m.d.(interface {
+				browse() (editKind, string, func(string), bool)
+			}); ok {
+				if mode, seed, sink, yes := bd.browse(); yes {
+					m.c.modals = append(m.c.modals, newFilePicker(m.th, mode, seed, func(s string) string {
+						sink(s)
+						return ""
+					}))
+					return nil
+				}
+			}
+		}
 		return m.d.HandleKey(k.String())
 	}
 	if p, ok := msg.(tea.PasteMsg); ok {
@@ -506,7 +522,7 @@ func (m *Compositor) openManageCreate(prefill string) {
 		d.rows[0].field.value = []rune(prefill)
 		d.rows[0].field.cursor = len([]rune(prefill))
 	}
-	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, reload: m.reloadNav})
+	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, c: m, reload: m.reloadNav})
 }
 
 // openManage opens the module-management menu (m) as a modal over the
@@ -526,5 +542,5 @@ func (m *Compositor) openManage() {
 			}
 		}
 	}
-	m.modals = append(m.modals, &dialogModal{d: newManageDialog(ce, m.root, m.facts, item), th: m.th, reload: m.reloadNav})
+	m.modals = append(m.modals, &dialogModal{d: newManageDialog(ce, m.root, m.facts, item), th: m.th, c: m, reload: m.reloadNav})
 }

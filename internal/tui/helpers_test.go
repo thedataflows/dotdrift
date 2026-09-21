@@ -62,6 +62,8 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: tea.KeySpace}
 	case "enter":
 		return tea.KeyPressMsg{Code: tea.KeyEnter}
+	case "backspace":
+		return tea.KeyPressMsg{Code: tea.KeyBackspace}
 	case "up":
 		return tea.KeyPressMsg{Code: tea.KeyUp}
 	case "down":
@@ -90,6 +92,16 @@ func keyPress(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'z', Mod: tea.ModCtrl | tea.ModShift}
 	case "ctrl+r":
 		return tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
+	case "ctrl+enter":
+		return tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModCtrl}
+	case "ctrl+l":
+		return tea.KeyPressMsg{Code: 'l', Mod: tea.ModCtrl}
+	case "ctrl+o":
+		return tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}
+	case "ctrl+u":
+		return tea.KeyPressMsg{Code: 'u', Mod: tea.ModCtrl}
+	case "ctrl+g":
+		return tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl}
 	default:
 		return tea.KeyPressMsg{Code: rune(s[0])}
 	}

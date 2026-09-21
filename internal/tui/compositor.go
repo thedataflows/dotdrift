@@ -312,16 +312,30 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(m.modals) > 0 {
 		if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "esc" {
 			top := m.modals[len(m.modals)-1]
+			// 0094: a modal with an inner state to back out of (the
+			// picker's filter or location bar) handles the first esc
+			// itself; only an unhandled esc pops.
+			if eh, ok := top.(interface{ onEsc() bool }); ok && eh.onEsc() {
+				return m, nil
+			}
 			if cm, ok := top.(interface{ cancel() }); ok {
 				cm.cancel() // the elevation prompt's esc aborts the gated op
 			}
 			m.modals = m.modals[:len(m.modals)-1]
 			return m, nil
 		}
-		// ? opens help even over a modal — except the elevation prompt,
-		// where ? is a legitimate password character.
+		// ? opens help even over a modal — except where ? is content:
+		// the elevation prompt (a password character) and modals that
+		// own a text input right now (0094: the multi-line editor,
+		// the picker's filter and location bar).
 		if k, ok := msg.(tea.KeyPressMsg); ok && k.String() == "?" {
-			if _, isElevation := m.modals[len(m.modals)-1].(*elevationModel); !isElevation {
+			top := m.modals[len(m.modals)-1]
+			_, isElevation := top.(*elevationModel)
+			owns := false
+			if to, ok := top.(interface{ ownsText() bool }); ok {
+				owns = to.ownsText()
+			}
+			if !isElevation && !owns {
 				m.openHelp()
 				return m, nil
 			}

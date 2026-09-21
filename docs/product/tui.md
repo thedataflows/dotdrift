@@ -146,7 +146,27 @@ view stack wholesale). Its parts:
   the link modal instead of the inline input (0095): a link is a
   target/source pair — the target is the dotfiles map key — so the
   prefilled form (the add form's twin) edits both, and committing a
-  changed target renames the entry, mode preserved. A broken file
+  changed target renames the entry, mode preserved. Fields are typed
+  inputs (0094): a writes block and a hook command open a **multi-line
+  editor** — enter splits, backspace joins, paste keeps its newlines
+  (unlike the single-line sanitizer), `ctrl+enter` commits, `esc`
+  cancels, and `ctrl+g` toggles source coloring guessed from the
+  target's extension (the caret's own line stays plain so the
+  reverse-video caret survives) — and path fields (smb share `path`,
+  mounts `source`/`destination`) open a **file picker** instead of the
+  inline input: a desktop-style listing (dirs first, symlinks resolved,
+  dotfiles behind `.`) with arrows/pgup/pgdn/home/end, `/` filtering
+  the current listing, `enter` picking per mode, `ctrl+enter` picking
+  the shown directory, and a `ctrl+l` location bar for typed or pasted
+  paths — tilde expands, and a not-yet-existing file or directory name
+  is accepted while its parent exists (the escape hatch for new
+  mountpoints and device paths). Form fields that take paths — onboard
+  `paths`, the link forms' `source`, the writes add form's `target`,
+  the mounts/smb field forms' path values — browse with `ctrl+o`
+  instead, because enter already means *commit the form*; the onboard
+  pick appends to its space-separated list. Every pick and every editor
+  commit rides the same validation, splice, ledger, and undo pipeline a
+  typed commit runs. A broken file
   edits as raw text lines
   (`e` on a line); a repair that parses unlocks the structured surface,
   and its save sends the whole repaired file as the raw candidate

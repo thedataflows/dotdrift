@@ -13,7 +13,7 @@
 │                          ││  ~/.bashrc ← .bashrc (symlink) ✎                                 │
 │                          ││writes ＋                                                         │
 │                          ││  ~/.config/demo.toml (edit: line) ✎                              │
-│                          ││  ~/.profile (edit: block)                                        │
+│                          ││  ~/.profile (edit: block) ✎                                      │
 │                          ││when ＋                                                           │
 │                          ││  hosts myhost ✎                                                  │
 │                          ││  os linux ✎                                                      │

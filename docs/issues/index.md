@@ -87,3 +87,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0097](0097-tui-picker-up-dir-row.md) | File picker lists a `../` up-dir row whenever the directory has a parent | done | medium |
 | [0098](0098-tui-link-forms-target-browse.md) | Link forms' `target` field browses with ctrl+o, mirroring `source` | done | low |
 | [0099](0099-tui-picker-typed-paths-need-not-exist.md) | Picker location bar accepts typed paths that do not exist at all | done | low |
+| [0100](0100-tui-link-source-browse-module-relative.md) | Link source browse is module-relative, not cwd-relative | done | medium |

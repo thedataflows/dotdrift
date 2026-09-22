@@ -87,7 +87,7 @@ func TestPaste_manageCreateDialog(t *testing.T) {
 }
 
 func TestPaste_addForm(t *testing.T) {
-	_, rows, build, _ := addFormSpec("demo", "packages", "")
+	_, rows, build, _ := addFormSpec("demo", "packages", "", "")
 	f := newAddForm(newTheme(true), "add package · demo", rows, build, func(string) string { return "" })
 	f.update(tea.PasteMsg{Content: "ripgrep\n"})
 	require.Equal(t, "ripgrep", f.rows[0].field.String())

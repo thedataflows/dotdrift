@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -1200,7 +1201,7 @@ func (m *Compositor) commitFieldAt(row int, value string) string {
 // the field-edit seam: same validation, splice, ledger, and undo as
 // the inline input the modal replaces; a refusal keeps the form open.
 func (m *Compositor) openLinkEdit(row wsRow) {
-	title, rows, build := editLinkFormSpec(m.ws.moduleID, row.key, row.value)
+	title, rows, build := editLinkFormSpec(m.ws.moduleID, m.ws.activeDir(), row.key, row.value)
 	rowIdx := m.ws.cursor
 	form := newAddForm(m.th, title, rows, build, func(input string) string {
 		return m.commitFieldAt(rowIdx, input)
@@ -1212,12 +1213,51 @@ func (m *Compositor) openLinkEdit(row wsRow) {
 
 // browseField opens the file picker over a form field's current text
 // (0094): the pick fills the field — the form's own commit still
-// validates the synthesized grammar on enter.
+// validates the synthesized grammar on enter. A field with a browseBase
+// (0100, a link source) browses base-relative instead: the picker seeds
+// against the base and the pick stores the base-relative path — a pick
+// outside the base can never resolve, so it refuses inside the picker.
 func (m *Compositor) browseField(mode editKind, f *dlgField) {
-	m.modals = append(m.modals, newFilePicker(m.th, mode, f.String(), func(s string) string {
+	seed := f.String()
+	commit := func(s string) string {
 		f.set(s)
 		return ""
-	}))
+	}
+	if base := f.browseBase; base != "" {
+		if seed != "" && !filepath.IsAbs(seed) && !strings.HasPrefix(seed, "~") {
+			seed = filepath.Join(base, seed) // a relative value seeds inside the base (0096)
+		}
+		commit = func(s string) string {
+			rel, refusal := moduleRel(base, s)
+			if refusal != "" {
+				return refusal
+			}
+			f.set(rel)
+			return ""
+		}
+	}
+	p := newFilePicker(m.th, mode, seed, commit)
+	if f.browseBase != "" && f.String() == "" {
+		p.cd(f.browseBase) // an empty field opens inside the base, not its parent or home
+	}
+	m.modals = append(m.modals, p)
+}
+
+// moduleRel renders a picked path base-relative (0100): an absolute
+// pick inside the base stores its relative path; a relative pick (the
+// location bar's typed path) stores as typed, cleaned. A pick outside
+// the base refuses — a link source must live inside a module layer
+// (resolveSource rejects escapes at resolve time; this fails at input).
+func moduleRel(base, s string) (rel, refusal string) {
+	abs := s
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(base, abs)
+	}
+	rel, err := filepath.Rel(base, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "must be inside the module directory"
+	}
+	return rel, ""
 }
 
 // cycleChoice steps the cursor row's closed-set value in place
@@ -1254,7 +1294,7 @@ func (m *Compositor) startAdd() {
 		return
 	}
 	section, addPath := addScope(row)
-	title, rows, build, relabel := addFormSpec(m.ws.moduleID, section, addPath)
+	title, rows, build, relabel := addFormSpec(m.ws.moduleID, section, addPath, m.ws.activeDir())
 	if rows == nil {
 		return
 	}

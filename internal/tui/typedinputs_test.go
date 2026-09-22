@@ -268,6 +268,90 @@ func TestTyped_linkFormsTargetBrowse(t *testing.T) {
 	require.Equal(t, kindEither, topModal[*filePicker](t, c).mode, "the edit modal's target browses too")
 }
 
+// TestTyped_linkSourceBrowseIsModuleRelative (0100): a link source is
+// module-layer-relative (resolveSource joins it against the layer dirs
+// and refuses escapes), so the browse roots at the module dir and the
+// pick stores the relative path — not an absolute one the resolver
+// would reject.
+func TestTyped_linkSourceBrowseIsModuleRelative(t *testing.T) {
+	c := typedShell(t)
+	dir := c.ws.activeDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "zshrc"), []byte("x"), 0o644))
+
+	c = cursorTo(t, c, "←")
+	c = cpress(c, "a")    // add link form
+	c = cpress(c, "down") // the source row
+	c = cpress(c, "ctrl+o")
+	p := topModal[*filePicker](t, c)
+	require.Equal(t, dir, p.cwd, "an empty source browses inside the module layer dir, not the process cwd")
+	c = cpress(c, "/")
+	c = typeText(c, "zsh")
+	c = cpress(c, "enter") // commit the filter
+	c = cpress(c, "enter") // pick zshrc
+	f := topModal[*addForm](t, c)
+	require.Equal(t, "zshrc", f.rows[1].field.String(), "the pick stores the module-relative source")
+
+	c = cpress(c, "up") // the target row
+	c = typeText(c, "~/.zshrc")
+	c = wsPress(t, c, "enter")
+	require.Empty(t, c.modals, "the form commits")
+	require.Equal(t, "zshrc", c.wsDraftFor(dir).cfg.Dotfiles["~/.zshrc"].Source,
+		"the stored source is module-relative")
+}
+
+// TestTyped_linkSourceBrowseRefusesOutside (0100): a pick outside the
+// module dir can never resolve (resolveSource rejects escapes), so the
+// picker refuses it at input time and stays open; a relative typed
+// path stores as typed — it may exist in another layer.
+func TestTyped_linkSourceBrowseRefusesOutside(t *testing.T) {
+	outside := filepath.Join(t.TempDir(), "outside.conf")
+	require.NoError(t, os.WriteFile(outside, []byte("x"), 0o644))
+	c := typedShell(t)
+	c = cursorTo(t, c, "←")
+	c = cpress(c, "a")
+	c = cpress(c, "down")
+	c = cpress(c, "ctrl+o")
+	c = cpress(c, "ctrl+l")
+	c = cpress(c, "ctrl+u")
+	c = typeText(c, outside)
+	c = cpress(c, "enter")
+	p := topModal[*filePicker](t, c) // the refusal keeps the picker open
+	require.Contains(t, p.err, "module directory")
+
+	c = cpress(c, "ctrl+l")
+	c = cpress(c, "ctrl+u")
+	c = typeText(c, "zshrc")
+	c = cpress(c, "enter")
+	f := topModal[*addForm](t, c)
+	require.Equal(t, "zshrc", f.rows[1].field.String(), "a relative location-bar path stores module-relative as typed")
+
+	c = cpress(c, "ctrl+o")
+	c = cpress(c, "ctrl+l")
+	c = cpress(c, "ctrl+u")
+	c = typeText(c, "../escape.conf")
+	c = cpress(c, "enter")
+	p = topModal[*filePicker](t, c)
+	require.Contains(t, p.err, "module directory", "an escaping relative path refuses too")
+}
+
+// TestTyped_linkEditSourceBrowseSeedsModuleDir (0100): the edit
+// modal's prefilled source is module-relative; the picker resolves it
+// against the module dir (0096: parent listing, entry selected), not
+// the process cwd.
+func TestTyped_linkEditSourceBrowseSeedsModuleDir(t *testing.T) {
+	c := typedShell(t)
+	dir := c.ws.activeDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "gitconfig"), []byte("x"), 0o644))
+
+	c = cursorTo(t, c, "←")
+	c = cpress(c, "enter") // the 0095 edit-link modal (~/.gitconfig ← gitconfig)
+	c = cpress(c, "down")  // the source row
+	c = cpress(c, "ctrl+o")
+	p := topModal[*filePicker](t, c)
+	require.Equal(t, dir, p.cwd, "the relative source seeds inside the module layer dir")
+	require.Equal(t, "gitconfig", p.visible()[p.sel].name, "…with its own entry selected (0096)")
+}
+
 func TestTyped_writesAddTargetBrowse(t *testing.T) {
 	c := typedShell(t)
 	c = cursorTo(t, c, "edit: line")

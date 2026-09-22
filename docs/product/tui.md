@@ -176,7 +176,14 @@ view stack wholesale). Its parts:
   directory symlink, so it browses in either mode too), the writes add form's `target`,
   the mounts/smb field forms' path values — browse with `ctrl+o`
   instead, because enter already means *commit the form*; the onboard
-  pick appends to its space-separated list. Every pick and every editor
+  pick appends to its space-separated list. A link `source` browse is
+  module-relative (0100): the picker roots at the active layer's module
+  directory — an empty field opens inside it, the edit modal's relative
+  value seeds there with its entry selected — and the pick stores the
+  module-relative path the resolver expects; a pick outside the module
+  directory refuses inside the picker (`resolveSource` would reject it
+  at resolve time anyway), while a relative location-bar path stores as
+  typed — it may exist in another layer. Every pick and every editor
   commit rides the same validation, splice, ledger, and undo pipeline a
   typed commit runs. A broken file
   edits as raw text lines

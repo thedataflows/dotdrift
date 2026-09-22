@@ -62,6 +62,11 @@ type dlgField struct {
 	// browse marks a path-kind field (0094): ctrl+o opens the file
 	// picker with that pick mode and the pick fills the field.
 	browse editKind
+	// browseBase makes the pick base-relative (0100): the picker seeds
+	// against this directory and the pick stores the path relative to
+	// it — a pick outside the base refuses. Empty: the pick fills the
+	// field verbatim (an absolute live-system path).
+	browseBase string
 }
 
 func newDlgField(label, value string) *dlgField {

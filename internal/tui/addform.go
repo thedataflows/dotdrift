@@ -170,7 +170,7 @@ func addScope(row wsRow) (section, addPath string) {
 // synthesizer, and an optional relabel hook. The identity row leads (it
 // takes the opening focus and the typing), choices follow. The switch
 // is exhaustive over addFamily's sections; a nil rows slice refuses.
-func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
+func addFormSpec(moduleID, section, addPath, dir string) (string, []dlgRow, func([]dlgRow) string, func([]dlgRow)) {
 	switch section {
 	case "packages":
 		name := newDlgField("name", "")
@@ -189,6 +189,7 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 		source := newDlgField("source", "")
 		target.browse = kindEither // 0098: ^o browses too — a link target may be a dir symlink
 		source.browse = kindEither // 0094: ^o browses for the linked file/dir
+		source.browseBase = dir    // 0100: the source stores module-relative; the pick roots here
 		return "add link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 			func([]dlgRow) string {
 				return strings.TrimSpace(target.String()) + " " + strings.TrimSpace(source.String())
@@ -316,11 +317,12 @@ func addFormSpec(moduleID, section, addPath string) (string, []dlgRow, func([]dl
 // is the map key — so a bare text input on the source alone could
 // never rename an entry; the modal commits the same two-field grammar
 // the add form synthesizes.
-func editLinkFormSpec(moduleID, curTarget, curSource string) (string, []dlgRow, func([]dlgRow) string) {
+func editLinkFormSpec(moduleID, dir, curTarget, curSource string) (string, []dlgRow, func([]dlgRow) string) {
 	target := newDlgField("target", curTarget)
 	source := newDlgField("source", curSource)
 	target.browse = kindEither // 0098: ^o browses too (0096 seeds it on the current target)
 	source.browse = kindEither // 0094: ^o browses for the linked file/dir
+	source.browseBase = dir    // 0100: the source stores module-relative; the pick roots here
 	return "edit link · " + moduleID, []dlgRow{fieldRow(target), fieldRow(source)},
 		func([]dlgRow) string {
 			return strings.TrimSpace(target.String()) + " " + strings.TrimSpace(source.String())

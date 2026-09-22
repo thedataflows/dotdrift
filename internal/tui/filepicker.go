@@ -493,7 +493,7 @@ func (p *filePicker) view(w, h int) string {
 			p.th.disabledMark.Render("  ("+itoa(len(p.visible()))+"/"+itoa(len(p.entries))+")"))
 	}
 	if p.locating {
-		lines = append(lines, p.th.fieldLabel.Render("path: ")+string(p.loc)+p.th.caret.Render(" "))
+		lines = append(lines, p.th.fieldLabel.Render("path: ")+string(p.loc)+p.th.caretCell(" "))
 	}
 	if p.err != "" {
 		lines = append(lines, p.th.errorMark.Render("✗ "+p.err))

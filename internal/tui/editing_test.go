@@ -62,12 +62,27 @@ func TestEdit_caretIsBlockNotGlyph(t *testing.T) {
 	lines := w.editLines(e, th, 60)
 	plain := ansiRe.ReplaceAllString(lines[0], "")
 	require.Equal(t, "│ ▸ abcd", plain, "a mid-text caret adds no cell (the bar is the row's cursor border)")
-	require.Contains(t, lines[0], th.caret.Render("c"), "the char under the caret takes the block treatment")
+	require.Contains(t, lines[0], th.caretCell("c"), "the char under the caret takes the block treatment")
 	require.NotContains(t, plain, "▏", "no caret glyph is inserted into the text")
 
 	e.cur = 4
 	lines = w.editLines(e, th, 60)
-	require.Contains(t, lines[0], th.caret.Render(" "), "end of input renders a caret cell")
+	require.Contains(t, lines[0], th.caretCell(" "), "end of input renders a caret cell")
+}
+
+func TestEdit_caretKeepsTailColor(t *testing.T) {
+	// 0102: the caret is nested inside the row's accent style; a full
+	// reset at the caret stripped the color from the rest of the text,
+	// so moving the caret left decolored the tail and moving it back
+	// right recolored it. The caret releases only its reverse attribute.
+	th := newTheme(true)
+	w := &workspaceModel{}
+	e := &wsEdit{input: []rune("abcd"), cur: 2}
+
+	line := w.editLines(e, th, 60)[0]
+	require.Contains(t, line, "\x1b[27md", "the tail after the caret keeps the row's accent")
+	require.NotContains(t, line, "\x1b[md", "no full reset between the caret and the tail")
+	require.NotContains(t, line, "\x1b[0md", "no full reset between the caret and the tail")
 }
 
 func TestEdit_enterStartsEdit_escExits(t *testing.T) {

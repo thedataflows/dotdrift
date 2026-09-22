@@ -108,7 +108,9 @@ view stack wholesale). Its parts:
   the cursor into an input without leaving the workspace; the tier-1
   error renders at the field live. The input's caret is a reverse-video
   block on the character under it — never a glyph inserted into the
-  text, so the tail never shifts a cell (0092) — and bracketed paste
+  text, so the tail never shifts a cell (0092), and its reverse video
+  releases without a full reset, so the caret never alters the row's
+  color (0102) — and bracketed paste
   lands at the caret with control runes stripped (0091); the same paste
   reaches every text input in the shell (dialog fields, the add form,
   the nav filter, the palette, the elevation password). Fields whose value set is closed

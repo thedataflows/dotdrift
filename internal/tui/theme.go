@@ -2,6 +2,7 @@ package tui
 
 import (
 	"image/color"
+	"strings"
 
 	"charm.land/lipgloss/v2"
 )
@@ -115,6 +116,21 @@ func newTheme(isDark bool) theme {
 
 // Label renders a section label or highlighted chrome text.
 func (t theme) Label(s string) string { return t.sectionLabel.Render(s) }
+
+// caretCell renders the 0092 block caret so it can nest inside a styled
+// row: lipgloss closes a styled run with a full reset, which erases the
+// enclosing row's color for the rest of the line (0102 — the text lost
+// its accent when the caret moved left into it). The caret instead
+// releases only its reverse attribute; the row's own style carries on.
+func (t theme) caretCell(s string) string {
+	cell := t.caret.Render(s)
+	for _, reset := range []string{"\x1b[m", "\x1b[0m"} {
+		if i := strings.LastIndex(cell, reset); i >= 0 {
+			return cell[:i] + "\x1b[27m" + cell[i+len(reset):]
+		}
+	}
+	return cell
+}
 
 // Meta renders dim, parenthetical chrome text.
 func (t theme) Meta(s string) string { return t.meta.Render(s) }

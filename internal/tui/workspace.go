@@ -341,7 +341,7 @@ func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
 		at = string(runes[cur])
 		after = string(runes[cur+1:])
 	}
-	shown := string(runes[:cur]) + th.caret.Render(at) + after
+	shown := string(runes[:cur]) + th.caretCell(at) + after
 	lines := []string{th.cursorRow.MaxWidth(width).Render(" ▸ " + shown)}
 	if e.err != "" {
 		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))

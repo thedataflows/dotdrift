@@ -89,3 +89,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0099](0099-tui-picker-typed-paths-need-not-exist.md) | Picker location bar accepts typed paths that do not exist at all | done | low |
 | [0100](0100-tui-link-source-browse-module-relative.md) | Link source browse is module-relative, not cwd-relative | done | medium |
 | [0101](0101-tui-navfilter-settles-details-debounce.md) | Nav filter settles the workspace on the selection after a 300 ms debounce | done | medium |
+| [0102](0102-tui-caret-reset-strips-row-color.md) | Field-edit caret reset strips the row color from the tail | done | medium |

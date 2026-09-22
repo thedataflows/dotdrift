@@ -86,3 +86,15 @@ func TestTheme_cursorRow(t *testing.T) {
 	require.Equal(t, "  demo", plain, "plain text aligns with the cursor row")
 	require.NotEqual(t, th.cursorRow.Render("x"), th.rowText.Render(" x"), "the cursor style is visible")
 }
+
+// 0102: the caret renders nested inside styled rows, so it must release
+// only its reverse attribute — a full reset would erase the enclosing
+// row's color for the rest of the line.
+func TestTheme_caretCell(t *testing.T) {
+	th := newTheme(true)
+	cell := th.caretCell("x")
+	require.Contains(t, cell, "\x1b[7m", "the caret cell turns reverse video on")
+	require.Contains(t, cell, "\x1b[27m", "the caret cell turns only reverse video off")
+	require.NotContains(t, cell, "\x1b[0m", "no full reset")
+	require.NotContains(t, cell, "\x1b[m", "no full reset")
+}

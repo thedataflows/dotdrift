@@ -284,7 +284,7 @@ func (e *multiline) view(w, h int) string {
 				at = string(line[e.cx])
 				after = string(line[e.cx+1:])
 			}
-			body = string(line[:e.cx]) + e.th.caret.Render(at) + after
+			body = string(line[:e.cx]) + e.th.caretCell(at) + after
 		case ok:
 			body = colored[i]
 		default:

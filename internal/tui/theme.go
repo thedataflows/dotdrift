@@ -16,7 +16,7 @@ import (
 // means a new registry entry, never an inline lipgloss.NewStyle chain.
 
 type palette struct {
-	indigo, fuchsia, red, amber, muted, dim, value color.Color
+	indigo, fuchsia, red, amber, muted, dim, value, key color.Color
 }
 
 // paletteFor resolves the shared hues for one background. Light variants
@@ -34,6 +34,10 @@ func paletteFor(isDark bool) palette {
 		muted:   ld(lipgloss.Color("245"), lipgloss.Color("245")),
 		dim:     ld(lipgloss.Color("248"), lipgloss.Color("240")),
 		value:   ld(lipgloss.Color("234"), lipgloss.Color("255")),
+		// The key hue (0103) sits one step between value and muted: an
+		// entry row's key half recedes from its content without falling
+		// all the way to the label/hint shades.
+		key: ld(lipgloss.Color("238"), lipgloss.Color("250")),
 	}
 }
 
@@ -56,6 +60,7 @@ type theme struct {
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
 	cursorRow     lipgloss.Style // the cursor row: bar + accent text (0075)
 	rowText       lipgloss.Style // value/content text (0080); the truncation carrier
+	rowKey        lipgloss.Style // an entry row's key half — one shade under the value (0103)
 	caret         lipgloss.Style // the block caret: reverse video on the cell under it (0092)
 	fieldLabel    lipgloss.Style // a dialog/form row's fixed label (0080)
 	modalBorder   lipgloss.Style // the confirm modal's frame (M15)
@@ -93,6 +98,7 @@ func newTheme(isDark bool) theme {
 			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(p.fuchsia), // the bubbles delegate treatment
 		rowText:     lipgloss.NewStyle().Foreground(p.value), // values read as content (0080)
+		rowKey:      lipgloss.NewStyle().Foreground(p.key),   // the key half recedes one shade (0103)
 		caret:       lipgloss.NewStyle().Reverse(true),       // the block caret: the cell itself, no glyph (0092)
 		fieldLabel:  lipgloss.NewStyle().Foreground(p.muted), // fixed labels recede (0080)
 		modalBorder: pane.BorderForeground(p.amber),

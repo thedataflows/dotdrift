@@ -328,6 +328,14 @@ view stack wholesale). Its parts:
   `fieldLabel` (muted) and placeholder hints stay dim. Filled vs unfilled
   reads by color, backed by the hint's parentheses; chrome and run
   output stay default.
+- **A row's key half recedes one shade under its value** (0103). The
+  `key` hue (250 dark / 238 light, between value and muted) colors the
+  `rowKey` registry entry: every workspace key/value row — meta fields,
+  link/write targets, when leaves, hook prefixes, unit directives,
+  tools, secrets/mounts/smb fields — renders its key half (separator
+  included) in `rowKey` and the value in `rowText`. Single-shade rows
+  (packages, containers, headers, hints) stay flat, and the cursor row
+  keeps the flat accent — selection already owns its color.
 - The cursor row is the bubbles list-delegate treatment: a left bar in
   the highlight hue plus bold accent text (the `cursorRow` registry
   entry), plain rows keeping a two-space lead so text columns align.

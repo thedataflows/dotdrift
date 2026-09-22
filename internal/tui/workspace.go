@@ -65,6 +65,11 @@ type wsRow struct {
 	// inline single-line input, kindMulti opens the multi-line editor
 	// (a writes block, a hook), the path kinds open the file picker.
 	kind editKind
+	// valueAt is the byte offset in text where the value half begins
+	// (0103): the key half renders one shade under the value so the
+	// field's name recedes from its content. 0 marks a single-shade
+	// row (packages, containers, headers, hints, raw rows).
+	valueAt int
 }
 
 type workspaceModel struct {
@@ -325,6 +330,14 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if i == w.cursor {
 		return []string{th.cursorRow.MaxWidth(width).Render(" " + text)}
 	}
+	if r.valueAt > 0 && r.valueAt < len(r.text) {
+		// 0103: the key half recedes one shade under the value. The
+		// halves render as self-styled runs inside the rowText wrap —
+		// the 0080/0102 pattern, so the ANSI-aware clamp and the marks
+		// appended after the value are untouched.
+		body := th.rowKey.Render(r.text[:r.valueAt]) + th.rowText.Render(r.text[r.valueAt:]) + text[len(r.text):]
+		return []string{th.rowText.MaxWidth(width).Render("  " + body)}
+	}
 	return []string{th.rowText.MaxWidth(width).Render("  " + text)}
 }
 
@@ -389,16 +402,20 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	entry := func(section, text, family, key, value string) wsRow {
 		return wsRow{section: section, text: text, family: family, key: key, value: value}
 	}
+	// split marks where a row's value half begins (0103): everything up
+	// to and including the separator is the key half and renders one
+	// shade under the value.
+	split := func(r wsRow, n int) wsRow { r.valueAt = n; return r }
 	hint := func(section string) wsRow {
 		return wsRow{section: section, text: `· a adds "field = value"`, hint: true}
 	}
 
 	var meta []wsRow
 	if cfg.ID != "" {
-		meta = append(meta, entry("meta", "id "+cfg.ID, "", "", ""))
+		meta = append(meta, split(entry("meta", "id "+cfg.ID, "", "", ""), len("id ")))
 	}
-	meta = append(meta, entry("meta", "description "+cfg.Description, profile.FamilyKeys, "description", cfg.Description))
-	meta = append(meta, entry("meta", "scope "+cfg.ScopeOrDefault(), profile.FamilyKeys, "scope", cfg.Scope))
+	meta = append(meta, split(entry("meta", "description "+cfg.Description, profile.FamilyKeys, "description", cfg.Description), len("description ")))
+	meta = append(meta, split(entry("meta", "scope "+cfg.ScopeOrDefault(), profile.FamilyKeys, "scope", cfg.Scope), len("scope ")))
 	if cfg.Disabled {
 		meta = append(meta, entry("meta", "disabled", "", "", ""))
 	}
@@ -418,17 +435,18 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 		d := cfg.Dotfiles[target]
 		switch {
 		case d.Source != "":
-			links = append(links, entry("links", target+" ← "+d.Source+" ("+d.Mode+")",
-				profile.FamilyDotfiles, target, d.Source))
+			links = append(links, split(entry("links", target+" ← "+d.Source+" ("+d.Mode+")",
+				profile.FamilyDotfiles, target, d.Source), len(target)))
 		case d.Line != "":
-			writes = append(writes, entry("writes", target+" (edit: line)",
-				profile.FamilyDotfiles, target, d.Line))
+			writes = append(writes, split(entry("writes", target+" (edit: line)",
+				profile.FamilyDotfiles, target, d.Line), len(target)))
 		case d.Block != "":
 			// 0094: a block edits in the multi-line editor, seeded
 			// with its content — its payload is many lines, never a
 			// single-line field.
 			writes = append(writes, wsRow{section: "writes", text: target + " (edit: block)",
-				family: profile.FamilyDotfiles, key: target, value: d.Block, kind: kindMulti})
+				family: profile.FamilyDotfiles, key: target, value: d.Block, kind: kindMulti,
+				valueAt: len(target)})
 		}
 	}
 	section("links", links)
@@ -448,6 +466,7 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 		when = append(when, wsRow{
 			section: "when", text: text,
 			family: profile.FamilyWhen, key: pathKey(segs...), value: value,
+			valueAt: len(text) - len(value),
 		})
 	}
 	var renderGroup func(depth int, group []string, w *profile.When)
@@ -503,11 +522,13 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	var hooks []wsRow
 	for _, h := range cfg.Hooks.Pre {
 		hooks = append(hooks, wsRow{section: "hooks", text: "pre: " + h.Command,
-			family: profile.FamilyHooks, key: "pre:" + h.Command, value: h.Command, kind: kindMulti})
+			family: profile.FamilyHooks, key: "pre:" + h.Command, value: h.Command, kind: kindMulti,
+			valueAt: len("pre: ")})
 	}
 	for _, h := range cfg.Hooks.Post {
 		hooks = append(hooks, wsRow{section: "hooks", text: "post: " + h.Command,
-			family: profile.FamilyHooks, key: "post:" + h.Command, value: h.Command, kind: kindMulti})
+			family: profile.FamilyHooks, key: "post:" + h.Command, value: h.Command, kind: kindMulti,
+			valueAt: len("post: ")})
 	}
 	section("hooks", hooks)
 
@@ -524,8 +545,9 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			if encoded == "" {
 				continue // value shapes the encoder skips render nothing either
 			}
-			units = append(units, entry("systemd.units", "  "+directive+" = "+encoded,
-				profile.FamilySystemd, pathKey(name, directive), editableTomlValue(unit[directive])))
+			units = append(units, split(entry("systemd.units", "  "+directive+" = "+encoded,
+				profile.FamilySystemd, pathKey(name, directive), editableTomlValue(unit[directive])),
+				len("  "+directive+" = ")))
 		}
 		if len(units) == before+1 {
 			units = append(units, hint("systemd.units"))
@@ -535,7 +557,8 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 
 	var tools []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Tools)) {
-		tools = append(tools, entry("tools", name+" = "+cfg.Tools[name], profile.FamilyTools, name, cfg.Tools[name]))
+		tools = append(tools, split(entry("tools", name+" = "+cfg.Tools[name], profile.FamilyTools, name, cfg.Tools[name]),
+			len(name+" = ")))
 	}
 	section("tools", tools)
 
@@ -544,10 +567,13 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	// an unset field renders nothing, `a` on the container adds it.
 	fieldRow := func(section, family, entry, field, value string) wsRow {
 		text := "  " + field + " " + value
-		return wsRow{section: section, text: text, family: family, key: pathKey(entry, field), value: value}
+		return wsRow{section: section, text: text, family: family, key: pathKey(entry, field), value: value,
+			valueAt: len(text) - len(value)}
 	}
 	scalarRow := func(section, family, field, value string) wsRow {
-		return wsRow{section: section, text: field + " " + value, family: family, key: field, value: value}
+		text := field + " " + value
+		return wsRow{section: section, text: text, family: family, key: field, value: value,
+			valueAt: len(text) - len(value)}
 	}
 
 	var secrets []wsRow

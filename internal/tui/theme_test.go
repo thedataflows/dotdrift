@@ -87,6 +87,28 @@ func TestTheme_cursorRow(t *testing.T) {
 	require.NotEqual(t, th.cursorRow.Render("x"), th.rowText.Render(" x"), "the cursor style is visible")
 }
 
+// 0103: an entry row's key half recedes one step toward the label hues
+// while the value keeps the bright content hue — close enough to read as
+// the same text, far enough to tell the field's name from its content.
+// The key hue is its own registry entry, distinct from the label and
+// hint hues on both backgrounds.
+func TestTheme_rowKey(t *testing.T) {
+	require.Equal(t, lipgloss.Color("250"), paletteFor(true).key, "dark key sits one step under the 255 value")
+	require.Equal(t, lipgloss.Color("238"), paletteFor(false).key, "light key sits one step over the 234 value")
+	for _, isDark := range []bool{true, false} {
+		th := newTheme(isDark)
+		p := paletteFor(isDark)
+		require.NotEqual(t, "x", th.rowKey.Render("x"), "the key style is visible")
+		require.NotEqual(t, th.rowKey.Render("x"), th.rowText.Render("x"),
+			"key and value are visibly different shades")
+		require.NotEqual(t, th.rowKey.Render("x"), th.fieldLabel.Render("x"),
+			"the key shade is not the label hue")
+		require.NotEqual(t, p.key, p.value)
+		require.NotEqual(t, p.key, p.muted, "the key shade is not the label hue")
+		require.NotEqual(t, p.key, p.dim, "the key shade is not the hint hue")
+	}
+}
+
 // 0102: the caret renders nested inside styled rows, so it must release
 // only its reverse attribute — a full reset would erase the enclosing
 // row's color for the rest of the line.

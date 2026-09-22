@@ -221,12 +221,13 @@ func (m *Compositor) navFilterKey(k tea.KeyPressMsg) tea.Cmd {
 		m.nav.filtering = false
 		return nil
 	case "backspace":
-		if len(m.nav.query) > 0 {
-			want := m.nav.selected().moduleID
-			m.nav.query = m.nav.query[:len(m.nav.query)-1]
-			m.nav.refilter(want)
+		if len(m.nav.query) == 0 {
+			return nil
 		}
-		return nil
+		want := m.nav.selected().moduleID
+		m.nav.query = m.nav.query[:len(m.nav.query)-1]
+		m.nav.refilter(want)
+		return m.debouncedSyncWorkspace()
 	case "up", "k":
 		m.nav.move(-1)
 		return m.syncWorkspace()
@@ -238,6 +239,7 @@ func (m *Compositor) navFilterKey(k tea.KeyPressMsg) tea.Cmd {
 		want := m.nav.selected().moduleID
 		m.nav.query = append(m.nav.query, []rune(k.Text)...)
 		m.nav.refilter(want)
+		return m.debouncedSyncWorkspace()
 	}
 	return nil
 }

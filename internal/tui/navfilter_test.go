@@ -141,3 +141,84 @@ func TestFilter_clickSelectsAndExitsMode(t *testing.T) {
 	require.False(t, c.nav.filtering, "a click commits the typing mode")
 	require.Contains(t, plainFrame(c), "/ e · esc clears", "the filter stays applied")
 }
+
+// T-tui-navfilter (0101): a query change does not sync the workspace per
+// keystroke (that would read a layer file per character); a debounce
+// syncs it to the selection once typing settles.
+
+// settle runs the tick cmd a query change returned and feeds the
+// resulting message back in, then settles any scheduled layer read.
+func settle(t *testing.T, c *Compositor, cmd tea.Cmd) *Compositor {
+	t.Helper()
+	msg := mustMsg(cmd)
+	require.IsType(t, filterSettleMsg{}, msg, "a query change schedules the settle tick")
+	c, next := cstep(c, msg)
+	return wsSettle(t, c, next)
+}
+
+func TestFilter_typingSettlesDetails(t *testing.T) {
+	c := filterShell(t)
+	require.Equal(t, "demo", c.ws.moduleID)
+
+	c = cpress(c, "/")
+	var cmd tea.Cmd
+	c, _ = cstep(c, tea.KeyPressMsg{Code: 'o', Text: "o"})
+	c, cmd = cstep(c, tea.KeyPressMsg{Code: 't', Text: "t"})
+	require.Equal(t, "other", c.nav.selected().moduleID, "the cursor lands on the match")
+	require.Equal(t, "demo", c.ws.moduleID, "typing does not sync the workspace per keystroke")
+
+	c = settle(t, c, cmd)
+	require.Equal(t, "other", c.ws.moduleID, "the settled filter syncs the workspace to the selection")
+}
+
+func TestFilter_backspaceSettlesDetails(t *testing.T) {
+	c := filterShell(t)
+	c = wsPress(t, c, "j")
+	require.Equal(t, "other", c.ws.moduleID)
+
+	c = cpress(c, "/")
+	c, _ = cstep(c, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	require.Equal(t, "demo", c.nav.selected().moduleID, "the query moves the cursor to demo")
+	require.Equal(t, "other", c.ws.moduleID, "the workspace still shows other")
+	c, cmd := cstep(c, keyPress("backspace"))
+	require.Equal(t, "demo", c.nav.selected().moduleID, "backspace re-broadens, the cursor keeps demo")
+	require.Equal(t, "other", c.ws.moduleID, "backspace does not sync per keystroke either")
+
+	c = settle(t, c, cmd)
+	require.Equal(t, "demo", c.ws.moduleID, "the settled backspace syncs the workspace")
+}
+
+func TestFilter_pasteSettlesDetails(t *testing.T) {
+	c := filterShell(t)
+	c = cpress(c, "/")
+	c, cmd := cstep(c, tea.PasteMsg{Content: "ot"})
+	require.Equal(t, "other", c.nav.selected().moduleID)
+	require.Equal(t, "demo", c.ws.moduleID, "pasting does not sync per message")
+
+	c = settle(t, c, cmd)
+	require.Equal(t, "other", c.ws.moduleID, "the settled paste syncs the workspace")
+}
+
+func TestFilter_noMatchSettlesToEmptyWorkspace(t *testing.T) {
+	c := filterShell(t)
+	c = cpress(c, "/")
+	var cmd tea.Cmd
+	for _, r := range "zzz" {
+		c, cmd = cstep(c, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	require.Empty(t, moduleLabels(c))
+
+	c = settle(t, c, cmd)
+	require.Empty(t, c.ws.moduleID, "an empty match set settles to an empty workspace")
+}
+
+func TestFilter_staleSettleTickIsIgnored(t *testing.T) {
+	c := filterShell(t)
+	c = cpress(c, "/")
+	c = typeText(c, "ot")
+	require.Equal(t, "demo", c.ws.moduleID)
+
+	c, cmd := cstep(c, filterSettleMsg{seq: c.filterSeq - 1})
+	require.Nil(t, cmd, "a superseded tick schedules nothing")
+	require.Equal(t, "demo", c.ws.moduleID, "a superseded tick does not sync")
+}

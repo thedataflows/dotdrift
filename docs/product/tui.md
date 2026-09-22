@@ -73,7 +73,10 @@ view stack wholesale). Its parts:
   children follow their module), `j`/`k`/arrows move within the
   matches with the workspace following, and the query shows at the
   pane bottom — the `/ demo▏` cursor bar while typing, a named
-  `/ demo · esc clears` after enter keeps the filter applied. `esc`
+  `/ demo · esc clears` after enter keeps the filter applied. The
+  workspace follows the selection once typing settles (300 ms debounce,
+  0101 — a sync per keystroke would read a layer file per character);
+  an empty match set settles to an empty workspace. `esc`
   removes the filter (while typing, after enter, or from the base esc
   rule). The cursor keeps its module across query changes while it
   still matches; an empty result names the query. Mouse clicks work

@@ -48,9 +48,16 @@ type opFinishedMsg struct {
 type msgFadeMsg struct{ token int }
 type spinTickMsg struct{}
 
+// filterSettleMsg is the nav filter's debounce tick (0101): a query
+// change moves the cursor on every keystroke, but syncing the workspace
+// per keystroke would read a layer file per character — the last tick
+// wins and syncs once typing settles.
+type filterSettleMsg struct{ seq int }
+
 const (
-	msgFadeAfter = 4 * time.Second
-	spinInterval = 100 * time.Millisecond
+	msgFadeAfter      = 4 * time.Second
+	spinInterval      = 100 * time.Millisecond
+	filterSettleAfter = 300 * time.Millisecond
 )
 
 var spinFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
@@ -130,6 +137,10 @@ type Compositor struct {
 	message  string
 	msgErr   bool
 	msgToken int
+
+	// filterSeq sequences the nav filter's settle ticks (0101): only the
+	// latest tick syncs the workspace.
+	filterSeq int
 
 	help help.Model
 }
@@ -277,6 +288,11 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.spinIdx++
 		return m, m.spinTick()
+	case filterSettleMsg:
+		if msg.seq != m.filterSeq {
+			return m, nil // superseded by a newer keystroke
+		}
+		return m, m.syncWorkspace()
 	}
 
 	// Apply session messages are compositor-level, not modal input: they
@@ -379,7 +395,7 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			want := m.nav.selected().moduleID
 			m.nav.query = append(m.nav.query, pasteRunes(p.Content)...)
 			m.nav.refilter(want)
-			return m, nil
+			return m, m.debouncedSyncWorkspace()
 		}
 		if k, ok := msg.(tea.KeyPressMsg); ok {
 			return m, m.navFilterKey(k)
@@ -449,6 +465,15 @@ func (m *Compositor) syncNavToActiveLayer() {
 			return
 		}
 	}
+}
+
+// debouncedSyncWorkspace schedules the workspace sync for when the nav
+// filter's query settles (0101): typing moves the cursor per keystroke,
+// but a per-keystroke layer read is waste. The last tick wins.
+func (m *Compositor) debouncedSyncWorkspace() tea.Cmd {
+	m.filterSeq++
+	seq := m.filterSeq
+	return tea.Tick(filterSettleAfter, func(time.Time) tea.Msg { return filterSettleMsg{seq} })
 }
 
 // syncWorkspace points the workspace at the nav selection — the two never

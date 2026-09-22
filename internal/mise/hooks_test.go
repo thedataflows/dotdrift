@@ -173,40 +173,31 @@ func recordingRunMise(calls *[][]string, runErr error) *mise.Mise {
 	}
 }
 
-// recordingRunMiseFn lets each call decide its own error (by argv), so a test
-// can fail one command's task and succeed the rest.
-func recordingRunMiseFn(calls *[][]string, fn func(args []string) error) *mise.Mise {
-	return &mise.Mise{
-		LookPath: func(string) (string, error) { return "/fake/mise", nil },
-		RunContext: func(_ context.Context, _ string, args ...string) (string, error) {
-			*calls = append(*calls, append([]string{}, args...))
-			for _, a := range args {
-				if a == "--version" {
-					return mise.MinMiseVersion + "\n", nil
-				}
-			}
-			return "", fn(args)
-		},
-	}
-}
-
 // Each command runs as its own mise task, named by index against the Task
 // prefix, in order.
 func TestHooksStep_runsEachCommandAsTask(t *testing.T) {
 	var calls [][]string
-	exec := mise.NewExecMise(recordingRunMise(&calls, nil))
+	var handed [][]string
+	em := mise.NewExecMise(recordingRunMise(&calls, nil))
 	step := &mise.HooksStep{
-		Exec:       exec,
+		Exec:       em,
 		Commands:   []profile.HookCommand{{Command: "echo a"}, {Command: "echo b"}},
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
+		Handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd.Args)
+			return nil
+		},
 	}
 
 	require.Equal(t, "hooks-pre", step.Name())
 	require.NoError(t, step.Run(context.Background()))
-	require.Contains(t, calls, []string{"run", "--cd", "/state/mise", "hooks-pre-0"})
-	require.Equal(t, []string{"hooks-pre-0", "hooks-pre-1"}, taskNames(calls))
+	for _, c := range calls {
+		require.Equal(t, []string{"--version"}, c,
+			"only mise's version probe may use the piped runner; tasks go through handover")
+	}
+	require.Equal(t, []string{"hooks-pre-0", "hooks-pre-1"}, taskNames(handed))
 }
 
 // The pipeline ctx reaches the mise runner.
@@ -232,6 +223,7 @@ func TestHooksStep_ctxPropagates(t *testing.T) {
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
+		Handover:   func(*exec.Cmd) error { return nil },
 	}
 	ctx := context.WithValue(context.Background(), ctxKey{}, "marker")
 	require.NoError(t, step.Run(ctx))
@@ -256,51 +248,51 @@ func TestHooksStep_emptyCommandsSkipsRunner(t *testing.T) {
 // A required (non-optional) hook failing fails the step so resume re-runs it.
 func TestHooksStep_requiredFailureFailsStep(t *testing.T) {
 	boom := errors.New("task failed")
-	var calls [][]string
-	exec := mise.NewExecMise(recordingRunMise(&calls, boom))
+	var handed [][]string
 	step := &mise.HooksStep{
-		Exec:       exec,
+		Exec:       mise.NewExecMise(recordingRunMise(&[][]string{}, nil)),
 		Commands:   []profile.HookCommand{{Command: "echo pre"}},
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
+		Handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd.Args)
+			return boom
+		},
 	}
 	err := step.Run(context.Background())
 	require.ErrorIs(t, err, boom)
 	require.Contains(t, err.Error(), "echo pre", "error must name the failing command")
+	require.Len(t, taskNames(handed), 1, "the hook must have run before failing")
 }
 
 // An optional hook failing does NOT fail the step: it runs, the failure is
 // logged (warn) naming the command, and apply continues.
 func TestHooksStep_optionalFailureContinues(t *testing.T) {
 	buf := captureZerolog(t)
-	boom := errors.New("task failed")
-	var calls [][]string
-	exec := mise.NewExecMise(recordingRunMise(&calls, boom))
+	var handed [][]string
 	step := &mise.HooksStep{
-		Exec:       exec,
+		Exec:       mise.NewExecMise(recordingRunMise(&[][]string{}, nil)),
 		Commands:   []profile.HookCommand{{Command: "echo flaky", Optional: true}},
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
+		Handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd.Args)
+			return errors.New("task failed")
+		},
 	}
 	require.NoError(t, step.Run(context.Background()))
-	require.Len(t, taskNames(calls), 1, "optional hook must still run")
+	require.Len(t, taskNames(handed), 1, "optional hook must still run")
 	require.Contains(t, buf.String(), "echo flaky", "optional failure must be logged with the command")
 }
 
 // An optional hook failing mid-sequence still runs the remaining hooks in
 // order — optionality never reorders or short-circuits the sequence.
 func TestHooksStep_optionalFailureRunsRemaining(t *testing.T) {
-	var calls [][]string
-	exec := mise.NewExecMise(recordingRunMiseFn(&calls, func(args []string) error {
-		if len(args) > 0 && args[len(args)-1] == "hooks-pre-1" {
-			return errors.New("flaky failed")
-		}
-		return nil
-	}))
+	var handed [][]string
 	step := &mise.HooksStep{
-		Exec: exec,
+		Exec: mise.NewExecMise(recordingRunMise(&[][]string{}, nil)),
 		Commands: []profile.HookCommand{
 			{Command: "echo first"},
 			{Command: "echo flaky", Optional: true},
@@ -309,20 +301,25 @@ func TestHooksStep_optionalFailureRunsRemaining(t *testing.T) {
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
+		Handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd.Args)
+			if taskNames(handed)[len(taskNames(handed))-1] == "hooks-pre-1" {
+				return errors.New("flaky failed")
+			}
+			return nil
+		},
 	}
 	require.NoError(t, step.Run(context.Background()))
-	require.Equal(t, []string{"hooks-pre-0", "hooks-pre-1", "hooks-pre-2"}, taskNames(calls),
+	require.Equal(t, []string{"hooks-pre-0", "hooks-pre-1", "hooks-pre-2"}, taskNames(handed),
 		"all hooks must run in order despite the optional failure")
 }
 
-// taskNames pulls the trailing task name off each recorded `mise run` argv,
-// ignoring the EnsureContext --version probe that precedes the first run.
-func taskNames(calls [][]string) []string {
+// taskNames pulls the trailing task name off each handed `mise run` argv —
+// handover children only, so no probe filtering is needed (0104).
+func taskNames(argvs [][]string) []string {
 	var names []string
-	for _, c := range calls {
-		if len(c) > 0 && c[0] == "run" {
-			names = append(names, c[len(c)-1])
-		}
+	for _, c := range argvs {
+		names = append(names, c[len(c)-1])
 	}
 	return names
 }
@@ -359,17 +356,11 @@ var _ apply.Observer = (*recordingHooksObserver)(nil)
 // Every hook command announces its sub-step boundary; an optional failure
 // announces the failure and the sequence continues.
 func TestHooksStep_subStepEventsFirePerCommand(t *testing.T) {
-	boom := errors.New("task failed")
-	var calls [][]string
-	exec := mise.NewExecMise(recordingRunMiseFn(&calls, func(args []string) error {
-		if len(args) > 0 && args[len(args)-1] == "hooks-pre-1" {
-			return boom
-		}
-		return nil
-	}))
+	var handed [][]string
+	em := mise.NewExecMise(recordingRunMise(&[][]string{}, nil))
 	obs := &recordingHooksObserver{}
 	step := &mise.HooksStep{
-		Exec: exec,
+		Exec: em,
 		Commands: []profile.HookCommand{
 			{Command: "echo first"},
 			{Command: "echo flaky", Optional: true},
@@ -378,6 +369,13 @@ func TestHooksStep_subStepEventsFirePerCommand(t *testing.T) {
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
+		Handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd.Args)
+			if taskNames(handed)[len(taskNames(handed))-1] == "hooks-pre-1" {
+				return errors.New("task failed")
+			}
+			return nil
+		},
 	}
 	step.SetObserver(obs)
 
@@ -390,21 +388,20 @@ func TestHooksStep_subStepEventsFirePerCommand(t *testing.T) {
 	}, obs.events)
 }
 
-// With the interactive opt-in and a handover callback, every task routes
-// through the handover seam as a spec-built `mise run` child — the piped
-// runner is never invoked — and the step classifies NeedsTTY with the
-// interactive-hook reason (0071, 0064-D4).
-func TestHooksStep_interactiveRoutesThroughHandover(t *testing.T) {
+// Hook tasks are interactive everywhere (0088 config, 0104 execution):
+// every task routes through the handover seam as a spec-built `mise run`
+// child — the piped runner is never invoked — and the step classifies
+// NeedsTTY with the interactive-hook reason (0071).
+func TestHooksStep_alwaysRoutesThroughHandover(t *testing.T) {
 	var calls [][]string
 	runner := mise.NewExecMise(recordingRunMise(&calls, nil))
 	var handed [][]string
 	step := &mise.HooksStep{
-		Exec:        runner,
-		Commands:    []profile.HookCommand{{Command: "sudo chown"}, {Command: "echo done"}},
-		ConfigPath:  "/state/mise/mise.toml",
-		Task:        "hooks-pre",
-		StepName:    "hooks-pre",
-		Interactive: true,
+		Exec:       runner,
+		Commands:   []profile.HookCommand{{Command: "sudo chown"}, {Command: "echo done"}},
+		ConfigPath: "/state/mise/mise.toml",
+		Task:       "hooks-pre",
+		StepName:   "hooks-pre",
 		Handover: func(cmd *exec.Cmd) error {
 			handed = append(handed, cmd.Args)
 			return nil
@@ -421,24 +418,20 @@ func TestHooksStep_interactiveRoutesThroughHandover(t *testing.T) {
 		{"/fake/mise", "run", "--cd", "/state/mise", "hooks-pre-0"},
 		{"/fake/mise", "run", "--cd", "/state/mise", "hooks-pre-1"},
 	}, handed)
-
-	// Without the opt-in there is no terminal need and no handover.
-	step.Interactive = false
-	require.Empty(t, step.RequiresTTY())
 }
 
-// Interactive set without a handover callback fails loud (contract 13):
-// classifying NeedsTTY and then piping an interactive command would lie.
-func TestHooksStep_interactiveWithoutHandoverFailsLoud(t *testing.T) {
+// Hook tasks are interactive everywhere, so a missing handover callback
+// fails loud (contract 13): classifying NeedsTTY and then piping an
+// interactive task would lie (0104).
+func TestHooksStep_withoutHandoverFailsLoud(t *testing.T) {
 	var calls [][]string
 	runner := mise.NewExecMise(recordingRunMise(&calls, nil))
 	step := &mise.HooksStep{
-		Exec:        runner,
-		Commands:    []profile.HookCommand{{Command: "sudo chown"}},
-		ConfigPath:  "/state/mise/mise.toml",
-		Task:        "hooks-pre",
-		StepName:    "hooks-pre",
-		Interactive: true,
+		Exec:       runner,
+		Commands:   []profile.HookCommand{{Command: "sudo chown"}},
+		ConfigPath: "/state/mise/mise.toml",
+		Task:       "hooks-pre",
+		StepName:   "hooks-pre",
 	}
 
 	err := step.Run(context.Background())

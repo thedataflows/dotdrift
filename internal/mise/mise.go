@@ -636,16 +636,6 @@ func (e *ExecMise) DotfilesApplySudoCmd(ctx context.Context, configPath string, 
 	return e.mise.newOpCmd(ctx, trustEnv(configPath), argv[0], argv[1:]...), nil
 }
 
-// RunTask runs a named task (e.g. "hooks:pre") from the generated config.
-func (e *ExecMise) RunTask(ctx context.Context, configPath, taskName string) error {
-	path, err := e.mise.EnsureContext(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = e.mise.runOp(ctx, trustEnv(configPath), path, "run", "--cd", filepath.Dir(configPath), taskName)
-	return err
-}
-
 // RunTaskCmd builds (never starts) the child for one mise task run — the
 // handover twin source (issue 0071): stdio nil for the consumer to wire,
 // env carrying the trust plumbing, argv `mise run --cd <dir> <task>`.

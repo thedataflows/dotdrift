@@ -40,7 +40,6 @@ func TestSession_cancelMidHandoverReportsCancelled(t *testing.T) {
 
 	opts := baseOpts(filepath.Join("..", "..", "testdata", "profiles", "resolve"), filepath.Join(dir, "state.json"))
 	opts.Sections = map[string]bool{"hooks": true}
-	opts.HandoverAvailable = ptr(true)
 	opts.Handover = func(cmd *exec.Cmd) error {
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 		return cmd.Run()

@@ -413,8 +413,9 @@ func TestSession_backupEmitsEvents(t *testing.T) {
 }
 
 // Preview freezes the per-step TTY classification at Start: stable across
-// calls, one entry per step. Real steps declare no terminal need yet —
-// the honest classification arrives with real handover surfacing (0071).
+// calls, one entry per step. Hook steps always declare the terminal need —
+// their tasks are interactive everywhere (0088 config, 0104 execution);
+// every other step stays terminal-free.
 func TestSession_previewReportsTTYClassification(t *testing.T) {
 	dir := t.TempDir()
 	deps, _ := stubSessionDeps(t, testFacts())
@@ -426,7 +427,12 @@ func TestSession_previewReportsTTYClassification(t *testing.T) {
 	require.Equal(t, "hooks-pre", pv[0].Name)
 	require.Equal(t, "hooks-post", pv[4].Name)
 	for _, p := range pv {
-		require.False(t, p.NeedsTTY, "no real step surfaces a terminal need until 0071")
+		if strings.HasPrefix(p.Name, "hooks-") {
+			require.True(t, p.NeedsTTY, "%s must classify NeedsTTY: interactive tasks (0104)", p.Name)
+			require.Contains(t, p.Reason, "interactive hook")
+			continue
+		}
+		require.False(t, p.NeedsTTY, "%s must not need the terminal", p.Name)
 		require.Empty(t, p.Reason)
 	}
 	require.Equal(t, pv, sess.Preview(), "preview must be stable")
@@ -598,27 +604,22 @@ func TestSession_hookSubStepEvents(t *testing.T) {
 
 // A failing required hook command is observable before the step-level
 // failure: a Sub-carrying StepFailed names the command, then the step
-// fails resumably (cursor untouched, session outcome Failed).
+// fails resumably (cursor untouched, session outcome Failed). The failure
+// rides the handover seam — hook tasks never run piped (0104).
 func TestSession_hookSubStepFailure(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	deps, _ := stubSessionDeps(t, testFacts())
-	events := &[]string{}
-	deps.NewMise = func() *mise.Mise {
-		m := fakeMise(events)
-		inner := m.Run
-		m.Run = func(name string, args ...string) (string, error) {
-			for _, a := range args {
-				if a == "hooks-pre-0" {
-					return "", errors.New("hook boom")
-				}
-			}
-			return inner(name, args...)
+
+	opts := baseOpts(resolveFixture(t), statePath)
+	opts.Handover = func(cmd *exec.Cmd) error {
+		if cmd.Args[len(cmd.Args)-1] == "hooks-pre-0" {
+			return errors.New("hook boom")
 		}
-		return m
+		return nil
 	}
 
-	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(resolveFixture(t), statePath))
+	sess, err := NewApplyArea(deps).Start(context.Background(), opts)
 	require.NoError(t, err)
 	evs := drain(t, sess)
 	res, err := sess.Wait()
@@ -647,16 +648,16 @@ func TestSession_hookSubStepFailure(t *testing.T) {
 	require.Equal(t, "hooks-pre", stepFails[0].Name)
 }
 
-// With handover available, hook steps classify as needing the terminal
-// (0064-D4: the interactive-hook opt-in) and their commands run through
-// the Handover seam instead of the piped mise runner (0071).
-func TestSession_interactiveHooksHandover(t *testing.T) {
+// Hook tasks are interactive everywhere (0104): with no terminal anywhere
+// in the test process, hook steps classify as needing the terminal and
+// their commands run through the Handover seam instead of the piped mise
+// runner (0071).
+func TestSession_hooksRunThroughHandoverEverywhere(t *testing.T) {
 	dir := t.TempDir()
 	deps, events := stubSessionDeps(t, testFacts())
 
 	var handed []*exec.Cmd
 	opts := baseOpts(resolveFixture(t), filepath.Join(dir, "s.json"))
-	opts.HandoverAvailable = ptr(true)
 	opts.Handover = func(cmd *exec.Cmd) error {
 		handed = append(handed, cmd)
 		return nil
@@ -709,8 +710,6 @@ func TestSession_interactiveHooksHandover(t *testing.T) {
 	require.Equal(t, len(pr.Plan.Hooks.Pre)+len(pr.Plan.Hooks.Post), subs)
 	require.Equal(t, OutcomeCompleted, func() SessionOutcome { r, _ := sess.Wait(); return r.Outcome }())
 }
-
-func ptr[T any](v T) *T { return &v }
 
 // hasEnv reports whether the environment carries the key.
 func hasEnv(env []string, key string) bool {

@@ -120,14 +120,15 @@ type HooksStep struct {
 	ConfigPath string
 	Task       string // mise task-name prefix, e.g. "hooks-pre"; per-command tasks are <Task>-<i>
 	StepName   string // pipeline step name, e.g. "hooks-pre"
-	// Interactive says this session can put a real terminal under the hook
-	// child: with a Handover callback every task runs through it (issue
-	// 0071) instead of the piped runner. The tasks are always generated
-	// `interactive = true` (issue 0088) — without a terminal mise degenerates
-	// the key to plain execution, so the piped path is unchanged.
-	Interactive bool
+	// Hook tasks are interactive everywhere — the generated tasks always
+	// carry mise's `interactive = true` (0088) and every task runs through
+	// the handover seam (0104), never through the piped runner: dotdrift
+	// itself must not strip the terminal the key promises. Without a
+	// terminal on the consumer's stdio mise degenerates the task to plain
+	// execution (verified 2026.9.10), so terminal-less callers are
+	// unchanged apart from streaming.
 	// Handover runs one child command on the consumer's terminal. Injected
-	// by the apply session; nil (no session) keeps the piped runner path.
+	// by the apply session; nil fails loud (contract 13).
 	Handover apply.HandoverFunc
 
 	obs apply.Observer // injected by the pipeline; nil = no observation
@@ -141,9 +142,9 @@ var (
 func (s *HooksStep) Name() string { return s.StepName }
 
 // RequiresTTY classifies the step up front (0064-D4): interactive hook
-// commands run on the consumer's terminal.
+// tasks run on the consumer's terminal — always (0104).
 func (s *HooksStep) RequiresTTY() string {
-	if s.Interactive && len(s.Commands) > 0 {
+	if len(s.Commands) > 0 {
 		return "interactive hook commands run on your terminal"
 	}
 	return ""
@@ -163,10 +164,10 @@ func (s *HooksStep) Run(ctx context.Context) error {
 	if s.Exec == nil {
 		return fmt.Errorf("no mise exec configured")
 	}
-	// Interactive with no handover fails loud (contract 13): the step just
-	// classified NeedsTTY — piping an interactive command would lie.
-	if s.Interactive && s.Handover == nil {
-		return fmt.Errorf("interactive hooks require a handover callback")
+	// Interactive tasks with no handover fail loud (contract 13): the step
+	// just classified NeedsTTY — piping an interactive task would lie.
+	if s.Handover == nil {
+		return fmt.Errorf("interactive hook tasks require a handover callback")
 	}
 	for i, c := range s.Commands {
 		task := fmt.Sprintf("%s-%d", s.Task, i)
@@ -175,14 +176,10 @@ func (s *HooksStep) Run(ctx context.Context) error {
 			s.obs.HookStarted(s.StepName, sub)
 		}
 		var err error
-		if s.Interactive {
-			var cmd *exec.Cmd
-			cmd, err = s.Exec.RunTaskCmd(ctx, s.ConfigPath, task)
-			if err == nil {
-				err = s.Handover(cmd)
-			}
-		} else {
-			err = s.Exec.RunTask(ctx, s.ConfigPath, task)
+		var cmd *exec.Cmd
+		cmd, err = s.Exec.RunTaskCmd(ctx, s.ConfigPath, task)
+		if err == nil {
+			err = s.Handover(cmd)
 		}
 		if err != nil {
 			if s.obs != nil {

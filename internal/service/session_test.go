@@ -97,7 +97,6 @@ func stubSessionDeps(t *testing.T, f *facts.Facts) (ApplyDeps, *[]string) {
 		NewSmbRunner: func() smb.Runner {
 			return &recordingSmbRunner{events: events}
 		},
-		StdinIsTerminal: func() bool { return false },
 	}, events
 }
 

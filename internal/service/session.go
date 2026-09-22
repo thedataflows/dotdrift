@@ -38,11 +38,6 @@ type ApplyOpts struct {
 	// consumer) before steps see it.
 	Handover func(*exec.Cmd) error
 	Output   io.Writer // nil = event mode; attached = fd passthrough (D2)
-	// HandoverAvailable overrides StdinIsTerminal for the interactive-hook
-	// opt-in at config-write (0064-D4's absorption row): nil = the deps'
-	// stdin reality (today's behavior); a UI that can hand the terminal
-	// over sets it true.
-	HandoverAvailable *bool
 }
 
 // ApplyArea is the session area of the service layer: it starts and owns
@@ -108,8 +103,7 @@ func (s *ApplySession) Wait() (*SessionResult, error) {
 }
 
 // prepared carries the shared session prologue's results (reads, path
-// layout, the interactive decision): everything Start and Preview need
-// before steps exist.
+// layout): everything Start and Preview need before steps exist.
 type prepared struct {
 	facts          *facts.Facts
 	profile        *profile.Profile
@@ -118,7 +112,6 @@ type prepared struct {
 	statePath      string
 	profileRoot    string
 	misePluginsDir string
-	interactive    bool
 }
 
 // prepare runs the shared prologue: validate, detect, load, filter,
@@ -167,16 +160,10 @@ func (a *ApplyArea) prepare(opts ApplyOpts) (*prepared, error) {
 		misePluginsDir = mise.PluginsDirFromEnv()
 	}
 
-	// D4: the interactive-hook routing keys on handover availability, not
-	// raw stdin — CLI passes its own reality via deps, a UI that can hand
-	// the terminal over sets HandoverAvailable. Decided once, here: it
-	// drives the hook classification. Config-write is unconditional since
-	// issue 0088 — hook tasks are always `interactive = true`; this decides
-	// only whether the children run through the handover seam or piped.
-	interactive := a.deps.StdinIsTerminal()
-	if opts.HandoverAvailable != nil {
-		interactive = *opts.HandoverAvailable
-	}
+	// D4 decided hook routing on handover availability; since 0088 the
+	// config is unconditional and since 0104 the execution is too: hook
+	// tasks always run through the handover seam — there is no piped
+	// routing to decide anymore.
 
 	return &prepared{
 		facts:          f,
@@ -186,7 +173,6 @@ func (a *ApplyArea) prepare(opts ApplyOpts) (*prepared, error) {
 		statePath:      statePath,
 		profileRoot:    profileRoot,
 		misePluginsDir: misePluginsDir,
-		interactive:    interactive,
 	}, nil
 }
 
@@ -221,7 +207,7 @@ func (a *ApplyArea) Preview(opts ApplyOpts) ([]StepPreview, error) {
 	}
 	steps := buildSteps(prep.sections, prep.plan, mise.NewExecMise(a.deps.NewMise()),
 		prep.facts, prep.profileRoot, nil, prep.misePluginsDir,
-		opts, a.deps, newConfigPaths(filepath.Dir(prep.statePath)), prep.interactive)
+		opts, a.deps, newConfigPaths(filepath.Dir(prep.statePath)))
 	return classifySteps(steps), nil
 }
 
@@ -281,7 +267,7 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 	paths := newConfigPaths(filepath.Dir(prep.statePath))
 
 	run.steps = buildSteps(prep.sections, plan, runner, f, prep.profileRoot, out,
-		prep.misePluginsDir, opts, a.deps, paths, prep.interactive)
+		prep.misePluginsDir, opts, a.deps, paths)
 
 	run.index = make(map[string]int, len(run.steps))
 	for i, st := range run.steps {
@@ -319,7 +305,6 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		paths:       paths,
 		profileRoot: prep.profileRoot,
 		cursor:      s0.LastCompleted,
-		interactive: prep.interactive,
 	})
 	return sess, nil
 }
@@ -382,7 +367,6 @@ type runSpec struct {
 	paths       configPaths
 	profileRoot string
 	cursor      string
-	interactive bool
 }
 
 // run executes the absorbed orchestration (the cmd/apply.go Run body,

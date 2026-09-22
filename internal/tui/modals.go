@@ -234,8 +234,6 @@ func (m *Compositor) startApplyRun() tea.Cmd {
 		Modules:     m.applyModules, // the P-press yank snapshot (0093); nil = all
 	}
 	if m.send != nil {
-		avail := true
-		opts.HandoverAvailable = &avail
 		opts.Handover = m.handover
 	}
 	return func() tea.Msg {

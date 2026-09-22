@@ -2,7 +2,6 @@ package service
 
 import (
 	"github.com/thedataflows/dotdrift/internal/detect"
-	"github.com/thedataflows/dotdrift/internal/executil"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/packages"
@@ -23,13 +22,6 @@ type ApplyDeps struct {
 	NewMise      func() *mise.Mise
 	PackagesFor  func(backend string) packages.Backend
 	NewSmbRunner func() smb.Runner
-	// StdinIsTerminal reports whether the consumer's stdin is a terminal.
-	// It keys the session-side interactive-hook routing (0064-D4): the CLI
-	// passes its own reality; a UI that can hand the terminal over sets
-	// ApplyOpts.HandoverAvailable instead. The generated hook tasks are
-	// always `interactive = true` (issue 0088) — this decides only whether
-	// the children run through the handover seam or piped.
-	StdinIsTerminal func() bool
 }
 
 // WithDefaults returns the dep set with zero-value fields replaced by the
@@ -53,9 +45,6 @@ func (d ApplyDeps) WithDefaults() ApplyDeps {
 	}
 	if d.NewSmbRunner == nil {
 		d.NewSmbRunner = func() smb.Runner { return &smb.ExecRunner{} }
-	}
-	if d.StdinIsTerminal == nil {
-		d.StdinIsTerminal = executil.IsStdinTerminal
 	}
 	return d
 }

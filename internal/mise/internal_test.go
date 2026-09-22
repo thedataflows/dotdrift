@@ -95,8 +95,8 @@ func TestExecMise_trustsGeneratedConfigDir(t *testing.T) {
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.DotfilesApply(ctx, cfg, true, false)
 		}},
-		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.RunTask(ctx, cfg, "hooks:pre")
+		{"Bootstrap", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.Bootstrap(ctx, cfg, true)
 		}},
 	}
 	for _, tc := range cases {
@@ -188,9 +188,9 @@ func TestExecMise_verboseStreamsOperationOutput(t *testing.T) {
 		{"DotfilesApply", func(ctx context.Context, em *ExecMise, cfg string) error {
 			return em.DotfilesApply(ctx, cfg, true, false)
 		}, "dotfiles"},
-		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.RunTask(ctx, cfg, "hooks:pre")
-		}, "run"},
+		{"Bootstrap", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.Bootstrap(ctx, cfg, true)
+		}, "bootstrap"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -283,10 +283,10 @@ func TestExecMise_verboseEchoesCommandLine(t *testing.T) {
 		}, func(script, cfgDir string) []string {
 			return []string{script, "install", "--cd", cfgDir}
 		}},
-		{"RunTask", func(ctx context.Context, em *ExecMise, cfg string) error {
-			return em.RunTask(ctx, cfg, "hooks:pre")
+		{"Bootstrap", func(ctx context.Context, em *ExecMise, cfg string) error {
+			return em.Bootstrap(ctx, cfg, true)
 		}, func(script, cfgDir string) []string {
-			return []string{script, "run", "--cd", cfgDir, "hooks:pre"}
+			return []string{script, "bootstrap", "--cd", cfgDir, "--yes"}
 		}},
 	}
 	for _, tc := range cases {

@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -106,6 +105,10 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) *applyFakes {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	events := &[]string{}
 	backend := &recordingBackend{events: events}
+	// Hook tasks always run through the handover seam (0104); the recording
+	// stand-in keeps the fake mise path from ever forking and logs each
+	// child that would own the terminal.
+	recordHandover(t, events)
 	return &applyFakes{
 		events:  events,
 		backend: backend,
@@ -122,12 +125,6 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) *applyFakes {
 			NewMise:      func() *mise.Mise { return fakeMise(events) },
 			PackagesFor:  func(string) packages.Backend { return backend },
 			NewSmbRunner: func() smb.Runner { return &recordingSmbRunner{events: events} },
-			// Pin the non-interactive path: go test's stdin is /dev/null,
-			// whose char-device mode makes the real probe report a terminal
-			// and would push hook tasks through the handover seam (where the
-			// fake mise path cannot exec). The interactive handover path is
-			// covered at the service seam (issue 0071).
-			StdinIsTerminal: func() bool { return false },
 		},
 	}
 }
@@ -177,12 +174,12 @@ func TestApply_happyPath(t *testing.T) {
 		"load",
 		"resolve",
 		"mise:ensure",
-		"mise:run run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-pre-0",
+		"handover:/fake/mise /fake/mise run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-pre-0",
 		"packages:absent",
 		"mise:run bootstrap",
 		"mise:run install",
 		"mise:run dotfiles apply",
-		"mise:run run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-post-0",
+		"handover:/fake/mise /fake/mise run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-post-0",
 	)
 	requireOrder(t, *fk.events, "mise:run bootstrap")
 	require.Contains(t, *fk.events, "packages:absent emacs,nano")
@@ -239,37 +236,28 @@ func TestApply_resumeSkipsStepsThroughCursor(t *testing.T) {
 	require.True(t, os.IsNotExist(statErr), "state file must be removed after the resumed apply completes")
 }
 
-// Hook tasks are always generated with mise's interactive = true (issue
-// 0088): interactivity is the task's intrinsic property — a hook may run an
-// interactive command (e.g. sudo) — not a function of the writing session's
-// TTY. mise degenerates the key to plain execution without a terminal, so
-// piped/CI runs are unchanged.
+// Hook tasks are always generated with mise's interactive = true and always
+// routed through the handover seam (issues 0088, 0104): interactivity is the
+// task's intrinsic property — a hook may run an interactive command (e.g.
+// sudo) — never a function of the driving session's TTY. mise degenerates
+// the key to plain execution without a terminal, so piped/CI runs still
+// work; they stream instead of being captured.
 func TestApply_hookTasksAlwaysInteractive(t *testing.T) {
-	run := func(t *testing.T, tty bool) string {
-		t.Helper()
-		dir := t.TempDir()
-		statePath := filepath.Join(dir, "state.json")
-		f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
-		fk := stubApplyDeps(t, f)
-		fk.deps.StdinIsTerminal = func() bool { return tty }
-		// tty=true now also routes hook commands through the handover seam
-		// (issue 0071); a no-op handover stands in for the terminal exec so
-		// the fake mise path is never forked.
-		orig := handoverToTerminal
-		handoverToTerminal = func(*exec.Cmd) error { return nil }
-		t.Cleanup(func() { handoverToTerminal = orig })
-		require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
-		cfg, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
-		require.NoError(t, err)
-		return string(cfg)
-	}
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	fk := stubApplyDeps(t, f)
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
+	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "interactive = true")
 
-	t.Run("tty marks tasks interactive", func(t *testing.T) {
-		require.Contains(t, run(t, true), "interactive = true")
-	})
-	t.Run("no tty still marks tasks interactive", func(t *testing.T) {
-		require.Contains(t, run(t, false), "interactive = true")
-	})
+	// The tasks ran through the handover seam, never the piped runner.
+	require.Contains(t, *fk.events, "handover:/fake/mise /fake/mise run --cd "+
+		filepath.Join(dir, "mise", "shared")+" hooks-pre-0")
+	for _, e := range *fk.events {
+		require.NotContains(t, e, "mise:run run", "hook tasks must not run through the piped runner")
+	}
 }
 
 // The tools/dotfiles steps each get their own config (in their own
@@ -510,13 +498,13 @@ func TestApply_mountsStepConditional(t *testing.T) {
 	require.NoError(t, cmd.Run())
 
 	requireOrder(t, *fk.events,
-		"mise:run run",    // hooks:pre
+		"handover:",       // hooks:pre
 		"--only packages", // packages
 		"--only files",    // system files + mount destination dirs (issue 0042)
 		"--only services", // mounts services
 		"--only accounts", // smb accounts (+services)
 		"smb:run",         // PostBootstrap testparm
-		"mise:run run",    // hooks:post
+		"handover:",       // hooks:post
 	)
 
 	_, statErr := os.Stat(statePath)
@@ -542,7 +530,7 @@ func TestApply_smbStepConditional(t *testing.T) {
 		"mise:run bootstrap", // mounts services
 		"mise:run bootstrap", // smb accounts+services
 		"smb:run",            // PostBootstrap testparm
-		"mise:run run",       // hooks:post
+		"handover:",          // hooks:post
 	)
 
 	joined := strings.Join(*fk.events, "\n")
@@ -668,12 +656,12 @@ func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, bac
 
 	var captured *mise.Mise
 	deps = &service.ApplyDeps{
-		Detect:          func() (*facts.Facts, error) { return f, nil },
-		NewMise:         func() *mise.Mise { captured = fakeMise(events); return captured },
-		PackagesFor:     func(string) packages.Backend { return backend },
-		NewSmbRunner:    func() smb.Runner { return sr },
-		StdinIsTerminal: func() bool { return false }, // non-interactive path; see stubApplyFakes
+		Detect:       func() (*facts.Facts, error) { return f, nil },
+		NewMise:      func() *mise.Mise { captured = fakeMise(events); return captured },
+		PackagesFor:  func(string) packages.Backend { return backend },
+		NewSmbRunner: func() smb.Runner { return sr },
 	}
+	recordHandover(t, events) // hook tasks always handover (0104); never fork the fake
 	return &captured, backend, sr, deps
 }
 

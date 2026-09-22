@@ -603,7 +603,6 @@ func TestExecMise_operationsNeutralCwd(t *testing.T) {
 	require.NoError(t, e.EnsureAndInstall(ctx, configPath))
 	require.NoError(t, e.DotfilesApply(ctx, configPath, true, false))
 	require.NoError(t, e.Bootstrap(ctx, configPath, true, "packages"))
-	require.NoError(t, e.RunTask(ctx, configPath, "hooks-pre-0"))
 
 	data, err := os.ReadFile(marker)
 	require.NoError(t, err)
@@ -611,7 +610,7 @@ func TestExecMise_operationsNeutralCwd(t *testing.T) {
 	require.NoError(t, err)
 	want, _ := filepath.EvalSymlinks(home)
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	require.Len(t, lines, 5, "version probe + four operations: %v", lines)
+	require.Len(t, lines, 4, "version probe + three operations: %v", lines)
 	for _, l := range lines {
 		parts := strings.SplitN(l, " ", 2)
 		require.Len(t, parts, 2)

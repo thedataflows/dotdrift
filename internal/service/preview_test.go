@@ -21,7 +21,6 @@ func TestApplyArea_preview_classifiesWithoutStarting(t *testing.T) {
 	area := NewApplyArea(deps)
 
 	opts := baseOpts(resolveFixture(t), statePath)
-	opts.HandoverAvailable = ptr(true) // the TUI's reality: handover always available
 
 	previews, err := area.Preview(opts)
 	require.NoError(t, err)
@@ -45,7 +44,7 @@ func TestApplyArea_preview_classifiesWithoutStarting(t *testing.T) {
 			}
 		}
 		return false
-	}(), "hooks-pre classifies NeedsTTY under HandoverAvailable")
+	}(), "hooks-pre classifies NeedsTTY: hook tasks are interactive everywhere (0104)")
 
 	_, _ = sess.Wait()
 }

@@ -158,7 +158,6 @@ type ApplyOpts struct {
     Backup      bool
     Handover    func(*exec.Cmd) error // required; see "Terminal handover"
     Output      io.Writer             // nil = event mode; attached = fd passthrough
-    HandoverAvailable *bool           // nil = the process's stdin reality; a UI that can hand the terminal over sets true
 }
 ```
 
@@ -235,12 +234,11 @@ importing any UI package (0061-D4, 0064-D9):
   a gate can say "N steps will take the terminal" before anything runs.
   Both walk the same `buildSteps`/`RequiresTTY` path, so the
   classification cannot drift from behavior. The hook tasks are always
-  generated `interactive = true` (issue 0088) — mise degenerates the key
-  to plain execution without a terminal — while **handover availability**
-  (`HandoverAvailable`, not raw stdin state) decides whether this
-  session's hook children run through the handover seam: the CLI passes
-  its own stdin reality, a UI that can hand the terminal over passes
-  true.
+  generated `interactive = true` (issue 0088) and always run through the
+  handover seam (issue 0104) — mise degenerates the key to plain
+  execution when the consumer's stdio has no terminal, so terminal-less
+  callers keep working; a consumer that cannot hand over at all gets a
+  loud error instead of a piped interactive task.
 
 ## Cancel and results
 

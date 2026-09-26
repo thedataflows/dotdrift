@@ -2,7 +2,7 @@
 # E2E image: build dotdrift from this repo, then run the scenario on a slim
 # Debian runtime with real apt + real mise bootstrap.
 
-FROM golang:1.26-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 WORKDIR /src
 COPY . .
 RUN go build -mod=vendor -o /out/dotdrift .

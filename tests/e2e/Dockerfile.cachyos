@@ -4,7 +4,7 @@
 # binary repo (cachyos/paru), so dotdrift's Arch backend works without an AUR
 # build, and paru installs repo packages as root.
 
-FROM golang:1.26-bookworm AS builder
+FROM golang:1.27-bookworm AS builder
 WORKDIR /src
 COPY . .
 RUN go build -mod=vendor -o /out/dotdrift .

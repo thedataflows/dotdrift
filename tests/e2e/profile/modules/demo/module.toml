@@ -1,5 +1,4 @@
 id = "demo"
-app = "demo"
 
 [packages]
 present = ["jq"]

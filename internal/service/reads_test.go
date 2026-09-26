@@ -161,7 +161,14 @@ func TestService_status_read(t *testing.T) {
 	}
 
 	var otherCalls int
+	// The read detects facts through the seam (nil facts → deps.Detect);
+	// pin the fixture facts so the test never reads the invoking user.
+	var detectCalls int
 	area := NewReadsArea(ReadsDeps{
+		Detect: func() (*facts.Facts, error) {
+			detectCalls++
+			return f, nil
+		},
 		OtherAccounts: func(string, *facts.Facts) ([]profile.Account, error) {
 			otherCalls++
 			return []profile.Account{{Name: "root", Uid: "0", Home: "/root"}}, nil
@@ -178,6 +185,7 @@ func TestService_status_read(t *testing.T) {
 	require.Equal(t, statePath, r.StatePath)
 	require.Equal(t, "packages", r.State.LastCompleted)
 	require.Equal(t, f.Username, r.Facts.Username)
+	require.Equal(t, 1, detectCalls, "the read detects once, through the seam")
 	require.Equal(t, dir, r.ProfileRoot, "profile root is absolute")
 	require.Len(t, r.Findings, 1, "the absent package is one finding")
 	require.Equal(t, "packages", r.Findings[0].Section)

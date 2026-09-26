@@ -422,6 +422,14 @@ func TestSession_previewReportsTTYClassification(t *testing.T) {
 	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(resolveFixture(t), filepath.Join(dir, "s.json")))
 	require.NoError(t, err)
 
+	// Settle before the body returns: the session keeps running while the
+	// test reads the preview, and an unsettled session writes into dir
+	// after the test ends — TempDir cleanup races (directory not empty).
+	// The preview is frozen at Start, so settling first loses nothing.
+	drain(t, sess)
+	_, err = sess.Wait()
+	require.NoError(t, err)
+
 	pv := sess.Preview()
 	require.Len(t, pv, 5)
 	require.Equal(t, "hooks-pre", pv[0].Name)

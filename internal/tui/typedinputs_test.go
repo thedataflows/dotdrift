@@ -206,15 +206,15 @@ func TestTyped_addFormBrowseCommitsIntoField(t *testing.T) {
 	c := typedShell(t)
 	c = cursorTo(t, c, "data") // the mounts container
 	c = cpress(c, "a")
-	f := topModal[*addForm](t, c)
-	c = cpress(c, "down") // the value row
+	topModal[*addForm](t, c) // the form opened
+	c = cpress(c, "down")    // the value row
 	c = cpress(c, "ctrl+o")
 	require.Equal(t, kindEither, topModal[*filePicker](t, c).mode, "ctrl+o on a path field browses (source: files or dirs)")
 	c = cpress(c, "ctrl+l")
 	c = cpress(c, "ctrl+u")
 	c = typeText(c, picked)
 	c = cpress(c, "enter")
-	f = topModal[*addForm](t, c)
+	f := topModal[*addForm](t, c)
 	require.Equal(t, picked, f.rows[1].field.String(), "the pick fills the form field; the form stays open")
 }
 

@@ -32,7 +32,7 @@ From a clone, run it directly: `./install.sh [version]`. It needs `curl`, `tar`,
 
 ### From source
 
-With [Go](https://go.dev) 1.26 or newer:
+With [Go](https://go.dev) 1.27 or newer:
 
 ```bash
 go install github.com/thedataflows/dotdrift@latest

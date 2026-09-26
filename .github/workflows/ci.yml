@@ -37,7 +37,7 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12
+          version: v2.13
       - name: gosec
         run: |
           go install github.com/securego/gosec/v2/cmd/gosec@v2.28

@@ -4,7 +4,7 @@ go = '1.27'
 ## https://github.com/goreleaser/goreleaser/releases
 "goreleaser" = '2.18'
 ## https://github.com/golangci/golangci-lint/releases
-"golangci-lint" = '2'
+"golangci-lint" = '2.14'
 ## https://github.com/securego/gosec/releases
 "aqua:securego/gosec" = '2'
 

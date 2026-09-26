@@ -72,6 +72,9 @@ preview test settles the session (`drain` + `Wait`) before the body returns.
 Toolchain side: golangci-lint-action `v2.12` → `v2.13` (the v2.13.2 binary is
 built with Go 1.27), release `go-version: 1.26` → `1.27`, e2e builder images
 `golang:1.26-bookworm` → `golang:1.27-bookworm`, `mise.toml` `go = '1.27'`.
+A same-day follow-up moved the linter pin to `v2.14` (mise `2.14` + the
+action's `version: v2.14`; v2.14.0 loads the module with 0 issues), so both
+pins name the 2.14 line.
 The version bump also surfaced one latent `ineffassign` in
 `TestTyped_addFormBrowseCommitsIntoField` (an assigned-then-reassigned `f`);
 the first binding is now the bare assertion it always was. The e2e scenario's

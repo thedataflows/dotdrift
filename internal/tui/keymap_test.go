@@ -238,7 +238,7 @@ func TestMouse_parity(t *testing.T) {
 	// Click a nav row: selects it and focuses the nav (the workspace
 	// follows on the identity placeholder — the click's load cmd is
 	// dropped by the harness, which is fine here).
-	c = cstepMouse(t, c, tea.MouseClickMsg{Button: tea.MouseLeft, X: 5, Y: 4})
+	c = cstepMouse(t, c, tea.MouseClickMsg{Button: tea.MouseLeft, X: 5, Y: 5})
 	require.Equal(t, focusNav, c.focus, "click focuses the pane")
 	require.Equal(t, 1, c.nav.cursor, "click selects the row")
 	require.Contains(t, c.ws.placeholderOrBody(), "plain", "the workspace follows the click")
@@ -256,6 +256,7 @@ func TestKeys_noOrphanedBindings(t *testing.T) {
 	require.ElementsMatch(t, keys, []string{
 		"j:nav", "k:nav", "down:nav", "up:nav", "h:nav", "l:nav", "left:nav", "right:nav",
 		"enter:nav", "/:nav", "n:nav", "m:nav", "O:nav", "space:nav", "y:nav", "P:both", "p:both", "?:both", "q:both", "tab:both", "o:both",
+		"s:both", "1:both", "2:both", "3:both", "4:both",
 		"j:work", "k:work", "down:work", "up:work", "enter:work", "e:work", "left:work", "right:work", "a:both",
 		"d:work", "D:work", "ctrl+s:work", "ctrl+z:work", "ctrl+shift+z:work", "L:work", "w:work", "/:work",
 		"pgup:nav", "pgdown:nav", "home:nav", "end:nav",
@@ -279,9 +280,9 @@ func clickWorkRow(t *testing.T, c *Compositor, i int) *Compositor {
 	return cstepMouse(t, c, tea.MouseClickMsg{Button: tea.MouseLeft, X: navW + 3, Y: workRowY(i)})
 }
 
-// workRowY is the screen row of workspace entry i (header + border +
-// title offsets).
-func workRowY(i int) int { return 4 + i }
+// workRowY is the screen row of workspace entry i (header + view row +
+// border + title offsets).
+func workRowY(i int) int { return 5 + i }
 
 func TestWritesMenu_cursorRowBar(t *testing.T) {
 	// 0075 T-tui-selection: modal menus use the same cursor treatment.

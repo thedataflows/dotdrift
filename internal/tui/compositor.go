@@ -82,6 +82,11 @@ type Compositor struct {
 	ws    workspaceModel
 	focus paneFocus
 
+	// view is the active base view on the view row (0107); stale marks
+	// the views whose data a write or apply outlived (markStale).
+	view  viewKind
+	stale [viewCount]bool
+
 	modals []modal
 
 	// afterPop is set by a modal's answer and runs after the modal pops
@@ -695,27 +700,37 @@ func (m *Compositor) compositedFrame() string {
 	return canvas.Render()
 }
 
-// baseFrame is header + panes + footer at the current size. In lipgloss
-// v2 a style's Width/Height include the border, so pane content gets the
-// outer dimensions minus two — a view handed the outer size overflows
-// the box (the workspace-all golden caught this).
+// baseFrame is header + view row + body + footer at the current size.
+// The Modules body is the two panes, untouched; another view renders
+// its own body. In lipgloss v2 a style's Width/Height include the
+// border, so pane content gets the outer dimensions minus two — a view
+// handed the outer size overflows the box (the workspace-all golden
+// caught this).
 func (m *Compositor) baseFrame() string {
 	navW, workW, paneH := m.layout()
-	left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-4, paneH-2, m.th, m.draftMarks()))
-	right := m.pane(m.focus == focusWork, workW-2, paneH, m.ws.view(workW-4, paneH-2, m.th))
+	var body string
+	if m.view == viewModules {
+		left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-4, paneH-2, m.th, m.draftMarks()))
+		right := m.pane(m.focus == focusWork, workW-2, paneH, m.ws.view(workW-4, paneH-2, m.th))
+		body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	} else {
+		body = m.viewBody(paneH)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left,
 		m.headerView(),
-		lipgloss.JoinHorizontal(lipgloss.Top, left, right),
+		m.viewRow(),
+		body,
 		m.footerView(),
 	)
 }
 
 // layout returns the nav and workspace total widths and the pane content
-// height: header 1 line, footer 2 lines, pane borders 2 rows.
+// height: header 1 line, view row 1 line, footer 2 lines, pane borders
+// 2 rows.
 func (m *Compositor) layout() (navW, workW, paneH int) {
 	navW = m.w * 3 / 10
 	navW = min(max(navW, 22), 44)
-	return navW, m.w - navW, m.h - 5
+	return navW, m.w - navW, m.h - 6
 }
 
 func (m *Compositor) pane(focused bool, w, h int, content string) string {

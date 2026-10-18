@@ -48,9 +48,13 @@ type manageSel struct {
 }
 
 // Reads is the compositor's narrow read seam (ADR-0008's doorway): the
-// modules listing, facts included. *service.ReadsArea satisfies it.
+// modules listing and the profile read, facts included.
+// *service.ReadsArea satisfies it.
 type Reads interface {
 	Modules(profilePath string, modules []string) (*service.ModulesRead, error)
+	// Profile is the light no-probes read behind the Profile view
+	// (0107); the view itself lands in slice 1c.
+	Profile(profilePath string, modules []string) (*service.ProfileRead, error)
 }
 
 // minWidth/minHeight: below this the shell shows the too-small guard.

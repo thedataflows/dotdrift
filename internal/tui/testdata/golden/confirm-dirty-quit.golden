@@ -1,4 +1,5 @@
  dotdrift · $PROFILE · host myhost · user cri  ● 1
+ Modules · Status · Plan · Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]  · meta  ●                                           │
 ││ ▸ demo ●                ││meta                                                              │
@@ -7,7 +8,6 @@
 │                          ││  scope user ◂▸                                                   │
 │                          ││packages ＋                                                       │
 │                          ││  + neovim ✎                                                      │
-│                          ││  + ripgrep ✎                                                     │
 │                      ╭────────────────────────────────────────────────────╮                  │
 │                      │                                                    │                  │
 │                      │  quit with unsaved drafts?                         │                  │
@@ -18,7 +18,7 @@
 │                      │  y confirm · n/esc cancel                          │                  │
 │                      │                                                    │                  │
 │                      ╰────────────────────────────────────────────────────╯                  │
-│                          ││                                                                  │
+│                          ││smb ＋                                                            │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

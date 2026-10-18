@@ -137,7 +137,7 @@ func TestFilter_clickSelectsAndExitsMode(t *testing.T) {
 	c := filterShell(t)
 	c = cpress(c, "/")
 	c = typeText(c, "e")
-	c = cstepMouse(t, c, tea.MouseClickMsg{X: 5, Y: 3, Button: tea.MouseLeft})
+	c = cstepMouse(t, c, tea.MouseClickMsg{X: 5, Y: 4, Button: tea.MouseLeft})
 	require.False(t, c.nav.filtering, "a click commits the typing mode")
 	require.Contains(t, plainFrame(c), "/ e · esc clears", "the filter stays applied")
 }

@@ -1,4 +1,5 @@
  dotdrift · $PROFILE · host myhost · user cri
+ Modules · Status · Plan · Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]  · when                                              │
 ││ ▸ demo                  ││meta                                                              │
@@ -22,7 +23,6 @@
 │                          ││    packages emacs ✎                                              │
 │                          ││hooks ＋                                                          │
 │                          ││systemd.units ＋                                                  │
-│                          ││tools ＋                                                          │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette • ? help • q quit

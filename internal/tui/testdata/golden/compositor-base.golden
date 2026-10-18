@@ -1,9 +1,9 @@
  dotdrift · $PROFILE · host myhost · user cri
+ Modules · Status · Plan · Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││module: shell                                                     │
 ││   shell                 ││packages: 3                                                       │
 │    firefox               ││                                                                  │
-│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

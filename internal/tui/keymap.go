@@ -63,6 +63,12 @@ func keyTable() []keyTableEntry {
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
 		{"P", "both", "apply", func(m *Compositor) tea.Cmd { return m.startApply() }},
 		{"tab", "both", "switch pane", func(m *Compositor) tea.Cmd { m.focus = (m.focus + 1) % 2; return nil }},
+		// view row (0107): s cycles, 1-4 jump — live in every view
+		{"s", "both", "next view", func(m *Compositor) tea.Cmd { m.view = (m.view + 1) % viewCount; return nil }},
+		{"1", "both", "modules view", func(m *Compositor) tea.Cmd { m.view = viewModules; return nil }},
+		{"2", "both", "status view", func(m *Compositor) tea.Cmd { m.view = viewStatus; return nil }},
+		{"3", "both", "plan view", func(m *Compositor) tea.Cmd { m.view = viewPlan; return nil }},
+		{"4", "both", "profile view", func(m *Compositor) tea.Cmd { m.view = viewProfile; return nil }},
 		// workspace pane
 		{"j", "work", "scroll down", func(m *Compositor) tea.Cmd { m.ws.move(1); return nil }},
 		{"k", "work", "scroll up", func(m *Compositor) tea.Cmd { m.ws.move(-1); return nil }},
@@ -100,7 +106,10 @@ func keyTable() []keyTableEntry {
 }
 
 // dispatchKey runs the binding for the pressed key and focused pane.
-// shift+tab aliases tab (two panes: reverse is forward).
+// shift+tab aliases tab (two panes: reverse is forward). Off the
+// Modules view, "both" bindings still run (view switching, help, quit)
+// and pane keys go to the active view's hook (0107) — nil until the
+// view has a body, so pane keys are dead on an empty view.
 func (m *Compositor) dispatchKey(s string) (tea.Cmd, bool) {
 	if s == "shift+tab" {
 		s = "tab"
@@ -110,7 +119,19 @@ func (m *Compositor) dispatchKey(s string) (tea.Cmd, bool) {
 		pane = "work"
 	}
 	for _, b := range keyTable() {
-		if b.key == s && (b.pane == pane || b.pane == "both") {
+		if b.key != s {
+			continue
+		}
+		if b.pane == "both" {
+			return b.run(m), true
+		}
+		if m.view != viewModules {
+			if h := m.viewHook(); h != nil {
+				return h(s)
+			}
+			return nil, false
+		}
+		if b.pane == pane {
 			return b.run(m), true
 		}
 	}
@@ -187,6 +208,17 @@ func (m *Compositor) helpRows() []helpRow {
 	}
 	if m.ws.editing != nil {
 		return []helpRow{{"type", "edit the field"}, {"enter", "commit"}, {"esc", "cancel"}, {"?", "this help"}}
+	}
+	if m.view != viewModules {
+		// Off the Modules view only the "both" bindings run (0107):
+		// the help cannot promise dead pane keys.
+		var rows []helpRow
+		for _, b := range keyTable() {
+			if b.pane == "both" {
+				rows = append(rows, helpRow{b.key, b.help})
+			}
+		}
+		return rows
 	}
 	pane := "nav"
 	if m.focus == focusWork {
@@ -400,9 +432,13 @@ func (m *Compositor) restoreIndex() (map[string]map[string][]service.RestoreHit,
 
 // baseMouse handles clicks and wheels on the two panes (modal content
 // handles its own; this runs only when no modal is open). Row hit math:
-// header 1 + border 1 + group title 1 → pane rows start at y=3; the
-// workspace's title line takes one more (y=4).
+// header 1 + view row 1 + border 1 + group title 1 → pane rows start at
+// y=4; the workspace's title line takes one more (y=5). Off the Modules
+// view there are no panes to hit.
 func (m *Compositor) baseMouse(msg tea.Msg) tea.Cmd {
+	if m.view != viewModules {
+		return nil
+	}
 	navW, _, _ := m.layout()
 	switch msg := msg.(type) {
 	case tea.MouseWheelMsg:
@@ -428,14 +464,14 @@ func (m *Compositor) baseMouse(msg tea.Msg) tea.Cmd {
 		m.nav.filtering = false // a click commits the typing mode; the filter stays
 		if msg.X < navW {
 			m.focus = focusNav
-			idx := m.nav.offset + msg.Y - 3
+			idx := m.nav.offset + msg.Y - 4
 			if idx >= 0 && idx < len(m.nav.rows()) {
 				m.nav.cursor = idx
 			}
 			return m.syncWorkspace()
 		}
 		m.focus = focusWork
-		idx := m.ws.offset + msg.Y - 4
+		idx := m.ws.offset + msg.Y - 5
 		if m.ws.selectableRow(idx) {
 			m.ws.cursor = idx
 			if m.doubleClick(idx) {

@@ -1,4 +1,5 @@
  dotdrift · $PROFILE · host myhost · user cri
+ Modules · Status · Plan · Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
 ││ ▸ demo                  ││meta                                                              │
@@ -8,17 +9,16 @@
 │                          ││packages ＋                                                       │
 │                          ││  + neovim ✎                                                      │
 │                          ││  + ripgrep ✎                                                     │
-│                          ││links ＋                                                          │
-│                          ││wri╭──────────────────────────────────╮                           │
-│                          ││whe│                                  │                           │
-│                          ││hoo│  │/ demo · host▏                 │                           │
-│                          ││sys│                                  │                           │
-│                          ││too│  │ ◆ demo · host myhost  module  │                           │
-│                          ││  n│                                  │                           │
-│                          ││sec╰──────────────────────────────────╯                           │
+│                          ││lin╭──────────────────────────────────╮                           │
+│                          ││wri│                                  │                           │
+│                          ││whe│  │/ demo · host▏                 │                           │
+│                          ││hoo│                                  │                           │
+│                          ││sys│  │ ◆ demo · host myhost  module  │                           │
+│                          ││too│                                  │                           │
+│                          ││  n╰──────────────────────────────────╯                           │
+│                          ││secrets ＋                                                        │
 │                          ││mounts ＋                                                         │
 │                          ││smb ＋                                                            │
-│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

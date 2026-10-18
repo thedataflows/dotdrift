@@ -92,8 +92,9 @@ func TestFilter_arrowsMoveWhileTyping(t *testing.T) {
 	require.Equal(t, "other", c.nav.selected().moduleID, "j moves within the matches")
 	c = cpress(c, "enter")
 	require.Equal(t, focusNav, c.focus)
-	c = wsPress(t, c, "enter")
-	require.Equal(t, focusWork, c.focus, "enter opens the selection as usual")
+	c = wsPress(t, c, "enter") // toggles expansion (no layers: a no-op) and settles the workspace read
+	c = cpress(c, "right")
+	require.Equal(t, focusWork, c.focus, "the right arrow opens the selection in the workspace")
 	require.Equal(t, "other", c.ws.moduleID)
 }
 

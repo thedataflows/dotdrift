@@ -47,7 +47,16 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"pgdown", "nav", "page down", func(m *Compositor) tea.Cmd { m.nav.page(1); return m.syncWorkspace() }},
 		{"home", "nav", "first row", func(m *Compositor) tea.Cmd { m.nav.home(); return m.syncWorkspace() }},
 		{"end", "nav", "last row", func(m *Compositor) tea.Cmd { m.nav.end(); return m.syncWorkspace() }},
-		{"enter", "nav", "open in workspace", func(m *Compositor) tea.Cmd { m.focus = focusWork; return m.syncWorkspace() }},
+		{"enter", "nav", "expand/collapse", func(m *Compositor) tea.Cmd {
+			// 0134: on a layer child, enter keeps its old job —
+			// focus the workspace on that layer.
+			if m.nav.selected().layer != "" {
+				m.focus = focusWork
+				return m.syncWorkspace()
+			}
+			m.nav.toggleExpand()
+			return m.syncWorkspace()
+		}},
 		{"/", "nav", "filter modules", func(m *Compositor) tea.Cmd { m.nav.filtering = true; return nil }},
 		{"n", "nav", "new module", func(m *Compositor) tea.Cmd { m.openManageCreate(""); return nil }},
 		{"m", "nav", "manage modules", func(m *Compositor) tea.Cmd { m.openManage(); return nil }},

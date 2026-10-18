@@ -261,7 +261,7 @@ func TestWorkspace_overlayHintOnNonBaseTab(t *testing.T) {
 	frame := c.ws.view(100, 30, c.th)
 	require.NotContains(t, frame, "merge", "the base tab carries no overlay hint")
 
-	c = wsPress(t, c, "enter") // focus the workspace
+	c = wsPress(t, c, "right") // focus the workspace
 	c = wsPress(t, c, "L")     // the user tab
 	frame = c.ws.view(100, 30, c.th)
 	require.Contains(t, frame, "packages, tools, dotfiles, hooks, mounts, smb")

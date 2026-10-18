@@ -355,7 +355,7 @@ func (n *navModel) collapse() {
 	delete(n.expanded, sel.moduleID)
 }
 
-// expand implements l/right: a collapsed module row with layers expands.
+// expand implements l: a collapsed module row with layers expands.
 func (n *navModel) expand() {
 	rows := n.rows()
 	if len(rows) == 0 {
@@ -373,6 +373,26 @@ func (n *navModel) expand() {
 			n.expanded[m.id] = true
 		}
 	}
+}
+
+// toggleExpand implements enter on a module row (0134): an
+// expanded module collapses, a collapsed one expands. A module
+// without layers has nothing to toggle. Child rows never reach
+// it — enter on a child focuses the workspace instead.
+func (n *navModel) toggleExpand() {
+	rows := n.rows()
+	if len(rows) == 0 {
+		return
+	}
+	sel := rows[n.cursor]
+	if sel.layer != "" {
+		return
+	}
+	if n.expanded[sel.moduleID] {
+		delete(n.expanded, sel.moduleID)
+		return
+	}
+	n.expand()
 }
 
 // restore places the cursor back on want after a reload, clamping to the

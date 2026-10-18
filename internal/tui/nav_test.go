@@ -137,6 +137,31 @@ func TestNav_expandCollapseWithHL(t *testing.T) {
 	require.Len(t, c.nav.rows(), 1, "h collapses")
 }
 
+// 0134: enter in the nav toggles the module's expansion and keeps
+// focus on the nav — the arrows already move between panes.
+func TestNav_enterTogglesExpansion(t *testing.T) {
+	_, c := navShell(t, "resolve")
+	require.Equal(t, focusNav, c.focus)
+	require.Len(t, c.nav.rows(), 1, "the module starts collapsed")
+
+	c = cpress(c, "enter")
+	require.Len(t, c.nav.rows(), 4, "enter expands the module")
+	require.Equal(t, focusNav, c.focus, "focus stays on the nav")
+
+	c = cpress(c, "enter")
+	require.Len(t, c.nav.rows(), 1, "enter collapses the module")
+	require.Equal(t, focusNav, c.focus, "focus stays on the nav")
+
+	// On a layer child, enter focuses the workspace as before: the
+	// toggle belongs to the parent module row only.
+	c = cpress(c, "enter")
+	c = cpress(c, "j")
+	require.Equal(t, "base", c.nav.rows()[c.nav.cursor].layer)
+	c = wsPress(t, c, "enter")
+	require.Equal(t, focusWork, c.focus, "enter on a child focuses the workspace")
+	require.Len(t, c.nav.rows(), 4, "the module stays expanded")
+}
+
 // 0118: the arrows move pane focus, so nav expand/collapse is h/l
 // only and tab switches the view from the nav.
 func TestNav_arrowsMoveFocusNotExpand(t *testing.T) {

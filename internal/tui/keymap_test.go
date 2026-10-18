@@ -45,9 +45,13 @@ func TestKeys_table(t *testing.T) {
 	c = cpress(c, "h")
 	require.False(t, c.nav.expanded["demo"], "h collapses")
 
-	// enter on a module row jumps focus to the workspace
+	// enter on a module row toggles its expansion (0134); the right
+	// arrow moves focus to the workspace
 	c = wsPress(t, c, "enter")
-	require.Equal(t, focusWork, c.focus, "enter opens the module in the workspace")
+	require.True(t, c.nav.expanded["demo"], "enter expands")
+	require.Equal(t, focusNav, c.focus, "enter keeps focus on the nav")
+	c = cpress(c, "right")
+	require.Equal(t, focusWork, c.focus, "right opens the module in the workspace")
 
 	// workspace rows
 	start := c.ws.cursor
@@ -323,6 +327,6 @@ func TestKeys_footerHintsShowPrimaryActions(t *testing.T) {
 
 	c.focus = focusNav
 	nav := joined(c.ShortHelp())
-	require.Contains(t, nav, "enter open in workspace", "enter is hinted in the nav")
+	require.Contains(t, nav, "enter expand/collapse", "enter is hinted in the nav")
 	require.NotContains(t, nav, "add entry", "a does nothing from the nav pane, so it is not hinted")
 }

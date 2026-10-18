@@ -145,8 +145,8 @@ func TestManage_cursorRowBar(t *testing.T) {
 	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ create module",
 		"the menu cursor row renders the bar")
 	d.HandleKey("enter") // create mode: the module field row is focused
-	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│ module",
-		"the focused form row renders the bar")
+	require.Contains(t, ansiRe.ReplaceAllString(d.View(th), ""), "│module",
+		"the focused form row renders the bar, pipe next to the label (0142)")
 }
 
 // 0089: the create/move confirm prompt renders only while the gate is

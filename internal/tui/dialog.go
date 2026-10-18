@@ -237,9 +237,11 @@ func (r dlgRow) renderRow(th theme, focused bool) string {
 	}
 	body := th.fieldLabel.Render(label) + " " + val
 	if focused {
-		return th.cursorRow.Render(" " + body)
+		// No lead: the pipe sits next to the label, as in the Plan
+		// view (issues 0141, 0142).
+		return th.cursorRow.Render(body)
 	}
-	return "  " + body
+	return " " + body
 }
 
 func (r dlgRow) rowLabel() string {

@@ -52,6 +52,20 @@ func TestDlgRow_labelValueHintColors(t *testing.T) {
 	require.Contains(t, focused, th.caretCell(" "), "the caret renders at the end of the input")
 }
 
+// 0142: a dialog row carries no extra leading space — the focused
+// row's pipe sits next to the label (as in the Plan view, 0141) and a
+// plain row keeps one space, so the label column never shifts.
+func TestDlgRow_noLeadingSpace(t *testing.T) {
+	th := newTheme(true)
+	row := fieldRow(newDlgField("app", "shell"))
+
+	focused := ansiRe.ReplaceAllString(row.renderRow(th, true), "")
+	require.True(t, strings.HasPrefix(focused, "│app shell"),
+		"the focused row renders pipe + label, got %q", focused)
+	plain := ansiRe.ReplaceAllString(row.renderRow(th, false), "")
+	require.Equal(t, " app shell", plain, "a plain row keeps one lead")
+}
+
 // 0131: a dialog field renders a fixed-width window of its value that
 // follows the cursor, so long text does not stretch the modal and the
 // arrow keys can reach text outside the visible window. The focused

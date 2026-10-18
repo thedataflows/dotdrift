@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   user cri   host myhost   · meta                     │
-││▸ demo                   ││ META                                                             │
-│ ▸ plain                  │││  id demo                                                        │
-│                          ││   description  ✎                                                 │
-│                          ││   scope user ◂▸                                                  │
-│                          ││                                                                  │
-│                          ││ PACKAGES ＋                                                      │
-│                          ││                                                                  │
-│                          ││ LINKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ WRITES ＋                                                        │
-│                          ││                                                                  │
-│                          ││ WHEN ＋                                                          │
-│                          ││                                                                  │
-│                          ││ HOOKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ SYSTEMD.UNITS ＋                                                 │
-│                          ││                                                                  │
-│                          ││ TOOLS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ SECRETS ＋                                                       │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   user cri   host myhost   · meta                       │
+││▸ demo                     ││ META                                                               │
+│ ▸ plain                    │││  id demo                                                          │
+│                            ││   description  ✎                                                   │
+│                            ││   scope user ◂▸                                                    │
+│                            ││                                                                    │
+│                            ││ PACKAGES ＋                                                        │
+│                            ││                                                                    │
+│                            ││ LINKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ WRITES ＋                                                          │
+│                            ││                                                                    │
+│                            ││ WHEN ＋                                                            │
+│                            ││                                                                    │
+│                            ││ HOOKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ SYSTEMD.UNITS ＋                                                   │
+│                            ││                                                                    │
+│                            ││ TOOLS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ SECRETS ＋                                                         │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter expand/collapse • / filter modules • ? help • q quit

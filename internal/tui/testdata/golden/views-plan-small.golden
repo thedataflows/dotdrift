@@ -1,22 +1,22 @@
  dotdrift · $PROFILE
   1. Modules   2. Status   3. Plan (11)   4. Profile
 ────────────────────────────────────────────────────────────────
-╭────────────────────────────╮╭────────────────────────────╮
-││packages: 2 install, 1 remo││ packages                   │
-│ tools: 2                   ││  - firefox                 │
-│ dotfiles: 1                ││  - ripgrep                 │
-│ hooks: 1 pre, 1 post       ││remove:                     │
-│ systemd: 1                 ││  - nano                    │
-│ mounts: 1                  ││                            │
-│ smb: 1                     ││                            │
-│                            ││                            │
-│                            ││                            │
-│                            ││                            │
-│                            ││                            │
-│                            ││                            │
-│                            ││                            │
-│                            ││                            │
-│                            ││                            │
-╰────────────────────────────╯╰────────────────────────────╯
+╭──────────────────────────────╮╭──────────────────────────────╮
+││packages: 2 install, 1 remove││ packages                     │
+│ tools: 2                     ││  - firefox                   │
+│ dotfiles: 1                  ││  - ripgrep                   │
+│ hooks: 1 pre, 1 post         ││remove:                       │
+│ systemd: 1                   ││  - nano                      │
+│ mounts: 1                    ││                              │
+│ smb: 1                       ││                              │
+│                              ││                              │
+│                              ││                              │
+│                              ││                              │
+│                              ││                              │
+│                              ││                              │
+│                              ││                              │
+│                              ││                              │
+│                              ││                              │
+╰──────────────────────────────╯╰──────────────────────────────╯
 
  tab next view • r refresh view • p plan • P apply yanked/all …

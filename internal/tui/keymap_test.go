@@ -134,6 +134,22 @@ func TestKeys_table(t *testing.T) {
 	require.IsType(t, tea.QuitMsg{}, mustMsg(cmd))
 }
 
+// 0146: ctrl+c runs the same quit flow as q — at the base level and
+// out of the field editor, which owns keys before the binding table.
+func TestKeys_ctrlCQuits(t *testing.T) {
+	_, c := navShell(t, "resolve")
+	_, cmd := cstep(c, keyPress("ctrl+c"))
+	require.NotNil(t, cmd)
+	require.IsType(t, tea.QuitMsg{}, mustMsg(cmd), "ctrl+c quits a clean shell")
+
+	_, _, c2 := editShell(t)
+	c2 = cpress(c2, "enter")
+	require.NotNil(t, c2.ws.editing, "the field editor is active")
+	_, cmd = cstep(c2, keyPress("ctrl+c"))
+	require.NotNil(t, cmd)
+	require.IsType(t, tea.QuitMsg{}, mustMsg(cmd), "ctrl+c quits out of the field editor")
+}
+
 func TestKeys_shiftIsTheDangerousVersion(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": editFixture})
 	c.applyFor = func(*facts.Facts) ApplyLauncher {
@@ -266,7 +282,7 @@ func TestKeys_noOrphanedBindings(t *testing.T) {
 	}
 	require.ElementsMatch(t, keys, []string{
 		"j:nav", "k:nav", "down:nav", "up:nav", "h:nav", "l:nav",
-		"enter:nav", "/:nav", "n:nav", "m:nav", "O:nav", "space:nav", "y:nav", "P:both", "p:both", "?:both", "q:both", "tab:both", "shift+tab:both", "o:both",
+		"enter:nav", "/:nav", "n:nav", "m:nav", "O:nav", "space:nav", "y:nav", "P:both", "p:both", "?:both", "q:both", "ctrl+c:both", "tab:both", "shift+tab:both", "o:both",
 		"left:both", "right:both", "1:both", "2:both", "3:both", "4:both", "r:both", "R:both", "f:both",
 		"j:work", "k:work", "down:work", "up:work", "enter:work", "e:work", "h:work", "l:work", "a:both",
 		"d:work", "D:work", "ctrl+s:work", "ctrl+z:work", "ctrl+shift+z:work", "L:work", "w:work", "/:work",

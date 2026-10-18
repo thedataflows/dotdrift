@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   · meta                                              │
-││▸ demo                   ││ META                                                             │
-│                          │││  id demo                                                        │
-│                          ││   description the demo module ✎                                  │
-│                          ││   scope user ◂▸                                                  │
-│                          ││                                                                  │
-│                          ││ PACKAGES ＋                                                      │
-│                          ││   + neovim ✎                                                     │
-│                          ││   + ripgrep ✎                                                    │
-│                          ││   − emacs ✎                                                      │
-│                          ││                                                                  │
-│                          ││ LINKS ＋                                                         │
-│                          ││   ~/.bashrc ← .bashrc (symlink) ✎                                │
-│                          ││                                                                  │
-│                          ││ WRITES ＋                                                        │
-│                          ││   ~/.config/demo.toml (edit: line) ✎                             │
-│                          ││   ~/.profile (edit: block) ✎                                     │
-│                          ││                                                                  │
-│                          ││ WHEN ＋                                                          │
-│                          ││   hosts myhost ✎                                                 │
-│                          ││   os linux ✎                                                     │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   · meta                                                │
+││▸ demo                     ││ META                                                               │
+│                            │││  id demo                                                          │
+│                            ││   description the demo module ✎                                    │
+│                            ││   scope user ◂▸                                                    │
+│                            ││                                                                    │
+│                            ││ PACKAGES ＋                                                        │
+│                            ││   + neovim ✎                                                       │
+│                            ││   + ripgrep ✎                                                      │
+│                            ││   − emacs ✎                                                        │
+│                            ││                                                                    │
+│                            ││ LINKS ＋                                                           │
+│                            ││   ~/.bashrc ← .bashrc (symlink) ✎                                  │
+│                            ││                                                                    │
+│                            ││ WRITES ＋                                                          │
+│                            ││   ~/.config/demo.toml (edit: line) ✎                               │
+│                            ││   ~/.profile (edit: block) ✎                                       │
+│                            ││                                                                    │
+│                            ││ WHEN ＋                                                            │
+│                            ││   hosts myhost ✎                                                   │
+│                            ││   os linux ✎                                                       │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter expand/collapse • / filter modules • ? help • q quit

@@ -117,7 +117,7 @@ func (m *Compositor) profileBody(w int) string {
 		if len(lines) > 0 {
 			body += "\n" + strings.Join(lines, "\n")
 		}
-		return m.th.cardBorder.Width(w - 2).Render(body)
+		return m.th.cardBorder.Width(w).Render(body)
 	}
 	var cards []string
 	if f := r.Facts; f != nil {

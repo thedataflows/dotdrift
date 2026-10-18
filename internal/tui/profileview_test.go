@@ -141,22 +141,28 @@ func TestProfileView_rendersFactsAndResume(t *testing.T) {
 }
 
 // 0144: no outer pane card around the group cards — the cards sit
-// directly in the frame and stretch the full width minus 2 chars.
+// directly in the frame. 0145: they stretch the full frame width
+// (no right padding), and the body fills the pane height so the
+// footer stays at the bottom of the frame.
 func TestProfileView_cardsStretchFullWidth(t *testing.T) {
 	_, c := profileShell()
 	c = loadProfileView(t, c)
 
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.NotContains(t, frame, "│╭", "no card nests inside a larger pane border")
-	for _, line := range strings.Split(frame, "\n") {
+	lines := strings.Split(frame, "\n")
+	for _, line := range lines {
 		if strings.Contains(line, "FACTS") {
 			break
 		}
 		if strings.HasPrefix(line, "╭") {
-			require.Equal(t, 98, len([]rune(strings.TrimRight(line, " "))),
-				"the card spans the 100-char frame minus 2 chars")
+			require.Equal(t, 100, len([]rune(strings.TrimRight(line, " "))),
+				"the card spans the full 100-char frame")
 		}
 	}
+	require.Contains(t, lines[len(lines)-1], "q quit", "the footer sits on the last line")
+	require.Equal(t, "", strings.TrimSpace(lines[len(lines)-2]),
+		"the body pads to the pane height, so the footer stays at the bottom")
 }
 
 func TestProfileView_resumeLineFollowsTheHash(t *testing.T) {

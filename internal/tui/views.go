@@ -117,31 +117,35 @@ func (m *Compositor) viewRow() string {
 func (m *Compositor) viewBody(paneH int) string {
 	switch m.view {
 	case viewProfile:
-		// No outer pane (issue 0144): the group cards are the frame —
-		// at the full width they render width-2, with no larger card
-		// around them. The lines clip to the pane height the border
-		// used to enforce.
+		// No outer pane (issue 0144): the group cards are the frame,
+		// at the full frame width (0145). The lines clip to the pane
+		// height and pad back to it, so the footer stays at the
+		// bottom of the frame.
 		lines := strings.Split(m.profileBody(m.w), "\n")
 		if len(lines) > paneH {
 			lines = lines[:max(paneH, 0)]
 		}
+		for len(lines) < paneH {
+			lines = append(lines, "")
+		}
 		return strings.Join(lines, "\n")
 	case viewStatus:
 		// Findings rows run long (paths + details): an even split, not
-		// the Modules view's narrow nav.
+		// the Modules view's narrow nav. Each pane fills its slot,
+		// content at the full inner width (0145).
 		listW := m.w / 2
-		left := m.pane(m.focus == focusNav, listW-2, paneH, m.statusList(listW-4, paneH-2))
-		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.statusDetail(m.w-listW-4, paneH-2))
+		left := m.pane(m.focus == focusNav, listW, paneH, m.statusList(listW-2, paneH-2))
+		right := m.pane(m.focus == focusWork, m.w-listW, paneH, m.statusDetail(m.w-listW-2, paneH-2))
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	case viewPlan:
 		// The report's entry lines run long: the same even split as
 		// the Status view (0109).
 		listW := m.w / 2
-		left := m.pane(m.focus == focusNav, listW-2, paneH, m.planList(listW-4, paneH-2))
-		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.planDetail(m.w-listW-4, paneH-2))
+		left := m.pane(m.focus == focusNav, listW, paneH, m.planList(listW-2, paneH-2))
+		right := m.pane(m.focus == focusWork, m.w-listW, paneH, m.planDetail(m.w-listW-2, paneH-2))
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
-	return m.pane(false, m.w-2, paneH, m.th.loading.Render(" not loaded"))
+	return m.pane(false, m.w, paneH, m.th.loading.Render(" not loaded"))
 }
 
 // detailWindow cuts the visible window out of a detail pane's lines

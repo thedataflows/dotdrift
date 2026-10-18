@@ -447,6 +447,9 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.openHelp()
 				return m, nil
 			}
+			if k.String() == "ctrl+c" {
+				return m, m.quit() // 0146: quit, like at the base level
+			}
 			return m, m.editKey(k)
 		}
 		return m, nil
@@ -464,6 +467,9 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.debouncedSyncWorkspace()
 		}
 		if k, ok := msg.(tea.KeyPressMsg); ok {
+			if k.String() == "ctrl+c" {
+				return m, m.quit() // 0146: quit, like at the base level
+			}
 			return m, m.navFilterKey(k)
 		}
 	}
@@ -784,8 +790,10 @@ func (m *Compositor) baseFrame() string {
 	navW, workW, paneH := m.layout()
 	var body string
 	if m.view == viewModules {
-		left := m.pane(m.focus == focusNav, navW-2, paneH, m.nav.view(navW-4, paneH-2, m.th, m.draftMarks()))
-		right := m.pane(m.focus == focusWork, workW-2, paneH, m.ws.view(workW-4, paneH-2, m.th))
+		// Each pane fills its slot and the content the pane's full
+		// inner width (slot minus border): no right padding (0145).
+		left := m.pane(m.focus == focusNav, navW, paneH, m.nav.view(navW-2, paneH-2, m.th, m.draftMarks()))
+		right := m.pane(m.focus == focusWork, workW, paneH, m.ws.view(workW-2, paneH-2, m.th))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	} else {
 		body = m.viewBody(paneH)

@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   · when                                              │
-││▸ demo                   ││ META                                                             │
-│                          ││   id demo                                                        │
-│                          ││   description  ✎                                                 │
-│                          ││   scope user ◂▸                                                  │
-│                          ││                                                                  │
-│                          ││ PACKAGES ＋                                                      │
-│                          ││                                                                  │
-│                          ││ LINKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ WRITES ＋                                                        │
-│                          ││                                                                  │
-│                          ││ WHEN ＋                                                          │
-│                          ││   hosts myhost ✎                                                 │
-│                          ││   and[0] ＋                                                      │
-│                          ││     os linux ✎                                                   │
-│                          │││    gpu nvidia ✎                                                 │
-│                          ││   and[1] ＋                                                      │
-│                          ││     or[0] ＋                                                     │
-│                          ││       hosts work ✎                                               │
-│                          ││     or[1] ＋                                                     │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   · when                                                │
+││▸ demo                     ││ META                                                               │
+│                            ││   id demo                                                          │
+│                            ││   description  ✎                                                   │
+│                            ││   scope user ◂▸                                                    │
+│                            ││                                                                    │
+│                            ││ PACKAGES ＋                                                        │
+│                            ││                                                                    │
+│                            ││ LINKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ WRITES ＋                                                          │
+│                            ││                                                                    │
+│                            ││ WHEN ＋                                                            │
+│                            ││   hosts myhost ✎                                                   │
+│                            ││   and[0] ＋                                                        │
+│                            ││     os linux ✎                                                     │
+│                            │││    gpu nvidia ✎                                                   │
+│                            ││   and[1] ＋                                                        │
+│                            ││     or[0] ＋                                                       │
+│                            ││       hosts work ✎                                                 │
+│                            ││     or[1] ＋                                                       │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

@@ -67,6 +67,7 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"/", "work", "palette", func(m *Compositor) tea.Cmd { m.openPalette(); return nil }},
 		{"?", "both", "help", func(m *Compositor) tea.Cmd { m.openHelp(); return nil }},
 		{"q", "both", "quit", func(m *Compositor) tea.Cmd { return m.quit() }},
+		{"ctrl+c", "both", "quit", func(m *Compositor) tea.Cmd { return m.quit() }},
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
 		{"P", "both", "apply", func(m *Compositor) tea.Cmd { return m.startApply() }},
 		{"tab", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},

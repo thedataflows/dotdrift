@@ -1,29 +1,29 @@
  dotdrift · $PROFILE · host myhost · user cri
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   · raw                                               │
-││▸ demo · invalid module.t││broken module.toml — raw text mode                                │
-│                          ││  module.toml:2: unknown key "app"                                │
-│                          │││  id = "demo" ✎                                                  │
-│                          ││   app = "demo-app" ✎                                             │
-│   ╭─────────────────────────────────────────────────────────────────────────────────────────╮│
-│   │                                                                                         ││
-│   │  sudo elevation required                                                                ││
-│   │                                                                                         ││
-│   │    • dotfiles-system: elevated system edits: edit targets are not user-writable (sudo)  ││
-│   │                                                                                         ││
-│   │    password: ••••••▏                                                                    ││
-│   │                                                                                         ││
-│   │    enter submit · esc cancel                                                            ││
-│   │                                                                                         ││
-│   ╰─────────────────────────────────────────────────────────────────────────────────────────╯│
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   · raw                                                 │
+││▸ demo · invalid module.tom││broken module.toml — raw text mode                                  │
+│                            ││  module.toml:2: unknown key "app"                                  │
+│                            │││  id = "demo" ✎                                                    │
+│                            ││   app = "demo-app" ✎                                               │
+│   ╭─────────────────────────────────────────────────────────────────────────────────────────╮    │
+│   │                                                                                         │    │
+│   │  sudo elevation required                                                                │    │
+│   │                                                                                         │    │
+│   │    • dotfiles-system: elevated system edits: edit targets are not user-writable (sudo)  │    │
+│   │                                                                                         │    │
+│   │    password: ••••••▏                                                                    │    │
+│   │                                                                                         │    │
+│   │    enter submit · esc cancel                                                            │    │
+│   │                                                                                         │    │
+│   ╰─────────────────────────────────────────────────────────────────────────────────────────╯    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter expand/collapse • / filter modules • ? help • q quit
 

@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri  ● 1
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   · meta  ●                                           │
-││▸ demo ●                 ││ META                                                             │
-│                          ││   id demo                                                        │
-│                          │││  description the demo module-next ●                             │
-│                          ││   scope user ◂▸                                                  │
-│                          ││                                                                  │
-│                          ││ PACKAGES ＋                                                      │
-│                          ││   + neovim ✎                                                     │
-│                          ││   + ripgrep ✎                                                    │
-│                          ││                                                                  │
-│                          ││ LINKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ WRITES ＋                                                        │
-│                          ││                                                                  │
-│                          ││ WHEN ＋                                                          │
-│                          ││                                                                  │
-│                          ││ HOOKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ SYSTEMD.UNITS ＋                                                 │
-│                          ││                                                                  │
-│                          ││ TOOLS ＋                                                         │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   · meta  ●                                             │
+││▸ demo ●                   ││ META                                                               │
+│                            ││   id demo                                                          │
+│                            │││  description the demo module-next ●                               │
+│                            ││   scope user ◂▸                                                    │
+│                            ││                                                                    │
+│                            ││ PACKAGES ＋                                                        │
+│                            ││   + neovim ✎                                                       │
+│                            ││   + ripgrep ✎                                                      │
+│                            ││                                                                    │
+│                            ││ LINKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ WRITES ＋                                                          │
+│                            ││                                                                    │
+│                            ││ WHEN ＋                                                            │
+│                            ││                                                                    │
+│                            ││ HOOKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ SYSTEMD.UNITS ＋                                                   │
+│                            ││                                                                    │
+│                            ││ TOOLS ＋                                                           │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • ctrl+z undo …

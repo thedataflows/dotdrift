@@ -102,8 +102,9 @@ view stack wholesale). Its parts:
   step when a cursor is pending — a cursor stored for a different input
   is dead, 0106), and the other-accounts note with each account's apply
   command. The groups render as titled cards with no outer pane
-  around them — each card stretches the frame width minus 2 chars
-  (issue 0144). The read is light — facts, the plan read, the state file, the
+  around them — each card stretches the full frame width, and the
+  body fills the pane height so the footer stays at the bottom
+  (issues 0144, 0145). The read is light — facts, the plan read, the state file, the
   accounts list; no probes — and async: the view shows its loading state
   on first entry and re-reads on `r`. A second refresh during a pending
   read does nothing. Lines clamp to the pane width.
@@ -422,7 +423,10 @@ view stack wholesale). Its parts:
   footer hints and the contextual `?` help render from it, so docs
   cannot drift from behavior. Shift is the dangerous version (`p` plan /
   `P` apply, `d` remove row / `D` discard draft); esc pops the top layer
-  (modal → edit → filter → focus to nav, 0081); `ctrl+z`
+  (modal → edit → filter → focus to nav, 0081); `ctrl+c` quits exactly
+  like `q` — at the base level, in the field editor, and in the nav
+  filter (issue 0146; inside the apply detail it still cancels the
+  run); `ctrl+z`
   steps the active draft back one committed change and `ctrl+shift+z`
   redoes (0079) — undoing past the first change returns the clean file,
   and confirms remain the safety net for what undo cannot reach (saves,

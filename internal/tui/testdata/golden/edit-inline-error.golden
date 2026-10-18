@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   · packages                                          │
-││▸ demo                   ││ META                                                             │
-│                          ││   id demo                                                        │
-│                          ││   description the demo module ✎                                  │
-│                          ││   scope user ◂▸                                                  │
-│                          ││                                                                  │
-│                          ││ PACKAGES ＋                                                      │
-│                          │││ ▸                                                               │
-│                          ││    ✗ package name must not be empty                              │
-│                          ││   + ripgrep ✎                                                    │
-│                          ││                                                                  │
-│                          ││ LINKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ WRITES ＋                                                        │
-│                          ││                                                                  │
-│                          ││ WHEN ＋                                                          │
-│                          ││                                                                  │
-│                          ││ HOOKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ SYSTEMD.UNITS ＋                                                 │
-│                          ││                                                                  │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   · packages                                            │
+││▸ demo                     ││ META                                                               │
+│                            ││   id demo                                                          │
+│                            ││   description the demo module ✎                                    │
+│                            ││   scope user ◂▸                                                    │
+│                            ││                                                                    │
+│                            ││ PACKAGES ＋                                                        │
+│                            │││ ▸                                                                 │
+│                            ││    ✗ package name must not be empty                                │
+│                            ││   + ripgrep ✎                                                      │
+│                            ││                                                                    │
+│                            ││ LINKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ WRITES ＋                                                          │
+│                            ││                                                                    │
+│                            ││ WHEN ＋                                                            │
+│                            ││                                                                    │
+│                            ││ HOOKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ SYSTEMD.UNITS ＋                                                   │
+│                            ││                                                                    │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter commit • esc cancel • ? help

@@ -1,28 +1,28 @@
  dotdrift · $PROFILE · host myhost · user cri
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo   base   · secrets                                           │
-││▸ demo                   ││   description  ✎                                                 │
-│                          ││   scope user ◂▸                                                  │
-│                          ││                                                                  │
-│                          ││ PACKAGES ＋                                                      │
-│                          ││                                                                  │
-│                          ││ LINKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ WRITES ＋                                                        │
-│                          ││                                                                  │
-│                          ││ WHEN ＋                                                          │
-│                          ││                                                                  │
-│                          ││ HOOKS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ SYSTEMD.UNITS ＋                                                 │
-│                          ││                                                                  │
-│                          ││ TOOLS ＋                                                         │
-│                          ││                                                                  │
-│                          ││ SECRETS ＋                                                       │
-│                          ││   API_KEY ＋                                                     │
-│                          │││    env DEMO_API_KEY ✎                                           │
-╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
+╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
+│MODULES                     ││demo   base   · secrets                                             │
+││▸ demo                     ││   description  ✎                                                   │
+│                            ││   scope user ◂▸                                                    │
+│                            ││                                                                    │
+│                            ││ PACKAGES ＋                                                        │
+│                            ││                                                                    │
+│                            ││ LINKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ WRITES ＋                                                          │
+│                            ││                                                                    │
+│                            ││ WHEN ＋                                                            │
+│                            ││                                                                    │
+│                            ││ HOOKS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ SYSTEMD.UNITS ＋                                                   │
+│                            ││                                                                    │
+│                            ││ TOOLS ＋                                                           │
+│                            ││                                                                    │
+│                            ││ SECRETS ＋                                                         │
+│                            ││   API_KEY ＋                                                       │
+│                            │││    env DEMO_API_KEY ✎                                             │
+╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

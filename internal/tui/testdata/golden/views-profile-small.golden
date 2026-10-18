@@ -1,22 +1,22 @@
  dotdrift · $PROFILE
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────
-╭────────────────────────────────────────────────────────────╮
-│ FACTS                                                      │
-│  host:    myhost                                           │
-│  user:    cri                                              │
-│  os:      linux                                            │
-│  kernel:  6.12.1-arch1-1                                   │
-│  distro:  arch                                             │
-│  gpu:     amd                                              │
-│  backend: paru                                             │
-╰────────────────────────────────────────────────────────────╯
-╭────────────────────────────────────────────────────────────╮
-│ PROFILE                                                    │
-│  profile: $PROFILE                          │
-│  state:   $STATE        │
-│  resume:  last completed "packages" - next apply resumes   │
-│ aft                                                        │
-╰────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────╮
+│ FACTS                                                        │
+│  host:    myhost                                             │
+│  user:    cri                                                │
+│  os:      linux                                              │
+│  kernel:  6.12.1-arch1-1                                     │
+│  distro:  arch                                               │
+│  gpu:     amd                                                │
+│  backend: paru                                               │
+╰──────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────╮
+│ PROFILE                                                      │
+│  profile: $PROFILE                            │
+│  state:   $STATE          │
+│  resume:  last completed "packages" - next apply resumes aft │
+╰──────────────────────────────────────────────────────────────╯
+╭──────────────────────────────────────────────────────────────╮
 
  tab next view • r refresh view • p plan • P apply yanked/all …

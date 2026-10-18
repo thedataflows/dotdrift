@@ -489,11 +489,15 @@ func (p *filePicker) view(w, h int) string {
 	}
 	lines = append(lines, p.th.fieldLabel.Render(cwd))
 	if p.filtering || len(p.filter) > 0 {
-		lines = append(lines, p.th.meta.Render("filter: "+string(p.filter))+
+		// Tail windows (0132): both typed lines show their end, where
+		// the caret sits, and never stretch the modal.
+		win, _, _ := runeWindow(p.filter, len(p.filter), len(p.filter), max(w-24, 8))
+		lines = append(lines, p.th.meta.Render("filter: "+string(win))+
 			p.th.disabledMark.Render("  ("+itoa(len(p.visible()))+"/"+itoa(len(p.entries))+")"))
 	}
 	if p.locating {
-		lines = append(lines, p.th.fieldLabel.Render("path: ")+string(p.loc)+p.th.caretCell(" "))
+		win, _, _ := runeWindow(p.loc, len(p.loc), len(p.loc), max(w-24, 8))
+		lines = append(lines, p.th.fieldLabel.Render("path: ")+string(win)+p.th.caretCell(" "))
 	}
 	if p.err != "" {
 		lines = append(lines, p.th.errorMark.Render("✗ "+p.err))
@@ -540,7 +544,7 @@ func (p *filePicker) view(w, h int) string {
 	}
 	lines = append(lines, "",
 		p.th.meta.Render(enterHint+" · → in · ← up · / filter · ^L path · . hidden · esc close"))
-	return p.th.modalBorder.Padding(1, 2).Render(strings.Join(lines, "\n"))
+	return p.th.modalBorder.Padding(1, 2).MaxWidth(w).Render(strings.Join(lines, "\n"))
 }
 
 // itoa avoids strconv for the two counts the picker renders.

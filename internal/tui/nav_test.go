@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,6 +19,23 @@ import (
 // overlay layers as expandable children, dirty markers per file,
 // expansion memory, placeholder rows while reads are in flight. Goldens
 // pin the composited final frame; message-driven tests pin behavior.
+
+// 0132: the nav filter renders its tail window, so the caret at the
+// end of a long query stays visible inside the pane.
+func TestNavFilter_windowShowsTail(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
+	c.nav.filtering = true
+	c.nav.query = []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	plain := ansiRe.ReplaceAllString(c.nav.view(30, 12, c.th, nil), "")
+	for _, line := range strings.Split(plain, "\n") {
+		require.LessOrEqual(t, len([]rune(line)), 30, "the filter line fits the pane")
+	}
+	lines := strings.Split(plain, "\n")
+	filterLine := lines[len(lines)-1]
+	require.Contains(t, filterLine, strings.Repeat("b", 10), "the tail at the caret is visible")
+	require.NotContains(t, filterLine, "a", "text far left of the window is not rendered")
+	require.Contains(t, filterLine, "▏", "the caret is visible")
+}
 
 // navShell builds a compositor over the real reads area and the named
 // checked-in profile, fully loaded (the navLoadedMsg already applied).

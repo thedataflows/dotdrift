@@ -8,6 +8,7 @@ package tui
 // A navigator, not a command line.
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,6 +37,20 @@ func paletteShell(t *testing.T) (map[string]string, *Compositor) {
 func pal(t *testing.T, c *Compositor) *paletteModel {
 	t.Helper()
 	return c.modals[len(c.modals)-1].(*paletteModel)
+}
+
+// 0132: the palette query renders its tail window, so the caret at
+// the end stays visible and the modal does not stretch.
+func TestPalette_queryWindowShowsTail(t *testing.T) {
+	_, c := paletteShell(t)
+	p := pal(t, c)
+	p.query = []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	plain := ansiRe.ReplaceAllString(p.view(60, 30), "")
+	for _, line := range strings.Split(plain, "\n") {
+		require.LessOrEqual(t, len([]rune(line)), 62, "the palette modal fits the frame")
+	}
+	require.Contains(t, plain, strings.Repeat("b", 10), "the tail at the caret is visible")
+	require.NotContains(t, plain, strings.Repeat("a", 25), "the head of the query is outside the window")
 }
 
 func TestPalette_emptyQueryShowsRecents(t *testing.T) {

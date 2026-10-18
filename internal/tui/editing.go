@@ -96,6 +96,7 @@ type wsEdit struct {
 	row     int    // rows index; for add, the section's last row
 	input   []rune // the input buffer
 	cur     int    // cursor position in the buffer
+	off     int    // the visible window's left edge, in runes (0132)
 	add     bool   // a synthetic new-row input
 	section string // the section an add commits into
 	addPath string // structural adds: the entry the add lands in ("" = the section itself)

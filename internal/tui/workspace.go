@@ -374,14 +374,17 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 // (0092) — never a glyph inserted into the text, which would take a cell
 // and shift the tail one column right wherever the caret rests.
 func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
-	runes := e.input
-	cur := min(e.cur, len(runes))
+	// The window contains the caret (0132): a value wider than the
+	// pane (a long description under meta) used to clip the caret
+	// and everything right of the pane edge away.
+	win, off, caret := runeWindow(e.input, e.cur, e.off, max(width-3, 1))
+	e.off = off
 	at, after := " ", ""
-	if cur < len(runes) {
-		at = string(runes[cur])
-		after = string(runes[cur+1:])
+	if caret < len(win) {
+		at = string(win[caret])
+		after = string(win[caret+1:])
 	}
-	shown := string(runes[:cur]) + th.caretCell(at) + after
+	shown := string(win[:caret]) + th.caretCell(at) + after
 	lines := []string{th.cursorRow.MaxWidth(width).Render(" ▸ " + shown)}
 	if e.err != "" {
 		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))

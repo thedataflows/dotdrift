@@ -61,6 +61,21 @@ func pickNames(entries []pickEntry) []string {
 	return out
 }
 
+// 0132: the typed path renders its tail window, so the caret at the
+// end stays visible and the picker modal does not stretch.
+func TestPicker_pathWindowShowsTail(t *testing.T) {
+	root := pickerFixture(t)
+	p := browsePicker(kindEither, root, func(string) string { return "" })
+	p.locating = true
+	p.loc = []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	plain := ansiRe.ReplaceAllString(p.view(60, 30), "")
+	for _, line := range strings.Split(plain, "\n") {
+		require.LessOrEqual(t, len([]rune(line)), 62, "the picker modal fits the frame")
+	}
+	require.Contains(t, plain, strings.Repeat("b", 10), "the tail at the caret is visible")
+	require.NotContains(t, plain, strings.Repeat("a", 10), "text far left of the window is not rendered")
+}
+
 func TestPicker_dirsFirstCaseInsensitive(t *testing.T) {
 	root := pickerFixture(t)
 	p := browsePicker(kindEither, root, func(string) string { return "" })

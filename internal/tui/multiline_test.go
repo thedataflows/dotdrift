@@ -98,6 +98,23 @@ func TestMultiline_caretMovement(t *testing.T) {
 	require.Equal(t, 0, e.cy)
 }
 
+// 0132: the caret line renders a window that contains the caret, so
+// a long line's tail stays reachable with the arrows.
+func TestMultiline_caretLineWindowFollowsCaret(t *testing.T) {
+	commit, _ := commitRecorder()
+	e := newMultiline(newTheme(true), "edit", strings.Repeat("a", 30)+strings.Repeat("b", 30), "", commit)
+	e.cx = 60
+
+	plain := ansiRe.ReplaceAllString(e.view(60, 30), "")
+	require.Contains(t, plain, strings.Repeat("b", 20), "the window shows the text at the caret (the end)")
+	require.NotContains(t, plain, strings.Repeat("a", 20), "text far left of the window is not rendered")
+
+	e.cx = 0
+	plain = ansiRe.ReplaceAllString(e.view(60, 30), "")
+	require.Contains(t, plain, strings.Repeat("a", 20), "the arrows reach the start of a long line")
+	require.NotContains(t, plain, strings.Repeat("b", 20), "the window followed the caret to the left")
+}
+
 func TestMultiline_pasteKeepsNewlines(t *testing.T) {
 	commit, _ := commitRecorder()
 	e := newMultiline(newTheme(true), "edit", "ab", "", commit)

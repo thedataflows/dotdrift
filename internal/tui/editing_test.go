@@ -14,6 +14,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -68,6 +69,28 @@ func TestEdit_caretIsBlockNotGlyph(t *testing.T) {
 	e.cur = 4
 	lines = w.editLines(e, th, 60)
 	require.Contains(t, lines[0], th.caretCell(" "), "end of input renders a caret cell")
+}
+
+// 0132: the inline editor renders a window that contains the caret,
+// so text clipped by the pane edge stays reachable with the arrows —
+// for example a long description under meta.
+func TestEdit_windowFollowsCaret(t *testing.T) {
+	th := newTheme(true)
+	w := &workspaceModel{}
+	e := &wsEdit{input: []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30)), cur: 60}
+
+	lines := w.editLines(e, th, 30)
+	plain := ansiRe.ReplaceAllString(lines[0], "")
+	require.LessOrEqual(t, len([]rune(plain)), 31, "the edit line fits the pane")
+	require.Contains(t, plain, strings.Repeat("b", 20), "the window shows the text at the caret (the end)")
+	require.NotContains(t, plain, strings.Repeat("a", 20), "text far left of the window is not rendered")
+	require.Contains(t, lines[0], "\x1b[7m", "the caret cell is visible at the end")
+
+	e.cur = 0
+	lines = w.editLines(e, th, 30)
+	plain = ansiRe.ReplaceAllString(lines[0], "")
+	require.Contains(t, plain, strings.Repeat("a", 20), "the arrows reach the start of long text")
+	require.NotContains(t, plain, strings.Repeat("b", 20), "the window followed the caret to the left")
 }
 
 func TestEdit_caretKeepsTailColor(t *testing.T) {

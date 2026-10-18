@@ -67,6 +67,27 @@ func tuiRestoreHandover(*exec.Cmd) error {
 // typing never stretches the modal.
 const fieldViewCells = 40
 
+// runeWindow returns the window of runes that contains cur, at most
+// cells runes wide, plus the window's new left edge and cur's offset
+// inside the window (0131, 0132). The edge moves only when cur leaves
+// the window, so the text does not slide on every keystroke. Every
+// text input renders through this helper: clipped text is always
+// reachable with the arrow keys because the window follows the caret.
+func runeWindow(runes []rune, cur, off, cells int) (window []rune, newOff, caret int) {
+	cells = max(cells, 1)
+	cur = min(max(cur, 0), len(runes))
+	if cur < off {
+		off = cur
+	}
+	if cur >= off+cells {
+		off = cur - cells + 1
+	}
+	if maxOff := max(len(runes)-cells, 0); off > maxOff {
+		off = maxOff
+	}
+	return runes[off:min(off+cells, len(runes))], off, cur - off
+}
+
 type dlgField struct {
 	label  string
 	value  []rune
@@ -144,23 +165,11 @@ func (f *dlgField) right() {
 }
 
 // visible returns the window of the value that contains the cursor
-// and the cursor's offset inside it (0131). The window's left edge
-// moves only when the cursor leaves the window, so the text does
-// not slide on every keystroke; the left and right arrows walk the
-// cursor, and the window follows, which makes text outside the
-// window reachable.
+// and the cursor's offset inside it (0131).
 func (f *dlgField) visible() (string, int) {
-	if f.cursor < f.off {
-		f.off = f.cursor
-	}
-	if f.cursor >= f.off+fieldViewCells {
-		f.off = f.cursor - fieldViewCells + 1
-	}
-	if maxOff := max(len(f.value)-fieldViewCells, 0); f.off > maxOff {
-		f.off = maxOff
-	}
-	end := min(f.off+fieldViewCells, len(f.value))
-	return string(f.value[f.off:end]), f.cursor - f.off
+	win, off, caret := runeWindow(f.value, f.cursor, f.off, fieldViewCells)
+	f.off = off
+	return string(win), caret
 }
 
 // renderValue renders the field's visible window in the value style,

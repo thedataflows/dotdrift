@@ -424,10 +424,10 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 			lines = append(lines, n.rowView(rows[i], i == n.cursor, th, drafts, w))
 		}
 		if len(rows) == 0 && len(n.query) > 0 {
-			lines = append(lines, th.disabledMark.Render("  no modules match «"+string(n.query)+"»"))
+			lines = append(lines, th.disabledMark.MaxWidth(w).Render("  no modules match «"+string(n.query)+"»"))
 		}
 		if hCap < h {
-			lines = append(lines, n.filterView(th))
+			lines = append(lines, n.filterView(th, w))
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -435,9 +435,12 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 
 // filterView is the pane-bottom query line: the cursor bar while typing,
 // a named applied filter after enter.
-func (n *navModel) filterView(th theme) string {
+func (n *navModel) filterView(th theme, w int) string {
 	if n.filtering {
-		return th.inputText.Render(" / "+string(n.query)) + th.dirtyMark.Render("▏") // a plain input line, no fill (0124)
+		// The tail window (0132): the caret sits at the query's end,
+		// so a long query shows its end, never clips the caret away.
+		win, _, _ := runeWindow(n.query, len(n.query), len(n.query), max(w-4, 1))
+		return th.inputText.Render(" / "+string(win)) + th.dirtyMark.Render("▏") // a plain input line, no fill (0124)
 	}
 	return th.meta.Render(" / " + string(n.query) + " · esc clears")
 }

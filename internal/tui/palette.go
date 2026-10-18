@@ -419,7 +419,10 @@ func (e paletteEntry) glyph() string {
 
 func (p *paletteModel) view(w, h int) string {
 	var b strings.Builder
-	b.WriteString(p.th.inputText.Render("/ "+string(p.query)) + p.th.dirtyMark.Render("▏")) // a plain input line, no fill (0124)
+	// The tail window (0132): the caret sits at the query's end, so
+	// a long query shows its end and the modal does not stretch.
+	win, _, _ := runeWindow(p.query, len(p.query), len(p.query), max(w-9, 1))
+	b.WriteString(p.th.inputText.Render("/ "+string(win)) + p.th.dirtyMark.Render("▏")) // a plain input line, no fill (0124)
 	b.WriteString("\n\n")
 	if len(p.rows) == 0 {
 		b.WriteString(p.th.disabledMark.Render("  no matches") + "\n")
@@ -437,7 +440,7 @@ func (p *paletteModel) view(w, h int) string {
 			b.WriteString(p.th.meta.Render("  … "+strconv.Itoa(len(p.rows)-paletteMaxVisible)+" more") + "\n")
 		}
 	}
-	box := p.th.modalBorder.Padding(1, 2).Render(strings.TrimRight(b.String(), "\n"))
+	box := p.th.modalBorder.Padding(1, 2).MaxWidth(w).Render(strings.TrimRight(b.String(), "\n"))
 	p.boxY = max((h-lipgloss.Height(box))/2, 0)
 	return box
 }

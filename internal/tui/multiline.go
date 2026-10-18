@@ -35,6 +35,7 @@ type multiline struct {
 	cy     int
 	cx     int
 	off    int
+	hoff   int // the caret line's visible window edge, in runes (0132)
 	pageH  int // the last render's body height: the paging step
 	hint   string
 	color  bool
@@ -278,13 +279,16 @@ func (e *multiline) view(w, h int) string {
 			// The caret line: the 0092 reverse-video block on the cell
 			// under the caret, never an inserted glyph — and never
 			// token colors, which the reversed cell cannot survive.
-			line := e.lines[i]
+			// The line renders through the caret window (0132), so a
+			// long line's tail stays reachable.
+			win, off, caret := runeWindow(e.lines[i], e.cx, e.hoff, maxw)
+			e.hoff = off
 			at, after := " ", ""
-			if e.cx < len(line) {
-				at = string(line[e.cx])
-				after = string(line[e.cx+1:])
+			if caret < len(win) {
+				at = string(win[caret])
+				after = string(win[caret+1:])
 			}
-			body = string(line[:e.cx]) + e.th.caretCell(at) + after
+			body = string(win[:caret]) + e.th.caretCell(at) + after
 		case ok:
 			body = colored[i]
 		default:
@@ -292,5 +296,5 @@ func (e *multiline) view(w, h int) string {
 		}
 		lines = append(lines, "  "+ansi.Truncate(body, maxw, "…"))
 	}
-	return e.th.modalBorder.Padding(1, 2).Render(strings.Join(lines, "\n"))
+	return e.th.modalBorder.Padding(1, 2).MaxWidth(w).Render(strings.Join(lines, "\n"))
 }

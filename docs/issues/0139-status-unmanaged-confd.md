@@ -52,6 +52,16 @@ conf.d directory lists nothing. Subdirectories are skipped.
   summary, or status exit behavior.
 - [x] Both the CLI report and the TUI Status view show the lines.
 
+## Notes
+
+- Correction (2026-10-18, user request): the gray was too dark to
+  read on a dark terminal. The unmanaged gray is now light on both
+  surfaces — the CLI palette `dim` role defaults to `38;5;245`
+  (was `90`; the role also carries module descriptions, which get
+  the same lighter gray), and the TUI unmanaged row and pill use
+  the `muted` gray (245). Closing commit for the correction follows
+  the original `f19f415`.
+
 ## Out of Scope
 
 - Deleting or editing the listed files from status.

@@ -341,10 +341,11 @@ func (m *Compositor) statusFindingLine(f *drift.Finding) string {
 }
 
 // statusFindingStyle picks the row hue: drift and unauthorized carry the
-// error mark, unknown the reason mark, unmanaged gray (information only).
+// error mark, unknown the reason mark, unmanaged a light gray
+// (information only; the dim gray read too dark on dark terminals).
 func statusFindingStyle(th theme, f *drift.Finding) lipgloss.Style {
 	if f.Status == drift.Unmanaged {
-		return th.disabledMark
+		return th.meta
 	}
 	if f.Status == drift.Unknown {
 		return th.reasonMark

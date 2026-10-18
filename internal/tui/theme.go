@@ -164,7 +164,7 @@ func newTheme(isDark bool) theme {
 		pillUnauthorized: lipgloss.NewStyle().Padding(0, 1).
 			Foreground(lipgloss.Color("#FFFFFF")).Background(p.fuchsia),
 		pillUnmanaged: lipgloss.NewStyle().Padding(0, 1).
-			Foreground(lipgloss.Color("#FFFFFF")).Background(p.dim),
+			Foreground(lipgloss.Color("#000000")).Background(p.muted),
 		cardBorder:  pane.BorderForeground(p.dim).Padding(0, 1),
 		modalDanger: pane.BorderForeground(p.red),
 		modalInfo:   pane.BorderForeground(p.indigo),

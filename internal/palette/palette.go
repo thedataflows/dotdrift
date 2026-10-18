@@ -44,7 +44,7 @@ func Default() *Palette {
 		Warn:    "33",
 		Error:   "31",
 		Orphan:  "35",
-		Dim:     "90",
+		Dim:     "38;5;245", // light gray: 90 (bright black) read too dark on dark terminals
 	}}
 }
 

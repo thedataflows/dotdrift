@@ -145,7 +145,7 @@ description = "Editor setup"
 	colored := buf.String()
 	require.Contains(t, colored, "\033[32m+\033[0m demo [system]")
 	require.Contains(t, colored, "\033[31m-\033[0m edit \033[31mdisabled\033[0m")
-	// Description is dimmed grey, independent of the marker color.
-	require.Contains(t, colored, "\033[90m- System-wide demo configuration\033[0m")
-	require.Contains(t, colored, "\033[90m- Editor setup\033[0m")
+	// Description is light grey, independent of the marker color.
+	require.Contains(t, colored, "\033[38;5;245m- System-wide demo configuration\033[0m")
+	require.Contains(t, colored, "\033[38;5;245m- Editor setup\033[0m")
 }

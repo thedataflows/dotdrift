@@ -16,7 +16,7 @@ func TestDefaultPalette(t *testing.T) {
 	require.Equal(t, "\033[33mx\033[0m", p.Wrap(palette.Warn, "x"))
 	require.Equal(t, "\033[31mx\033[0m", p.Wrap(palette.Error, "x"))
 	require.Equal(t, "\033[35mx\033[0m", p.Wrap(palette.Orphan, "x"))
-	require.Equal(t, "\033[90mx\033[0m", p.Wrap(palette.Dim, "x"))
+	require.Equal(t, "\033[38;5;245mx\033[0m", p.Wrap(palette.Dim, "x"), "dim is a light gray, readable on dark terminals")
 }
 
 // Seq returns the raw SGR parameters for a role.

@@ -13,11 +13,14 @@ package tui
 // ever reaches the altscreen); declined or failed validation runs the
 // read unelevated and permission-denied probes report unauthorized
 // (0108). A second r during a probe is a no-op (builder's call, named in
-// the spec).
+// the spec). Slice 2d adds the row actions: enter jumps to the Modules
+// view at the finding's first owning module, and P runs the one apply
+// flow scoped to all of the finding's owners (beating the yank set).
 
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -410,9 +413,79 @@ func (m *Compositor) statusEnd() {
 	}
 }
 
+// statusFindingAt returns the finding under the cursor, nil for the
+// all-OK row (headers and the summary are not selectable).
+func (m *Compositor) statusFindingAt() *drift.Finding {
+	rows := m.statusRows()
+	if m.status.cursor >= len(rows) {
+		return nil
+	}
+	return rows[m.status.cursor].finding
+}
+
+// statusOwnerIDs lists the finding's owning module ids in the finding's
+// own order (the first owner is enter's jump target). Finding.Module is
+// comma-joined for a multi-owner finding; an orphan's owner is its
+// layer-dir basename, resolved to the module id that owns the dir —
+// module.toml's id can differ from the dir name.
+func (m *Compositor) statusOwnerIDs(f *drift.Finding) []string {
+	owners := splitComma(f.Module)
+	if f.Section != "orphans" {
+		return owners
+	}
+	for i, dir := range owners {
+		owners[i] = m.moduleIDForDir(dir)
+	}
+	return owners
+}
+
+// moduleIDForDir resolves a layer-dir basename to its module id through
+// the nav's layers; the basename itself is the fallback (the id defaults
+// to the dir name when module.toml has none).
+func (m *Compositor) moduleIDForDir(dir string) string {
+	for _, mod := range m.nav.modules {
+		for _, l := range mod.layers {
+			if filepath.Base(l.dir) == dir {
+				return mod.id
+			}
+		}
+	}
+	return dir
+}
+
+// statusJumpToOwner is enter on a finding row (slice 2d): the Modules
+// view opens with the nav cursor on the first owning module — the
+// palette jump's idiom (focus to the workspace, the workspace follows).
+func (m *Compositor) statusJumpToOwner(f *drift.Finding) tea.Cmd {
+	owners := m.statusOwnerIDs(f)
+	if len(owners) == 0 {
+		return nil
+	}
+	m.switchView(viewModules)
+	m.jumpToModule(owners[0], "")
+	m.focus = focusWork
+	return m.syncWorkspace()
+}
+
+// statusApplyOwners is P's scope override on the Status view (slice 2d):
+// the selected finding's owners beat the yank snapshot. Nil off the
+// Status view or on a row without a finding — the yank snapshot stands.
+func (m *Compositor) statusApplyOwners() []string {
+	if m.view != viewStatus {
+		return nil
+	}
+	if f := m.statusFindingAt(); f != nil {
+		return m.statusOwnerIDs(f)
+	}
+	return nil
+}
+
 // statusKey is the Status view's viewHook: the pane movement keys (they
-// live in the one binding table) drive the findings cursor. enter/P on a
-// finding land in Task 7.
+// live in the one binding table) drive the findings cursor, and enter on
+// a finding jumps to its first owning module on the Modules view. P is
+// a "both" binding: it never reaches this hook — its Status-view scope
+// override lives in startApply (statusApplyOwners), keeping the one
+// apply path.
 func (m *Compositor) statusKey(s string) (tea.Cmd, bool) {
 	page := m.h - 8 // pane content height (layout: 6 chrome lines + 2 border)
 	switch s {
@@ -428,6 +501,10 @@ func (m *Compositor) statusKey(s string) (tea.Cmd, bool) {
 		m.statusHome()
 	case "end":
 		m.statusEnd()
+	case "enter":
+		if f := m.statusFindingAt(); f != nil {
+			return m.statusJumpToOwner(f), true
+		}
 	default:
 		return nil, false
 	}

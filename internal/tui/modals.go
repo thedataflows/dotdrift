@@ -159,12 +159,17 @@ type applyDrainedMsg struct{}
 
 // startApply previews the would-be session (P). The gates — destructive
 // confirm, then elevation — hang off the preview's landing. A non-empty
-// yank set snapshots here and rides the chain into Start (0093).
+// yank set snapshots here and rides the chain into Start (0093); on the
+// Status view a selected finding's owners beat the yank set (0108 slice
+// 2d) — same snapshot field, same one apply path.
 func (m *Compositor) startApply() tea.Cmd {
 	if m.applying || m.applyFor == nil {
 		return nil
 	}
 	m.applyModules = m.nav.yankedIDs()
+	if owners := m.statusApplyOwners(); len(owners) > 0 {
+		m.applyModules = owners
+	}
 	l := m.applyFor(m.facts)
 	return func() tea.Msg {
 		previews, err := l.Preview(service.ApplyOpts{ProfilePath: m.root, Modules: m.applyModules})

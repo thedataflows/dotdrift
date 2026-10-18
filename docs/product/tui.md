@@ -82,7 +82,13 @@ view stack wholesale). Its parts:
   `no drift`). Right: the selected finding's detail (module, item,
   state, detail), and for a copy-mode dotfile finding the live diff.
   `j`/`k` and the paging keys move the cursor; `f` cycles the section
-  filter (all → each present section → all). The read runs as a
+  filter (all → each present section → all). `enter` on a finding jumps
+  to the Modules view with the cursor on the finding's first owning
+  module (a multi-owner finding's module list is comma-joined; an
+  orphan finding jumps to the module owning its layer dir), the
+  workspace following the jump. `P` on a finding runs the usual apply
+  flow scoped to all of the finding's owners — the owners beat the
+  yank set. The read runs as a
   command, so the shell stays responsive while probes run; the pane
   shows `probing…` until the read lands, and a second `r` during a
   probe is a no-op. A failed re-run keeps the old list only with the
@@ -94,7 +100,8 @@ view stack wholesale). Its parts:
   broken module surfaces in a `load problems:` block and the summary
   never claims `no drift`. A non-empty yank set scopes the read and the
   title names the scope (`Status [shell]`); changing the yank set marks
-  the view stale.
+  the view stale. A finished apply marks the Status and Plan views
+  stale — the views wait for `r`, no automatic re-probe.
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
   64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
   and chrome behavior.
@@ -337,7 +344,9 @@ view stack wholesale). Its parts:
   `r` re-reads the active view and `R` re-reads all views (0107).
   `f` cycles the Status view's section filter (0108); a yank change
   marks the Status and Plan views stale (their reads were scoped under
-  the old set).
+  the old set). On the Status view `enter` on a finding jumps to its
+  first owning module on the Modules view, and `P` scopes the apply to
+  the finding's owners instead of the yank set (0108).
   `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /

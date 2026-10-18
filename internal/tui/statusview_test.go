@@ -343,6 +343,124 @@ func TestStatusView_yankMarksStale(t *testing.T) {
 	require.True(t, c.stale[viewPlan], "a yank change marks the Plan view stale")
 }
 
+func TestStatusView_enterJumpsToModule(t *testing.T) {
+	// Slice 2d: enter on a finding opens the Modules view with the nav
+	// cursor on the finding's first owning module (the palette jump
+	// idiom: focus to the workspace, the workspace follows).
+	read := statusFixtureRead()
+	read.Findings = []drift.Finding{
+		{Section: "dotfiles", Item: "/home/cri/.vimrc", Status: drift.Drift, Detail: "content differs", Module: "editors, shell"},
+	}
+	_, c := statusShell(read)
+	c.nav = navModel{modules: []navModule{{id: "editors"}, {id: "shell"}}}
+	c = loadStatusView(t, c)
+
+	c = cpress(c, "enter")
+	require.Equal(t, viewModules, c.view, "enter jumps to the Modules view")
+	require.Equal(t, "editors", c.nav.selected().moduleID,
+		"the cursor lands on the first owner of a comma-joined multi-owner finding")
+	require.Equal(t, focusWork, c.focus, "the jump hands focus to the workspace")
+	require.Equal(t, "editors", c.ws.moduleID, "the workspace follows the jump")
+
+	// An orphan finding's owner is its layer-dir basename; the jump
+	// resolves it to the owning module (module.toml's id can differ
+	// from the dir name).
+	orphanRead := statusFixtureRead()
+	orphanRead.Findings = []drift.Finding{
+		{Section: "orphans", Item: "stray.conf", Status: drift.Drift, Detail: "not referenced by any declaration", Module: "dotdir"},
+	}
+	_, c = statusShell(orphanRead)
+	c.nav = navModel{modules: []navModule{{
+		id:     "dots",
+		layers: []navLayer{{layer: "base", dir: "/home/cri/profiles/main/modules/dotdir"}},
+	}}}
+	c = loadStatusView(t, c)
+	c = cpress(c, "enter")
+	require.Equal(t, viewModules, c.view)
+	require.Equal(t, "dots", c.nav.selected().moduleID,
+		"an orphan jumps to the module owning its layer dir")
+
+	// The all-OK row owns no finding: enter is inert.
+	okRead := statusFixtureRead()
+	okRead.Findings = []drift.Finding{
+		{Section: "tools", Item: "go", Status: drift.OK, Module: "shell"},
+	}
+	_, c = statusShell(okRead)
+	c = loadStatusView(t, c)
+	c = cpress(c, "enter")
+	require.Equal(t, viewStatus, c.view, "enter on the all-OK row stays put")
+}
+
+func TestStatusView_applyScopesAllOwners(t *testing.T) {
+	// Slice 2d: P on a finding runs the one apply flow with
+	// ApplyOpts.Modules = every owner of the finding — the finding's
+	// owners beat the yank set.
+	read := statusFixtureRead()
+	read.Findings = []drift.Finding{
+		{Section: "dotfiles", Item: "/home/cri/.vimrc", Status: drift.Drift, Detail: "content differs", Module: "editors, shell"},
+	}
+	_, c := statusShell(read)
+	c.nav = navModel{modules: []navModule{{id: "editors"}, {id: "shell"}, {id: "other"}}}
+	c.nav.yanked = map[string]bool{"other": true}
+	fl := &fakeLauncher{run: closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted})}
+	c.applyFor = func(*facts.Facts) ApplyLauncher { return fl }
+	c.pumpNoBlock = true
+	c = loadStatusView(t, c)
+
+	c = wsPress(t, c, "P") // settles preview → gates → run
+	require.Equal(t, []string{"editors", "shell"}, c.applyModules,
+		"P snapshots the finding's owners at the press")
+	require.Len(t, fl.startedOpts, 1)
+	require.Equal(t, []string{"editors", "shell"}, fl.startedOpts[0].Modules,
+		"the owners ride the gates into Start, beating the yank set")
+
+	// The all-OK row owns no finding: P keeps the yank scope.
+	okRead := statusFixtureRead()
+	okRead.Findings = []drift.Finding{
+		{Section: "tools", Item: "go", Status: drift.OK, Module: "shell"},
+	}
+	_, c = statusShell(okRead)
+	c.nav = navModel{modules: []navModule{{id: "shell"}, {id: "other"}}}
+	c.nav.yanked = map[string]bool{"other": true}
+	fl = &fakeLauncher{run: closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted})}
+	c.applyFor = func(*facts.Facts) ApplyLauncher { return fl }
+	c.pumpNoBlock = true
+	c = loadStatusView(t, c)
+	c = wsPress(t, c, "P")
+	require.Equal(t, []string{"other"}, fl.startedOpts[0].Modules,
+		"with no finding under the cursor the yank snapshot stands")
+}
+
+func TestStatusView_yankChangeMarksStale(t *testing.T) {
+	// Review Focus 3: a yank change marks the Status and Plan views
+	// stale from that moment — their reads ran under the old scope.
+	_, c := statusShell(statusFixtureRead())
+	c.nav = navModel{modules: []navModule{{id: "shell"}, {id: "apps"}}}
+	c = loadStatusView(t, c)
+	require.False(t, c.stale[viewStatus], "the landed read is fresh")
+
+	c = cpress(c, "1") // the Modules view owns the yank keys
+	c = cpress(c, "y")
+	require.True(t, c.stale[viewStatus], "a yank change marks Status stale")
+	require.True(t, c.stale[viewPlan], "a yank change marks Plan stale")
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Status (stale)",
+		"the row title carries the mark")
+}
+
+func TestStatusView_applyFinishMarksStale(t *testing.T) {
+	// A finished apply outlives the Status/Plan data: the views are
+	// marked stale, never auto re-probed — r refreshes.
+	stub, c := statusShell(statusFixtureRead())
+	c = loadStatusView(t, c)
+	require.False(t, c.stale[viewStatus])
+
+	c.apply = &applyRunState{}
+	c, _ = cstep(c, applyWaitedMsg{res: &service.SessionResult{Outcome: service.OutcomeCompleted}})
+	require.True(t, c.stale[viewStatus], "a finished apply marks Status stale")
+	require.True(t, c.stale[viewPlan], "a finished apply marks Plan stale")
+	require.Equal(t, 1, stub.statusCalls, "the finish does not re-probe — r refreshes")
+}
+
 func TestStatusView_golden(t *testing.T) {
 	stub, c := statusShell(statusFixtureRead())
 	stub.diffs = []service.DiffEntry{{

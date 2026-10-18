@@ -49,7 +49,6 @@ summary when U > 0. The palette role is the unknown role (error).
 
 ## Out of Scope
 
-- TUI Status view rendering (slice 2b, consumes this status)
 - Typed error causes on probes (the detail string is the carrier)
 
 ## Notes
@@ -57,3 +56,16 @@ summary when U > 0. The palette role is the unknown role (error).
 Pinning tests: `TestCheck_permissionDeniedIsUnauthorized`,
 `TestCheck_otherUnknownStaysUnknown`, `TestRender_unauthorizedCounts`;
 `TestCheck_dotfileEditUnreadable` updated to expect `Unauthorized`.
+
+The TUI Status view (slices 2b–2d of the
+[TUI views design](../superpowers/specs/2026-10-18-tui-views-design.md))
+landed under this issue: the findings list with the sudo elevation gate
+(`TestStatusView_listsFindings`, `TestStatusView_allOKSectionRow`,
+`TestStatusView_sudoGate`, `TestStatusView_tolerantBrokenModule`,
+`TestStatusView_probePendingKeepsShell`), the stale-seq landing guard
+(`TestStatusView_midProbeStaleMarkSurvivesLanding`), and the row
+actions — `enter` jumps to the first owning module, `P` scopes the
+apply to all owners (`TestStatusView_enterJumpsToModule`,
+`TestStatusView_applyScopesAllOwners`,
+`TestStatusView_yankChangeMarksStale`,
+`TestStatusView_applyFinishMarksStale`).

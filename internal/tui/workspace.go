@@ -286,6 +286,13 @@ func (w *workspaceModel) titleView(th theme) string {
 	return s
 }
 
+// sectionFilled reports whether the section headed at rows[hdr]
+// carries entry rows: the next row exists and is neither a header
+// nor a hint (an add-gesture hint is not content, 0123).
+func sectionFilled(rows []wsRow, hdr int) bool {
+	return hdr+1 < len(rows) && !rows[hdr+1].header && !rows[hdr+1].hint
+}
+
 // rowView renders one row (possibly several lines: the edit input and its
 // tier-1 error render in place). Rows announce their gesture (0079
 // T-tui-marks), computed from the same registry that decides behavior so
@@ -304,18 +311,29 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			// to say so.
 			return []string{th.cursorLine(" "+text+mark, width)}
 		}
-		// A section header is a filled bar (0121), no underline
-		// (the 0120 leak rule). The lead matches the cursor row's
-		// bar cell (0116): no shift under the cursor.
-		return []string{th.barLine(" "+text+mark, width)}
+		// A section header is a filled bar (0121) only when the
+		// section has entries (0123): emphasis follows content, so
+		// an empty section is a plain bold heading in the same
+		// column and empty sections stack calm. No underline (the
+		// 0120 leak rule). The lead matches the cursor row's bar
+		// cell (0116): no shift under the cursor.
+		if sectionFilled(w.rows, i) {
+			return []string{th.barLine(" "+text+mark, width)}
+		}
+		return []string{th.sectionLabel.Render("  " + text + mark)}
 	}
 	if r.hint {
 		if r.text == "" {
 			// The section separator (0117, 0121): an eighth-block
 			// edge row in the bar color — the next section's fill
 			// starts one eighth of a row late, a ~2px gap where a
-			// blank row read as a full character height.
-			return []string{th.barEdge.Render(strings.Repeat("▇", width))}
+			// blank row read as a full character height. Only a
+			// filled bar earns the edge (0123); before a plain
+			// heading the separator renders nothing.
+			if i+1 < len(w.rows) && w.rows[i+1].header && sectionFilled(w.rows, i+1) {
+				return []string{th.barEdge.Render(strings.Repeat("▇", width))}
+			}
+			return nil
 		}
 		return []string{th.disabledMark.MaxWidth(width).Render("   " + r.text)}
 	}

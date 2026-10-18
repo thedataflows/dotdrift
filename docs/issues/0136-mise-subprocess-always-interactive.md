@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0136: mise subprocess always interactive
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: high
 - **Labels**: [mise, apply]
 - **Assignee**: none
 - **Related**: [0028](0028-apply-mise-prompts-unanswerable-stdin.md)
 - **Related code**: [`internal/mise/`](../../internal/mise/)
-- **Closing commits**: none
+- **Closing commits**: `84f8b01`
 
 ## Summary
 
@@ -42,12 +42,12 @@ consumer's real stdio and are unchanged.
 
 ## Acceptance Criteria
 
-- [ ] `opStdin` always returns the real stdin; no terminal gate remains
+- [x] `opStdin` always returns the real stdin; no terminal gate remains
   on any mise spawn path (`runContextEnv`, `runOp`, `runProbe`,
   `defaultInstall`, `internal/profile` mise probes).
-- [ ] Regression test: a mise child receives stdin even when stdin is
+- [x] Regression test: a mise child receives stdin even when stdin is
   not a terminal, on the captured and streamed paths.
-- [ ] `docs/product/cli-surface.md` states the unconditional rule.
+- [x] `docs/product/cli-surface.md` states the unconditional rule.
 
 ## Out of Scope
 

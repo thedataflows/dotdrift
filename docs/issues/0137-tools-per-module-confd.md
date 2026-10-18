@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0137: tools as per-module global conf.d snippets
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [mise, tools]
 - **Assignee**: none
 - **Related**: [0037](0037-tools-global-activation.md)
 - **Related code**: [`internal/mise/`](../../internal/mise/), [`internal/resolve/`](../../internal/resolve/)
-- **Closing commits**: none
+- **Closing commits**: `84f8b01`
 
 ## Summary
 
@@ -48,13 +48,13 @@ snippet per module:
 
 ## Acceptance Criteria
 
-- [ ] `mise.ToolsStep` writes one `conf.d/<module>.toml` per module
+- [x] `mise.ToolsStep` writes one `conf.d/<module>.toml` per module
   with tools, containing exactly that module's merged tools.
-- [ ] Stale marked snippets and the legacy `dotdrift.toml` fragment
+- [x] Stale marked snippets and the legacy `dotdrift.toml` fragment
   are removed; unmarked files in conf.d are untouched.
-- [ ] The install itself still runs against the per-step tools config;
+- [x] The install itself still runs against the per-step tools config;
   snippets are written only after a successful install.
-- [ ] Product docs describe the per-module snippets.
+- [x] Product docs describe the per-module snippets.
 
 ## Out of Scope
 

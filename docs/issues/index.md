@@ -123,3 +123,5 @@ use, plus emergent features and chores. Planned work lives in
 | [0133](0133-input-continuation-marks.md) | Faded ... continuation marks in clipped inputs | done | medium |
 | [0134](0134-nav-enter-expand-collapse.md) | Enter in the Modules nav expands/collapses the module | done | medium |
 | [0135](0135-single-text-input-component.md) | One reusable text input component for every input | done | medium |
+| [0136](0136-mise-subprocess-always-interactive.md) | mise subprocess always interactive | done | high |
+| [0137](0137-tools-per-module-confd.md) | Tools as per-module global conf.d snippets | done | medium |

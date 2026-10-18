@@ -84,7 +84,7 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"4", "both", "profile view", func(m *Compositor) tea.Cmd { return m.switchView(viewProfile) }},
 		{"r", "both", "refresh view", func(m *Compositor) tea.Cmd { return m.refreshView() }},
 		{"R", "both", "refresh all views", func(m *Compositor) tea.Cmd { return m.refreshAllViews() }},
-		{"f", "both", "filter section (Status view)", func(m *Compositor) tea.Cmd { return m.cycleStatusFilter() }},
+		{"f", "both", "quickfilter pane", func(m *Compositor) tea.Cmd { return m.openQuickFilter() }},
 		// workspace pane
 		{"j", "work", "scroll down", func(m *Compositor) tea.Cmd { m.ws.move(1); return nil }},
 		{"k", "work", "scroll up", func(m *Compositor) tea.Cmd { m.ws.move(-1); return nil }},
@@ -140,10 +140,6 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 				}
 			case "o":
 				b.pane = "disabled"
-			case "f":
-				if m.view != viewStatus {
-					b.pane = "disabled"
-				}
 			case "P":
 				b.help = "apply yanked/all"
 				if m.view == viewStatus && len(m.statusApplyOwners()) > 0 {
@@ -154,6 +150,11 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		}
 		originalPane := b.pane
 		b.pane = "disabled"
+		if b.key == "/" && originalPane == "nav" {
+			// 0148: / is the focused panel's quickfilter on the read views.
+			b.pane, b.help = "read", "quickfilter pane"
+			continue
+		}
 		if m.view != viewStatus && m.view != viewPlan {
 			continue
 		}

@@ -29,12 +29,14 @@ type profileLoadedMsg struct {
 }
 
 // profileModel is the Profile view's state: no cursor, no scroll — the
-// list fits the pane or the pane clips it.
+// list fits the pane or the pane clips it. The quickfilter (0148)
+// narrows the cards' rows.
 type profileModel struct {
 	pending bool
 	seq     int
 	loadErr string
 	read    *service.ProfileRead
+	filter  paneFilter
 }
 
 // switchView activates a view on the row and schedules the view's read
@@ -120,6 +122,18 @@ func (m *Compositor) profileBody(w int) string {
 		return m.th.cardBorder.Width(w).Render(body)
 	}
 	var cards []string
+	// The quickfilter (0148): a card keeps its matching rows; a card
+	// whose title matches keeps all its rows; a card with no matching
+	// row drops out.
+	addCard := func(title string, lines []string) {
+		if q := p.filter.query.String(); q != "" && !matchText(q, title) {
+			lines = filterLines(lines, q)
+			if len(lines) == 0 {
+				return
+			}
+		}
+		cards = append(cards, card(title, lines))
+	}
 	if f := r.Facts; f != nil {
 		var lines []string
 		row(&lines, "host", f.Hostname)
@@ -129,7 +143,7 @@ func (m *Compositor) profileBody(w int) string {
 		row(&lines, "distro", f.Distro)
 		row(&lines, "gpu", f.GPU)
 		row(&lines, "backend", f.Backend)
-		cards = append(cards, card("FACTS", lines))
+		addCard("FACTS", lines)
 	}
 	var lines []string
 	row(&lines, "profile", r.ProfilePath)
@@ -149,7 +163,7 @@ func (m *Compositor) profileBody(w int) string {
 		resumeLine += m.th.rowText.Render(resume)
 	}
 	lines = append(lines, ansi.Truncate(resumeLine, inner, ""))
-	cards = append(cards, card("PROFILE", lines))
+	addCard("PROFILE", lines)
 	if len(r.Others) > 0 {
 		// The 0038 note, Status's wording: name each other account with
 		// configuration on this machine and its apply command.
@@ -159,9 +173,25 @@ func (m *Compositor) profileBody(w int) string {
 			lines = append(lines, ansi.Truncate(m.th.rowText.Render(" users/"+acct.Name+" — apply with: "+accountApplyCmd(acct)), inner, ""))
 		}
 		lines = append(lines, ansi.Truncate(m.th.meta.Render(" (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system scope)"), inner, ""))
-		cards = append(cards, card("OTHER ACCOUNTS", lines))
+		addCard("OTHER ACCOUNTS", lines)
 	}
-	return strings.Join(cards, "\n")
+	out := strings.Join(cards, "\n")
+	if p.filter.active() {
+		if len(cards) == 0 {
+			out = m.th.disabledMark.Render(" no rows match «" + p.filter.query.String() + "»")
+		}
+		out += "\n" + p.filter.view(m.th, w)
+	}
+	return out
+}
+
+// profileKey is the Profile view's viewHook: / opens the panel's
+// quickfilter (0148). The view has no cursor, so no movement keys.
+func (m *Compositor) profileKey(s string) (tea.Cmd, bool) {
+	if s == "/" {
+		return m.openQuickFilter(), true
+	}
+	return nil, false
 }
 
 // accountApplyCmd is the per-account apply instruction (the rule of

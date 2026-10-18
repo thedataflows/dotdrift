@@ -118,8 +118,8 @@ view stack wholesale). Its parts:
   line is the CLI's (`drift: N items, M unknown, U unauthorized`, or
   `no drift`). Right: the selected finding's detail (module, item,
   state, detail), and for a copy-mode dotfile finding the live diff.
-  `j`/`k` and the paging keys move the cursor; `f` cycles the section
-  filter (all → each present section → all). `enter` on a finding jumps
+  `j`/`k` and the paging keys move the cursor; `f` or `/` opens the
+  focused panel's quickfilter (0148). `enter` on a finding jumps
   to the Modules view with the cursor on the finding's first owning
   module (a multi-owner finding's module list is comma-joined; an
   orphan finding jumps to the module owning its layer dir), the
@@ -205,6 +205,18 @@ view stack wholesale). Its parts:
   rule). The cursor keeps its module across query changes while it
   still matches; an empty result names the query. Mouse clicks work
   on the filtered rows and commit the typing mode.
+- **The read-view quickfilter** (issue
+  [0148](../issues/0148-quickfilter-read-views.md)). On the Status,
+  Plan, and Profile views, `f` or `/` opens a quickfilter on the
+  focused panel, with the nav filter's keys and query line: typing
+  narrows the panel live, the movement keys still move in a list
+  panel, `enter` keeps the filter, `esc` removes it, `ctrl+c` quits.
+  The Status list filters finding rows (row text and section name
+  match, so a section name does the old `f` section cycle's job —
+  that cycle is gone), the Status and Plan detail panels filter
+  their lines, the Plan list filters section names, and the Profile
+  cards keep matching rows (a title match keeps the whole card).
+  Matching is a case-insensitive substring test on the plain text.
 - **The workspace** (T-tui-workspace). `module.toml` rendered as a
   sectioned read surface over the 0065 config seam (strict decode + raw
   text; the workspace never parses TOML): fixed-order sections — meta,
@@ -425,8 +437,8 @@ view stack wholesale). Its parts:
   `P` apply, `d` remove row / `D` discard draft); esc pops the top layer
   (modal → edit → filter → focus to nav, 0081); `ctrl+c` quits exactly
   like `q` — at the base level, in the field editor, and in the nav
-  filter (issue 0146; inside the apply detail it still cancels the
-  run); `ctrl+z`
+  filter (issue 0146; also in a read-view quickfilter, 0148; inside
+  the apply detail it still cancels the run); `ctrl+z`
   steps the active draft back one committed change and `ctrl+shift+z`
   redoes (0079) — undoing past the first change returns the clean file,
   and confirms remain the safety net for what undo cannot reach (saves,
@@ -434,7 +446,8 @@ view stack wholesale). Its parts:
   place, the workspace pane's opens the palette (0081) — the footer
   hint resolves the verb from the table per focused pane.
   `r` re-reads the active view and `R` re-reads all views (0107).
-  `f` cycles the Status view's section filter (0108); a yank change
+  `f` or `/` opens the focused panel's quickfilter on the Status,
+  Plan, and Profile views (0148); a yank change
   marks the Status and Plan views stale (their reads were scoped under
   the old set). On the Status view `enter` on a finding jumps to its
   first owning module on the Modules view, and `P` scopes the apply to

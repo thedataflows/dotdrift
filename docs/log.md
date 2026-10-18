@@ -1,6 +1,10 @@
 # Directory Update Log
 
 
+## 2026-10-19
+
+* **Feat (tui, quickfilter on the read views — issue [0148](issues/0148-quickfilter-read-views.md))**: on tabs 2-4 (Status, Plan, Profile), `f` or `/` now opens a quickfilter on the focused panel, with the Modules nav filter's rules — typing narrows live, movement keys still move in a list panel, `enter` keeps the filter, `esc` removes it, `ctrl+c` quits, and the query line sits at the panel bottom. The Status list filters finding rows by text or section name, the Status and Plan detail panels filter their lines, the Plan list filters section names, and the Profile cards keep matching rows (a title match keeps the whole card). Matching is a case-insensitive substring test on plain text, through the shared text input. The Status `f` section cycle is gone: typing a section name in the list filter does its job. Tests pin all five panels, the section-name filter, movement and ctrl+c while typing. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0. Docs: issue 0148 + index, tui.md quickfilter bullet and keys bullets, this entry.
+
 ## 2026-10-18
 
 * **Feat (tui, empty line above the tabs — issue [0147](issues/0147-blank-line-above-tabs.md))**: the frame now puts one empty line between the header text and the tab bar, in every view. The pane budget drops one line (`h-8`) so frames still fit the terminal exactly; the 41 regenerated goldens show only the inserted line and the one-line-shorter bodies. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0. Docs: issue 0147 + index, this entry.

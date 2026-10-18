@@ -474,6 +474,22 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// A read view's quickfilter typing mode owns key input while
+	// active (0148), on the nav filter's pattern.
+	if f := m.typingFilter(); f != nil {
+		if p, ok := msg.(tea.PasteMsg); ok {
+			f.query.insertRunes(pasteRunes(p.Content))
+			m.afterFilterChange(f)
+			return m, nil
+		}
+		if k, ok := msg.(tea.KeyPressMsg); ok {
+			if k.String() == "ctrl+c" {
+				return m, m.quit() // 0146: quit, like at the base level
+			}
+			return m, m.quickFilterKey(k)
+		}
+	}
+
 	// Mouse on the base panes.
 	switch msg.(type) {
 	case tea.MouseWheelMsg, tea.MouseClickMsg:
@@ -497,6 +513,13 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if len(m.nav.query.buf) > 0 {
 			m.nav.clearFilter()
 			return m, m.syncWorkspace()
+		}
+		// An applied quickfilter in the focused read-view panel clears
+		// the same way (0148).
+		if f := m.paneFilterFor(m.focus); f != nil && len(f.query.buf) > 0 {
+			f.clear()
+			m.afterFilterChange(f)
+			return m, nil
 		}
 		if m.focus != focusNav {
 			m.focus = focusNav

@@ -59,8 +59,9 @@ type statusModel struct {
 	diffs        []service.DiffEntry
 	scope        []string // the successful read's scope; names the title
 	pendingScope []string
-	seq          int    // staleSeq[viewStatus] when the read started (0108 fix round 1)
-	filter       string // a section name; "" = all sections
+	seq          int // staleSeq[viewStatus] when the read started (0108 fix round 1)
+	listFilter   paneFilter
+	detailFilter paneFilter
 	cursor       int
 	offset       int
 	dOffset      int
@@ -74,6 +75,7 @@ var statusSectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "sm
 // are not selectable; finding rows and the all-OK row are.
 type statusRow struct {
 	sel     bool
+	header  bool // a section header: kept by the quickfilter when a kept row follows
 	finding *drift.Finding
 	okCount int // >0: the all-OK row of a section with this many checks
 	text    string
@@ -243,7 +245,7 @@ func (m *Compositor) statusRows() []statusRow {
 	var rows []statusRow
 	broken := brokenModules(r.Profile)
 	if len(broken) > 0 {
-		rows = append(rows, statusRow{text: " load problems:", style: m.th.sectionLabel})
+		rows = append(rows, statusRow{header: true, text: " load problems:", style: m.th.sectionLabel})
 		for _, s := range broken {
 			rows = append(rows, statusRow{text: "  " + s.Module.ID + ": " + s.Reason, style: m.th.errorMark})
 		}
@@ -251,9 +253,6 @@ func (m *Compositor) statusRows() []statusRow {
 	}
 	totalDrift, totalUnknown, totalUnauth := 0, 0, 0
 	for _, sec := range statusSectionOrder {
-		if m.status.filter != "" && m.status.filter != sec {
-			continue
-		}
 		var driftN, unkN, unauthN, n, unmN int
 		for i := range r.Findings {
 			f := &r.Findings[i]
@@ -282,7 +281,7 @@ func (m *Compositor) statusRows() []statusRow {
 		if counts := statusCounts(driftN, unkN, unauthN); counts != "" {
 			header += " " + counts
 		}
-		rows = append(rows, statusRow{text: header, style: m.th.sectionLabel})
+		rows = append(rows, statusRow{header: true, text: header, style: m.th.sectionLabel})
 		if driftN+unkN+unauthN == 0 && n-unmN > 0 {
 			rows = append(rows, statusRow{sel: true, okCount: n - unmN, style: m.th.successMark,
 				text: "  ✓ ok: all " + strconv.Itoa(n-unmN) + " checks passed"})
@@ -317,7 +316,39 @@ func (m *Compositor) statusRows() []statusRow {
 		}
 		rows = append(rows, statusRow{}, statusRow{text: summary})
 	}
+	if q := m.status.listFilter.query.String(); q != "" {
+		rows = filterStatusRows(rows, q)
+	}
 	return rows
+}
+
+// filterStatusRows narrows the built rows to a quickfilter query
+// (0148): a selectable row keeps when its text or its finding's
+// section matches; a section header keeps when a kept row follows
+// it; blank rows and the summary drop out.
+func filterStatusRows(rows []statusRow, q string) []statusRow {
+	var out []statusRow
+	var header *statusRow
+	for i := range rows {
+		r := rows[i]
+		if r.header {
+			h := r
+			header = &h
+			continue
+		}
+		if !r.sel {
+			continue
+		}
+		if !matchText(q, r.text) && (r.finding == nil || !matchText(q, r.finding.Section)) {
+			continue
+		}
+		if header != nil {
+			out = append(out, *header)
+			header = nil
+		}
+		out = append(out, r)
+	}
+	return out
 }
 
 // statusFindingLine renders one finding row with the CLI's wording:
@@ -534,6 +565,9 @@ func (m *Compositor) statusApplyOwners() []string {
 // keeping the one apply path.
 func (m *Compositor) statusKey(s string) (tea.Cmd, bool) {
 	page := m.h - 8 // pane content height (layout: 6 chrome lines + 2 border)
+	if s == "/" {
+		return m.openQuickFilter(), true // 0148: the focused panel's quickfilter
+	}
 	if m.focus == focusWork {
 		return m.statusDetailKey(s, page)
 	}
@@ -587,39 +621,6 @@ func (m *Compositor) statusDetailKey(s string, page int) (tea.Cmd, bool) {
 	return nil, true
 }
 
-// cycleStatusFilter is f (the one section-filter mechanism): all → each
-// present section in report order → all. Inert off the Status view.
-func (m *Compositor) cycleStatusFilter() tea.Cmd {
-	if m.view != viewStatus || m.status.read == nil {
-		return nil
-	}
-	var secs []string
-	for _, sec := range statusSectionOrder {
-		for i := range m.status.read.Findings {
-			if m.status.read.Findings[i].Section == sec {
-				secs = append(secs, sec)
-				break
-			}
-		}
-	}
-	idx := -1
-	for i, sec := range secs {
-		if sec == m.status.filter {
-			idx = i
-			break
-		}
-	}
-	if idx+1 < len(secs) {
-		m.status.filter = secs[idx+1]
-	} else {
-		m.status.filter = ""
-	}
-	m.status.cursor, m.status.offset = 0, 0
-	m.status.dOffset = 0
-	m.status.clamp(m.statusRows())
-	return nil
-}
-
 // statusList renders the left pane: the findings list in its current
 // state (not loaded / probing / loaded / failed).
 func (m *Compositor) statusList(w, h int) string {
@@ -644,12 +645,12 @@ func (m *Compositor) statusList(w, h int) string {
 	if len(s.scope) > 0 {
 		head = append(head, m.th.meta.Render(" scope: "+strings.Join(s.scope, ", ")))
 	}
-	if s.filter != "" {
-		head = append(head, m.th.meta.Render(" section: "+s.filter+" (f cycles)"))
-	}
 	rows := m.statusRows()
 	s.clamp(rows)
 	avail := h - len(head)
+	if s.listFilter.active() {
+		avail-- // the query line takes the pane's last line (0148)
+	}
 	if avail < 1 {
 		avail = 1
 	}
@@ -670,6 +671,12 @@ func (m *Compositor) statusList(w, h int) string {
 			line = rows[i].style.Render(rows[i].text)
 		}
 		lines = append(lines, ansi.Truncate(line, w, ""))
+	}
+	if len(rows) == 0 && len(s.listFilter.query.buf) > 0 {
+		lines = append(lines, m.th.disabledMark.MaxWidth(w).Render("  no findings match «"+s.listFilter.query.String()+"»"))
+	}
+	if s.listFilter.active() {
+		lines = append(lines, s.listFilter.view(m.th, w))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -709,14 +716,25 @@ func diffLine(th theme, line string) string {
 // clipped side carries the overflow mark.
 func (m *Compositor) statusDetail(w, h int) string {
 	lines := m.statusDetailLines(w)
-	if len(lines) == 0 {
-		return ""
-	}
 	s := &m.status
+	if len(lines) == 0 {
+		if len(s.detailFilter.query.buf) > 0 {
+			lines = []string{m.th.disabledMark.MaxWidth(w).Render("  no lines match «" + s.detailFilter.query.String() + "»")}
+		} else {
+			return ""
+		}
+	}
+	if s.detailFilter.active() {
+		h-- // the query line takes the pane's last line (0148)
+	}
 	if top := len(lines) - h; s.dOffset > top {
 		s.dOffset = max(0, top)
 	}
-	return strings.Join(detailWindow(m.th, lines, s.dOffset, h), "\n")
+	out := strings.Join(detailWindow(m.th, lines, s.dOffset, h), "\n")
+	if s.detailFilter.active() {
+		out += "\n" + s.detailFilter.view(m.th, w)
+	}
+	return out
 }
 
 // statusDetailLines builds the detail pane's lines: the selected
@@ -742,7 +760,7 @@ func (m *Compositor) statusDetailLines(w int) []string {
 	if row.okCount > 0 {
 		lines = append(lines, m.th.detailLine("ok", w))
 		lines = append(lines, m.th.pillOK.Render("ok")+" "+m.th.rowText.Render("all "+strconv.Itoa(row.okCount)+" checks passed"))
-		return lines
+		return filterLines(lines, s.detailFilter.query.String())
 	}
 	f := row.finding
 	if f == nil {
@@ -770,5 +788,5 @@ func (m *Compositor) statusDetailLines(w int) []string {
 			break
 		}
 	}
-	return lines
+	return filterLines(lines, s.detailFilter.query.String())
 }

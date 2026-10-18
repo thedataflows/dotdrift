@@ -188,5 +188,8 @@ func (m *Compositor) viewHook() func(s string) (tea.Cmd, bool) {
 	if m.view == viewPlan {
 		return m.planKey
 	}
+	if m.view == viewProfile {
+		return m.profileKey
+	}
 	return nil
 }

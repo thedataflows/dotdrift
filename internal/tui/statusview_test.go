@@ -288,38 +288,6 @@ func TestStatusView_probePendingKeepsShell(t *testing.T) {
 	require.Equal(t, 0, stub.statusCalls, "the read runs only through the scheduled cmd")
 }
 
-func TestStatusView_sectionFilter(t *testing.T) {
-	// The section filter (f, the one mechanism): cycle all → each
-	// present section → all.
-	_, c := statusShell(statusFixtureRead())
-	c = loadStatusView(t, c)
-
-	c = cpress(c, "f")
-	require.Equal(t, "packages", c.status.filter)
-	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "ripgrep")
-	require.NotContains(t, frame, "/etc/hosts", "a filter narrows the list to one section")
-
-	c = cpress(c, "f")
-	require.Equal(t, "tools", c.status.filter)
-	c = cpress(c, "f")
-	require.Equal(t, "dotfiles", c.status.filter)
-	frame = ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "/etc/hosts")
-	require.NotContains(t, frame, "ripgrep")
-
-	c = cpress(c, "f")
-	require.Equal(t, "", c.status.filter, "the cycle wraps back to all sections")
-	frame = ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "ripgrep")
-	require.Contains(t, frame, "/etc/hosts")
-
-	// f is inert off the Status view.
-	c = cpress(c, "1")
-	c = cpress(c, "f")
-	require.Equal(t, "", c.status.filter, "f does nothing on the Modules view")
-}
-
 func TestStatusView_midProbeStaleMarkSurvivesLanding(t *testing.T) {
 	// Fix round 1: a stale mark set during the probe (a yank change, a
 	// write, a finished apply) must survive the landing of the read that

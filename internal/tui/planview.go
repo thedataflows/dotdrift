@@ -47,6 +47,8 @@ type planViewModel struct {
 	pendingScope []string
 	seq          int // staleSeq[viewPlan] when the read started (0108 fix round 1)
 	showDiff     bool
+	listFilter   paneFilter
+	detailFilter paneFilter
 	cursor       int
 	offset       int
 	dOffset      int
@@ -99,6 +101,23 @@ func planSections(r *service.PlanRead) []planSection {
 	add("systemd", num(len(p.Systemd.Units)))
 	add("mounts", num(len(p.Mounts.Entries)))
 	add("smb", num(len(p.Smb.Modules)))
+	return out
+}
+
+// planSections is the compositor's section list under the list
+// quickfilter (0148): a section keeps when its name or count matches.
+func (m *Compositor) planSections() []planSection {
+	secs := planSections(m.planv.read)
+	q := m.planv.listFilter.query.String()
+	if q == "" {
+		return secs
+	}
+	out := secs[:0:0]
+	for _, s := range secs {
+		if matchText(q, s.name) || matchText(q, s.count) {
+			out = append(out, s)
+		}
+	}
 	return out
 }
 
@@ -161,7 +180,7 @@ func (m *Compositor) planLoaded(msg planLoadedMsg) tea.Cmd {
 	m.planv.diffs = msg.diffs
 	m.stale[viewPlan] = m.staleSeq[viewPlan] != m.planv.seq
 	m.planv.dOffset = 0 // new data: the detail reads from the top
-	m.planv.clamp(len(planSections(msg.read)))
+	m.planv.clamp(len(m.planSections()))
 	return nil
 }
 
@@ -194,7 +213,7 @@ func (p *planViewModel) clamp(n int) {
 func (m *Compositor) planMove(d int) {
 	m.planv.cursor += d
 	m.planv.dOffset = 0
-	m.planv.clamp(len(planSections(m.planv.read)))
+	m.planv.clamp(len(m.planSections()))
 }
 
 // planKey is the Plan view's viewHook: the pane movement keys (they
@@ -203,6 +222,9 @@ func (m *Compositor) planMove(d int) {
 // pane focused the movement keys scroll the detail instead (0111).
 func (m *Compositor) planKey(s string) (tea.Cmd, bool) {
 	page := m.h - 8 // pane content height (layout: 6 chrome lines + 2 border)
+	if s == "/" {
+		return m.openQuickFilter(), true // 0148: the focused panel's quickfilter
+	}
 	if m.focus == focusWork {
 		return m.planDetailKey(s, page)
 	}
@@ -219,9 +241,9 @@ func (m *Compositor) planKey(s string) (tea.Cmd, bool) {
 		m.planv.cursor = 0
 		m.planv.dOffset = 0
 	case "end":
-		m.planv.cursor = len(planSections(m.planv.read)) - 1
+		m.planv.cursor = len(m.planSections()) - 1
 		m.planv.dOffset = 0
-		m.planv.clamp(len(planSections(m.planv.read)))
+		m.planv.clamp(len(m.planSections()))
 	case "d":
 		m.planv.showDiff = !m.planv.showDiff
 	default:
@@ -279,9 +301,12 @@ func (m *Compositor) planList(w, h int) string {
 	if s.showDiff {
 		head = append(head, m.th.meta.Render(" diff: on (d toggles)"))
 	}
-	secs := planSections(s.read)
+	secs := m.planSections()
 	s.clamp(len(secs))
 	avail := h - len(head)
+	if s.listFilter.active() {
+		avail-- // the query line takes the pane's last line (0148)
+	}
 	if avail < 1 {
 		avail = 1
 	}
@@ -293,7 +318,11 @@ func (m *Compositor) planList(w, h int) string {
 	}
 	lines := head
 	if len(secs) == 0 {
-		lines = append(lines, " plan is empty")
+		if len(s.listFilter.query.buf) > 0 {
+			lines = append(lines, m.th.disabledMark.MaxWidth(w).Render("  no sections match «"+s.listFilter.query.String()+"»"))
+		} else {
+			lines = append(lines, " plan is empty")
+		}
 	}
 	for i := s.offset; i < len(secs) && len(lines) < h; i++ {
 		if i == s.cursor {
@@ -307,6 +336,9 @@ func (m *Compositor) planList(w, h int) string {
 		text := m.th.sectionLabel.Render(" "+secs[i].name+":") + " " + m.th.rowText.Render(secs[i].count)
 		lines = append(lines, ansi.Truncate(text, w, ""))
 	}
+	if s.listFilter.active() {
+		lines = append(lines, s.listFilter.view(m.th, w))
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -319,28 +351,38 @@ func (m *Compositor) planDetail(w, h int) string {
 	if s.read == nil {
 		return ""
 	}
+	var lines []string
 	if s.showDiff {
-		if len(s.diffs) == 0 {
+		if len(s.diffs) == 0 && len(s.detailFilter.query.buf) == 0 {
 			return m.th.meta.Render(" no copy-mode diffs")
 		}
 		var b strings.Builder
 		if err := service.RenderDiff(&b, s.diffs, "internal", false); err != nil {
 			return ""
 		}
-		lines := []string{m.th.detailLine("diff", w)}
-		for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
-			lines = append(lines, ansi.Truncate(diffLine(m.th, line), w, ""))
+		lines = append(lines, m.th.detailLine("diff", w))
+		if len(s.diffs) > 0 {
+			for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
+				lines = append(lines, ansi.Truncate(diffLine(m.th, line), w, ""))
+			}
 		}
-		return m.planDetailWindow(lines, h)
+	} else {
+		secs := m.planSections()
+		if s.cursor >= len(secs) {
+			return ""
+		}
+		// The detail pane opens with a header strip naming the section
+		// (0113), then the section's report lines.
+		lines = append(lines, m.th.detailLine(secs[s.cursor].name, w))
+		lines = append(lines, m.planSectionLines(secs[s.cursor].name, w)...)
 	}
-	secs := planSections(s.read)
-	if s.cursor >= len(secs) {
-		return ""
+	lines = filterLines(lines, s.detailFilter.query.String())
+	if len(lines) == 0 {
+		lines = []string{m.th.disabledMark.MaxWidth(w).Render("  no lines match «" + s.detailFilter.query.String() + "»")}
 	}
-	// The detail pane opens with a header strip naming the section
-	// (0113), then the section's report lines.
-	lines := []string{m.th.detailLine(secs[s.cursor].name, w)}
-	lines = append(lines, m.planSectionLines(secs[s.cursor].name, w)...)
+	if s.detailFilter.active() {
+		return m.planDetailWindow(lines, max(h-1, 1)) + "\n" + s.detailFilter.view(m.th, w)
+	}
 	return m.planDetailWindow(lines, h)
 }
 

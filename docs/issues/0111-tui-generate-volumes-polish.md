@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: agent
 - **Related**: [TUI views design spec](../superpowers/specs/2026-10-18-tui-views-design.md), slice 5
 - **Related code**: [`internal/tui/dialog.go`](../../internal/tui/dialog.go), [`internal/tui/views.go`](../../internal/tui/views.go)
-- **Closing commits**: see the task 10 report
+- **Closing commits**: de438e1
 
 ## Summary
 

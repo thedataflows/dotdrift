@@ -113,3 +113,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0123](0123-empty-sections-unfilled.md) | Empty sections render unfilled | done | medium |
 | [0124](0124-footer-filter-no-fill.md) | Remove background fill from footer and filter inputs | done | medium |
 | [0125](0125-remove-section-edge-row.md) | Remove the section edge row | done | medium |
+| [0126](0126-section-header-dark-border.md) | Thin dark border on section headers | done | medium |

@@ -97,7 +97,7 @@ func TestPaste_navFilter(t *testing.T) {
 	c := filterShell(t)
 	c = cpress(c, "/")
 	c, _ = cstep(c, tea.PasteMsg{Content: "oth"})
-	require.Equal(t, "oth", string(c.nav.query), "the query extends")
+	require.Equal(t, "oth", c.nav.query.String(), "the query extends")
 	require.Equal(t, "other", c.nav.selected().moduleID, "the list refilters")
 }
 
@@ -108,7 +108,7 @@ func TestPaste_palette(t *testing.T) {
 	require.IsType(t, &paletteModel{}, c.modals[0])
 	c, _ = cstep(c, tea.PasteMsg{Content: "demo"})
 	p := c.modals[0].(*paletteModel)
-	require.Equal(t, "demo", string(p.query), "the palette query extends")
+	require.Equal(t, "demo", p.query.String(), "the palette query extends")
 }
 
 func TestPaste_elevationPassword(t *testing.T) {

@@ -60,7 +60,7 @@ type navModel struct {
 	// The in-place modules filter (0081): query narrows rows(), filtering
 	// is the typing mode that owns the keys (0081 T-tui-navfilter).
 	filtering bool
-	query     []rune
+	query     textInput // the shared input (0135): the caret moves like everywhere
 
 	// The yank set (0093): session-only module ids space/y toggle; p/P
 	// scope plan and apply to it (empty = all modules).
@@ -172,7 +172,7 @@ func (n *navModel) rows() []navRow {
 // no filter is set. sahilm/fuzzy, the palette's matcher, so both agree
 // on what "matches" means.
 func (n *navModel) matchSet() map[string]bool {
-	if len(n.query) == 0 {
+	if len(n.query.buf) == 0 {
 		return nil
 	}
 	ids := make([]string, len(n.modules))
@@ -180,7 +180,7 @@ func (n *navModel) matchSet() map[string]bool {
 		ids[i] = m.id
 	}
 	set := map[string]bool{}
-	for _, r := range fuzzy.Find(string(n.query), ids) {
+	for _, r := range fuzzy.Find(n.query.String(), ids) {
 		set[n.modules[r.Index].id] = true
 	}
 	return set
@@ -204,7 +204,7 @@ func (n *navModel) refilter(want string) {
 // clearFilter removes the query and the typing mode (esc, 0081).
 func (n *navModel) clearFilter() {
 	n.filtering = false
-	n.query = nil
+	n.query = textInput{}
 	n.cursor = 0
 }
 
@@ -220,14 +220,6 @@ func (m *Compositor) navFilterKey(k tea.KeyPressMsg) tea.Cmd {
 	case "enter":
 		m.nav.filtering = false
 		return nil
-	case "backspace":
-		if len(m.nav.query) == 0 {
-			return nil
-		}
-		want := m.nav.selected().moduleID
-		m.nav.query = m.nav.query[:len(m.nav.query)-1]
-		m.nav.refilter(want)
-		return m.debouncedSyncWorkspace()
 	case "up", "k":
 		m.nav.move(-1)
 		return m.syncWorkspace()
@@ -235,9 +227,12 @@ func (m *Compositor) navFilterKey(k tea.KeyPressMsg) tea.Cmd {
 		m.nav.move(1)
 		return m.syncWorkspace()
 	}
-	if k.Text != "" {
-		want := m.nav.selected().moduleID
-		m.nav.query = append(m.nav.query, []rune(k.Text)...)
+	// The shared input's keys (0135): typing, backspace, delete, and
+	// caret movement. A changed query refilters; a caret move only
+	// re-renders.
+	want := m.nav.selected().moduleID
+	before := m.nav.query.String()
+	if m.nav.query.handleKey(k) && m.nav.query.String() != before {
 		m.nav.refilter(want)
 		return m.debouncedSyncWorkspace()
 	}
@@ -429,7 +424,7 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 		rows := n.rows()
 		// An active filter reserves the pane's last line for the query.
 		hCap := h
-		if n.filtering || len(n.query) > 0 {
+		if n.filtering || len(n.query.buf) > 0 {
 			hCap--
 		}
 		if avail := hCap - 1; avail > 0 { // the header line takes one row
@@ -443,8 +438,8 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 		for i := n.offset; i < len(rows) && len(lines) < hCap; i++ {
 			lines = append(lines, n.rowView(rows[i], i == n.cursor, th, drafts, w))
 		}
-		if len(rows) == 0 && len(n.query) > 0 {
-			lines = append(lines, th.disabledMark.MaxWidth(w).Render("  no modules match «"+string(n.query)+"»"))
+		if len(rows) == 0 && len(n.query.buf) > 0 {
+			lines = append(lines, th.disabledMark.MaxWidth(w).Render("  no modules match «"+n.query.String()+"»"))
 		}
 		if hCap < h {
 			lines = append(lines, n.filterView(th, w))
@@ -457,23 +452,13 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 // a named applied filter after enter.
 func (n *navModel) filterView(th theme, w int) string {
 	if n.filtering {
-		// The tail window (0132): the caret sits at the query's end,
-		// so a long query shows its end, never clips the caret away.
-		// A faded "..." marks the left edge, where text continues
-		// (0133).
-		win, _, _, moreLeft, _ := framedWindow(n.query, len(n.query), len(n.query), max(w-4, 1))
-		mark := ""
-		if moreLeft {
-			mark = th.disabledMark.Render("...")
-		}
-		return th.inputText.Render(" / ") + mark + th.inputText.Render(string(win)) + th.dirtyMark.Render("▏") // a plain input line, no fill (0124)
+		// The shared input renders its window (0135): the caret is
+		// always visible inside the pane, however long the query.
+		n.query.Cells = max(w-4, 1)
+		return th.inputText.Render(" / ") + n.query.render(th, th.inputText, true) // a plain input line, no fill (0124)
 	}
-	win, _, _, moreLeft, _ := framedWindow(n.query, len(n.query), len(n.query), max(w-16, 1))
-	mark := ""
-	if moreLeft {
-		mark = "..."
-	}
-	return th.meta.Render(" / " + mark + string(win) + " · esc clears")
+	n.query.Cells = max(w-16, 1)
+	return th.meta.Render(" / ") + n.query.render(th, th.meta, false) + th.meta.Render(" · esc clears")
 }
 
 // rowView renders one row: expansion marker, label, dirty and reason

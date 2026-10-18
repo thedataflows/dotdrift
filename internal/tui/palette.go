@@ -49,7 +49,7 @@ type paletteEntry struct {
 type paletteModel struct {
 	c      *Compositor
 	th     theme
-	query  []rune
+	query  textInput // the shared input (0135)
 	all    []paletteEntry
 	rows   []paletteEntry // the filtered, ranked view
 	sel    int
@@ -172,7 +172,7 @@ func (p *paletteModel) refilter() {
 	}
 
 	p.rows = nil
-	if len(p.query) == 0 {
+	if len(p.query.buf) == 0 {
 		for _, id := range m.paletteRecents {
 			if e, ok := byID[id]; ok {
 				p.rows = append(p.rows, e)
@@ -186,7 +186,7 @@ func (p *paletteModel) refilter() {
 			}
 		}
 	} else {
-		q := string(p.query)
+		q := p.query.String()
 		for sec := sectionModules; sec <= sectionFields; sec++ {
 			var entries []paletteEntry
 			for _, e := range p.all {
@@ -269,7 +269,7 @@ func (p *paletteModel) update(msg tea.Msg) tea.Cmd {
 			if len(p.rows) == 0 {
 				p.done = true
 				p.c.afterPop = func() tea.Cmd {
-					p.c.openManageCreate(string(p.query))
+					p.c.openManageCreate(p.query.String())
 					return nil
 				}
 				return nil
@@ -277,14 +277,11 @@ func (p *paletteModel) update(msg tea.Msg) tea.Cmd {
 			if p.sel < len(p.rows)-1 {
 				p.sel++
 			}
-		case "backspace":
-			if len(p.query) > 0 {
-				p.query = p.query[:len(p.query)-1]
-				p.refilter()
-			}
 		default:
-			if msg.Text != "" {
-				p.query = append(p.query, []rune(msg.Text)...)
+			// The shared input's keys (0135): typing, backspace,
+			// delete, and caret movement. A changed query refilters.
+			before := p.query.String()
+			if p.query.handleKey(msg) && p.query.String() != before {
 				p.refilter()
 				p.sel = 0
 			}
@@ -297,7 +294,7 @@ func (p *paletteModel) update(msg tea.Msg) tea.Cmd {
 		}
 	case tea.PasteMsg:
 		// 0091: bracketed paste extends the query like typed text.
-		p.query = append(p.query, pasteRunes(msg.Content)...)
+		p.query.insertRunes(pasteRunes(msg.Content))
 		p.refilter()
 		p.sel = 0
 	case tea.MouseWheelMsg:
@@ -384,7 +381,7 @@ func (m *Compositor) runPaletteEntry(e paletteEntry) tea.Cmd {
 // jumpToModule moves the nav cursor onto the module (expanding for a
 // layer child) without touching drafts — jumping away never prompts.
 func (m *Compositor) jumpToModule(id, layer string) {
-	m.nav.query = nil
+	m.nav.query = textInput{}
 	m.nav.filtering = false
 	m.nav.offset = 0
 	m.filterSeq++
@@ -422,16 +419,12 @@ func (p *paletteModel) view(w, h int) string {
 	// The tail window (0132): the caret sits at the query's end, so
 	// a long query shows its end and the modal does not stretch. A
 	// faded "..." marks the left edge, where text continues (0133).
-	win, _, _, moreLeft, _ := framedWindow(p.query, len(p.query), len(p.query), max(w-9, 1))
-	mark := ""
-	if moreLeft {
-		mark = p.th.disabledMark.Render("...")
-	}
-	b.WriteString(p.th.inputText.Render("/ ") + mark + p.th.inputText.Render(string(win)) + p.th.dirtyMark.Render("▏")) // a plain input line, no fill (0124)
+	p.query.Cells = max(w-9, 1)
+	b.WriteString(p.th.inputText.Render("/ ") + p.query.render(p.th, p.th.inputText, true)) // a plain input line, no fill (0124)
 	b.WriteString("\n\n")
 	if len(p.rows) == 0 {
 		b.WriteString(p.th.disabledMark.Render("  no matches") + "\n")
-		b.WriteString(p.th.meta.Render("  ctrl+n creates a module named «"+string(p.query)+"»") + "\n")
+		b.WriteString(p.th.meta.Render("  ctrl+n creates a module named «"+p.query.String()+"»") + "\n")
 	} else {
 		for i := p.scroll; i < len(p.rows) && i < p.scroll+paletteMaxVisible; i++ {
 			e := p.rows[i]

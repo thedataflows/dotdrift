@@ -59,14 +59,9 @@ func (f *addForm) update(msg tea.Msg) tea.Cmd {
 			if f.cur < len(f.rows)-1 {
 				f.cur++
 			}
-		case "left":
-			f.rows[f.cur].left()
+		case "left", "right", "backspace", "home", "end", "delete":
+			f.rows[f.cur].handleKey(msg.String())
 			f.retune()
-		case "right":
-			f.rows[f.cur].right()
-			f.retune()
-		case "backspace":
-			f.rows[f.cur].backspace()
 		case "ctrl+o":
 			// 0094: a path-kind field browses; the pick fills the field.
 			if r := f.rows[f.cur]; r.field != nil && r.field.browse != kindText && f.onBrowse != nil {

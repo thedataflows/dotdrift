@@ -25,7 +25,7 @@ import (
 func TestNavFilter_windowShowsTail(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	c.nav.filtering = true
-	c.nav.query = []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	c.nav.query.set(strings.Repeat("a", 30) + strings.Repeat("b", 30))
 	plain := ansiRe.ReplaceAllString(c.nav.view(30, 12, c.th, nil), "")
 	for _, line := range strings.Split(plain, "\n") {
 		require.LessOrEqual(t, len([]rune(line)), 30, "the filter line fits the pane")
@@ -34,7 +34,7 @@ func TestNavFilter_windowShowsTail(t *testing.T) {
 	filterLine := lines[len(lines)-1]
 	require.Contains(t, filterLine, strings.Repeat("b", 10), "the tail at the caret is visible")
 	require.NotContains(t, filterLine, "a", "text far left of the window is not rendered")
-	require.Contains(t, filterLine, "▏", "the caret is visible")
+	require.Contains(t, c.nav.view(30, 12, c.th, nil), "\x1b[7m", "the block caret is visible at the caret (0135)")
 	// 0133: a faded ... marks the left edge, where text continues.
 	require.Less(t, strings.Index(filterLine, "..."), strings.Index(filterLine, "bbb"),
 		"a left ... shows the hidden head of the query")

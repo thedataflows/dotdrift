@@ -459,7 +459,7 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if p, ok := msg.(tea.PasteMsg); ok {
 			// 0091: paste extends the query like typed text.
 			want := m.nav.selected().moduleID
-			m.nav.query = append(m.nav.query, pasteRunes(p.Content)...)
+			m.nav.query.insertRunes(pasteRunes(p.Content))
 			m.nav.refilter(want)
 			return m, m.debouncedSyncWorkspace()
 		}
@@ -488,7 +488,7 @@ func (m *Compositor) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if msg.String() == "esc" {
 		// The compositor's base esc rule: an applied nav filter clears
 		// first (0081), then focus returns to the nav.
-		if len(m.nav.query) > 0 {
+		if len(m.nav.query.buf) > 0 {
 			m.nav.clearFilter()
 			return m, m.syncWorkspace()
 		}

@@ -702,8 +702,7 @@ func (m *Compositor) openManageCreate(prefill string) {
 	d := newManageDialog(ce, m.root, m.facts, item)
 	d.openEntry() // menu cursor defaults to "create module"
 	if prefill != "" && len(d.rows) > 0 && d.rows[0].field != nil {
-		d.rows[0].field.value = []rune(prefill)
-		d.rows[0].field.cursor = len([]rune(prefill))
+		d.rows[0].field.set(prefill)
 	}
 	m.modals = append(m.modals, &dialogModal{d: d, th: m.th, c: m, reload: m.reloadNav})
 }

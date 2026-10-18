@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/alecthomas/chroma/v2/lexers"
 	"github.com/alecthomas/chroma/v2/quick"
 	"github.com/charmbracelet/x/ansi"
@@ -116,14 +117,14 @@ func (e *multiline) update(msg tea.Msg) tea.Cmd {
 			e.deleteForward()
 		case "left":
 			if e.cx > 0 {
-				e.cx--
+				e.editLine(func(t *textInput) { t.left() })
 			} else if e.cy > 0 {
 				e.cy--
 				e.cx = len(e.lines[e.cy])
 			}
 		case "right":
 			if e.cx < len(e.lines[e.cy]) {
-				e.cx++
+				e.editLine(func(t *textInput) { t.right() })
 			} else if e.cy < len(e.lines)-1 {
 				e.cy++
 				e.cx = 0
@@ -139,9 +140,9 @@ func (e *multiline) update(msg tea.Msg) tea.Cmd {
 				e.clampX()
 			}
 		case "home":
-			e.cx = 0
+			e.editLine(func(t *textInput) { t.home() })
 		case "end":
-			e.cx = len(e.lines[e.cy])
+			e.editLine(func(t *textInput) { t.end() })
 		case "pgup":
 			e.cy = max(0, e.cy-max(e.pageH, 1))
 			e.clampX()
@@ -165,10 +166,19 @@ func (e *multiline) update(msg tea.Msg) tea.Cmd {
 // movement.
 func (e *multiline) clampX() { e.cx = min(e.cx, len(e.lines[e.cy])) }
 
+// editLine applies a single-line edit to the caret line through the
+// shared textInput (0135) and writes the buffer, caret, and window
+// edge back. Line-structure edits (split, join, paste) stay here —
+// they are the multi-line editor's own job.
+func (e *multiline) editLine(f func(*textInput)) {
+	ti := textInput{buf: e.lines[e.cy], cur: e.cx, off: e.hoff, Cells: fieldViewCells}
+	f(&ti)
+	e.lines[e.cy], e.cx, e.hoff = ti.buf, ti.cur, ti.off
+}
+
 // insert puts runes at the caret.
 func (e *multiline) insert(rs []rune) {
-	e.lines[e.cy] = slices.Insert(e.lines[e.cy], e.cx, rs...)
-	e.cx += len(rs)
+	e.editLine(func(t *textInput) { t.insertRunes(rs) })
 }
 
 // splitLine breaks the current line at the caret (enter).
@@ -185,8 +195,7 @@ func (e *multiline) splitLine() {
 func (e *multiline) backspace() {
 	line := e.lines[e.cy]
 	if e.cx > 0 {
-		e.lines[e.cy] = slices.Delete(line, e.cx-1, e.cx)
-		e.cx--
+		e.editLine(func(t *textInput) { t.backspace() })
 		return
 	}
 	if e.cy == 0 {
@@ -203,7 +212,7 @@ func (e *multiline) backspace() {
 func (e *multiline) deleteForward() {
 	line := e.lines[e.cy]
 	if e.cx < len(line) {
-		e.lines[e.cy] = slices.Delete(line, e.cx, e.cx+1)
+		e.editLine(func(t *textInput) { t.deleteForward() })
 		return
 	}
 	if e.cy == len(e.lines)-1 {
@@ -279,23 +288,12 @@ func (e *multiline) view(w, h int) string {
 			// The caret line: the 0092 reverse-video block on the cell
 			// under the caret, never an inserted glyph — and never
 			// token colors, which the reversed cell cannot survive.
-			// The line renders through the caret window (0132), so a
-			// long line's tail stays reachable. A faded "..." marks
-			// each edge where the line continues (0133).
-			win, off, caret, moreLeft, moreRight := framedWindow(e.lines[i], e.cx, e.hoff, maxw)
-			e.hoff = off
-			at, after := " ", ""
-			if caret < len(win) {
-				at = string(win[caret])
-				after = string(win[caret+1:])
-			}
-			body = string(win[:caret]) + e.th.caretCell(at) + after
-			if moreLeft {
-				body = e.th.disabledMark.Render("...") + body
-			}
-			if moreRight {
-				body += e.th.disabledMark.Render("...")
-			}
+			// It renders through the shared textInput (0135), so its
+			// window, caret, and continuation marks match every
+			// other input.
+			ti := textInput{buf: e.lines[i], cur: e.cx, off: e.hoff, Cells: maxw}
+			body = ti.render(e.th, lipgloss.Style{}, true)
+			e.hoff = ti.off
 		case ok:
 			body = colored[i]
 		default:

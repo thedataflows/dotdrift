@@ -44,7 +44,7 @@ func pal(t *testing.T, c *Compositor) *paletteModel {
 func TestPalette_queryWindowShowsTail(t *testing.T) {
 	_, c := paletteShell(t)
 	p := pal(t, c)
-	p.query = []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	p.query.set(strings.Repeat("a", 30) + strings.Repeat("b", 30))
 	plain := ansiRe.ReplaceAllString(p.view(60, 30), "")
 	for _, line := range strings.Split(plain, "\n") {
 		require.LessOrEqual(t, len([]rune(line)), 62, "the palette modal fits the frame")

@@ -91,12 +91,11 @@ func (d *wsDraft) pushUndo(cursor int, banner string) {
 // draft stays alive (its redo stack is the point) but counts as clean.
 func (d *wsDraft) dirty() bool { return d != nil && d.changes > 0 }
 
-// wsEdit is the active field/line input.
+// wsEdit is the active field/line input: the shared textInput
+// (0135) plus the edit's identity.
 type wsEdit struct {
-	row     int    // rows index; for add, the section's last row
-	input   []rune // the input buffer
-	cur     int    // cursor position in the buffer
-	off     int    // the visible window's left edge, in runes (0132)
+	row int // rows index; for add, the section's last row
+	textInput
 	add     bool   // a synthetic new-row input
 	section string // the section an add commits into
 	addPath string // structural adds: the entry the add lands in ("" = the section itself)
@@ -104,7 +103,7 @@ type wsEdit struct {
 }
 
 // inputString returns the buffer as a string.
-func (e *wsEdit) inputString() string { return string(e.input) }
+func (e *wsEdit) inputString() string { return e.String() }
 
 // rowKey identifies one editable row for dirty markers and staged errors.
 func rowKey(family, key string) string { return family + ":" + key }
@@ -1134,7 +1133,7 @@ func (m *Compositor) startEdit() {
 		m.openMultiEdit(row)
 		return
 	}
-	m.ws.editing = &wsEdit{row: m.ws.cursor, input: []rune(row.value), cur: len([]rune(row.value))}
+	m.ws.editing = &wsEdit{row: m.ws.cursor, textInput: newTextInput(row.value)}
 }
 
 // openPathPicker pushes the file picker for a path-kind row (0094).
@@ -1187,7 +1186,7 @@ func (m *Compositor) openChoice(row wsRow, set []string) {
 // refusal's error ("" on success) — the link modal renders it inside
 // the form; the pickers ignore it.
 func (m *Compositor) commitFieldAt(row int, value string) string {
-	m.ws.editing = &wsEdit{row: row, input: []rune(value), cur: len([]rune(value))}
+	m.ws.editing = &wsEdit{row: row, textInput: newTextInput(value)}
 	if m.ws.applyEdit() {
 		m.finishFieldCommit()
 		return ""
@@ -1311,7 +1310,7 @@ func (m *Compositor) startAdd() {
 // add path — the same wsEdit an inline input would have produced. A
 // refusal returns the tier-1 error; nothing stages.
 func (m *Compositor) commitAddAt(row int, section, addPath, input string) string {
-	m.ws.editing = &wsEdit{row: row, add: true, section: section, addPath: addPath, input: []rune(input), cur: len([]rune(input))}
+	m.ws.editing = &wsEdit{row: row, add: true, section: section, addPath: addPath, textInput: newTextInput(input)}
 	if m.ws.applyEdit() {
 		m.finishFieldCommit()
 		return ""
@@ -1336,25 +1335,10 @@ func (m *Compositor) editKey(k tea.KeyPressMsg) tea.Cmd {
 			m.finishFieldCommit()
 		}
 		return nil
-	case "left":
-		if e.cur > 0 {
-			e.cur--
-		}
-	case "right":
-		if e.cur < len(e.input) {
-			e.cur++
-		}
-	case "backspace":
-		if e.cur > 0 {
-			e.input = append(e.input[:e.cur-1], e.input[e.cur:]...)
-			e.cur--
-		}
 	default:
-		if k.Text != "" {
-			runes := []rune(k.Text)
-			e.input = append(e.input[:e.cur], append(runes, e.input[e.cur:]...)...)
-			e.cur += len(runes)
-		}
+		// The shared input's keys (0135): caret movement, home/end,
+		// backspace, delete, typing.
+		e.handleKey(k)
 	}
 	m.revalidateEdit()
 	return nil
@@ -1381,8 +1365,7 @@ func (m *Compositor) pasteEdit(content string) {
 	if len(rs) == 0 {
 		return
 	}
-	e.input = append(e.input[:e.cur], append(rs, e.input[e.cur:]...)...)
-	e.cur += len(rs)
+	e.insertRunes(rs)
 	m.revalidateEdit()
 }
 

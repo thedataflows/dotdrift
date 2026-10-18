@@ -48,7 +48,8 @@ func TestFilter_queryShownAtPaneBottom(t *testing.T) {
 	c := filterShell(t)
 	c = cpress(c, "/")
 	c = typeText(c, "de")
-	require.Contains(t, plainFrame(c), "/ de▏", "the query shows while typing")
+	require.Contains(t, plainFrame(c), "/ de", "the query shows while typing")
+	require.Contains(t, c.View().Content, "\x1b[7m", "the block caret shows at the caret (0135)")
 
 	c = cpress(c, "enter")
 	require.False(t, c.nav.filtering, "enter ends the typing mode")
@@ -63,7 +64,7 @@ func TestFilter_escRemovesFilter(t *testing.T) {
 	c = cpress(c, "enter") // applied, mode off
 	c = cpress(c, "esc")   // base esc clears the applied filter
 	require.Equal(t, []string{"demo", "other", "plain"}, moduleLabels(c), "esc restores the full list")
-	require.Empty(t, c.nav.query)
+	require.Empty(t, c.nav.query.String())
 	require.NotContains(t, plainFrame(c), "/ de", "the query line is gone")
 
 	// esc while typing clears too.

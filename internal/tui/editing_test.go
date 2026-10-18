@@ -58,7 +58,7 @@ func TestEdit_caretIsBlockNotGlyph(t *testing.T) {
 	// cell, so the tail never shifts.
 	th := newTheme(true)
 	w := &workspaceModel{}
-	e := &wsEdit{input: []rune("abcd"), cur: 2}
+	e := &wsEdit{textInput: textInput{buf: []rune("abcd"), cur: 2}}
 
 	lines := w.editLines(e, th, 60)
 	plain := ansiRe.ReplaceAllString(lines[0], "")
@@ -77,7 +77,7 @@ func TestEdit_caretIsBlockNotGlyph(t *testing.T) {
 func TestEdit_windowFollowsCaret(t *testing.T) {
 	th := newTheme(true)
 	w := &workspaceModel{}
-	e := &wsEdit{input: []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30)), cur: 60}
+	e := &wsEdit{textInput: textInput{buf: []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30)), cur: 60}}
 
 	lines := w.editLines(e, th, 30)
 	plain := ansiRe.ReplaceAllString(lines[0], "")
@@ -113,10 +113,13 @@ func TestEdit_caretKeepsTailColor(t *testing.T) {
 	// right recolored it. The caret releases only its reverse attribute.
 	th := newTheme(true)
 	w := &workspaceModel{}
-	e := &wsEdit{input: []rune("abcd"), cur: 2}
+	e := &wsEdit{textInput: textInput{buf: []rune("abcd"), cur: 2}}
 
 	line := w.editLines(e, th, 60)[0]
-	require.Contains(t, line, "\x1b[27md", "the tail after the caret keeps the row's accent")
+	// Since 0135 the shared input styles the tail segment itself, so
+	// the tail carries the accent explicitly rather than inheriting
+	// it past the caret's reverse release.
+	require.Contains(t, line, th.rowText.Render("d"), "the tail after the caret keeps the row's accent")
 	require.NotContains(t, line, "\x1b[md", "no full reset between the caret and the tail")
 	require.NotContains(t, line, "\x1b[0md", "no full reset between the caret and the tail")
 }
@@ -354,7 +357,7 @@ func TestEdit_rawTextDegradedMode(t *testing.T) {
 	// Repair the line into a real table header: the structured surface
 	// unlocks (state visible, never silent).
 	c = cpress(c, "e")
-	c.ws.editing.input = []rune("[packages]") // the line editor seeds from the row; set the repair directly
+	c.ws.editing.set("[packages]") // the line editor seeds from the row; set the repair directly
 	c = wsPress(t, c, "enter")
 	require.Contains(t, c.ws.placeholderOrBody(), "meta", "a file that parses again renders structured")
 	require.Contains(t, c.ws.placeholderOrBody(), "packages")

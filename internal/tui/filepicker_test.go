@@ -67,7 +67,7 @@ func TestPicker_pathWindowShowsTail(t *testing.T) {
 	root := pickerFixture(t)
 	p := browsePicker(kindEither, root, func(string) string { return "" })
 	p.locating = true
-	p.loc = []rune(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	p.loc.set(strings.Repeat("a", 30) + strings.Repeat("b", 30))
 	plain := ansiRe.ReplaceAllString(p.view(60, 30), "")
 	for _, line := range strings.Split(plain, "\n") {
 		require.LessOrEqual(t, len([]rune(line)), 62, "the picker modal fits the frame")
@@ -120,7 +120,7 @@ func TestPicker_filterNarrowsAndEscClears(t *testing.T) {
 	require.Equal(t, []string{"gamma.txt"}, pickNames(p.visible()), "the filter narrows the current listing")
 	require.True(t, p.onEsc(), "esc in the filter is handled inside the picker — it must not close the modal")
 	require.False(t, p.filtering)
-	require.Empty(t, string(p.filter), "esc clears the query")
+	require.Empty(t, p.filter.String(), "esc clears the query")
 	require.Len(t, p.visible(), 6, "the full listing is back")
 }
 

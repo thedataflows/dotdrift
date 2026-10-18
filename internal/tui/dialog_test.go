@@ -25,13 +25,15 @@ import (
 func TestDlgRow_labelValueHintColors(t *testing.T) {
 	th := newTheme(true)
 
-	typed := fieldRow(&dlgField{label: "app", hint: "detected account", value: []rune("shell")})
+	typed := fieldRow(newDlgField("app", "shell"))
+	typed.field.hint = "detected account"
 	got := typed.renderRow(th, false)
 	require.Contains(t, got, th.fieldLabel.Render("app"), "the label renders in the muted label style")
 	require.Contains(t, got, th.rowText.Render("shell"), "the value renders in the bright value style")
 	require.NotContains(t, got, th.disabledMark.Render("shell"), "a typed value is not dimmed")
 
-	empty := fieldRow(&dlgField{label: "paths", hint: "detected account"})
+	empty := fieldRow(newDlgField("paths", ""))
+	empty.field.hint = "detected account"
 	got = empty.renderRow(th, false)
 	require.Contains(t, got, th.disabledMark.Render("(detected account)"), "the hint stays dim")
 	require.NotContains(t, got, th.rowText.Render("(detected account)"), "a hint is not styled as a value")
@@ -44,7 +46,6 @@ func TestDlgRow_labelValueHintColors(t *testing.T) {
 
 	// 0131: the focused row shows the caret at the cursor; at the end
 	// of the input the value itself keeps its style.
-	typed.field.cursor = len(typed.field.value)
 	focused := typed.renderRow(th, true)
 	require.True(t, strings.HasPrefix(ansiRe.ReplaceAllString(focused, ""), "│"), "the focused row keeps the cursor bar")
 	require.Contains(t, focused, th.rowText.Render("shell"), "the value keeps its style under the cursor treatment")

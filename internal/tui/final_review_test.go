@@ -164,7 +164,7 @@ func TestFinalStatusJumpClearsNavFilter(t *testing.T) {
 		"users/cri/modules/owner/module.toml": "id = \"owner\"\n",
 		"modules/other/module.toml":           "id = \"other\"\n",
 	})
-	c.nav.query = []rune("other")
+	c.nav.query.set("other")
 	c.view = viewStatus
 	c.status.read = statusFixtureRead()
 	c.status.read.Plan.Dotfiles.Entries = append(c.status.read.Plan.Dotfiles.Entries, resolve.DotfileEntry{Target: "/target", Module: "owner", Layer: "user"})
@@ -174,7 +174,7 @@ func TestFinalStatusJumpClearsNavFilter(t *testing.T) {
 	c = wsPress(t, c, "enter")
 	require.Equal(t, "owner", c.nav.selected().moduleID)
 	require.Equal(t, "user", c.nav.selected().layer)
-	require.Empty(t, c.nav.query)
+	require.Empty(t, c.nav.query.String())
 }
 
 func TestFinalVolumePickerFitsAndKeepsSelection(t *testing.T) {
@@ -299,7 +299,7 @@ func TestFinalStatusJumpUsesKnownLayer(t *testing.T) {
 			c.status.read.Findings = []drift.Finding{f}
 			c.status.clamp(c.statusRows())
 			c.view, c.focus = viewStatus, focusNav
-			c.nav.query = []rune("other")
+			c.nav.query.set("other")
 			c = wsPress(t, c, "enter")
 			require.Equal(t, "owner", c.nav.selected().moduleID)
 			if kind != "overlay only" {

@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // editKind names a field's input type (0094). kindText is the inline
@@ -58,10 +59,10 @@ type filePicker struct {
 	cwd        string
 	entries    []pickEntry
 	showHidden bool
-	filter     []rune
+	filter     textInput // the shared input (0135)
 	filtering  bool
 	locating   bool
-	loc        []rune
+	loc        textInput // the shared input (0135)
 	sel        int
 	off        int
 	pageH      int // the last render's list height: the paging step
@@ -105,7 +106,7 @@ func (p *filePicker) onEsc() bool {
 		return true
 	case p.filtering:
 		p.filtering = false
-		p.filter = p.filter[:0]
+		p.filter.set("")
 		p.sel = 0
 		return true
 	}
@@ -223,10 +224,10 @@ func readPickDir(dir string, mode editKind, showHidden bool) ([]pickEntry, error
 // visible is the listing after the filter: case-insensitive substring
 // on the entry name.
 func (p *filePicker) visible() []pickEntry {
-	if len(p.filter) == 0 {
+	if len(p.filter.buf) == 0 {
 		return p.entries
 	}
-	needle := strings.ToLower(string(p.filter))
+	needle := strings.ToLower(p.filter.String())
 	var out []pickEntry
 	for _, e := range p.entries {
 		if strings.Contains(strings.ToLower(e.name), needle) {
@@ -298,9 +299,9 @@ func (p *filePicker) update(msg tea.Msg) tea.Cmd {
 		rs := pasteRunes(msg.Content)
 		switch {
 		case p.locating:
-			p.loc = append(p.loc, rs...)
+			p.loc.insertRunes(rs)
 		case p.filtering:
-			p.filter = append(p.filter, rs...)
+			p.filter.insertRunes(rs)
 			p.clampSel()
 		}
 	case tea.MouseWheelMsg:
@@ -361,7 +362,7 @@ func (p *filePicker) navKey(k tea.KeyPressMsg) {
 		p.filtering = true
 	case "ctrl+l":
 		p.locating = true
-		p.loc = []rune(p.cwd)
+		p.loc.set(p.cwd)
 		p.err = ""
 	}
 	p.clampSel()
@@ -412,14 +413,10 @@ func (p *filePicker) filterKey(k tea.KeyPressMsg) {
 	switch k.String() {
 	case "enter":
 		p.filtering = false
-	case "backspace":
-		if len(p.filter) > 0 {
-			p.filter = p.filter[:len(p.filter)-1]
-		}
 	default:
-		if k.Text != "" {
-			p.filter = append(p.filter, []rune(k.Text)...)
-		}
+		// The shared input's keys (0135): typing, backspace, delete,
+		// and caret movement.
+		p.filter.handleKey(k)
 	}
 	p.clampSel()
 }
@@ -429,16 +426,10 @@ func (p *filePicker) locKey(k tea.KeyPressMsg) {
 	switch k.String() {
 	case "enter":
 		p.locEnter()
-	case "backspace":
-		if len(p.loc) > 0 {
-			p.loc = p.loc[:len(p.loc)-1]
-		}
 	case "ctrl+u":
-		p.loc = p.loc[:0]
+		p.loc.set("")
 	default:
-		if k.Text != "" {
-			p.loc = append(p.loc, []rune(k.Text)...)
-		}
+		p.loc.handleKey(k)
 	}
 }
 
@@ -449,7 +440,7 @@ func (p *filePicker) locKey(k tea.KeyPressMsg) {
 // field's commit validation, which renders its refusal in the modal.
 func (p *filePicker) locEnter() {
 	home, _ := os.UserHomeDir()
-	s := expandHome(strings.TrimSpace(string(p.loc)), home)
+	s := expandHome(strings.TrimSpace(p.loc.String()), home)
 	if s == "" {
 		return
 	}
@@ -488,25 +479,16 @@ func (p *filePicker) view(w, h int) string {
 		cwd = "…" + string(rs[len(rs)-maxw:])
 	}
 	lines = append(lines, p.th.fieldLabel.Render(cwd))
-	if p.filtering || len(p.filter) > 0 {
-		// Tail windows (0132): both typed lines show their end, where
-		// the caret sits, and never stretch the modal. A faded "..."
-		// marks the left edge, where text continues (0133).
-		win, _, _, moreLeft, _ := framedWindow(p.filter, len(p.filter), len(p.filter), max(w-24, 8))
-		mark := ""
-		if moreLeft {
-			mark = "..."
-		}
-		lines = append(lines, p.th.meta.Render("filter: "+mark+string(win))+
+	if p.filtering || len(p.filter.buf) > 0 {
+		// Both typed lines render through the shared input (0135):
+		// the window follows the caret and never stretches the modal.
+		p.filter.Cells = max(w-24, 8)
+		lines = append(lines, p.th.meta.Render("filter: ")+p.filter.render(p.th, p.th.meta, p.filtering)+
 			p.th.disabledMark.Render("  ("+itoa(len(p.visible()))+"/"+itoa(len(p.entries))+")"))
 	}
 	if p.locating {
-		win, _, _, moreLeft, _ := framedWindow(p.loc, len(p.loc), len(p.loc), max(w-24, 8))
-		mark := ""
-		if moreLeft {
-			mark = p.th.disabledMark.Render("...")
-		}
-		lines = append(lines, p.th.fieldLabel.Render("path: ")+mark+string(win)+p.th.caretCell(" "))
+		p.loc.Cells = max(w-24, 8)
+		lines = append(lines, p.th.fieldLabel.Render("path: ")+p.loc.render(p.th, lipgloss.Style{}, true))
 	}
 	if p.err != "" {
 		lines = append(lines, p.th.errorMark.Render("✗ "+p.err))

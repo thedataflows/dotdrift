@@ -152,12 +152,8 @@ func (d *manageDialog) HandleKey(key string) tea.Cmd {
 			if d.cur < len(d.rows)-1 {
 				d.cur++
 			}
-		case "left":
-			d.rows[d.cur].left()
-		case "right":
-			d.rows[d.cur].right()
-		case "backspace":
-			d.rows[d.cur].backspace()
+		case "left", "right", "backspace", "home", "end", "delete":
+			d.rows[d.cur].handleKey(key)
 		case "enter":
 			if d.mode == manageCreate && d.rows[0].field.String() == "" {
 				return nil

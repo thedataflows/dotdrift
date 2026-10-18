@@ -61,62 +61,12 @@ func tuiRestoreHandover(*exec.Cmd) error {
 	return errors.New("needs a terminal: run dotdrift restore from the CLI")
 }
 
-// dlgField is one editable text line: a label and a value with a cursor.
-// fieldViewCells is the width of a dialog field's visible window
-// (0131): a field renders at most this many runes of its value, so
-// typing never stretches the modal.
-const fieldViewCells = 40
-
-// runeWindow returns the window of runes that contains cur, at most
-// cells runes wide, plus the window's new left edge and cur's offset
-// inside the window (0131, 0132). The edge moves only when cur leaves
-// the window, so the text does not slide on every keystroke. Every
-// text input renders through this helper: clipped text is always
-// reachable with the arrow keys because the window follows the caret.
-func runeWindow(runes []rune, cur, off, cells int) (window []rune, newOff, caret int) {
-	cells = max(cells, 1)
-	cur = min(max(cur, 0), len(runes))
-	if cur < off {
-		off = cur
-	}
-	if cur >= off+cells {
-		off = cur - cells + 1
-	}
-	if maxOff := max(len(runes)-cells, 0); off > maxOff {
-		off = maxOff
-	}
-	return runes[off:min(off+cells, len(runes))], off, cur - off
-}
-
-// framedWindow is runeWindow with continuation marks accounted
-// (0133): when text hides beyond an edge, three cells of the budget
-// go to a faded "..." the caller renders at that edge, so the input
-// never grows — the window just shows three fewer runes.
-func framedWindow(runes []rune, cur, off, cells int) (window []rune, newOff, caret int, moreLeft, moreRight bool) {
-	window, off, caret = runeWindow(runes, cur, off, cells)
-	moreLeft = off > 0
-	moreRight = off+len(window) < len(runes)
-	if moreLeft || moreRight {
-		budget := cells
-		if moreLeft {
-			budget -= 3
-		}
-		if moreRight {
-			budget -= 3
-		}
-		window, off, caret = runeWindow(runes, cur, off, budget)
-		moreLeft = off > 0
-		moreRight = off+len(window) < len(runes)
-	}
-	return window, off, caret, moreLeft, moreRight
-}
-
+// dlgField is one editable text line: a label around the shared
+// textInput (0135), plus the field's dialog-specific data.
 type dlgField struct {
-	label  string
-	value  []rune
-	cursor int
-	off    int // the visible window's left edge, in runes (0131)
-	hint   string
+	label string
+	textInput
+	hint string
 	// browse marks a path-kind field (0094): ctrl+o opens the file
 	// picker with that pick mode and the pick fills the field.
 	browse editKind
@@ -128,29 +78,7 @@ type dlgField struct {
 }
 
 func newDlgField(label, value string) *dlgField {
-	return &dlgField{label: label, value: []rune(value), cursor: len([]rune(value))}
-}
-
-func (f *dlgField) String() string { return string(f.value) }
-
-// set replaces the value (the kind row keeps the module id in step).
-func (f *dlgField) set(s string) {
-	f.value = []rune(s)
-	f.cursor = len(f.value)
-}
-
-func (f *dlgField) typeRune(r rune) {
-	f.insertRunes([]rune{r})
-}
-
-// insertRunes inserts a run of runes at the cursor — the paste path
-// (0091): one PasteMsg is many runes, not many keys.
-func (f *dlgField) insertRunes(rs []rune) {
-	if len(rs) == 0 {
-		return
-	}
-	f.value = append(f.value[:f.cursor], append(rs, f.value[f.cursor:]...)...)
-	f.cursor += len(rs)
+	return &dlgField{label: label, textInput: newTextInput(value)}
 }
 
 // pasteRunes sanitizes bracketed-paste content for the shell's
@@ -167,56 +95,11 @@ func pasteRunes(s string) []rune {
 	return out
 }
 
-func (f *dlgField) backspace() {
-	if f.cursor == 0 {
-		return
-	}
-	f.value = append(f.value[:f.cursor-1], f.value[f.cursor:]...)
-	f.cursor--
-}
-
-func (f *dlgField) left() {
-	if f.cursor > 0 {
-		f.cursor--
-	}
-}
-
-func (f *dlgField) right() {
-	if f.cursor < len(f.value) {
-		f.cursor++
-	}
-}
-
-// visible returns the window of the value that contains the cursor,
-// the cursor's offset inside it, and whether text continues past
-// either edge (0131, 0133).
-func (f *dlgField) visible() (window []rune, caret int, moreLeft, moreRight bool) {
-	win, off, caret, moreLeft, moreRight := framedWindow(f.value, f.cursor, f.off, fieldViewCells)
-	f.off = off
-	return win, caret, moreLeft, moreRight
-}
-
-// renderValue renders the field's visible window in the value style,
-// with the block caret at the cursor on the focused row (0131) and a
-// faded "..." at each edge where text continues (0133).
+// renderValue renders the field through the shared input (0135):
+// the visible window in the value style, the block caret on the
+// focused row, a faded "..." at each edge where text continues.
 func (f *dlgField) renderValue(th theme, focused bool) string {
-	win, caret, moreLeft, moreRight := f.visible()
-	left, right := "", ""
-	if moreLeft {
-		left = th.disabledMark.Render("...")
-	}
-	if moreRight {
-		right = th.disabledMark.Render("...")
-	}
-	if !focused {
-		return left + th.rowText.Render(string(win)) + right
-	}
-	at, after := " ", ""
-	if caret < len(win) {
-		at = string(win[caret])
-		after = string(win[caret+1:])
-	}
-	return left + th.rowText.Render(string(win[:caret])) + th.caretCell(at) + th.rowText.Render(after) + right
+	return f.render(th, th.rowText, focused)
 }
 
 // dlgChoice is one choice line: a fixed option list cycled with
@@ -272,8 +155,37 @@ func (r dlgRow) right() {
 
 func (r dlgRow) typeRune(rr rune) {
 	if r.field != nil {
-		r.field.typeRune(rr)
+		r.field.insertRunes([]rune{rr})
 	}
+}
+
+// handleKey routes one editing key to the row (0135): a choice
+// cycles on left/right only, a field takes the shared input's full
+// key set (caret movement, home/end, backspace, delete).
+func (r dlgRow) handleKey(key string) bool {
+	switch key {
+	case "left":
+		r.left()
+	case "right":
+		r.right()
+	case "backspace":
+		r.backspace()
+	case "home":
+		if r.field != nil {
+			r.field.home()
+		}
+	case "end":
+		if r.field != nil {
+			r.field.end()
+		}
+	case "delete":
+		if r.field != nil {
+			r.field.deleteForward()
+		}
+	default:
+		return false
+	}
+	return true
 }
 
 // insertRunes pastes into the row's field; choice rows have no text to
@@ -443,12 +355,8 @@ func (d *onboardDialog) HandleKey(key string) tea.Cmd {
 		if d.cur < len(d.rows)-1 {
 			d.cur++
 		}
-	case "left":
-		d.rows[d.cur].left()
-	case "right":
-		d.rows[d.cur].right()
-	case "backspace":
-		d.rows[d.cur].backspace()
+	case "left", "right", "backspace", "home", "end", "delete":
+		d.rows[d.cur].handleKey(key)
 	case "enter":
 		module := d.rows[0].field.String()
 		paths := d.rows[1].field.String()
@@ -633,12 +541,22 @@ func (d *restoreDialog) HandleKey(key string) tea.Cmd {
 				return nil
 			}
 			return d.resolve
+		case "left":
+			d.targets.left()
+		case "right":
+			d.targets.right()
+		case "home":
+			d.targets.home()
+		case "end":
+			d.targets.end()
+		case "delete":
+			d.targets.deleteForward()
 		case "backspace":
 			d.targets.backspace()
 		default:
 			r := []rune(key)
 			if len(r) == 1 {
-				d.targets.typeRune(r[0])
+				d.targets.insertRunes(r)
 			}
 		}
 		return nil
@@ -722,7 +640,7 @@ func (d *restoreDialog) View(th theme) string {
 	b.WriteString(th.viewTitle.Render("RESTORE"))
 	b.WriteString("\ncopy backed-up files back to their live targets\n\n")
 	if !d.resolved {
-		b.WriteString("> targets " + d.targets.String() + "\n")
+		b.WriteString("> targets " + d.targets.render(th, th.rowText, true) + "\n")
 		b.WriteString("\n" + th.meta.Render("enter resolves the targets to their backup generations"))
 		b.WriteString(finishView(th, "", d.report, d.err, d.running))
 		return b.String()
@@ -840,18 +758,14 @@ func (d *generateDialog) HandleKey(key string) tea.Cmd {
 		if d.cur < len(rows)-1 {
 			d.cur++
 		}
-	case "left":
-		rows[d.cur].left()
-		if d.cur == 0 {
+	case "left", "right", "backspace", "home", "end", "delete":
+		rows[d.cur].handleKey(key)
+		if d.cur == 0 && key == "left" {
 			d.module.set("smb") // follow the kind
 		}
-	case "right":
-		rows[d.cur].right()
-		if d.cur == 0 {
+		if d.cur == 0 && key == "right" {
 			d.module.set("mounts")
 		}
-	case "backspace":
-		rows[d.cur].backspace()
 	case "enter":
 		if !d.valid() {
 			return nil

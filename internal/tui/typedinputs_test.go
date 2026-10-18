@@ -180,7 +180,7 @@ func TestTyped_pickerFilterEscClearsNotPops(t *testing.T) {
 	c = typeText(c, "x")
 	c = cpress(c, "esc")
 	p := topModal[*filePicker](t, c)
-	require.Empty(t, string(p.filter), "esc inside the filter clears it…")
+	require.Empty(t, p.filter.String(), "esc inside the filter clears it…")
 	c = cpress(c, "esc")
 	require.Empty(t, c.modals, "…and only the next esc closes the picker")
 }

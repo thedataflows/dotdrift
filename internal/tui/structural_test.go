@@ -262,7 +262,7 @@ func TestMounts_fieldEdits(t *testing.T) {
 	wsToKey(t, c, pathKey("media", "options"))
 	c = cpress(c, "enter")
 	require.Equal(t, "rw, relatime", c.ws.editing.inputString(), "lists seed comma-joined")
-	c.ws.editing.input = []rune("rw, noatime")
+	c.ws.editing.set("rw, noatime")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, []string{"rw", "noatime"}, c.ws.draft.cfg.Mounts["media"].Options)
 
@@ -281,7 +281,7 @@ func TestMounts_fieldEdits(t *testing.T) {
 	// empty value; the text-kind type field pins the refusal.)
 	wsToKey(t, c, pathKey("media", "type"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = nil
+	c.ws.editing.set("")
 	c = cpress(c, "enter")
 	require.NotNil(t, c.ws.editing)
 	require.Contains(t, c.ws.editing.err, "required")
@@ -334,7 +334,7 @@ func TestSmb_scalarAndShareEdits(t *testing.T) {
 	_, c := entriesShell(t)
 	wsToKey(t, c, "users", "smb")
 	c = cpress(c, "enter")
-	c.ws.editing.input = []rune("cri")
+	c.ws.editing.set("cri")
 	c = wsPress(t, c, "enter")
 	require.Equal(t, []string{"cri"}, c.ws.draft.cfg.Smb.Users)
 
@@ -509,7 +509,7 @@ func TestWhen_groupLeafEdit(t *testing.T) {
 	// disappears with it.
 	wsToKey(t, c, pathKey("and", "0", "gpu"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = nil
+	c.ws.editing.set("")
 	c = wsPress(t, c, "enter")
 	require.Empty(t, c.ws.draft.cfg.When.And[0].GPU)
 	require.NotContains(t, c.ws.draft.raw, "nvidia-open", "the cleared leaf left the raw")
@@ -686,7 +686,7 @@ func TestSystemd_directiveTableEdit(t *testing.T) {
 	wsToKey(t, c, pathKey("demo.service", "Service"))
 	c = cpress(c, "enter")
 	// Table values seed as inline TOML; drop Restart by editing the table.
-	c.ws.editing.input = []rune(`{ ExecStart = "/usr/bin/demo" }`)
+	c.ws.editing.set(`{ ExecStart = "/usr/bin/demo" }`)
 	c = wsPress(t, c, "enter")
 	require.Nil(t, c.ws.editing)
 	require.Contains(t, c.ws.placeholderOrBody(), `ExecStart = "/usr/bin/demo"`, "the kept directive stands")
@@ -698,13 +698,13 @@ func TestSystemd_directiveValueTypes(t *testing.T) {
 	_, c := systemdShell(t)
 	wsToKey(t, c, pathKey("backup.timer", "OnBootSec"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = []rune(`90`)
+	c.ws.editing.set(`90`)
 	c = wsPress(t, c, "enter")
 	require.Equal(t, int64(90), c.ws.draft.cfg.Systemd.Units["backup.timer"]["OnBootSec"], "numbers parse typed")
 
 	wsToKey(t, c, pathKey("backup.timer", "OnBootSec"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = []rune(`["a", "b"]`)
+	c.ws.editing.set(`["a", "b"]`)
 	c = wsPress(t, c, "enter")
 	require.Equal(t, []any{"a", "b"}, c.ws.draft.cfg.Systemd.Units["backup.timer"]["OnBootSec"], "lists parse typed")
 }
@@ -713,7 +713,7 @@ func TestSystemd_directiveEmptyValueRefuses(t *testing.T) {
 	_, c := systemdShell(t)
 	wsToKey(t, c, pathKey("demo.service", "Description"))
 	c = cpress(c, "enter")
-	c.ws.editing.input = nil
+	c.ws.editing.set("")
 	c = cpress(c, "enter")
 	require.NotNil(t, c.ws.editing, "an empty directive value refuses to commit")
 	require.Contains(t, c.ws.editing.err, "empty", "tier-1 names the problem")

@@ -11,7 +11,7 @@
 │                          ││  packages ＋                                                     │
 │                       ╭─────────────────────────────────────────────────╮                    │
 │                       │                                                 │                    │
-│                       │  │/ zzzznothing▏                                │                    │
+│                       │  / zzzznothing▏                                 │                    │
 │                       │                                                 │                    │
 │                       │    no matches                                   │                    │
 │                       │    ctrl+n creates a module named «zzzznothing»  │                    │

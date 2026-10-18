@@ -112,12 +112,10 @@ func TestTheme_filledBars(t *testing.T) {
 		"the section bar fills the full width (0121)")
 	require.Equal(t, 20, len([]rune(strip(th.detailLine("dotfiles · x", 20)))),
 		"the detail header fills the full width")
-	// 0122: a footer key is a deliberate chip — its background is the
-	// indigo hue, not the bar background it sits on.
-	require.Contains(t, th.helpKey.Render("x"), "48;2;117;113;249",
-		"the footer key chip carries the indigo background")
-	require.NotContains(t, th.footerBar.Render("x"), "48;2;117;113;249",
-		"the bar background is not the chip background")
+	// 0124: footer keys are plain text again — no background slab
+	// under the footer or its keys.
+	require.NotContains(t, th.helpKey.Render("x"), "48;", "a footer key carries no background")
+	require.NotContains(t, th.helpDesc.Render("x"), "48;", "a footer description carries no background")
 
 	cursor := th.cursorLine(" demo", 20)
 	require.Equal(t, 20, len([]rune(strip(cursor))), "the cursor row fills the full width")
@@ -133,7 +131,7 @@ func TestTheme_visualRoles(t *testing.T) {
 	require.Contains(t, th.cursorRow.Render("x"), "48;", "the cursor row is a filled block")
 	require.Contains(t, th.tabActive.Render("x"), "48;", "the active tab is a filled block")
 	require.NotContains(t, th.tabInactive.Render("x"), "48;", "the inactive tab stays flat")
-	require.Contains(t, th.footerBar.Render("x"), "48;", "the footer is a background bar")
+	require.Contains(t, th.fillBg.Render("x"), "48;", "the cursor fill carries the selected background")
 	require.Contains(t, th.detailHeader.Render("x"), "48;", "the detail header is a filled strip")
 	require.Contains(t, th.sectionBar.Render("x"), "48;", "a section heading is a filled bar (0121)")
 	for _, pill := range []lipgloss.Style{th.pillOK, th.pillDrift, th.pillUnknown, th.pillUnauthorized} {

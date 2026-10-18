@@ -419,7 +419,7 @@ func (e paletteEntry) glyph() string {
 
 func (p *paletteModel) view(w, h int) string {
 	var b strings.Builder
-	b.WriteString(p.th.cursorRow.Render("/ " + string(p.query) + "▏"))
+	b.WriteString(p.th.inputText.Render("/ "+string(p.query)) + p.th.dirtyMark.Render("▏")) // a plain input line, no fill (0124)
 	b.WriteString("\n\n")
 	if len(p.rows) == 0 {
 		b.WriteString(p.th.disabledMark.Render("  no matches") + "\n")

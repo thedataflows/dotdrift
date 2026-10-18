@@ -836,9 +836,8 @@ func (m *Compositor) headerView() string {
 }
 
 func (m *Compositor) footerView() string {
-	// The footer is a background bar (0113): the help segments carry
-	// the bar background through the theme's help styles, and the bar
-	// style pads both lines to the frame width behind them.
+	// The footer is plain text (0124): no background slab — the
+	// help segments carry only foreground through the help styles.
 	m.help.Styles.ShortKey = m.th.helpKey
 	m.help.Styles.ShortDesc = m.th.helpDesc
 	m.help.Styles.ShortSeparator = m.th.helpDesc
@@ -853,6 +852,5 @@ func (m *Compositor) footerView() string {
 	default:
 		slot = " "
 	}
-	bar := ansi.Truncate(slot, m.w, "…") + "\n" + ansi.Truncate(" "+m.help.View(m), m.w, "…")
-	return m.th.footerBar.Width(m.w).Render(bar)
+	return ansi.Truncate(slot, m.w, "…") + "\n" + ansi.Truncate(" "+m.help.View(m), m.w, "…")
 }

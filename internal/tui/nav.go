@@ -437,7 +437,7 @@ func (n *navModel) view(w, h int, th theme, drafts map[string]bool) string {
 // a named applied filter after enter.
 func (n *navModel) filterView(th theme) string {
 	if n.filtering {
-		return th.cursorRow.Render(" / " + string(n.query) + "▏")
+		return th.inputText.Render(" / "+string(n.query)) + th.dirtyMark.Render("▏") // a plain input line, no fill (0124)
 	}
 	return th.meta.Render(" / " + string(n.query) + " · esc clears")
 }

@@ -11,7 +11,7 @@
 │                          ││  packages ＋                                                     │
 │                          ││   ╭──────────────────────────────────╮                           │
 │                          ││   │                                  │                           │
-│                          ││  l│  │/ demo · host▏                 │                           │
+│                          ││  l│  / demo · host▏                  │                           │
 │                          ││  w│                                  │                           │
 │                          ││  w│  │ ◆ demo · host myhost  module  │                           │
 │                          ││  h│                                  │                           │

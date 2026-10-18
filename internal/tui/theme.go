@@ -88,7 +88,7 @@ type theme struct {
 	tabInactive      lipgloss.Style // an inactive view tab: flat faint text
 	staleBadge       lipgloss.Style // the amber ● on a stale view's tab
 	successMark      lipgloss.Style // green ✓ / ok text (the first success role)
-	footerBar        lipgloss.Style // the bottom bar background
+	fillBg           lipgloss.Style // the background cells that fill a cursor row to the edge
 	detailHeader     lipgloss.Style // the filled strip atop a detail pane
 	sectionBar       lipgloss.Style // a workspace section heading bar
 	pillOK           lipgloss.Style // filled status pill: ok
@@ -98,8 +98,9 @@ type theme struct {
 	cardBorder       lipgloss.Style // a titled card frame (Profile groups)
 	modalDanger      lipgloss.Style // destructive confirm frame: red
 	modalInfo        lipgloss.Style // information frame (help, palette): indigo
-	helpKey          lipgloss.Style // a key chip in the footer bar
-	helpDesc         lipgloss.Style // a help description in the footer bar
+	helpKey          lipgloss.Style // a key in the footer help (plain text, 0124)
+	helpDesc         lipgloss.Style // a description in the footer help (plain text, 0124)
+	inputText        lipgloss.Style // a filter/query input line (plain text, 0124)
 	tabBar           lipgloss.Style // the tab bar's bottom rule (0114)
 	barEdge          lipgloss.Style // the eighth-block edge above a section bar (0121)
 }
@@ -143,7 +144,7 @@ func newTheme(isDark bool) theme {
 		tabInactive: lipgloss.NewStyle().Padding(0, 1).Foreground(p.muted),
 		staleBadge:  lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		successMark: lipgloss.NewStyle().Bold(true).Foreground(p.green),
-		footerBar:   lipgloss.NewStyle().Background(p.selectedBg),
+		fillBg:      lipgloss.NewStyle().Background(p.selectedBg),
 		detailHeader: lipgloss.NewStyle().Bold(true).Padding(0, 1).
 			Foreground(p.value).Background(p.selectedBg),
 		sectionBar: lipgloss.NewStyle().Bold(true).Padding(0, 1).
@@ -159,8 +160,9 @@ func newTheme(isDark bool) theme {
 		cardBorder:  pane.BorderForeground(p.dim).Padding(0, 1),
 		modalDanger: pane.BorderForeground(p.red),
 		modalInfo:   pane.BorderForeground(p.indigo),
-		helpKey:     lipgloss.NewStyle().Bold(true).Padding(0, 1).Foreground(lipgloss.Color("#FFFFFF")).Background(p.indigo), // a deliberate chip on the bar (0122)
-		helpDesc:    lipgloss.NewStyle().Foreground(p.muted).Background(p.selectedBg),
+		helpKey:     lipgloss.NewStyle().Bold(true).Foreground(p.value),
+		helpDesc:    lipgloss.NewStyle().Foreground(p.muted),
+		inputText:   lipgloss.NewStyle().Foreground(p.value),
 		tabBar: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, true, false).
 			BorderForeground(p.dim),
@@ -196,7 +198,7 @@ func (t theme) caretCell(s string) string {
 func (t theme) fillLine(style lipgloss.Style, s string, w int) string {
 	line := style.MaxWidth(w).Render(s)
 	if pad := w - ansi.StringWidth(line); pad > 0 {
-		line += t.footerBar.Render(strings.Repeat(" ", pad))
+		line += t.fillBg.Render(strings.Repeat(" ", pad))
 	}
 	return line
 }

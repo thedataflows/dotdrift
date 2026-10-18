@@ -36,6 +36,8 @@ func (c *TUICmd) Run() error {
 		LoadProfile:   profileLoadTolerant,
 		Resolve:       resolvePlan,
 		OtherAccounts: otherAccounts,
+		PackagesFor:   packagesFor,
+		NewMise:       defaultMise,
 	})
 	comp := tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
 		return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})

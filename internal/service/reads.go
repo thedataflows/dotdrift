@@ -14,6 +14,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/packages"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
@@ -34,6 +35,10 @@ type ReadsDeps struct {
 	// It is the CLI renderer's zerolog output; nil = quiet (the modules
 	// read never warns — its listing is the canonical surfacing).
 	WarnLoad func(p *profile.Profile)
+	// PackagesFor and NewMise build the default status probes (IsInstalled
+	// / ToolCurrent) when StatusOpts.ProbesFor is nil (0108, slice 2b).
+	PackagesFor func(backend string) packages.Backend
+	NewMise     func() *mise.Mise
 }
 
 // WithDefaults returns the dep set with zero-value fields replaced by the
@@ -51,6 +56,12 @@ func (d ReadsDeps) WithDefaults() ReadsDeps {
 	}
 	if d.OtherAccounts == nil {
 		d.OtherAccounts = profile.OtherAccounts
+	}
+	if d.PackagesFor == nil {
+		d.PackagesFor = packages.For
+	}
+	if d.NewMise == nil {
+		d.NewMise = mise.DefaultMise
 	}
 	return d
 }
@@ -128,15 +139,18 @@ func (r *ReadsArea) Plan(profilePath string, modules []string, f *facts.Facts) (
 }
 
 // StatusOpts carries a status read's inputs. ProbesFor is called with the
-// detected facts once the preamble has run — the package backend and mise
-// seams are the caller's, and building the probes needs the backend from
-// the facts. Verbose receives the per-probe progress lines when non-nil.
+// detected facts once the preamble has run; when nil, the read builds the
+// probes itself from ReadsDeps.PackagesFor/NewMise, wrapped for sudo
+// elevation when Elevated is true (the CLI always passes true; the TUI
+// picks per probe run). Verbose receives the per-probe progress lines
+// when non-nil.
 type StatusOpts struct {
 	ProfilePath string
 	StatePath   string // "" = the profile's default state path
 	Modules     []string
 	Jobs        int
 	Verbose     io.Writer
+	Elevated    bool
 	ProbesFor   func(f *facts.Facts) drift.Probes
 }
 
@@ -184,7 +198,13 @@ func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, e
 		return nil, fmt.Errorf("resolve profile root: %w", err)
 	}
 
-	findings := drift.Check(ctx, pr.Plan, profileRoot, opts.ProbesFor(pr.Facts), drift.CheckOptions{
+	probesFor := opts.ProbesFor
+	if probesFor == nil {
+		probesFor = func(f *facts.Facts) drift.Probes {
+			return defaultProbes(f, opts.Elevated, r.deps.PackagesFor, r.deps.NewMise)
+		}
+	}
+	findings := drift.Check(ctx, pr.Plan, profileRoot, probesFor(pr.Facts), drift.CheckOptions{
 		Jobs:    opts.Jobs,
 		Verbose: opts.Verbose,
 	})

@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0139: status lists unmanaged files in mise conf.d
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [status, mise, tools]
 - **Assignee**: none
 - **Related**: [0137](0137-tools-per-module-confd.md), [0138](0138-confd-sweep-partial-apply.md)
 - **Related code**: [`internal/drift/`](../../internal/drift/), [`internal/service/reads.go`](../../internal/service/reads.go), [`internal/tui/statusview.go`](../../internal/tui/statusview.go)
-- **Closing commits**: none
+- **Closing commits**: `f19f415`
 
 ## Summary
 
@@ -44,13 +44,13 @@ conf.d directory lists nothing. Subdirectories are skipped.
 
 ## Acceptance Criteria
 
-- [ ] Status lists each unmanaged conf.d file with its reason
+- [x] Status lists each unmanaged conf.d file with its reason
   (user file vs stale dotdrift snippet).
-- [ ] Managed snippets (one per module with tools in the plan) are
+- [x] Managed snippets (one per module with tools in the plan) are
   not listed.
-- [ ] Unmanaged findings never change drift counts, the "no drift"
+- [x] Unmanaged findings never change drift counts, the "no drift"
   summary, or status exit behavior.
-- [ ] Both the CLI report and the TUI Status view show the lines.
+- [x] Both the CLI report and the TUI Status view show the lines.
 
 ## Out of Scope
 

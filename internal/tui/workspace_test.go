@@ -198,6 +198,29 @@ func TestWorkspace_headingNoANSILeak(t *testing.T) {
 		"no leaked escape text in the stripped frame")
 }
 
+// 0128: every section header except meta is selectable as long as
+// the section supports adding — including a non-empty packages
+// header, which navigation used to skip.
+func TestWorkspace_addableHeadersSelectable(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
+	for i, r := range c.ws.rows {
+		if !r.header {
+			continue
+		}
+		if r.section == "meta" {
+			require.False(t, c.ws.selectableRow(i), "meta has no add and stays non-selectable")
+			continue
+		}
+		require.True(t, c.ws.selectableRow(i), "the %s header is selectable", r.section)
+	}
+
+	// Walking down from the meta entries lands on the packages header.
+	c.ws.cursor = wsRowBySectionText(c, "meta", "scope")
+	c.ws.move(1)
+	require.True(t, c.ws.rows[c.ws.cursor].header, "the next stop is a header")
+	require.Equal(t, "packages", c.ws.rows[c.ws.cursor].section)
+}
+
 func TestWorkspace_emptyStatesDesigned(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	requireGolden(t, "workspace-empty.golden", c.View().Content, subs)

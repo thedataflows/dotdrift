@@ -416,10 +416,10 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 		cfg = &profile.ModuleConfig{}
 	}
 	var rows []wsRow
-	// A header is selectable when it is the way in: an empty section's
-	// header takes the section's first entry, and a structural family's
-	// header is its entry-level scope (`a` adds an entry there — the
-	// containers add fields INTO their entries).
+	// A header is selectable when its section supports adding
+	// (0128): `a` on the header adds at the section's entry-level
+	// scope, empty or not. Meta is the one exception — it has no
+	// add, so its header stays out of the cursor's way.
 	section := func(name string, entries []wsRow) {
 		// One blank row between sections (0117): adjacent filled bars
 		// would merge into one block. A hint row is never selectable,
@@ -428,7 +428,7 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 			rows = append(rows, wsRow{section: name, hint: true})
 		}
 		rows = append(rows, wsRow{section: name, text: name, header: true,
-			selectable: len(entries) == 0 || isStructuralFamily(addFamily(name))})
+			selectable: addable(name)})
 		rows = append(rows, entries...)
 	}
 	entry := func(section, text, family, key, value string) wsRow {

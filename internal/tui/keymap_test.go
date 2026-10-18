@@ -148,7 +148,9 @@ func TestKeys_shiftIsTheDangerousVersion(t *testing.T) {
 	c.applying, c.apply = false, nil
 
 	// d removes a row (confirm), D discards the whole draft (confirm).
-	for !c.ws.atSection("packages") {
+	// The walk stops on a packages ENTRY: the header is selectable
+	// too since 0128, and d on a header removes nothing.
+	for !(c.ws.rows[c.ws.cursor].section == "packages" && !c.ws.rows[c.ws.cursor].header) {
 		c = cpress(c, "j")
 	}
 	c = cpress(c, "d")

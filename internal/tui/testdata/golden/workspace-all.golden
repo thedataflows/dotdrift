@@ -1,5 +1,6 @@
  dotdrift · $PROFILE · host myhost · user cri
   Modules   Status   Plan   Profile
+────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · meta                                              │
 ││ ▸ demo                  ││ meta                                                             │
@@ -22,7 +23,6 @@
 │                          ││  pre: echo pre ✎                                                 │
 │                          ││  post: echo post ✎                                               │
 │                          ││ systemd.units ＋                                                 │
-│                          ││  demo.service ＋                                                 │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / filter modules • ? help • q quit

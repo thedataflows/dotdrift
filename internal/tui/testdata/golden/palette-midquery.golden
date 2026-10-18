@@ -1,5 +1,6 @@
  dotdrift · $PROFILE · host myhost · user cri
   Modules   Status   Plan   Profile
+────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
 ││ ▸ demo                  ││ meta                                                             │
@@ -7,19 +8,18 @@
 │  ▸ plain · invalid module││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
 │                          ││ packages ＋                                                      │
-│                          ││  + neovim ✎                                                      │
 │                          ││  +╭──────────────────────────────────╮                           │
-│                          ││ li│                                  │                           │
-│                          ││ wr│  │/ dem▏                         │                           │
-│                          ││ wh│                                  │                           │
-│                          ││ ho│  │ ◆ demo  module                │                           │
-│                          ││ sy│    ◆ demo · user cri  module     │                           │
-│                          ││ to│    ◆ demo · host myhost  module  │                           │
-│                          ││  n│    ▶ onboard into demo  action   │                           │
-│                          ││ se│                                  │                           │
-│                          ││ mo╰──────────────────────────────────╯                           │
+│                          ││  +│                                  │                           │
+│                          ││ li│  │/ dem▏                         │                           │
+│                          ││ wr│                                  │                           │
+│                          ││ wh│  │ ◆ demo  module                │                           │
+│                          ││ ho│    ◆ demo · user cri  module     │                           │
+│                          ││ sy│    ◆ demo · host myhost  module  │                           │
+│                          ││ to│    ▶ onboard into demo  action   │                           │
+│                          ││  n│                                  │                           │
+│                          ││ se╰──────────────────────────────────╯                           │
+│                          ││ mounts ＋                                                        │
 │                          ││ smb ＋                                                           │
-│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

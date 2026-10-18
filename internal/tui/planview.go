@@ -327,7 +327,7 @@ func (m *Compositor) planDetail(w, h int) string {
 		if err := service.RenderDiff(&b, s.diffs, "internal", false); err != nil {
 			return ""
 		}
-		lines := []string{ansi.Truncate(m.th.detailHeader.Render("diff"), w, "")}
+		lines := []string{m.th.detailLine("diff", w)}
 		for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
 			lines = append(lines, ansi.Truncate(diffLine(m.th, line), w, ""))
 		}
@@ -339,7 +339,7 @@ func (m *Compositor) planDetail(w, h int) string {
 	}
 	// The detail pane opens with a header strip naming the section
 	// (0113), then the section's report lines.
-	lines := []string{ansi.Truncate(m.th.detailHeader.Render(secs[s.cursor].name), w, "")}
+	lines := []string{m.th.detailLine(secs[s.cursor].name, w)}
 	lines = append(lines, m.planSectionLines(secs[s.cursor].name, w)...)
 	return m.planDetailWindow(lines, h)
 }

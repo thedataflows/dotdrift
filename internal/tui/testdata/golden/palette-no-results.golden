@@ -1,5 +1,6 @@
  dotdrift · $PROFILE · host myhost · user cri
   Modules   Status   Plan   Profile
+────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
 ││ ▸ demo                  ││ meta                                                             │
@@ -8,7 +9,6 @@
 │                          ││  scope user ◂▸                                                   │
 │                          ││ packages ＋                                                      │
 │                          ││  + neovim ✎                                                      │
-│                          ││  + ripgrep ✎                                                     │
 │                       ╭─────────────────────────────────────────────────╮                    │
 │                       │                                                 │                    │
 │                       │  │/ zzzznothing▏                                │                    │
@@ -17,9 +17,9 @@
 │                       │    ctrl+n creates a module named «zzzznothing»  │                    │
 │                       │                                                 │                    │
 │                       ╰─────────────────────────────────────────────────╯                    │
+│                          ││ secrets ＋                                                       │
 │                          ││ mounts ＋                                                        │
 │                          ││ smb ＋                                                           │
-│                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

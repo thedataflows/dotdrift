@@ -1,5 +1,6 @@
  dotdrift · $PROFILE · host myhost · user cri
   Modules   Status   Plan   Profile
+────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · secrets                                           │
 ││ ▸ demo                  ││ meta                                                             │
@@ -22,7 +23,6 @@
 │                          ││    env MISE_TOKEN ✎                                              │
 │                          ││ mounts ＋                                                        │
 │                          ││  media ＋                                                        │
-│                          ││    source /dev/disk/by-label/media ✎                             │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

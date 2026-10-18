@@ -731,7 +731,7 @@ func (m *Compositor) statusDetailLines(w int) []string {
 		lines = append(lines, ansi.Truncate(m.th.rowKey.Render(fmt.Sprintf(" %-8s", k+":"))+" "+m.th.rowText.Render(v), w, ""))
 	}
 	if row.okCount > 0 {
-		lines = append(lines, ansi.Truncate(m.th.detailHeader.Render("ok"), w, ""))
+		lines = append(lines, m.th.detailLine("ok", w))
 		lines = append(lines, m.th.pillOK.Render("ok")+" "+m.th.rowText.Render("all "+strconv.Itoa(row.okCount)+" checks passed"))
 		return lines
 	}
@@ -741,7 +741,7 @@ func (m *Compositor) statusDetailLines(w int) []string {
 	}
 	// The detail pane opens with a header strip and a status pill
 	// (0113): the section and item name the finding before its fields.
-	lines = append(lines, ansi.Truncate(m.th.detailHeader.Render(f.Section+" · "+f.Item), w, ""))
+	lines = append(lines, m.th.detailLine(f.Section+" · "+f.Item, w))
 	lines = append(lines, m.statusPill(f))
 	kv("module", f.Module)
 	kv("item", f.Item)

@@ -100,6 +100,7 @@ type theme struct {
 	modalInfo        lipgloss.Style // information frame (help, palette): indigo
 	helpKey          lipgloss.Style // a key chip in the footer bar
 	helpDesc         lipgloss.Style // a help description in the footer bar
+	tabBar           lipgloss.Style // the tab bar's bottom rule (0114)
 }
 
 func newTheme(isDark bool) theme {
@@ -115,9 +116,9 @@ func newTheme(isDark bool) theme {
 		applyBadge:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
 		cursorRow: lipgloss.NewStyle().
-			Bold(true).Foreground(p.fuchsia).Background(p.selectedBg).
+			Bold(true).Foreground(p.value).Background(p.selectedBg).
 			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(p.fuchsia), // the bubbles delegate treatment, filled (0113)
+			BorderForeground(p.fuchsia), // filled block, neutral text, fuchsia bar only (0114)
 		rowText:     lipgloss.NewStyle().Foreground(p.value),  // values read as content (0080)
 		rowKey:      lipgloss.NewStyle().Foreground(p.indigo), // labels differ from values by hue (0113)
 		caret:       lipgloss.NewStyle().Reverse(true),        // the block caret: the cell itself, no glyph (0092)
@@ -159,6 +160,9 @@ func newTheme(isDark bool) theme {
 		modalInfo:   pane.BorderForeground(p.indigo),
 		helpKey:     lipgloss.NewStyle().Bold(true).Foreground(p.value).Background(p.selectedBg),
 		helpDesc:    lipgloss.NewStyle().Foreground(p.muted).Background(p.selectedBg),
+		tabBar: lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder(), false, false, true, false).
+			BorderForeground(p.dim),
 	}
 }
 
@@ -183,16 +187,26 @@ func (t theme) caretCell(s string) string {
 	return cell
 }
 
-// cursorLine renders the cursor row as a filled block across the full
-// pane width (0113): the styled row first, then plain background cells
-// to the edge — a style Width would wrap long rows instead of filling.
-func (t theme) cursorLine(s string, w int) string {
-	line := t.cursorRow.MaxWidth(w).Render(s)
+// fillLine renders s in style and fills the rest of the width with
+// plain background cells (0113, 0114): the styled run first, then the
+// bar background to the edge — a style Width would wrap long rows
+// instead of filling. All filled styles share the selectedBg fill.
+func (t theme) fillLine(style lipgloss.Style, s string, w int) string {
+	line := style.MaxWidth(w).Render(s)
 	if pad := w - ansi.StringWidth(line); pad > 0 {
 		line += t.footerBar.Render(strings.Repeat(" ", pad))
 	}
 	return line
 }
+
+// cursorLine renders the cursor row as a filled block across the pane.
+func (t theme) cursorLine(s string, w int) string { return t.fillLine(t.cursorRow, s, w) }
+
+// barLine renders a workspace section heading bar across the pane.
+func (t theme) barLine(s string, w int) string { return t.fillLine(t.sectionBar, s, w) }
+
+// detailLine renders a detail pane's header strip across the pane.
+func (t theme) detailLine(s string, w int) string { return t.fillLine(t.detailHeader, s, w) }
 
 // Meta renders dim, parenthetical chrome text.
 func (t theme) Meta(s string) string { return t.meta.Render(s) }

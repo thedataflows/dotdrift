@@ -103,7 +103,9 @@ func (m *Compositor) viewRow() string {
 	if ansi.StringWidth(row) > m.w {
 		row = build(true)
 	}
-	return ansi.Truncate(row, m.w, "…")
+	// The tab bar carries a bottom rule across the frame (0114), the
+	// gh-dash tab treatment; layout() reserves the extra line.
+	return m.th.tabBar.Width(m.w).Render(ansi.Truncate(row, m.w, "…"))
 }
 
 // viewBody renders the active non-Modules view: the Profile view's list

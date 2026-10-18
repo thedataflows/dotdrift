@@ -799,12 +799,12 @@ func (m *Compositor) baseFrame() string {
 }
 
 // layout returns the nav and workspace total widths and the pane content
-// height: header 1 line, view row 1 line, footer 2 lines, pane borders
-// 2 rows.
+// height: header 1 line, tab bar 2 lines (tabs + rule), footer 2 lines,
+// pane borders 2 rows.
 func (m *Compositor) layout() (navW, workW, paneH int) {
 	navW = m.w * 3 / 10
 	navW = min(max(navW, 22), 44)
-	return navW, m.w - navW, m.h - 6
+	return navW, m.w - navW, m.h - 7
 }
 
 func (m *Compositor) pane(focused bool, w, h int, content string) string {

@@ -102,6 +102,22 @@ func TestTheme_rowKey(t *testing.T) {
 	}
 }
 
+// 0114: a filled bar runs to the pane edge, not to the text width, and
+// the cursor row's text is the bright neutral hue — the fuchsia lives
+// only in the left accent bar, as in gh-dash.
+func TestTheme_filledBars(t *testing.T) {
+	th := newTheme(true)
+	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
+	require.Equal(t, 20, len([]rune(strip(th.barLine("packages", 20)))),
+		"the section bar fills the full width")
+	require.Equal(t, 20, len([]rune(strip(th.detailLine("dotfiles · x", 20)))),
+		"the detail header fills the full width")
+	cursor := th.cursorLine(" demo", 20)
+	require.Equal(t, 20, len([]rune(strip(cursor))), "the cursor row fills the full width")
+	require.Contains(t, cursor, "38;5;255", "the cursor text is the bright neutral hue")
+	require.Contains(t, cursor, "247;128;226", "the accent bar keeps the fuchsia hue")
+}
+
 // 0113: the gh-dash visual roles — filled blocks carry a background,
 // status pills carry a background, cards carry a border, and modal
 // severity differs by frame color.
@@ -112,6 +128,7 @@ func TestTheme_visualRoles(t *testing.T) {
 	require.NotContains(t, th.tabInactive.Render("x"), "48;", "the inactive tab stays flat")
 	require.Contains(t, th.footerBar.Render("x"), "48;", "the footer is a background bar")
 	require.Contains(t, th.detailHeader.Render("x"), "48;", "the detail header is a filled strip")
+	require.Contains(t, th.sectionBar.Render("x"), "48;", "a section heading is a filled bar")
 	for _, pill := range []lipgloss.Style{th.pillOK, th.pillDrift, th.pillUnknown, th.pillUnauthorized} {
 		require.Contains(t, pill.Render("x"), "48;", "a status pill is a filled block")
 	}

@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: agent
 - **Related**: [TUI views design spec](../superpowers/specs/2026-10-18-tui-views-design.md), slice 3
 - **Related code**: [`internal/tui/planview.go`](../../internal/tui/planview.go)
-- **Closing commits**: recorded below after the landing commit
+- **Closing commits**: 594d8e1
 
 ## Summary
 

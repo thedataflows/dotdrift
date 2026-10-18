@@ -514,7 +514,7 @@ func TestStatusView_detailScrolls(t *testing.T) {
 
 	// Moving the findings cursor resets the detail scroll.
 	c = cpress(c, "left") // back to the findings list
-	c = cpress(c, "k")   // the all-OK row
+	c = cpress(c, "k")    // the all-OK row
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.NotContains(t, frame, "more above", "a cursor move resets the detail scroll")
 }

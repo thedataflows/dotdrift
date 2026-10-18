@@ -13,7 +13,6 @@
 │                          ││  systemd.units ＋                                                │
 │                          ││  tools ＋                                                        │
 │                          ││  secrets ＋                                                      │
-│                          ││──────────────────────────────────────────────────────────────────│
 │                          ││   API_KEY ＋                                                     │
 │                          │││    env DEMO_API_KEY ✎                                           │
 │                          ││     description demo key ✎                                       │
@@ -21,8 +20,9 @@
 │                          ││   TOKEN ＋                                                       │
 │                          ││     env MISE_TOKEN ✎                                             │
 │                          ││  mounts ＋                                                       │
-│                          ││──────────────────────────────────────────────────────────────────│
 │                          ││   media ＋                                                       │
+│                          ││     source /dev/disk/by-label/media ✎                            │
+│                          ││     destination /media ✎                                         │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

@@ -192,8 +192,8 @@ func TestPlanView_detailScrolls(t *testing.T) {
 
 	// Moving the section cursor resets the detail scroll.
 	c = cpress(c, "left") // back to the section list
-	c = cpress(c, "j")   // tools
-	c = cpress(c, "k")   // packages again
+	c = cpress(c, "j")    // tools
+	c = cpress(c, "k")    // packages again
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "pkg-00", "a cursor move resets the detail scroll to the head")
 	require.NotContains(t, frame, "pkg-39")

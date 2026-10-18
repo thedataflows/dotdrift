@@ -313,7 +313,7 @@ func TestRestoreDialog_planLandsThroughCompositor(t *testing.T) {
 	}
 	c.writesFor = func(*facts.Facts) Writes { return fake }
 
-	c = cpress(c, "right")               // focus the work pane (w is a work binding)
+	c = cpress(c, "right")             // focus the work pane (w is a work binding)
 	c = cpress(c, "w")                 // the writes menu
 	c = cpress(c, "down")              // restore
 	c, _ = cstep(c, keyPress("enter")) // the menu pops, the dialog pushes

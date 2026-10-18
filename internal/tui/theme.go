@@ -91,7 +91,6 @@ type theme struct {
 	fillBg           lipgloss.Style // the background cells that fill a cursor row to the edge
 	detailHeader     lipgloss.Style // the filled strip atop a detail pane
 	sectionBar       lipgloss.Style // a workspace section heading bar
-	sectionRule      lipgloss.Style // the dark hairline border under a filled header (0126)
 	pillOK           lipgloss.Style // filled status pill: ok
 	pillDrift        lipgloss.Style // filled status pill: drift / unauthorized
 	pillUnknown      lipgloss.Style // filled status pill: unknown
@@ -149,7 +148,6 @@ func newTheme(isDark bool) theme {
 			Foreground(p.value).Background(p.selectedBg),
 		sectionBar: lipgloss.NewStyle().Bold(true).Padding(0, 1).
 			Foreground(p.indigo).Background(p.selectedBg), // the filled heading bar (0121)
-		sectionRule: lipgloss.NewStyle().Foreground(p.dim),
 		pillOK: lipgloss.NewStyle().Padding(0, 1).
 			Foreground(lipgloss.Color("#FFFFFF")).Background(p.green),
 		pillDrift: lipgloss.NewStyle().Padding(0, 1).

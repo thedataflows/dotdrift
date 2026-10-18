@@ -283,6 +283,37 @@ func TestStatusView_sectionFilter(t *testing.T) {
 	require.Equal(t, "", c.status.filter, "f does nothing on the Modules view")
 }
 
+func TestStatusView_midProbeStaleMarkSurvivesLanding(t *testing.T) {
+	// Fix round 1: a stale mark set during the probe (a yank change, a
+	// write, a finished apply) must survive the landing of the read that
+	// started before it — the landed data is the OLD scope's.
+	_, c := statusShell(statusFixtureRead())
+	c.nav = navModel{modules: []navModule{{id: "shell"}, {id: "firefox"}}}
+
+	var cmd tea.Cmd
+	c, cmd = cstep(c, keyPress("2"))
+	c, cmd = cstep(c, mustMsg(cmd)) // the plan check landed; the probe is in flight
+
+	// Mid-probe: the user yanks a module on the Modules view.
+	c = cpress(c, "1")
+	c = cpress(c, "y")
+	require.True(t, c.stale[viewStatus], "the yank marks the Status view stale")
+
+	c, _ = cstep(c, mustMsg(cmd)) // the old-scope read lands
+	require.True(t, c.stale[viewStatus],
+		"a mark set after the read started survives its landing (old-scope data is not current)")
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Status (stale)")
+
+	// The other leg: no mid-probe mark, a landed refresh clears the mark.
+	_, c = statusShell(statusFixtureRead())
+	c = loadStatusView(t, c)
+	c.markStale(viewStatus)
+	c, cmd = cstep(c, keyPress("r"))
+	c, cmd = cstep(c, mustMsg(cmd))
+	c, _ = cstep(c, mustMsg(cmd))
+	require.False(t, c.stale[viewStatus], "an uninterrupted refresh clears the stale mark")
+}
+
 func TestStatusView_failedRefreshKeepsStaleList(t *testing.T) {
 	// The anti-goal: a failed re-run keeps the old list only with the
 	// stale mark, never silently.

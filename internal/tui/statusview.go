@@ -54,6 +54,7 @@ type statusModel struct {
 	read    *service.StatusRead
 	diffs   []service.DiffEntry
 	scope   []string // the yank snapshot the read ran under (0093); names the title
+	seq     int      // staleSeq[viewStatus] when the read started (0108 fix round 1)
 	filter  string   // a section name; "" = all sections
 	cursor  int
 	offset  int
@@ -83,6 +84,7 @@ func (m *Compositor) reloadStatus() tea.Cmd {
 	m.status.pending = true
 	m.status.loadErr = ""
 	m.status.scope = m.nav.yankedIDs()
+	m.status.seq = m.staleSeq[viewStatus] // a mark landing after this point survives the read
 	root, scope := m.root, m.status.scope
 	return func() tea.Msg {
 		pr, err := m.area.Plan(root, scope, nil)
@@ -142,9 +144,12 @@ func (m *Compositor) startStatusRead(elevated bool) tea.Cmd {
 	}
 }
 
-// statusLoaded lands the read: fresh data clears the stale mark; a
-// failure keeps the old list only with the stale mark (the design's
-// anti-goal), or shows the failed state when there is no list.
+// statusLoaded lands the read: fresh data clears the stale mark, unless
+// a mark landed after the read started (a yank change, a write, a
+// finished apply) — the landed data is the old scope's and stays marked
+// (fix round 1). A failure keeps the old list only with the stale mark
+// (the design's anti-goal), or shows the failed state when there is no
+// list.
 func (m *Compositor) statusLoaded(msg statusLoadedMsg) tea.Cmd {
 	if msg.err != nil {
 		return m.statusFailed(msg.err)
@@ -153,7 +158,7 @@ func (m *Compositor) statusLoaded(msg statusLoadedMsg) tea.Cmd {
 	m.status.loadErr = ""
 	m.status.read = msg.read
 	m.status.diffs = msg.diffs
-	m.stale[viewStatus] = false
+	m.stale[viewStatus] = m.staleSeq[viewStatus] != m.status.seq
 	m.status.clamp(m.statusRows())
 	return nil
 }

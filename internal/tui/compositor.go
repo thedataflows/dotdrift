@@ -86,10 +86,11 @@ type Compositor struct {
 	// the views whose data a write or apply outlived (markStale);
 	// profile is the Profile view's read state (slice 1c), status the
 	// Status view's (0108 slice 2c).
-	view    viewKind
-	stale   [viewCount]bool
-	profile profileModel
-	status  statusModel
+	view     viewKind
+	stale    [viewCount]bool
+	staleSeq [viewCount]int // bumps on every markStale: a read started before a mark must not clear it (0108 fix)
+	profile  profileModel
+	status   statusModel
 
 	modals []modal
 

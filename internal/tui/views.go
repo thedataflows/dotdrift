@@ -33,9 +33,12 @@ var viewNames = [viewCount]string{"Modules", "Status", "Plan", "Profile"}
 
 // markStale marks a view's data as out of date: the row shows the stale
 // word on its title. A refresh clears the mark when the fresh read
-// lands.
+// lands. The seq bump orders the mark against in-flight reads: a read
+// that started before this mark landed carries older data and must not
+// clear it (0108 fix round 1).
 func (m *Compositor) markStale(v viewKind) {
 	m.stale[v] = true
+	m.staleSeq[v]++
 }
 
 // markReadViewsStale marks every read view stale: a write (save, manage,

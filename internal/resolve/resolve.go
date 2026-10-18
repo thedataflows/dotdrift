@@ -47,6 +47,10 @@ type ToolsStep struct {
 	Versions map[string]string
 	// ToolModules maps each tool name to the module IDs that declare it.
 	ToolModules map[string][]string
+	// ModuleTools maps each module ID to its own tools (layers merged
+	// base → host → user for that module), so the tools step can write
+	// one global conf.d snippet per module (issue 0137).
+	ModuleTools map[string]map[string]string
 }
 
 // DotfilesStep lists managed dotfile entries.
@@ -112,7 +116,7 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 
 	plan := &Plan{
 		Packages: PackagesStep{},
-		Tools:    ToolsStep{Versions: make(map[string]string)},
+		Tools:    ToolsStep{Versions: make(map[string]string), ModuleTools: make(map[string]map[string]string)},
 		Secrets:  make(map[string]profile.Secret),
 		Dotfiles: DotfilesStep{},
 	}
@@ -180,7 +184,11 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		plan.Packages.Remove = append(plan.Packages.Remove, remove...)
 		sort.Strings(plan.Packages.Remove)
 
-		for k, v := range mergeTools(base.cfg.Tools, host.cfg.Tools, user.cfg.Tools) {
+		merged := mergeTools(base.cfg.Tools, host.cfg.Tools, user.cfg.Tools)
+		if len(merged) > 0 {
+			plan.Tools.ModuleTools[m.ID] = merged
+		}
+		for k, v := range merged {
 			plan.Tools.Versions[k] = v
 			toolIn[k] = append(toolIn[k], m.ID)
 		}

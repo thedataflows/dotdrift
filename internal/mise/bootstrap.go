@@ -67,13 +67,14 @@ func MisePluginsDir(xdgDataHome string) string {
 	return strings.Join([]string{xdgDataHome, "mise", "plugins"}, "/")
 }
 
-// ToolsFragmentPath returns the path of dotdrift's global tools activation
-// fragment: $XDG_CONFIG_HOME/mise/conf.d/dotdrift.toml (default
-// ~/.config/mise/conf.d/dotdrift.toml). mise loads conf.d/*.toml as
-// additional global config, so the resolved [tools] written there activate
-// on PATH — without touching config.toml, which a profile may manage as a
-// dotfile (issue 0037).
-func ToolsFragmentPath() string {
+// ToolsFragmentDir returns dotdrift's global tools activation directory:
+// $XDG_CONFIG_HOME/mise/conf.d (default ~/.config/mise/conf.d). mise loads
+// conf.d/*.toml as additional global config, so the per-module [tools]
+// snippets written there (one <module>.toml per module, issue 0137)
+// activate on PATH — without touching config.toml, which a profile may
+// manage as a dotfile. Issue 0037's single dotdrift.toml fragment lived
+// here too; the tools step removes it as a stale marked file.
+func ToolsFragmentDir() string {
 	xdgConfig := os.Getenv("XDG_CONFIG_HOME")
 	if xdgConfig == "" {
 		home, err := os.UserHomeDir()
@@ -82,7 +83,7 @@ func ToolsFragmentPath() string {
 		}
 		xdgConfig = filepath.Join(home, ".config")
 	}
-	return filepath.Join(xdgConfig, "mise", "conf.d", "dotdrift.toml")
+	return filepath.Join(xdgConfig, "mise", "conf.d")
 }
 
 // PluginsDirFromEnv resolves the mise plugin registry directory from the

@@ -101,6 +101,24 @@ func TestMergeTools_userWins(t *testing.T) {
 	require.Equal(t, "3.12", plan.Tools.Versions["python"], "user override should win for python")
 }
 
+// Per-module tools (issue 0137): the plan carries each module's own merged
+// tools so the tools step can write one conf.d snippet per module.
+func TestResolve_moduleToolsPerModule(t *testing.T) {
+	p, err := profile.Load(fixture(t, "resolve"), &facts.Facts{
+		Hostname: "myhost",
+		Username: "cri",
+		OS:       "linux",
+	})
+	require.NoError(t, err)
+
+	plan, err := resolve.Resolve(p, &facts.Facts{Hostname: "myhost", Username: "cri"})
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{"node": "22", "python": "3.12"},
+		plan.Tools.ModuleTools["shell"],
+		"the module's snippet set is its layers merged (host node, user python)")
+}
+
 func TestFileOverlay_userReplacesHost(t *testing.T) {
 	p, err := profile.Load(fixture(t, "resolve"), &facts.Facts{
 		Hostname: "myhost",

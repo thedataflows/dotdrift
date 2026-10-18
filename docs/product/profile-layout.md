@@ -216,12 +216,14 @@ public = false
   marker stripped (until mise ships its built-in `aur` manager — issue 0045).
   An explicit `manager:<pkg>` passes through unchanged.
 - `tools` installs the listed tools via mise AND activates them globally:
-  apply writes the resolved `[tools]` into `~/.config/mise/conf.d/dotdrift.toml`
-  (mise loads `conf.d/*.toml` as global config, XDG_CONFIG_HOME respected),
-  so installed tools resolve on PATH in every shell. The fragment is
-  dotdrift-owned and regenerated wholesale per apply — hand edits are lost;
-  `config.toml` itself is never touched. A run whose plan has no tools
-  removes a stale fragment (issue 0037).
+  apply writes each module's resolved `[tools]` into its own snippet
+  `~/.config/mise/conf.d/<module>.toml` (mise loads `conf.d/*.toml` as
+  global config, XDG_CONFIG_HOME respected), so installed tools resolve on
+  PATH in every shell. The snippets are dotdrift-owned (generated-by
+  marker) and regenerated per apply — hand edits are lost; `config.toml`
+  itself is never touched. A run whose plan has no tools removes every
+  marked snippet, and issue 0037's combined `dotdrift.toml` fragment is
+  removed as stale (issue 0137).
 - `secrets` declares sensitive inputs a module's templates need, without
   storing values in git (issue 0044). Each entry maps a logical name to the
   environment variable that supplies the value at apply time (via fnox, CI,

@@ -38,16 +38,34 @@ func TestRunOp_childReceivesStdin(t *testing.T) {
 	}
 }
 
-// The wiring is gated on stdin being a terminal: interactive runs inherit
-// the real stdin; piped/CI runs keep the null device so nothing blocks
-// waiting on input nobody will provide.
-func TestOpStdin_terminalGate(t *testing.T) {
+// Every mise subprocess is always marked interactive (issue 0136): the
+// child receives the real stdin whether or not dotdrift's own stdin is
+// a terminal — a gate here is what made mise prompts unanswerable again.
+func TestOpStdin_alwaysInteractive(t *testing.T) {
 	orig := executil.IsStdinTerminal
 	t.Cleanup(func() { executil.IsStdinTerminal = orig })
 
-	executil.IsStdinTerminal = func() bool { return true }
-	require.Equal(t, os.Stdin, opStdin(), "interactive stdin is inherited")
+	for _, terminal := range []bool{true, false} {
+		executil.IsStdinTerminal = func() bool { return terminal }
+		require.Equal(t, os.Stdin, opStdin(),
+			"mise stdin is always the real stdin (terminal=%v)", terminal)
+	}
+}
 
-	executil.IsStdinTerminal = func() bool { return false }
-	require.Nil(t, opStdin(), "non-interactive runs keep the null device")
+// Probes carry the same rule: a probe child also receives the real stdin.
+func TestRunProbe_childReceivesStdin(t *testing.T) {
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	orig := opStdin
+	opStdin = func() *os.File { return r }
+	t.Cleanup(func() { opStdin = orig })
+
+	_, err = w.WriteString("probe answer\n")
+	require.NoError(t, err)
+	require.NoError(t, w.Close())
+
+	m := &Mise{}
+	got, runErr := m.runProbe(context.Background(), "sh", "-c", "cat")
+	require.NoError(t, runErr)
+	require.Equal(t, "probe answer", got, "the probe child must read the wired stdin")
 }

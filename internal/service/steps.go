@@ -501,7 +501,7 @@ func buildSteps(sections SectionSet, plan *resolve.Plan, runner *mise.ExecMise,
 		steps = append(steps, &packagesStep{runner: runner, backend: backend, plan: plan, backendStr: f.Backend, configPath: paths.packages, misePluginsDir: misePluginsDir})
 	}
 	if sections.Has("tools") {
-		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths.tools, FragmentPath: mise.ToolsFragmentPath()})
+		steps = append(steps, &mise.ToolsStep{Runner: runner, Plan: plan, ConfigPath: paths.tools, FragmentDir: mise.ToolsFragmentDir()})
 	}
 	if sections.Has("dotfiles") {
 		steps = append(steps, &mise.DotfilesStep{Runner: runner, Plan: &userPlan, ConfigPath: paths.dotfiles, Yes: opts.Yes, Force: opts.Force})

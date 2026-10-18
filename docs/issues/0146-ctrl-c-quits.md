@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0146: ctrl+c quits the TUI, like q
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: none
 - **Related code**: [`internal/tui/keymap.go`](../../internal/tui/keymap.go), [`internal/tui/compositor.go`](../../internal/tui/compositor.go)
-- **Closing commits**: none
+- **Closing commits**: `bafa417`
 
 ## Summary
 
@@ -34,12 +34,12 @@ cancels the run).
 
 ## Acceptance Criteria
 
-- [ ] ctrl+c at the base level quits a clean shell and asks first
+- [x] ctrl+c at the base level quits a clean shell and asks first
   with dirty drafts, exactly like q.
-- [ ] ctrl+c quits from the field editor and the nav filter.
-- [ ] The apply detail modal's ctrl+c still cancels the run, not
+- [x] ctrl+c quits from the field editor and the nav filter.
+- [x] The apply detail modal's ctrl+c still cancels the run, not
   the app.
-- [ ] The ? help lists ctrl+c as quit.
+- [x] The ? help lists ctrl+c as quit.
 
 ## Out of Scope
 

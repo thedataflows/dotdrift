@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0145: View bodies must fill the frame (right padding, Profile bottom)
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: [0144](0144-profile-view-outer-card.md)
 - **Related code**: [`internal/tui/compositor.go`](../../internal/tui/compositor.go), [`internal/tui/views.go`](../../internal/tui/views.go), [`internal/tui/profileview.go`](../../internal/tui/profileview.go)
-- **Closing commits**: none
+- **Closing commits**: `bafa417`
 
 ## Summary
 
@@ -42,11 +42,11 @@ bottom. Content taller than the pane still clips.
 
 ## Acceptance Criteria
 
-- [ ] Two-pane bodies span the full frame width; content reaches
+- [x] Two-pane bodies span the full frame width; content reaches
   the panes' inner right edge.
-- [ ] Profile cards span the full frame width, and the Profile
+- [x] Profile cards span the full frame width, and the Profile
   body fills the pane height so the footer stays at the bottom.
-- [ ] Goldens are regenerated and reviewed; frames still fit the
+- [x] Goldens are regenerated and reviewed; frames still fit the
   terminal at small sizes.
 
 ## Out of Scope

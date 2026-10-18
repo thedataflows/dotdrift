@@ -1,4 +1,5 @@
  dotdrift · $PROFILE
+
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────
 ╭──────────────────────────────────────────────────────────────╮
@@ -17,6 +18,5 @@
 │  state:   $STATE          │
 │  resume:  last completed "packages" - next apply resumes aft │
 ╰──────────────────────────────────────────────────────────────╯
-╭──────────────────────────────────────────────────────────────╮
 
  tab next view • r refresh view • p plan • P apply yanked/all …

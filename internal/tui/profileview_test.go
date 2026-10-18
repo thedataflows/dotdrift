@@ -165,6 +165,18 @@ func TestProfileView_cardsStretchFullWidth(t *testing.T) {
 		"the body pads to the pane height, so the footer stays at the bottom")
 }
 
+// 0147: one empty line sits between the header text and the tab
+// bar, in every view (the Profile frame stands in for all).
+func TestView_blankLineAboveTabs(t *testing.T) {
+	_, c := profileShell()
+	c = loadProfileView(t, c)
+
+	lines := strings.Split(ansiRe.ReplaceAllString(c.View().Content, ""), "\n")
+	require.Contains(t, lines[0], "dotdrift", "the header text is the first line")
+	require.Equal(t, "", strings.TrimSpace(lines[1]), "one empty line above the tabs")
+	require.Contains(t, lines[2], "1. Modules", "the tab bar follows the empty line")
+}
+
 func TestProfileView_resumeLineFollowsTheHash(t *testing.T) {
 	// The 0106 rule through the real reads area: a cursor stored for a
 	// different input is dead — the view must show the clean line, like

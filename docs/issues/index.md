@@ -134,3 +134,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0144](0144-profile-view-outer-card.md) | Profile view: remove the outer card around the group cards | done | low |
 | [0145](0145-view-bodies-fill-frame.md) | View bodies must fill the frame (right padding, Profile bottom) | done | medium |
 | [0146](0146-ctrl-c-quits.md) | ctrl+c quits the TUI, like q | done | medium |
+| [0147](0147-blank-line-above-tabs.md) | Empty line between the header text and the tab bar | open | low |

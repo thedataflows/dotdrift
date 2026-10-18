@@ -800,6 +800,7 @@ func (m *Compositor) baseFrame() string {
 	}
 	return lipgloss.JoinVertical(lipgloss.Left,
 		ansi.Truncate(m.headerView(), m.w, "…"),
+		"", // one empty line above the tabs (issue 0147)
 		m.viewRow(),
 		body,
 		m.footerView(),
@@ -812,7 +813,9 @@ func (m *Compositor) baseFrame() string {
 func (m *Compositor) layout() (navW, workW, paneH int) {
 	navW = m.w * 3 / 10
 	navW = min(max(navW, 22), 44)
-	return navW, m.w - navW, m.h - 7
+	// h-8: header, the blank line above the tabs (0147), the tab
+	// bar and its rule, the footer, and the frame's spare lines.
+	return navW, m.w - navW, m.h - 8
 }
 
 func (m *Compositor) pane(focused bool, w, h int, content string) string {

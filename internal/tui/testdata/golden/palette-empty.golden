@@ -1,4 +1,5 @@
  dotdrift · $PROFILE · host myhost · user cri
+
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭────────────────────────────╮╭────────────────────────────────────────────────────────────────────╮
@@ -6,7 +7,6 @@
 ││▸ demo                     ││ META                                                               │
 │ ▸ other · invalid module.to│││  id demo                                                          │
 │ ▸ plain · invalid module.to││   description the demo module ✎                                    │
-│                            ││   scope user ◂▸                                                    │
 │                            ││ ╭──────────────────────────────────╮                               │
 │                            ││ │                                  │                               │
 │                            ││ │  /                               │                               │
@@ -18,11 +18,11 @@
 │                            ││ │    ◆ plain  module               │                               │
 │                            ││ │                                  │                               │
 │                            ││ ╰──────────────────────────────────╯                               │
+│                            ││                                                                    │
 │                            ││ HOOKS ＋                                                           │
 │                            ││                                                                    │
 │                            ││ SYSTEMD.UNITS ＋                                                   │
 │                            ││                                                                    │
-│                            ││ TOOLS ＋                                                           │
 ╰────────────────────────────╯╰────────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

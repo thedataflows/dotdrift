@@ -127,4 +127,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0137](0137-tools-per-module-confd.md) | Tools as per-module global conf.d snippets | done | medium |
 | [0138](0138-confd-sweep-partial-apply.md) | Apply must never delete files in mise conf.d | done | high |
 | [0139](0139-status-unmanaged-confd.md) | Status lists unmanaged files in mise conf.d | done | medium |
-| [0140](0140-plan-detail-duplicated-header.md) | Plan detail pane repeats the section header | open | low |
+| [0140](0140-plan-detail-duplicated-header.md) | Plan detail pane repeats the section header | done | low |

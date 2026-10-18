@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0140: Plan detail pane repeats the section header
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [tui, plan]
 - **Assignee**: none
 - **Related**: [0109](0109-tui-plan-view.md)
 - **Related code**: [`internal/tui/planview.go`](../../internal/tui/planview.go)
-- **Closing commits**: none
+- **Closing commits**: `0cce403`
 
 ## Summary
 
@@ -37,10 +37,10 @@ which separates the install list from the remove list.
 
 ## Acceptance Criteria
 
-- [ ] The Plan detail pane shows the section name once (the header
+- [x] The Plan detail pane shows the section name once (the header
   strip); no `<section>:` line follows it in the body.
-- [ ] The packages section keeps its `remove:` sub-header.
-- [ ] Plan view goldens are regenerated and reviewed.
+- [x] The packages section keeps its `remove:` sub-header.
+- [x] Plan view goldens are regenerated and reviewed.
 
 ## Out of Scope
 

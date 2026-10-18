@@ -273,6 +273,31 @@ func TestService_profileRead_noProbes(t *testing.T) {
 	require.Equal(t, 1, otherCalls, "the accounts listing rides the read")
 }
 
+func TestService_profileRead_deadCursorMasked(t *testing.T) {
+	// Parity with Status (issue 0106): a cursor stored for a different
+	// input is dead — Profile must not report it as pending either.
+	dir := statusFixture(t)
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux"}
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	statePath := state.ProfileStatePath(dir)
+	require.NoError(t, os.MkdirAll(filepath.Dir(statePath), 0o755))
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "packages",
+		InputHash:     "stale-hash",
+	}))
+
+	area := NewReadsArea(ReadsDeps{
+		Detect: func() (*facts.Facts, error) { return f, nil },
+	}.WithDefaults())
+	r, err := area.Profile(dir, nil)
+	require.NoError(t, err)
+	require.Empty(t, r.State.LastCompleted, "a stale-hash cursor is dead, not pending")
+
+	s, err := state.NewFileStore(statePath).Load()
+	require.NoError(t, err)
+	require.Equal(t, "packages", s.LastCompleted, "the mask is a copy — the state file is untouched")
+}
+
 func TestService_diff_read(t *testing.T) {
 	dir, plan := diffFixture(t)
 	area := NewReadsArea(ReadsDeps{}.WithDefaults())

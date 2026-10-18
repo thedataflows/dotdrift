@@ -235,6 +235,13 @@ func (r *ReadsArea) Profile(profilePath string, modules []string) (*ProfileRead,
 	if err != nil {
 		return nil, err
 	}
+	// Same dead-cursor mask as Status (issue 0106): a cursor stored for
+	// a different input is not pending, it is dead.
+	if s.LastCompleted != "" && s.InputHash != resolve.InputHash(pr.Profile, pr.Facts, pr.Plan) {
+		cp := *s
+		cp.LastCompleted = ""
+		s = &cp
+	}
 
 	others, err := r.deps.OtherAccounts(pr.Profile.Root, pr.Facts)
 	if err != nil {

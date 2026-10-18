@@ -9,13 +9,13 @@ timestamp: 2026-10-18T14:20:00Z
 # ISSUE 0112: TUI views final review fixes
 
 - **Type**: bug
-- **Status**: in-progress
+- **Status**: done
 - **Priority**: critical
 - **Labels**: [tui, service, regression]
 - **Assignee**: agent
 - **Related**: [TUI specification](../product/tui.md), [0110](0110-tui-apply-gate-options.md), [0111](0111-tui-generate-volumes-polish.md)
 - **Related code**: [TUI](../../internal/tui/), [service](../../internal/service/), [TUI command](../../cmd/tui.go)
-- **Closing commits**: none
+- **Closing commits**: `c0d9956`, `e4c83b8`
 
 ## Summary
 
@@ -32,19 +32,19 @@ closed or covered. Frame text and the volume picker must fit the terminal.
 
 ## Acceptance Criteria
 
-- [ ] All-off sections fail at the real service section boundary.
-- [ ] One apply gate, preview, and start chain owns its snapshot until it ends.
-- [ ] TUI sudo retries use `-n`; an expired ticket keeps the permission error.
-- [ ] Profile reads have a pending guard and preserve newer stale marks.
-- [ ] Closed or covered write dialogs and successful overrides mark read views stale.
-- [ ] Loaded, stale, scoped views and long footer text fit 64x24 and 100x30.
-- [ ] A failed Status or Plan refresh retains the previous displayed scope.
-- [ ] Status enter clears the nav filter and selects the winning layer when known.
-- [ ] The volume picker keeps its selection and volume facts visible within bounds.
-- [ ] Status shows the valid resume cursor or the clean resume message.
-- [ ] Status and Plan keep the current list visible with a refresh indication.
-- [ ] Add and onboard stay in Modules; apply detail and contextual help stay correct.
-- [ ] Full tests and vet pass. The product guide, log, and final fix report are current.
+- [x] All-off sections fail at the real service section boundary.
+- [x] One apply gate, preview, and start chain owns its snapshot until it ends.
+- [x] TUI sudo retries use `-n`; an expired ticket keeps the permission error.
+- [x] Profile reads have a pending guard and preserve newer stale marks.
+- [x] Closed or covered write dialogs and successful overrides mark read views stale.
+- [x] Loaded, stale, scoped views and long footer text fit 64x24 and 100x30.
+- [x] A failed Status or Plan refresh retains the previous displayed scope.
+- [x] Status enter clears the nav filter and selects the winning layer when known.
+- [x] The volume picker keeps its selection and volume facts visible within bounds.
+- [x] Status shows the valid resume cursor or the clean resume message.
+- [x] Status and Plan keep the current list visible with a refresh indication.
+- [x] Add and onboard stay in Modules; apply detail and contextual help stay correct.
+- [x] Full tests and vet pass. The product guide, log, and final fix report are current.
 
 ## Out of Scope
 

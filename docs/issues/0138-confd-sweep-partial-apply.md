@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0138: apply must never delete files in mise conf.d
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: high
 - **Labels**: [mise, tools]
 - **Assignee**: none
 - **Related**: [0137](0137-tools-per-module-confd.md)
 - **Related code**: [`internal/mise/step.go`](../../internal/mise/step.go), [`internal/service/steps.go`](../../internal/service/steps.go)
-- **Closing commits**: none
+- **Closing commits**: `6ad636c`
 
 ## Summary
 
@@ -51,11 +51,11 @@ behind; the user deletes it by hand if they want the tools gone.
 
 ## Acceptance Criteria
 
-- [ ] The tools step never deletes any file in conf.d, on any apply
+- [x] The tools step never deletes any file in conf.d, on any apply
   (whole-profile, module-filtered, or tool-less plan).
-- [ ] Per-module snippet writing is unchanged: one marked
+- [x] Per-module snippet writing is unchanged: one marked
   `<module>.toml` per module with tools, after a successful install.
-- [ ] Regression tests cover the filtered shapes and the tool-less
+- [x] Regression tests cover the filtered shapes and the tool-less
   plan.
 
 ## Out of Scope

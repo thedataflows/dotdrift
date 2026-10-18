@@ -304,8 +304,10 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			return []string{th.cursorLine(" "+text, width)}
 		}
 		// A section header is a heading bar (0113): a filled strip, so
-		// a section reads as a block, not as one more text row.
-		return []string{th.barLine(text, width)}
+		// a section reads as a block, not as one more text row. The
+		// lead matches the cursor row's bar cell (0116): the text must
+		// not shift when the cursor lands on the section.
+		return []string{th.barLine(" "+text, width)}
 	}
 	if r.hint {
 		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}

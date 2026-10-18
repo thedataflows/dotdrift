@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/drift"
 	"github.com/thedataflows/dotdrift/internal/facts"
@@ -113,6 +114,19 @@ func TestStatusView_listsFindings(t *testing.T) {
 	require.Contains(t, frame, "item:    firefox")
 	require.Contains(t, frame, "state:   drift")
 	require.Contains(t, frame, "detail:  not installed")
+}
+
+// 0116: the detail pane's header strip fills the full pane width, not
+// the text width, and the status pill follows it.
+func TestStatusView_detailHeaderFillsPane(t *testing.T) {
+	_, c := statusShell(statusFixtureRead())
+	c = loadStatusView(t, c)
+
+	lines := c.statusDetailLines(40)
+	require.NotEmpty(t, lines)
+	require.Equal(t, 40, ansi.StringWidth(ansiRe.ReplaceAllString(lines[0], "")),
+		"the detail header strip fills the pane width")
+	require.Contains(t, ansiRe.ReplaceAllString(lines[1], ""), "drift", "the status pill follows the strip")
 }
 
 func TestStatusView_allOKSectionRow(t *testing.T) {

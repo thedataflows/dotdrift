@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -104,6 +105,32 @@ API_KEY = { env = "DEMO_API_KEY", description = "demo key" }
 func TestWorkspace_allSections(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
 	requireGolden(t, "workspace-all.golden", c.View().Content, subs)
+}
+
+// 0116: a section header's text must not shift when the cursor lands
+// on it — the bar's padding and the cursor's bar cell put the text in
+// the same column — and the bar fills the full pane width.
+func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
+	idx := -1
+	for i, r := range c.ws.rows {
+		if r.header && r.section == "packages" {
+			idx = i
+		}
+	}
+	require.GreaterOrEqual(t, idx, 0, "the fixture has a packages section")
+	row := c.ws.rows[idx]
+	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
+	col := func(s string) int { return len([]rune(s[:strings.Index(s, "packages")])) }
+
+	c.ws.cursor = 0
+	plain := strip(c.ws.rowView(row, idx, c.th, 40)[0])
+	c.ws.cursor = idx
+	under := strip(c.ws.rowView(row, idx, c.th, 40)[0])
+
+	require.Equal(t, 40, ansi.StringWidth(plain), "the section bar fills the pane width")
+	require.Equal(t, col(plain), col(under),
+		"the section text stays in its column under the cursor")
 }
 
 func TestWorkspace_emptyStatesDesigned(t *testing.T) {

@@ -3,24 +3,24 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · packages                                          │
-││ ▸ demo                  ││ meta                                                             │
+││ ▸ demo                  ││  meta                                                            │
 │                          ││  id demo                                                         │
 │                          ││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
-│                          ││ packages ＋                                                      │
+│                          ││  packages ＋                                                     │
 │                          │││ ▸                                                               │
 │                          ││    ✗ package name must not be empty                              │
 │                          ││  + ripgrep ✎                                                     │
-│                          ││ links ＋                                                         │
-│                          ││ writes ＋                                                        │
-│                          ││ when ＋                                                          │
-│                          ││ hooks ＋                                                         │
-│                          ││ systemd.units ＋                                                 │
-│                          ││ tools ＋                                                         │
+│                          ││  links ＋                                                        │
+│                          ││  writes ＋                                                       │
+│                          ││  when ＋                                                         │
+│                          ││  hooks ＋                                                        │
+│                          ││  systemd.units ＋                                                │
+│                          ││  tools ＋                                                        │
 │                          ││  node = 20 ✎                                                     │
-│                          ││ secrets ＋                                                       │
-│                          ││ mounts ＋                                                        │
-│                          ││ smb ＋                                                           │
+│                          ││  secrets ＋                                                      │
+│                          ││  mounts ＋                                                       │
+│                          ││  smb ＋                                                          │
 │                          ││                                                                  │
 │                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯

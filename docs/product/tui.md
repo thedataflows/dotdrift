@@ -59,9 +59,9 @@ view stack wholesale). Its parts:
   active tab is a filled indigo block, the inactive tabs flat faint
   text, in the gh-dash treatment. `tab` cycles to the next view and
   `shift+tab` to the previous view, `1`–`4` jump — live in every view.
-  The nav's collapse/expand and the workspace's value cycling live on
-  `h`/`l` alone (dialogs, the picker, and editors keep their own
-  arrows).
+  The nav's expansion toggle lives on `enter` (with `h`/`l` as
+  collapse/expand) and the workspace's value cycling lives on `h`/`l`
+  alone (dialogs, the picker, and editors keep their own arrows).
   The Modules view is the two-pane base screen. Off the Modules view the
   shared bindings live, and a view with a body owns the pane movement
   keys through its hook (0108); the footer and `?` hint exactly the
@@ -171,8 +171,11 @@ view stack wholesale). Its parts:
 - **The nav** (T-tui-nav). Module rows with overlay layers as expandable
   children: `▸`/`▾` marks a module with layers, children indent as
   `base`, `user <name>`, `host <name>` (`user root (superuser)` per
-  issue 0029's visibility). `j`/`k` move, `l`/`right` expands, `h`/`left`
-  collapses or jumps from a child to its module row. Selecting a layer
+  issue 0029's visibility). `j`/`k` move; `enter` on a module row
+  toggles its expansion (`l` expands, `h` collapses or jumps from a
+  child to its module row), and `enter` on a layer child focuses the
+  workspace on that layer — the left/right arrows move between the
+  panes (0118). Selecting a layer
   child points the workspace at that layer file; the workspace and the
   nav never disagree. A module row is dirty (`●`) when any of its layer
   files has a draft in the 0065 ledger; the child names its own file's

@@ -121,3 +121,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0131](0131-modal-input-window.md) | Modal text inputs must not stretch the modal; long text scrolls | done | medium |
 | [0132](0132-caret-window-all-inputs.md) | Caret window navigation for every text input | done | medium |
 | [0133](0133-input-continuation-marks.md) | Faded ... continuation marks in clipped inputs | done | medium |
+| [0134](0134-nav-enter-expand-collapse.md) | Enter in the Modules nav expands/collapses the module | done | medium |

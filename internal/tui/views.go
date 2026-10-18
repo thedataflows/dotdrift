@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // viewKind names the base views on the view row.
@@ -56,6 +57,12 @@ func (m *Compositor) viewRow() string {
 		if m.stale[v] {
 			name += " (stale)"
 		}
+		// The Status title names the yank scope its data was read under
+		// (0108): a scoped read is visible, and a yank change marks the
+		// view stale until a refresh re-reads under the new scope.
+		if v == viewStatus && len(m.status.scope) > 0 {
+			name += " [" + strings.Join(m.status.scope, ", ") + "]"
+		}
 		if v == m.view {
 			parts = append(parts, m.th.viewTitle.Render(name))
 		} else {
@@ -66,20 +73,32 @@ func (m *Compositor) viewRow() string {
 }
 
 // viewBody renders the active non-Modules view: the Profile view's list
-// (slice 1c), or a full-width pane with the not-loaded placeholder for
+// (slice 1c), the Status view's findings list + detail panes (0108
+// slice 2c), or a full-width pane with the not-loaded placeholder for
 // the views whose bodies land later. The pane content gets the outer
 // dimensions minus the border, like the base panes.
 func (m *Compositor) viewBody(paneH int) string {
-	if m.view == viewProfile {
+	switch m.view {
+	case viewProfile:
 		return m.pane(false, m.w-2, paneH, m.profileBody(m.w-4))
+	case viewStatus:
+		// Findings rows run long (paths + details): an even split, not
+		// the Modules view's narrow nav.
+		listW := m.w / 2
+		left := m.pane(m.focus == focusNav, listW-2, paneH, m.statusList(listW-4, paneH-2))
+		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.statusDetail(m.w-listW-4))
+		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
 	return m.pane(false, m.w-2, paneH, m.th.loading.Render(" not loaded"))
 }
 
 // viewHook is the active view's pane-key handler: a non-Modules view
 // receives pane keys through this hook, never through the Modules
-// bindings. Nil until later slices give the views bodies — pane keys
-// are dead on an empty view.
+// bindings. Nil for views without a body — pane keys are dead on an
+// empty view.
 func (m *Compositor) viewHook() func(s string) (tea.Cmd, bool) {
+	if m.view == viewStatus {
+		return m.statusKey
+	}
 	return nil
 }

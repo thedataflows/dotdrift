@@ -26,17 +26,21 @@ import (
 // policy: check validates the password (production: executil.SudoValidate,
 // which leaves a fresh sudo timestamp the run's privileged steps use),
 // onOK proceeds, onCancel aborts. The password is a []byte zeroed on
-// submission, never logged, never drafted.
+// submission, never logged, never drafted. The Status view's sudo gate
+// (0108) reuses the same post-validate callbacks: onOK starts the read
+// elevated, onCancel starts it unelevated; cancelNote rewords the
+// esc hint for that flow.
 type elevationModel struct {
-	th       theme
-	reasons  []string
-	input    []byte
-	failures int
-	failed   bool // the last submission failed: show it
-	check    func(pw []byte) error
-	onOK     func()
-	onCancel func(aborted bool)
-	done     bool
+	th         theme
+	reasons    []string
+	input      []byte
+	failures   int
+	failed     bool // the last submission failed: show it
+	check      func(pw []byte) error
+	onOK       func()
+	onCancel   func(aborted bool)
+	cancelNote string // esc hint override; "" = "cancel (aborts the operation)"
+	done       bool
 }
 
 func (e *elevationModel) finished() bool { return e.done }

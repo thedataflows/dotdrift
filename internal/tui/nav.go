@@ -260,6 +260,10 @@ func (m *Compositor) toggleYank() {
 	} else {
 		m.nav.yanked[id] = true
 	}
+	// A yank change scopes the Status/Plan reads (0107): their data is
+	// stale from this moment.
+	m.markStale(viewStatus)
+	m.markStale(viewPlan)
 }
 
 // yankedIDs returns the yank set sorted (stable for ApplyOpts.Modules),

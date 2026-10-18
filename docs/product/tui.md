@@ -53,16 +53,17 @@ view stack wholesale). Its parts:
 - **The view row** (issue [0107](../issues/0107-tui-shell-views-profile.md)).
   Under the header: `Modules · Status · Plan · Profile`, the active view
   accented. `s` cycles, `1`–`4` jump — live in every view. The Modules
-  view is the two-pane base screen, unchanged. Off the Modules view only
-  the shared bindings live; the footer and `?` hint exactly those (the
-  footer keeps the primary verbs — the number jumps stay under `?` —
-  and truncates to the frame width; the full table is always under `?`).
-  A
+  view is the two-pane base screen, unchanged. Off the Modules view the
+  shared bindings live, and a view with a body owns the pane movement
+  keys through its hook (0108); the footer and `?` hint exactly the
+  live keys (the footer keeps the primary verbs — the number jumps stay
+  under `?` — and truncates to the frame width; the full table is
+  always under `?`). A
   write (save, manage, onboard, generate, restore) or a finished apply
   marks the read views stale: the title carries `(stale)` until a
   refresh lands. `r` re-reads the active view, `R` re-reads all views; a
-  landed read clears its view's mark. The Status and Plan bodies land in
-  later slices and show the not-loaded placeholder until then.
+  landed read clears its view's mark. The Plan body lands in a later
+  slice and shows the not-loaded placeholder until then.
 - **The Profile view** (0107). One read-only list, no cursor: the detect
   facts (host, user, os, kernel, distro, GPU, backend — an undetected
   fact renders nothing), the profile root, the state path, the resume
@@ -72,6 +73,28 @@ view stack wholesale). Its parts:
   command. The read is light — facts, the plan read, the state file, the
   accounts list; no probes — and async: the view shows its loading state
   on first entry and re-reads on `r`. Lines clamp to the pane width.
+- **The Status view** (issue [0108](../issues/0108-drift-unauthorized-status.md)).
+  Left: the findings list of `dotdrift status`, grouped by section in
+  the CLI's order with named counts (`packages: 1 drift, 1 unknown`).
+  Only drift, unknown, and unauthorized findings render as rows; an
+  all-OK section shows one `ok: all N checks passed` row; the summary
+  line is the CLI's (`drift: N items, M unknown, U unauthorized`, or
+  `no drift`). Right: the selected finding's detail (module, item,
+  state, detail), and for a copy-mode dotfile finding the live diff.
+  `j`/`k` and the paging keys move the cursor; `f` cycles the section
+  filter (all → each present section → all). The read runs as a
+  command, so the shell stays responsive while probes run; the pane
+  shows `probing…` until the read lands, and a second `r` during a
+  probe is a no-op. A failed re-run keeps the old list only with the
+  `(stale)` mark. When the scoped plan holds a system-scope dotfile,
+  mount, or smb entry, the elevation modal validates sudo before the
+  read starts — no prompt ever reaches the altscreen; a declined or
+  failed validation runs the read unelevated, and permission-denied
+  probes report `unauthorized`, never `unknown`. Loads stay tolerant: a
+  broken module surfaces in a `load problems:` block and the summary
+  never claims `no drift`. A non-empty yank set scopes the read and the
+  title names the scope (`Status [shell]`); changing the yank set marks
+  the view stale.
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
   64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
   and chrome behavior.
@@ -312,6 +335,9 @@ view stack wholesale). Its parts:
   place, the workspace pane's opens the palette (0081) — the footer
   hint resolves the verb from the table per focused pane.
   `r` re-reads the active view and `R` re-reads all views (0107).
+  `f` cycles the Status view's section filter (0108); a yank change
+  marks the Status and Plan views stale (their reads were scoped under
+  the old set).
   `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /

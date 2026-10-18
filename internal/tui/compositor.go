@@ -84,10 +84,12 @@ type Compositor struct {
 
 	// view is the active base view on the view row (0107); stale marks
 	// the views whose data a write or apply outlived (markStale);
-	// profile is the Profile view's read state (slice 1c).
+	// profile is the Profile view's read state (slice 1c), status the
+	// Status view's (0108 slice 2c).
 	view    viewKind
 	stale   [viewCount]bool
 	profile profileModel
+	status  statusModel
 
 	modals []modal
 
@@ -269,6 +271,12 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.stale[viewProfile] = false
 		return m, nil
+	case statusPlanMsg:
+		// 0108 slice 2c: the Status view's plan check landed — the
+		// elevation gate or the read follows.
+		return m, m.statusPlanChecked(msg)
+	case statusLoadedMsg:
+		return m, m.statusLoaded(msg)
 	case layerLoadedMsg:
 		if msg.dir != m.ws.activeDir() {
 			return m, nil // stale: the cursor moved on
@@ -363,6 +371,13 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cm.cancel() // the elevation prompt's esc aborts the gated op
 			}
 			m.modals = m.modals[:len(m.modals)-1]
+			// A cancel may schedule a follow-up like an answer does
+			// (0108: the declined status gate runs the read unelevated).
+			if m.afterPop != nil {
+				fn := m.afterPop
+				m.afterPop = nil
+				return m, fn()
+			}
 			return m, nil
 		}
 		// ? opens help even over a modal — except where ? is content:

@@ -1,0 +1,22 @@
+ dotdrift · $PROFILE
+ Modules · Status · Plan · Profile
+╭────────────────────────────╮╭────────────────────────────╮
+│ packages: 1 drift, 1 unknow││ module:  base              │
+│  apps: firefox - not instal││ item:    /etc/hosts        │
+│  shell: ripgrep - probe fai││ state:   unauthorized      │
+│ tools:                     ││ detail:  read failed: permi│
+│  ok: all 1 checks passed   ││                            │
+│ dotfiles: 1 unauthorized   ││[base] /etc/hosts           │
+││ base: /etc/hosts - read fa││--- /etc/hosts              │
+│                            ││+++ $PROFILE/│
+│ drift: 1 item, 1 unknown, 1││@@ -1,2 +1,3 @@             │
+│                            ││ 127.0.0.1 localhost        │
+│                            ││+127.0.1.1 myhost           │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+╰────────────────────────────╯╰────────────────────────────╯
+
+ s next view • r refresh view • R refresh all views • p plan …

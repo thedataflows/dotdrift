@@ -72,6 +72,7 @@ func keyTable() []keyTableEntry {
 		{"4", "both", "profile view", func(m *Compositor) tea.Cmd { return m.switchView(viewProfile) }},
 		{"r", "both", "refresh view", func(m *Compositor) tea.Cmd { return m.refreshView() }},
 		{"R", "both", "refresh all views", func(m *Compositor) tea.Cmd { return m.refreshAllViews() }},
+		{"f", "both", "filter section (Status view)", func(m *Compositor) tea.Cmd { return m.cycleStatusFilter() }},
 		// workspace pane
 		{"j", "work", "scroll down", func(m *Compositor) tea.Cmd { m.ws.move(1); return nil }},
 		{"k", "work", "scroll up", func(m *Compositor) tea.Cmd { m.ws.move(-1); return nil }},
@@ -184,14 +185,18 @@ func (m *Compositor) openHelp() {
 // otherwise the focused pane's table rows.
 func (m *Compositor) helpRows() []helpRow {
 	if len(m.modals) > 0 {
-		switch m.modals[len(m.modals)-1].(type) {
+		switch top := m.modals[len(m.modals)-1].(type) {
 		case *paletteModel:
 			return []helpRow{
 				{"type", "filter"}, {"enter", "choose"}, {"up/down", "move"},
 				{"ctrl+n", "create module (no matches)"}, {"esc", "close"},
 			}
 		case *elevationModel:
-			return []helpRow{{"type", "password"}, {"enter", "submit"}, {"esc", "cancel (aborts the operation)"}}
+			escNote := "cancel (aborts the operation)"
+			if top.cancelNote != "" {
+				escNote = top.cancelNote
+			}
+			return []helpRow{{"type", "password"}, {"enter", "submit"}, {"esc", escNote}}
 		case *confirmModel:
 			return []helpRow{{"y", "confirm"}, {"any other key", "cancel"}, {"esc", "cancel"}}
 		case *choiceModel:
@@ -214,9 +219,13 @@ func (m *Compositor) helpRows() []helpRow {
 		return []helpRow{{"type", "edit the field"}, {"enter", "commit"}, {"esc", "cancel"}, {"?", "this help"}}
 	}
 	if m.view != viewModules {
-		// Off the Modules view only the "both" bindings run (0107):
-		// the help cannot promise dead pane keys.
+		// Off the Modules view the "both" bindings run (0107); the
+		// Status view also owns the pane movement keys through its hook
+		// (0108) — the help names exactly the live keys.
 		var rows []helpRow
+		if m.view == viewStatus {
+			rows = append(rows, helpRow{"j/k", "move findings"})
+		}
 		for _, b := range keyTable() {
 			if b.pane == "both" {
 				rows = append(rows, helpRow{b.key, b.help})

@@ -23,11 +23,21 @@ import (
 )
 
 // stubReads is a canned Reads seam: Modules returns an empty read,
-// Profile returns the pinned model and counts its calls.
+// Profile returns the pinned model and counts its calls. The slice 2c
+// fields (plan/status/diffs) serve the Status view tests; the methods
+// live in statusview_test.go.
 type stubReads struct {
 	profile      *service.ProfileRead
 	profileErr   error
 	profileCalls int
+	plan         *service.PlanRead
+	planErr      error
+	status       *service.StatusRead
+	statusErr    error
+	statusCalls  int
+	lastOpts     service.StatusOpts
+	diffs        []service.DiffEntry
+	diffErr      error
 }
 
 func (s *stubReads) Modules(string, []string) (*service.ModulesRead, error) {

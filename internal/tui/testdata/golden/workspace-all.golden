@@ -7,22 +7,22 @@
 │                          │││ id demo                                                         │
 │                          ││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
+│                          ││                                                                  │
 │                          ││  packages ＋                                                     │
 │                          ││  + neovim ✎                                                      │
 │                          ││  + ripgrep ✎                                                     │
 │                          ││  − emacs ✎                                                       │
+│                          ││                                                                  │
 │                          ││  links ＋                                                        │
 │                          ││  ~/.bashrc ← .bashrc (symlink) ✎                                 │
+│                          ││                                                                  │
 │                          ││  writes ＋                                                       │
 │                          ││  ~/.config/demo.toml (edit: line) ✎                              │
 │                          ││  ~/.profile (edit: block) ✎                                      │
+│                          ││                                                                  │
 │                          ││  when ＋                                                         │
 │                          ││  hosts myhost ✎                                                  │
 │                          ││  os linux ✎                                                      │
-│                          ││  hooks ＋                                                        │
-│                          ││  pre: echo pre ✎                                                 │
-│                          ││  post: echo post ✎                                               │
-│                          ││  systemd.units ＋                                                │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / filter modules • ? help • q quit

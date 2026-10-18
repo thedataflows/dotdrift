@@ -133,6 +133,28 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 		"the section text stays in its column under the cursor")
 }
 
+// 0117: sections are separated by one blank row, so empty sections do
+// not merge into a single background block. The separator is a hint
+// row: the cursor never lands on it.
+func TestWorkspace_sectionsSeparated(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
+	require.NotEmpty(t, c.ws.rows)
+	require.False(t, c.ws.rows[0].hint, "no separator before the first section")
+	for i, r := range c.ws.rows {
+		if r.header && i > 0 {
+			prev := c.ws.rows[i-1]
+			require.True(t, prev.hint && prev.text == "",
+				"a blank row separates the %s section", r.section)
+		}
+	}
+	// Walk the whole surface: the cursor never rests on a separator.
+	c.ws.cursor = c.ws.firstEntry(0)
+	for range c.ws.rows {
+		require.False(t, c.ws.rows[c.ws.cursor].hint, "the cursor skips separators")
+		c.ws.move(1)
+	}
+}
+
 func TestWorkspace_emptyStatesDesigned(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	requireGolden(t, "workspace-empty.golden", c.View().Content, subs)
@@ -327,11 +349,11 @@ func TestWorkspace_pageKeysFollowTheCursor(t *testing.T) {
 	c = wsPress(t, c, "pgdown")
 	steps := 0
 	for i := start; i < c.ws.cursor; i++ {
-		if !c.ws.rows[i].header {
+		if c.ws.selectableRow(i) {
 			steps++
 		}
 	}
-	require.Equal(t, page, steps, "pgdown steps a page of entry rows")
+	require.Equal(t, page, steps, "pgdown steps a page of selectable rows (separators skipped)")
 	require.Contains(t, c.View().Content, c.ws.rows[c.ws.cursor].text, "the window keeps the paged row visible")
 	c = wsPress(t, c, "pgup")
 	require.Equal(t, start, c.ws.cursor, "pgup steps back")

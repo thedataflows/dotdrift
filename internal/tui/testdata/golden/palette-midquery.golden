@@ -7,22 +7,22 @@
 │  ▸ other · invalid module│││ id demo                                                         │
 │  ▸ plain · invalid module││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
-│                          ││  packages ＋                                                     │
-│                          ││  +╭──────────────────────────────────╮                           │
+│                          ││                                                                  │
+│                          ││  p╭──────────────────────────────────╮                           │
 │                          ││  +│                                  │                           │
-│                          ││  l│  │/ dem▏                         │                           │
+│                          ││  +│  │/ dem▏                         │                           │
+│                          ││   │                                  │                           │
+│                          ││  l│  │ ◆ demo  module                │                           │
+│                          ││   │    ◆ demo · user cri  module     │                           │
+│                          ││  w│    ◆ demo · host myhost  module  │                           │
+│                          ││   │    ▶ onboard into demo  action   │                           │
 │                          ││  w│                                  │                           │
-│                          ││  w│  │ ◆ demo  module                │                           │
-│                          ││  h│    ◆ demo · user cri  module     │                           │
-│                          ││  s│    ◆ demo · host myhost  module  │                           │
-│                          ││  t│    ▶ onboard into demo  action   │                           │
-│                          ││  n│                                  │                           │
-│                          ││  s╰──────────────────────────────────╯                           │
-│                          ││  mounts ＋                                                       │
-│                          ││  smb ＋                                                          │
+│                          ││   ╰──────────────────────────────────╯                           │
+│                          ││  hooks ＋                                                        │
 │                          ││                                                                  │
+│                          ││  systemd.units ＋                                                │
 │                          ││                                                                  │
-│                          ││                                                                  │
+│                          ││  tools ＋                                                        │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

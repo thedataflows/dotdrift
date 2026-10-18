@@ -7,22 +7,22 @@
 ││     base ●              │││ id demo                                                         │
 │      user cri            ││  description the demo module-next ●                              │
 │  ▸ other                 ││  scope user ◂▸                                                   │
+│                          ││                                                                  │
 │                          ││  packages ＋                                                     │
 │                          ││  + neovim ✎                                                      │
 │                          ││  + ripgrep ✎                                                     │
+│                          ││                                                                  │
 │                          ││  links ＋                                                        │
+│                          ││                                                                  │
 │                          ││  writes ＋                                                       │
+│                          ││                                                                  │
 │                          ││  when ＋                                                         │
+│                          ││                                                                  │
 │                          ││  hooks ＋                                                        │
+│                          ││                                                                  │
 │                          ││  systemd.units ＋                                                │
+│                          ││                                                                  │
 │                          ││  tools ＋                                                        │
-│                          ││  node = 20 ✎                                                     │
-│                          ││  secrets ＋                                                      │
-│                          ││  mounts ＋                                                       │
-│                          ││  smb ＋                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • ctrl+z undo …

@@ -7,7 +7,7 @@
 │                          ││  id demo                                                         │
 │                          │││ description the demo module-next ●                              │
 │                          ││  scope user ◂▸                                                   │
-│                          ││  packages ＋                                                     │
+│                          ││                                                                  │
 │                      ╭────────────────────────────────────────────────────╮                  │
 │                      │                                                    │                  │
 │                      │  quit with unsaved drafts?                         │                  │
@@ -18,11 +18,11 @@
 │                      │  y confirm · n/esc cancel                          │                  │
 │                      │                                                    │                  │
 │                      ╰────────────────────────────────────────────────────╯                  │
-│                          ││  mounts ＋                                                       │
-│                          ││  smb ＋                                                          │
+│                          ││  hooks ＋                                                        │
 │                          ││                                                                  │
+│                          ││  systemd.units ＋                                                │
 │                          ││                                                                  │
-│                          ││                                                                  │
+│                          ││  tools ＋                                                        │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • ctrl+z undo …

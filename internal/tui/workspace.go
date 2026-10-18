@@ -401,6 +401,12 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	// header is its entry-level scope (`a` adds an entry there — the
 	// containers add fields INTO their entries).
 	section := func(name string, entries []wsRow) {
+		// One blank row between sections (0117): adjacent filled bars
+		// would merge into one block. A hint row is never selectable,
+		// so movement skips the gap.
+		if len(rows) > 0 {
+			rows = append(rows, wsRow{section: name, hint: true})
+		}
 		rows = append(rows, wsRow{section: name, text: name, header: true,
 			selectable: len(entries) == 0 || isStructuralFamily(addFamily(name))})
 		rows = append(rows, entries...)

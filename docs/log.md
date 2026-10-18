@@ -3,6 +3,8 @@
 
 ## 2026-10-18
 
+* **Fixed (tui, section header rule removed — issue [0127](issues/0127-remove-section-header-rule.md))**: the 0126 hairline under a filled header read as the end of the section above it, cutting the header off from its own items — a border line means end of something. The rule and the `sectionRule` role are removed (0126 reverted in full); the filled bar sits directly on its items, one row, cursor or not. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0, goldens regenerated. Docs: issue + index, this entry.
+
 * **Feat (tui, thin dark border on section headers — issue [0126](issues/0126-section-header-dark-border.md))**: a filled section header now carries a thin dark border: a dark `─` hairline rule across the pane under the bar (the tab bar's bottom-rule device). A full box border would add two rows per header; the hairline reads as a border at one thin stroke. The rule is present under the cursor too, so rows below never shift when the cursor lands on a header; unfilled headings stay plain. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0, goldens regenerated. Docs: issue + index, this entry.
 
 * **Fixed (tui, filled section header is one row again — issue [0125](issues/0125-remove-section-edge-row.md))**: the 0121 eighth-block edge row stacked on top of the filled bar, making a two-row header block with the label at the bottom. Since 0123 empty sections render unfilled, filled bars never touch and the bar itself is the separation, so the edge row and the `barEdge` theme role are deleted; separator rows render nothing (the model rows stay). Gates: `go test ./...` all packages ok, `go vet ./...` exit 0, goldens regenerated. Docs: issue + index, this entry.

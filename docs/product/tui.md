@@ -57,8 +57,11 @@ view stack wholesale). Its parts:
   [0113](../issues/0113-tui-visual-system.md)). Under the header:
   `Modules`, `Status`, `Plan`, `Profile` as padded tab blocks — the
   active tab is a filled indigo block, the inactive tabs flat faint
-  text, in the gh-dash treatment. `<` and `>` cycle to the previous and
-  next view, `1`–`4` jump — live in every view; `s` is not a view key.
+  text, in the gh-dash treatment. The left and right arrow keys cycle
+  to the previous and next view, `1`–`4` jump — live in every view; no
+  view key needs Shift. The arrows own view switching, so the nav's
+  collapse/expand and the workspace's value cycling live on `h`/`l`
+  alone (dialogs, the picker, and editors keep their own arrows).
   The Modules view is the two-pane base screen. Off the Modules view the
   shared bindings live, and a view with a body owns the pane movement
   keys through its hook (0108); the footer and `?` hint exactly the

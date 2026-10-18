@@ -31,7 +31,7 @@ const (
 const viewCount = 4
 
 // viewNames are the row titles in row order.
-var viewNames = [viewCount]string{"Modules", "Status", "Plan", "Profile"}
+var viewNames = [viewCount]string{"1. Modules", "2. Status", "3. Plan", "4. Profile"}
 
 // markStale marks a view's data as out of date: the row shows the stale
 // dot badge on its tab. A refresh clears the mark when the fresh read

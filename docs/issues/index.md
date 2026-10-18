@@ -129,3 +129,5 @@ use, plus emergent features and chores. Planned work lives in
 | [0139](0139-status-unmanaged-confd.md) | Status lists unmanaged files in mise conf.d | done | medium |
 | [0140](0140-plan-detail-duplicated-header.md) | Plan detail pane repeats the section header | done | low |
 | [0141](0141-modules-panes-leading-space.md) | Modules panes carry one leading space too many | done | low |
+| [0142](0142-dialog-rows-leading-space.md) | Dialog form rows carry the same leading space | open | low |
+| [0143](0143-numbered-view-tabs.md) | Number the view tabs | open | low |

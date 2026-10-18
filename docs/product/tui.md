@@ -55,10 +55,12 @@ view stack wholesale). Its parts:
   the border color; exactly one pane is focused.
 - **The tab bar** (issues [0107](../issues/0107-tui-shell-views-profile.md),
   [0113](../issues/0113-tui-visual-system.md)). Under the header:
-  `Modules`, `Status`, `Plan`, `Profile` as padded tab blocks — the
-  active tab is a filled indigo block, the inactive tabs flat faint
-  text, in the gh-dash treatment. `tab` cycles to the next view and
-  `shift+tab` to the previous view, `1`–`4` jump — live in every view.
+  `1. Modules`, `2. Status`, `3. Plan`, `4. Profile` as padded tab
+  blocks — each tab names the number key that jumps to it (issue
+  0143); the active tab is a filled indigo block, the inactive tabs
+  flat faint text, in the gh-dash treatment. `tab` cycles to the
+  next view and `shift+tab` to the previous view, `1`–`4` jump —
+  live in every view.
   The nav's expansion toggle lives on `enter` (with `h`/`l` as
   collapse/expand) and the workspace's value cycling lives on `h`/`l`
   alone (dialogs, the picker, and editors keep their own arrows).

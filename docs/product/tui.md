@@ -231,7 +231,14 @@ view stack wholesale). Its parts:
   color (0102) — and bracketed paste
   lands at the caret with control runes stripped (0091); the same paste
   reaches every text input in the shell (dialog fields, the add form,
-  the nav filter, the palette, the elevation password). Fields whose value set is closed
+  the nav filter, the palette, the elevation password). Every text
+  input is the one `textInput` component (0135): shared caret keys
+  (left/right/home/end/backspace/delete), a window that follows the
+  caret with faded `...` marks where text continues (0131–0133), and
+  the block caret — in the inline editor, the dialog fields, the
+  multi-line editor behind `edit hook`/block, and the nav, palette,
+  and picker queries alike. The elevation password is the one
+  exception (a byte buffer zeroed on submit, no caret). Fields whose value set is closed
   open a choice picker instead (issue [0076](../issues/0076-tui-choice-editors-and-location.md)):
   `scope` (user/system), mount `state` (enabled/disabled), the boolean
   fields (`false`/`true`), smb `avahi` (`true`/`false`/`unset`), and

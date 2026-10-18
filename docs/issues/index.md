@@ -109,3 +109,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0119](0119-section-headings-hairlines.md) | Section headings as text, hairline spacing, indented items | done | medium |
 | [0120](0120-heading-ansi-leak.md) | Section heading leaks ANSI text | done | high |
 | [0121](0121-filled-headers-eighth-gap.md) | Filled section headers with an eighth-row gap | done | medium |
+| [0122](0122-footer-key-chips.md) | Footer keys as deliberate chips | done | medium |

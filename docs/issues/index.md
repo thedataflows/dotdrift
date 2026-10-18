@@ -103,3 +103,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0113](0113-tui-visual-system.md) | TUI visual system from gh-dash — filled tabs and rows, cards, pills, footer bar, < > view keys | done | high |
 | [0114](0114-tui-visual-fixes-screenshot.md) | TUI visual fixes from the first screenshot — filled bars, calm cursor, tab rule | done | medium |
 | [0115](0115-arrow-key-view-navigation.md) | Arrow keys switch views; h/l keep the pane horizontal jobs | done | medium |
+| [0116](0116-section-bar-alignment.md) | Section bars align with the cursor row and fill the pane | done | medium |

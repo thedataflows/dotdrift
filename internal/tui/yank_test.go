@@ -75,6 +75,7 @@ func TestYank_applyScopesToYanked(t *testing.T) {
 	c = wsPress(t, c, "j") // other (a nav move schedules the layer read)
 	c = cpress(c, "y")     // other
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.NotNil(t, c.apply, "P started the run")
 	require.Len(t, fl.startedOpts, 1)
 	require.Equal(t, []string{"demo", "other"}, fl.startedOpts[0].Modules,

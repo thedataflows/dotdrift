@@ -23,6 +23,17 @@ type fakeLauncher struct {
 
 func (f *fakeLauncher) Preview(opts service.ApplyOpts) ([]service.StepPreview, error) {
 	f.previewOpts = append(f.previewOpts, opts)
+	if len(opts.Sections) > 0 {
+		// The section gate shrinks the step list (0110): canned steps
+		// named after a deselected section drop out.
+		var kept []service.StepPreview
+		for _, p := range f.previews {
+			if opts.Sections[p.Name] {
+				kept = append(kept, p)
+			}
+		}
+		return kept, f.previewErr
+	}
 	return f.previews, f.previewErr
 }
 

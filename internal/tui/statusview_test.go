@@ -409,7 +409,8 @@ func TestStatusView_applyScopesAllOwners(t *testing.T) {
 	c.pumpNoBlock = true
 	c = loadStatusView(t, c)
 
-	c = wsPress(t, c, "P") // settles preview → gates → run
+	c = wsPress(t, c, "P") // opens the options gate
+	c = applyGateY(t, c)   // confirm: settles preview → gates → run
 	require.Equal(t, []string{"editors", "shell"}, c.applyModules,
 		"P snapshots the finding's owners at the press")
 	require.Len(t, fl.startedOpts, 1)
@@ -429,6 +430,7 @@ func TestStatusView_applyScopesAllOwners(t *testing.T) {
 	c.pumpNoBlock = true
 	c = loadStatusView(t, c)
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.Equal(t, []string{"other"}, fl.startedOpts[0].Modules,
 		"with no finding under the cursor the yank snapshot stands")
 }

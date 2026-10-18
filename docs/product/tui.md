@@ -317,7 +317,8 @@ view stack wholesale). Its parts:
   — an empty overlay overrides nothing, and delete module undoes it, so
   there is no dialog and no confirm — then the reload lands the
   workspace on the new file, tab and cursor on it. `P` runs
-  apply: preview → destructive confirm when steps will overwrite
+  apply: the options gate (force, backup, section toggles — 0110) →
+  preview → destructive confirm when steps will overwrite
   existing files (the new `OverwriteTargets` classification on copy-mode
   dotfile steps) → the elevation modal when the plan carries privileged
   steps — one prompt listing every reason, three failures abort, `esc`
@@ -430,16 +431,21 @@ view stack wholesale). Its parts:
 Apply runs **inside** the shell, over the service apply session
 ([service API](service-api.md)):
 
-- **Entry**: `P` anywhere on the base. The apply area's read-only
-  `Preview()` classifies the would-be session first; `p` shows the same
-  classification as the read-only plan modal.
-- **Gates, in order**: a destructive confirm when steps will overwrite
-  existing files (copy-mode dotfile destinations on disk, named —
-  backups are taken per issue 0025), then one elevation modal when the
-  plan carries privileged steps (every reason listed; the password is a
-  zeroed `[]byte` checked through `sudo -k -S -v`; three failures abort;
-  `esc` aborts before anything is touched). Declining any gate writes
-  nothing.
+- **Entry**: `P` anywhere on the base opens the options gate (issue
+  0110): force (off), backup (off), and one toggle row per plan section
+  (all on) — `space` toggles, `y`/`enter` snapshots the choices into
+  `ApplyOpts{Force, Backup, Sections}`, `esc` runs nothing. The choices
+  reset on every `P`. The apply area's read-only `Preview()` then
+  classifies the would-be session under that snapshot; `p` shows the
+  same classification (defaults) as the read-only plan modal.
+- **Gates, in order**: the options gate, then a destructive confirm when
+  steps will overwrite existing files (copy-mode dotfile destinations on
+  disk, named — backups are taken per issue 0025), then one elevation
+  modal when the plan carries privileged steps (every reason listed; the
+  password is a zeroed `[]byte` checked through `sudo -k -S -v`; three
+  failures abort; `esc` aborts before anything is touched). Declining
+  any gate writes nothing. With backup on, the run's backup events
+  render in the apply detail inspector.
 - While the run lives, the header's `▶ apply` badge and the footer carry
   status; `a` opens the apply detail inspector (step rows, output tail
   with `j`/`k`, verdict). Closing it never cancels; `ctrl+c` inside asks

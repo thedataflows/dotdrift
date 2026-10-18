@@ -199,6 +199,8 @@ func (m *Compositor) helpRows() []helpRow {
 			return []helpRow{{"type", "password"}, {"enter", "submit"}, {"esc", escNote}}
 		case *confirmModel:
 			return []helpRow{{"y", "confirm"}, {"any other key", "cancel"}, {"esc", "cancel"}}
+		case *applyGateModel:
+			return []helpRow{{"up/down", "move"}, {"space", "toggle"}, {"y/enter", "run"}, {"esc", "cancel"}}
 		case *choiceModel:
 			return []helpRow{{"up/down", "pick"}, {"enter", "choose"}, {"esc", "cancel"}}
 		case *filePicker:

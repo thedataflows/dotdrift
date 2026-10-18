@@ -81,6 +81,7 @@ func TestElevation_onePromptCoversAllPrivilegedOps(t *testing.T) {
 	l.run = closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted})
 
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.Len(t, c.modals, 1, "one elevation modal for the whole plan")
 	el, ok := c.modals[0].(*elevationModel)
 	require.True(t, ok, "the modal is the elevation prompt")
@@ -96,6 +97,7 @@ func TestElevation_states(t *testing.T) {
 	// The checker is captured at push time; the failure is wired before P.
 	c.sudoCheck = func([]byte) error { return errors.New("nope") }
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	requireGolden(t, "elevation-initial.golden", c.View().Content, subs)
 
 	c = typeText(c, "sekrit")
@@ -109,6 +111,7 @@ func TestElevation_cancelAbortsBeforeTouching(t *testing.T) {
 	l := &fakeLauncher{previews: []service.StepPreview{sudoPreview}}
 	_, c := applyShell(t, l)
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.Len(t, c.modals, 1)
 
 	c = cpress(c, "esc")
@@ -122,6 +125,7 @@ func TestElevation_threeFailuresAbort(t *testing.T) {
 	_, c := applyShell(t, l)
 	c.sudoCheck = func([]byte) error { return errors.New("nope") }
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 
 	for i := 0; i < 3; i++ {
 		c = typeText(c, "x")
@@ -140,6 +144,7 @@ func TestElevation_passwordNeverLoggedNorDrafted(t *testing.T) {
 	var got []byte
 	c.sudoCheck = func(pw []byte) error { got = append(got, pw...); return nil }
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	el := c.modals[0].(*elevationModel)
 
 	c = typeText(c, "hunter2")
@@ -255,8 +260,9 @@ func TestApply_destructiveConfirmBeforeElevation(t *testing.T) {
 	l.run = closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted})
 
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.Len(t, c.modals, 1)
-	require.IsType(t, &confirmModel{}, c.modals[0], "the destructive confirm comes first")
+	require.IsType(t, &confirmModel{}, c.modals[0], "the destructive confirm follows the options gate")
 	require.Contains(t, c.View().Content, "2 existing")
 	require.Equal(t, 0, l.started)
 
@@ -267,6 +273,99 @@ func TestApply_destructiveConfirmBeforeElevation(t *testing.T) {
 	c = typeText(c, "pw")
 	applySettle(t, c, cpressCmd(c, "enter"))
 	require.Equal(t, 1, l.started, "both gates passed, the run starts")
+}
+
+// applyGateY confirms the options gate with its defaults (y) after P and
+// settles the preview chain the confirm starts.
+func applyGateY(t *testing.T, c *Compositor) *Compositor {
+	t.Helper()
+	require.IsType(t, &applyGateModel{}, c.modals[len(c.modals)-1], "P opened the options gate")
+	return applySettle(t, c, cpressCmd(c, "y"))
+}
+
+func TestApplyGate_optionsBeforePreview(t *testing.T) {
+	l := &fakeLauncher{previews: []service.StepPreview{
+		{Name: "packages"}, {Name: "tools"}, {Name: "dotfiles"},
+	}}
+	l.run = closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted})
+	l.run.(*testRun).previews = l.previews
+	_, c := applyShell(t, l)
+
+	c = wsPress(t, c, "P")
+	require.Len(t, c.modals, 1)
+	require.IsType(t, &applyGateModel{}, c.modals[0], "the options gate opens before anything runs")
+	require.Empty(t, l.previewOpts, "no preview runs before the gate answers")
+
+	// force on (row 0); dotfiles only — every other section off.
+	c = cpress(c, "space")
+	for _, row := range []int{2, 3, 5, 6, 7, 8} { // packages, tools, systemd, mounts, smb, hooks
+		for c.modals[0].(*applyGateModel).cur < row {
+			c = cpress(c, "j")
+		}
+		c = cpress(c, "space")
+	}
+	c = applySettle(t, c, cpressCmd(c, "y"))
+
+	require.Len(t, l.previewOpts, 1, "exactly one preview runs, with the snapshot")
+	require.True(t, l.previewOpts[0].Force, "force rides into the preview")
+	require.False(t, l.previewOpts[0].Backup, "backup stays off")
+	require.Equal(t, map[string]bool{"dotfiles": true},
+		map[string]bool(l.previewOpts[0].Sections), "the section rows snapshot into Sections")
+	require.Len(t, c.applyPreviews, 1, "the step list shrinks to the selected sections")
+	require.Equal(t, "dotfiles", c.applyPreviews[0].Name)
+	require.Len(t, l.startedOpts, 1)
+	require.True(t, l.startedOpts[0].Force, "the same snapshot rides into Start")
+}
+
+func TestApplyGate_declineRunsNothing(t *testing.T) {
+	l := &fakeLauncher{previews: []service.StepPreview{{Name: "packages"}}}
+	_, c := applyShell(t, l)
+
+	c = wsPress(t, c, "P")
+	require.Len(t, c.modals, 1)
+	c = cpress(c, "esc")
+	require.Empty(t, c.modals, "esc pops the gate")
+	require.Empty(t, l.previewOpts, "decline runs no preview")
+	require.Equal(t, 0, l.started, "decline runs nothing")
+	require.Contains(t, c.message, "cancelled", "the footer reports the decline")
+}
+
+func TestApplyGate_resetsEachPress(t *testing.T) {
+	_, c := applyShell(t, &fakeLauncher{})
+
+	c = wsPress(t, c, "P")
+	c = cpress(c, "space") // force on
+	require.True(t, c.modals[0].(*applyGateModel).rows[0].on)
+	c = cpress(c, "esc")
+
+	c = wsPress(t, c, "P")
+	gate := c.modals[0].(*applyGateModel)
+	require.False(t, gate.rows[0].on, "force resets to off on the next P")
+	require.False(t, gate.rows[1].on, "backup resets to off on the next P")
+	for _, r := range gate.rows[2:] {
+		require.True(t, r.on, "section %q resets to on", r.name)
+	}
+	c = cpress(c, "esc")
+}
+
+func TestApplyGate_backupEventRenders(t *testing.T) {
+	previews := []service.StepPreview{{Name: "dotfiles"}}
+	run := closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted},
+		service.BackupTaken{Dir: "/x/modules/demo/backups/20261018-120000", Count: 2})
+	run.previews = previews
+	l := &fakeLauncher{previews: previews, run: run}
+	_, c := applyShell(t, l)
+
+	c = wsPress(t, c, "P")
+	c = cpress(c, "j")     // the backup row
+	c = cpress(c, "space") // backup on
+	c = applySettle(t, c, cpressCmd(c, "y"))
+
+	require.Len(t, l.startedOpts, 1)
+	require.True(t, l.startedOpts[0].Backup, "backup on rides into Start")
+	c = cpress(c, "a")
+	require.Contains(t, c.View().Content, "backup:",
+		"with backup on the BackupTaken event renders in the detail")
 }
 
 // applyShellRun builds a compositor whose launcher starts the canned run.
@@ -284,7 +383,8 @@ func TestApplyDetail_streaming(t *testing.T) {
 	run.events <- service.StepOutput{Name: "packages", Chunk: []byte("installing ripgrep\n")}
 	subs, _, c := applyShellRun(t, []service.StepPreview{{Name: "packages"}, {Name: "dotfiles"}}, run)
 
-	c = wsPress(t, c, "P") // no privileged steps: the run starts directly
+	c = wsPress(t, c, "P") // past the gate, no privileged steps: the run starts directly
+	c = applyGateY(t, c)
 	require.True(t, c.applying, "the badge is live while the run lives")
 
 	c = cpress(c, "a")
@@ -305,6 +405,7 @@ func TestApplyDetail_failed(t *testing.T) {
 	subs, _, c := applyShellRun(t, []service.StepPreview{{Name: "packages"}, {Name: "dotfiles"}}, run)
 
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.False(t, c.applying, "a failed run is done")
 	c = cpress(c, "a")
 	requireGolden(t, "apply-detail-failed.golden", c.View().Content, subs)
@@ -316,6 +417,7 @@ func TestApplyDetail_closeNeverCancels_ctrlCInsideConfirms(t *testing.T) {
 	_, _, c := applyShellRun(t, []service.StepPreview{{Name: "packages"}}, run)
 
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.True(t, c.applying)
 
 	c = cpress(c, "a")

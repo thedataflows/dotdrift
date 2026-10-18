@@ -143,6 +143,110 @@ func overwriteTargets(previews []service.StepPreview) []string {
 
 // --- apply driver ---
 
+// applyGateRow is one toggle row of the options gate: "force", "backup",
+// or a plan section of the service vocabulary.
+type applyGateRow struct {
+	name string
+	on   bool
+}
+
+// applyGateModel is the options pre-gate on every P (0110): force and
+// backup off, one row per section of service.SectionNames (all on).
+// space toggles the cursor row, y/enter snapshots the choices into the
+// ApplyOpts the preview and the run share, esc runs nothing. The modal
+// is built per press — the choices reset.
+type applyGateModel struct {
+	th        theme
+	rows      []applyGateRow
+	cur       int
+	onConfirm func(force, backup bool, sections map[string]bool)
+	onCancel  func()
+	done      bool
+}
+
+func newApplyGateModel(th theme) *applyGateModel {
+	g := &applyGateModel{th: th, rows: []applyGateRow{{name: "force"}, {name: "backup"}}}
+	for _, s := range service.SectionNames {
+		g.rows = append(g.rows, applyGateRow{name: s, on: true})
+	}
+	return g
+}
+
+func (g *applyGateModel) finished() bool { return g.done }
+
+// cancel is the compositor's esc-pop hook: declining runs nothing.
+func (g *applyGateModel) cancel() {
+	if g.onCancel != nil {
+		g.onCancel()
+	}
+}
+
+// snapshot turns the rows into the gate's answer: force, backup, and the
+// enabled sections — nil when every section is on (ApplyOpts' "nil =
+// all" rule, so a default confirm is today's behavior).
+func (g *applyGateModel) snapshot() (force, backup bool, sections map[string]bool) {
+	force, backup = g.rows[0].on, g.rows[1].on
+	all := true
+	for _, r := range g.rows[2:] {
+		if !r.on {
+			all = false
+		}
+	}
+	if all {
+		return force, backup, nil
+	}
+	sections = map[string]bool{}
+	for _, r := range g.rows[2:] {
+		if r.on {
+			sections[r.name] = true
+		}
+	}
+	return force, backup, sections
+}
+
+func (g *applyGateModel) update(msg tea.Msg) tea.Cmd {
+	k, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+	switch k.String() {
+	case "up", "k":
+		if g.cur > 0 {
+			g.cur--
+		}
+	case "down", "j":
+		if g.cur < len(g.rows)-1 {
+			g.cur++
+		}
+	case "space":
+		g.rows[g.cur].on = !g.rows[g.cur].on
+	case "y", "enter":
+		g.done = true
+		if g.onConfirm != nil {
+			g.onConfirm(g.snapshot())
+		}
+	}
+	return nil
+}
+
+func (g *applyGateModel) view(w, h int) string {
+	var b strings.Builder
+	b.WriteString(g.th.modalTitle.Render("apply options") + "\n\n")
+	for i, r := range g.rows {
+		mark := "[ ]"
+		if r.on {
+			mark = "[x]"
+		}
+		line := "  " + mark + " " + r.name + "\n"
+		if i == g.cur {
+			line = g.th.cursorRow.Render(" "+mark+" "+r.name) + "\n"
+		}
+		b.WriteString(line)
+	}
+	b.WriteString("\n" + g.th.meta.Render("  up/down move · space toggle · y/enter run · esc cancel"))
+	return g.th.modalBorder.Padding(1, 2).Render(b.String())
+}
+
 // applyRunState is the compositor's ambient apply state: the run, its
 // step rows, the output ring, and the terminal verdict.
 type applyRunState struct {
@@ -157,11 +261,12 @@ type applyRunState struct {
 // applyDrainedMsg signals the event stream's close (Wait's turn).
 type applyDrainedMsg struct{}
 
-// startApply previews the would-be session (P). The gates — destructive
-// confirm, then elevation — hang off the preview's landing. A non-empty
+// startApply opens the options gate (P) — the first gate of the chain:
+// options → preview → destructive confirm → elevation → run. A non-empty
 // yank set snapshots here and rides the chain into Start (0093); on the
 // Status view a selected finding's owners beat the yank set (0108 slice
-// 2d) — same snapshot field, same one apply path.
+// 2d) — same snapshot field, same one apply path. The gate is built
+// fresh, so its choices reset each press (0110).
 func (m *Compositor) startApply() tea.Cmd {
 	if m.applying || m.applyFor == nil {
 		return nil
@@ -170,9 +275,29 @@ func (m *Compositor) startApply() tea.Cmd {
 	if owners := m.statusApplyOwners(); len(owners) > 0 {
 		m.applyModules = owners
 	}
+	m.applyOpts = service.ApplyOpts{}
+	gate := newApplyGateModel(m.th)
+	gate.onConfirm = func(force, backup bool, sections map[string]bool) {
+		m.applyOpts.Force, m.applyOpts.Backup, m.applyOpts.Sections = force, backup, sections
+		m.afterPop = m.previewApply
+	}
+	gate.onCancel = func() {
+		m.message, m.msgErr = "apply cancelled", false
+	}
+	m.modals = append(m.modals, gate)
+	return nil
+}
+
+// previewApply runs the would-be session's one preview with the gate's
+// snapshot (0110). The destructive and elevation gates hang off the
+// preview's landing.
+func (m *Compositor) previewApply() tea.Cmd {
 	l := m.applyFor(m.facts)
+	opts := m.applyOpts
 	return func() tea.Msg {
-		previews, err := l.Preview(service.ApplyOpts{ProfilePath: m.root, Modules: m.applyModules})
+		opts.ProfilePath = m.root
+		opts.Modules = m.applyModules
+		previews, err := l.Preview(opts)
 		return applyPreviewMsg{previews: previews, err: err}
 	}
 }
@@ -241,6 +366,9 @@ func (m *Compositor) startApplyRun() tea.Cmd {
 		ProfilePath: m.root,
 		Yes:         true,
 		Modules:     m.applyModules, // the P-press yank snapshot (0093); nil = all
+		Force:       m.applyOpts.Force,
+		Backup:      m.applyOpts.Backup,
+		Sections:    m.applyOpts.Sections, // the options gate's snapshot (0110); nil = all
 	}
 	if m.send != nil {
 		opts.Handover = m.handover

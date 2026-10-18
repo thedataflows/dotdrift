@@ -116,8 +116,11 @@ func TestKeys_table(t *testing.T) {
 	require.Empty(t, c.store, "plan never prompts for credentials")
 	c = cpress(c, "esc")
 
-	// P starts the apply gate (fake launcher, no privileged steps)
+	// P opens the apply options gate; confirming it starts the run (fake
+	// launcher, no privileged steps).
 	c = wsPress(t, c, "P")
+	require.IsType(t, &applyGateModel{}, c.modals[0], "P opens the options gate first")
+	c = applyGateY(t, c)
 	require.NotNil(t, c.apply, "P started the run")
 
 	// q quits clean shells
@@ -140,6 +143,7 @@ func TestKeys_shiftIsTheDangerousVersion(t *testing.T) {
 	require.IsType(t, &planModel{}, c.modals[0])
 	c = cpress(c, "esc")
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.NotNil(t, c.apply, "P is the dangerous counterpart")
 	c.applying, c.apply = false, nil
 
@@ -210,6 +214,7 @@ func TestKeys_modalOverrides(t *testing.T) {
 		}
 	}
 	c = wsPress(t, c, "P")
+	c = applyGateY(t, c)
 	require.IsType(t, &elevationModel{}, c.modals[0])
 	c = cpress(c, "P") // captured — no second apply
 	require.Len(t, c.modals, 1)

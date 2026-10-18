@@ -109,8 +109,9 @@ type Compositor struct {
 	send          func(tea.Msg)
 	apply         *applyRunState
 	applyPreviews []service.StepPreview
-	applyModules  []string // the scope P pressed with: the yank set (0093), or a Status finding's owners (0108 2d)
-	pumpNoBlock   bool     // tests: the event pump never blocks a settle loop
+	applyModules  []string          // the scope P pressed with: the yank set (0093), or a Status finding's owners (0108 2d)
+	applyOpts     service.ApplyOpts // the options gate's snapshot (0110): Force, Backup, Sections
+	pumpNoBlock   bool              // tests: the event pump never blocks a settle loop
 
 	// paletteRecents: the palette's last-8 selections, session-only.
 	paletteRecents []string

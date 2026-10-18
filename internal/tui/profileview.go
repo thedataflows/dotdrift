@@ -37,8 +37,7 @@ type profileModel struct {
 }
 
 // switchView activates a view on the row and schedules the view's read
-// on first entry. The Plan view has no body yet and keeps the
-// not-loaded placeholder.
+// on first entry.
 func (m *Compositor) switchView(v viewKind) tea.Cmd {
 	m.view = v
 	if v == viewProfile && m.profile.read == nil && !m.profile.pending && m.profile.loadErr == "" {
@@ -46,6 +45,9 @@ func (m *Compositor) switchView(v viewKind) tea.Cmd {
 	}
 	if v == viewStatus && m.status.read == nil && !m.status.pending && m.status.loadErr == "" {
 		return m.reloadStatus()
+	}
+	if v == viewPlan && m.planv.read == nil && !m.planv.pending && m.planv.loadErr == "" {
+		return m.reloadPlan()
 	}
 	return nil
 }
@@ -65,13 +67,15 @@ func (m *Compositor) reloadProfile() tea.Cmd {
 }
 
 // refreshView re-reads the active view (r). The Modules view re-runs the
-// nav read; Plan has no read yet (a later slice).
+// nav read.
 func (m *Compositor) refreshView() tea.Cmd {
 	switch m.view {
 	case viewModules:
 		return m.reloadNav()
 	case viewStatus:
 		return m.reloadStatus()
+	case viewPlan:
+		return m.reloadPlan()
 	case viewProfile:
 		return m.reloadProfile()
 	}
@@ -80,7 +84,7 @@ func (m *Compositor) refreshView() tea.Cmd {
 
 // refreshAllViews re-reads every view that has a read (R).
 func (m *Compositor) refreshAllViews() tea.Cmd {
-	return tea.Batch(m.reloadNav(), m.reloadProfile(), m.reloadStatus())
+	return tea.Batch(m.reloadNav(), m.reloadProfile(), m.reloadStatus(), m.reloadPlan())
 }
 
 // profileBody renders the Profile view's list into the view pane.

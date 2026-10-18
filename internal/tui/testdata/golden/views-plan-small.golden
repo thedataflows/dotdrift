@@ -1,0 +1,22 @@
+ dotdrift · $PROFILE
+ Modules · Status · Plan · Profile
+╭────────────────────────────╮╭────────────────────────────╮
+││packages: 2 install, 1 remo││packages:                   │
+│ tools: 2                   ││  - firefox                 │
+│ dotfiles: 1                ││  - ripgrep                 │
+│ hooks: 1 pre, 1 post       ││remove:                     │
+│ systemd: 1                 ││  - nano                    │
+│ mounts: 1                  ││                            │
+│ smb: 1                     ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+│                            ││                            │
+╰────────────────────────────╯╰────────────────────────────╯
+
+ s next view • r refresh view • R refresh all views • p plan …

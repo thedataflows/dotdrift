@@ -62,8 +62,7 @@ view stack wholesale). Its parts:
   write (save, manage, onboard, generate, restore) or a finished apply
   marks the read views stale: the title carries `(stale)` until a
   refresh lands. `r` re-reads the active view, `R` re-reads all views; a
-  landed read clears its view's mark. The Plan body lands in a later
-  slice and shows the not-loaded placeholder until then.
+  landed read clears its view's mark.
 - **The Profile view** (0107). One read-only list, no cursor: the detect
   facts (host, user, os, kernel, distro, GPU, backend — an undetected
   fact renders nothing), the profile root, the state path, the resume
@@ -102,6 +101,20 @@ view stack wholesale). Its parts:
   title names the scope (`Status [shell]`); changing the yank set marks
   the view stale. A finished apply marks the Status and Plan views
   stale — the views wait for `r`, no automatic re-probe.
+- **The Plan view** (issue [0109](../issues/0109-tui-plan-view.md)).
+  The full merged plan of `dotdrift plan`. Left: one row per non-empty
+  section in the report's order with the merged counts (`packages:
+  2 install, 1 remove`, `tools: 2`, `dotfiles: 1`, `hooks: 1 pre,
+  1 post`, `systemd: 1`, `mounts: 1`, `smb: 1`). Right: the selected
+  section's entries exactly as `dotdrift plan` renders them — the full
+  report renders once when the read lands and the detail cuts the
+  section's block from it. `j`/`k` and the paging keys move the
+  section cursor; `d` toggles the copy-mode diff list (the `dotdrift
+  status --diff` data) in place of the section entries. The read is
+  probe-free and async like the other views; a second `r` in flight is
+  a no-op. A non-empty yank set scopes the read and the title names the
+  scope (`Plan [shell]`); changing the yank set marks the view stale,
+  and a read that started before the mark never clears it.
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
   64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
   and chrome behavior.
@@ -346,7 +359,8 @@ view stack wholesale). Its parts:
   marks the Status and Plan views stale (their reads were scoped under
   the old set). On the Status view `enter` on a finding jumps to its
   first owning module on the Modules view, and `P` scopes the apply to
-  the finding's owners instead of the yank set (0108).
+  the finding's owners instead of the yank set (0108). On the Plan view
+  `d` toggles the copy-mode diff list in the detail pane (0109).
   `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /

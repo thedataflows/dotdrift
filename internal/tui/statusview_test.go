@@ -29,7 +29,9 @@ import (
 
 func (s *stubReads) Plan(string, []string, *facts.Facts) (*service.PlanRead, error) {
 	if s.plan == nil && s.planErr == nil {
-		return &service.PlanRead{Plan: &resolve.Plan{}}, nil // a clean plan: no elevation gate
+		// A clean plan: no elevation gate. The Profile is set because
+		// the Plan view renders the report off it (0109).
+		return &service.PlanRead{Profile: &profile.Profile{}, Plan: &resolve.Plan{}}, nil
 	}
 	return s.plan, s.planErr
 }

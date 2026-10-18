@@ -3,8 +3,8 @@ package tui
 // T-tui-views slice 1b (issue 0107): the view row under the header —
 // Modules · Status · Plan · Profile, one active at a time. Modules is
 // the nav+workspace base screen, unchanged; the Profile body landed in
-// slice 1c (profileview.go), the Status and Plan bodies land in later
-// slices and render the not-loaded placeholder until then. A write or
+// slice 1c (profileview.go), the Status body in slice 2c
+// (statusview.go), the Plan body in slice 3 (planview.go). A write or
 // a finished apply marks a read view stale (markReadViewsStale); the
 // row title carries the stale word until a refresh clears it.
 
@@ -60,11 +60,15 @@ func (m *Compositor) viewRow() string {
 		if m.stale[v] {
 			name += " (stale)"
 		}
-		// The Status title names the yank scope its data was read under
-		// (0108): a scoped read is visible, and a yank change marks the
-		// view stale until a refresh re-reads under the new scope.
+		// The Status and Plan titles name the yank scope their data was
+		// read under (0108, 0109): a scoped read is visible, and a yank
+		// change marks the view stale until a refresh re-reads under
+		// the new scope.
 		if v == viewStatus && len(m.status.scope) > 0 {
 			name += " [" + strings.Join(m.status.scope, ", ") + "]"
+		}
+		if v == viewPlan && len(m.planv.scope) > 0 {
+			name += " [" + strings.Join(m.planv.scope, ", ") + "]"
 		}
 		if v == m.view {
 			parts = append(parts, m.th.viewTitle.Render(name))
@@ -77,8 +81,9 @@ func (m *Compositor) viewRow() string {
 
 // viewBody renders the active non-Modules view: the Profile view's list
 // (slice 1c), the Status view's findings list + detail panes (0108
-// slice 2c), or a full-width pane with the not-loaded placeholder for
-// the views whose bodies land later. The pane content gets the outer
+// slice 2c), the Plan view's section list + detail panes (0109 slice
+// 3), or a full-width pane with the not-loaded placeholder for the
+// views whose bodies land later. The pane content gets the outer
 // dimensions minus the border, like the base panes.
 func (m *Compositor) viewBody(paneH int) string {
 	switch m.view {
@@ -91,6 +96,13 @@ func (m *Compositor) viewBody(paneH int) string {
 		left := m.pane(m.focus == focusNav, listW-2, paneH, m.statusList(listW-4, paneH-2))
 		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.statusDetail(m.w-listW-4))
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
+	case viewPlan:
+		// The report's entry lines run long: the same even split as
+		// the Status view (0109).
+		listW := m.w / 2
+		left := m.pane(m.focus == focusNav, listW-2, paneH, m.planList(listW-4, paneH-2))
+		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.planDetail(m.w-listW-4))
+		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
 	return m.pane(false, m.w-2, paneH, m.th.loading.Render(" not loaded"))
 }
@@ -102,6 +114,9 @@ func (m *Compositor) viewBody(paneH int) string {
 func (m *Compositor) viewHook() func(s string) (tea.Cmd, bool) {
 	if m.view == viewStatus {
 		return m.statusKey
+	}
+	if m.view == viewPlan {
+		return m.planKey
 	}
 	return nil
 }

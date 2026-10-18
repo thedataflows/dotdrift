@@ -60,8 +60,9 @@ type Reads interface {
 	// (0107); the view itself lands in slice 1c.
 	Profile(profilePath string, modules []string) (*service.ProfileRead, error)
 	// Plan is the probe-free plan read behind the Status view's
-	// elevation gate: it decides whether the probing read needs sudo
-	// before the read starts. f nil = detect fresh facts.
+	// elevation gate (it decides whether the probing read needs sudo
+	// before the read starts) and the Plan view's merged-sections read
+	// (0109). f nil = detect fresh facts.
 	Plan(profilePath string, modules []string, f *facts.Facts) (*service.PlanRead, error)
 	// Status is the probing read; StatusOpts.Elevated says the sudo
 	// gate passed. Diff feeds the copy-mode dotfile detail pane.

@@ -96,3 +96,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0106](0106-resume-cursor-ignores-changed-sources.md) | Resume cursor ignores changed dotfile sources | done | high |
 | [0107](0107-tui-shell-views-profile.md) | TUI shell views + Profile view (slice 1) | done | medium |
 | [0108](0108-drift-unauthorized-status.md) | Drift status `unauthorized` for permission-denied findings (slice 2a) | done | medium |
+| [0109](0109-tui-plan-view.md) | TUI Plan view — merged plan sections with counts, copy-mode diff toggle (slice 3) | done | medium |

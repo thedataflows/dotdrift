@@ -220,11 +220,15 @@ func (m *Compositor) helpRows() []helpRow {
 	}
 	if m.view != viewModules {
 		// Off the Modules view the "both" bindings run (0107); the
-		// Status view also owns the pane movement keys through its hook
-		// (0108) — the help names exactly the live keys.
+		// Status and Plan views also own the pane movement keys through
+		// their hooks (0108, 0109) — the help names exactly the live
+		// keys.
 		var rows []helpRow
 		if m.view == viewStatus {
 			rows = append(rows, helpRow{"j/k", "move findings"})
+		}
+		if m.view == viewPlan {
+			rows = append(rows, helpRow{"j/k", "move sections"}, helpRow{"d", "toggle diff list"})
 		}
 		for _, b := range keyTable() {
 			if b.pane == "both" {

@@ -85,12 +85,14 @@ type Compositor struct {
 	// view is the active base view on the view row (0107); stale marks
 	// the views whose data a write or apply outlived (markStale);
 	// profile is the Profile view's read state (slice 1c), status the
-	// Status view's (0108 slice 2c).
+	// Status view's (0108 slice 2c), planv the Plan view's (0109
+	// slice 3).
 	view     viewKind
 	stale    [viewCount]bool
 	staleSeq [viewCount]int // bumps on every markStale: a read started before a mark must not clear it (0108 fix)
 	profile  profileModel
 	status   statusModel
+	planv    planViewModel
 
 	modals []modal
 
@@ -278,6 +280,9 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.statusPlanChecked(msg)
 	case statusLoadedMsg:
 		return m, m.statusLoaded(msg)
+	case planLoadedMsg:
+		// 0109 slice 3: the Plan view's read landed.
+		return m, m.planLoaded(msg)
 	case layerLoadedMsg:
 		if msg.dir != m.ws.activeDir() {
 			return m, nil // stale: the cursor moved on

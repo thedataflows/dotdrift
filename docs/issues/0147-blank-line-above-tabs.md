@@ -9,13 +9,13 @@ timestamp: 2026-10-19T00:00:00Z
 # ISSUE 0147: Empty line between the header text and the tab bar
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: [0114](0114-tui-visual-fixes-screenshot.md)
 - **Related code**: [`internal/tui/compositor.go`](../../internal/tui/compositor.go)
-- **Closing commits**: none
+- **Closing commits**: `9f73a67`
 
 ## Summary
 
@@ -31,10 +31,10 @@ frame still fits the terminal exactly at every size.
 
 ## Acceptance Criteria
 
-- [ ] One empty line sits between the header text and the tab
+- [x] One empty line sits between the header text and the tab
   bar in every view.
-- [ ] Frames still fit the terminal height at small sizes.
-- [ ] Goldens are regenerated and reviewed.
+- [x] Frames still fit the terminal height at small sizes.
+- [x] Goldens are regenerated and reviewed.
 
 ## Out of Scope
 

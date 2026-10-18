@@ -54,7 +54,10 @@ view stack wholesale). Its parts:
   Under the header: `Modules · Status · Plan · Profile`, the active view
   accented. `s` cycles, `1`–`4` jump — live in every view. The Modules
   view is the two-pane base screen, unchanged. Off the Modules view only
-  the shared bindings live; the footer and `?` hint exactly those. A
+  the shared bindings live; the footer and `?` hint exactly those (the
+  footer keeps the primary verbs — the number jumps stay under `?` —
+  and truncates to the frame width; the full table is always under `?`).
+  A
   write (save, manage, onboard, generate, restore) or a finished apply
   marks the read views stale: the title carries `(stale)` until a
   refresh lands. `r` re-reads the active view, `R` re-reads all views; a

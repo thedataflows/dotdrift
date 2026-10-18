@@ -210,6 +210,11 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
+		// The footer hints truncate to the frame (0107 fix round 1): an
+		// unset help width renders every binding, and JoinVertical then
+		// pads the whole frame to the footer's length. footerView
+		// prepends one space.
+		m.help.SetWidth(msg.Width - 1)
 		_, _, paneH := m.layout()
 		m.nav.bodyH, m.ws.bodyH = paneH-2, paneH-2 // the panes' content height
 		return m, nil
@@ -670,8 +675,10 @@ func (m *Compositor) ShortHelp() []key.Binding {
 	if m.view != viewModules {
 		// Off the Modules view only the "both" bindings live (0107):
 		// hint the view keys and the shared verbs, all resolved from
-		// the table — a dead pane verb never reaches the footer.
-		for _, k := range []string{"s", "1", "2", "3", "4", "r", "R", "p", "P", "?", "q"} {
+		// the table — a dead pane verb never reaches the footer. The
+		// number jumps stay in ? — the full list runs past the frame
+		// width, and truncation must not eat p/P/?/q (fix round 1).
+		for _, k := range []string{"s", "r", "R", "p", "P", "?", "q"} {
 			if b, ok := byKey[k]; ok {
 				add(b.key, b.help)
 			}

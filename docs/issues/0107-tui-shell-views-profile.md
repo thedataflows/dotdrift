@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: agent
 - **Related**: [TUI views design spec](../superpowers/specs/2026-10-18-tui-views-design.md)
 - **Related code**: [`internal/service/`](../../internal/service/), [`internal/tui/`](../../internal/tui/)
-- **Closing commits**: none
+- **Closing commits**: f92d976
 
 ## Summary
 
@@ -76,3 +76,12 @@ at 59x11 and the Profile frame at 64x24. One deliberate duplication:
 `applyCommandFor` rule rather than growing the service API for a
 render string. Status and Plan bodies remain placeholders for slices
 2–3 (own issues).
+
+Fix round 1 (review): the footer hints never had a width set, so the
+off-Modules footer ran ~150 cells and `JoinVertical` padded the whole
+frame to it — the 64x24 frame overflowed. `WindowSizeMsg` now sets the
+help width, and the off-Modules footer lists the primary verbs only
+(the number jumps stay under `?`); the same overflow existed on the
+Modules work-pane footers and is fixed there too. Pinned by
+`TestViews_footerFitsSmallFrame`; 13 goldens regenerated, every diff
+exactly the footer line.

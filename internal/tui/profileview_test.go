@@ -9,9 +9,11 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/profile"
@@ -205,6 +207,21 @@ func TestViews_smallFrame(t *testing.T) {
 	// The too-small guard still fires under the 60x12 minimum.
 	c, _ = cstep(c, tea.WindowSizeMsg{Width: 59, Height: 11})
 	require.Contains(t, c.View().Content, "too small")
+}
+
+func TestViews_footerFitsSmallFrame(t *testing.T) {
+	// Fix round 1 (review finding): the off-Modules footer hints ran
+	// ~150 cells with no help width set — past the 64-cell frame. Every
+	// row of the pinned frame must fit the terminal.
+	_, c := profileShell()
+	c = loadProfileView(t, c)
+	c, _ = cstep(c, tea.WindowSizeMsg{Width: 64, Height: 24})
+
+	lines := strings.Split(strings.TrimRight(c.View().Content, "\n"), "\n")
+	require.LessOrEqual(t, len(lines), 24, "the frame never exceeds the terminal height")
+	for i, line := range lines {
+		require.LessOrEqual(t, lipgloss.Width(line), 64, "row %d fits the frame width", i)
+	}
 }
 
 // stubDialog is the minimal dialog for the write-finished path.

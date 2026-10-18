@@ -7,9 +7,13 @@
 │                          ││   id demo                                                        │
 │                          ││   description  ✎                                                 │
 │                          ││   scope user ◂▸                                                  │
+│                          ││                                                                  │
 │                          ││  PACKAGES ＋                                                     │
+│                          ││                                                                  │
 │                          ││  LINKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  WRITES ＋                                                       │
+│                          ││                                                                  │
 │                          ││  WHEN ＋                                                         │
 │                          ││   hosts myhost ✎                                                 │
 │                          ││   and[0] ＋                                                      │
@@ -19,10 +23,6 @@
 │                          ││     or[0] ＋                                                     │
 │                          ││       hosts work ✎                                               │
 │                          ││     or[1] ＋                                                     │
-│                          ││       kernel >= 6 ✎                                              │
-│                          ││   not ＋                                                         │
-│                          ││     packages emacs ✎                                             │
-│                          ││  HOOKS ＋                                                        │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

@@ -7,21 +7,21 @@
 │                          ││   id demo                                                        │
 │                          ││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
+│                          ││                                                                  │
 │                          ││  PACKAGES ＋                                                     │
 │                          │││ ▸                                                               │
 │                          ││    ✗ package name must not be empty                              │
 │                          ││   + ripgrep ✎                                                    │
-│                          ││  LINKS ＋                                                        │
-│                          ││  WRITES ＋                                                       │
-│                          ││  WHEN ＋                                                         │
-│                          ││  HOOKS ＋                                                        │
-│                          ││  SYSTEMD.UNITS ＋                                                │
-│                          ││  TOOLS ＋                                                        │
-│                          ││   node = 20 ✎                                                    │
-│                          ││  SECRETS ＋                                                      │
-│                          ││  MOUNTS ＋                                                       │
-│                          ││  SMB ＋                                                          │
 │                          ││                                                                  │
+│                          ││  LINKS ＋                                                        │
+│                          ││                                                                  │
+│                          ││  WRITES ＋                                                       │
+│                          ││                                                                  │
+│                          ││  WHEN ＋                                                         │
+│                          ││                                                                  │
+│                          ││  HOOKS ＋                                                        │
+│                          ││                                                                  │
+│                          ││  SYSTEMD.UNITS ＋                                                │
 │                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 

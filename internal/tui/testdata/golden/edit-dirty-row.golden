@@ -7,22 +7,22 @@
 │                          ││   id demo                                                        │
 │                          │││  description the demo module-next ●                             │
 │                          ││   scope user ◂▸                                                  │
+│                          ││                                                                  │
 │                          ││  PACKAGES ＋                                                     │
 │                          ││   + neovim ✎                                                     │
 │                          ││   + ripgrep ✎                                                    │
+│                          ││                                                                  │
 │                          ││  LINKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  WRITES ＋                                                       │
+│                          ││                                                                  │
 │                          ││  WHEN ＋                                                         │
+│                          ││                                                                  │
 │                          ││  HOOKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││                                                                  │
 │                          ││  TOOLS ＋                                                        │
-│                          ││   node = 20 ✎                                                    │
-│                          ││  SECRETS ＋                                                      │
-│                          ││  MOUNTS ＋                                                       │
-│                          ││  SMB ＋                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • ctrl+z undo …

@@ -325,11 +325,11 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	}
 	if r.hint {
 		if r.text == "" {
-			// The section separator renders nothing (0125): since
-			// 0123 empty sections are unfilled, filled bars never
-			// touch, and the bar itself is the separation. The
-			// model row stays — movement and structure are unchanged.
-			return nil
+			// The section separator renders as one empty line
+			// (0130): it sits after the last item of the section
+			// above, so that section does not run into the next
+			// header. The cursor still skips the row.
+			return []string{""}
 		}
 		return []string{th.disabledMark.MaxWidth(width).Render("   " + r.text)}
 	}

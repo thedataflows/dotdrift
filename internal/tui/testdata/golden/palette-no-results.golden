@@ -7,8 +7,8 @@
 │  ▸ other · invalid module│││  id demo                                                        │
 │  ▸ plain · invalid module││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
+│                          ││                                                                  │
 │                          ││  PACKAGES ＋                                                     │
-│                          ││   + neovim ✎                                                     │
 │                       ╭─────────────────────────────────────────────────╮                    │
 │                       │                                                 │                    │
 │                       │  / zzzznothing▏                                 │                    │
@@ -17,12 +17,12 @@
 │                       │    ctrl+n creates a module named «zzzznothing»  │                    │
 │                       │                                                 │                    │
 │                       ╰─────────────────────────────────────────────────╯                    │
-│                          ││  SECRETS ＋                                                      │
-│                          ││  MOUNTS ＋                                                       │
-│                          ││  SMB ＋                                                          │
 │                          ││                                                                  │
+│                          ││  HOOKS ＋                                                        │
 │                          ││                                                                  │
+│                          ││  SYSTEMD.UNITS ＋                                                │
 │                          ││                                                                  │
+│                          ││  TOOLS ＋                                                        │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

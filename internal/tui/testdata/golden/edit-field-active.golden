@@ -7,22 +7,22 @@
 │                          ││   id demo                                                        │
 │                          │││ ▸ the demo module-next                                          │
 │                          ││   scope user ◂▸                                                  │
+│                          ││                                                                  │
 │                          ││  PACKAGES ＋                                                     │
 │                          ││   + neovim ✎                                                     │
 │                          ││   + ripgrep ✎                                                    │
+│                          ││                                                                  │
 │                          ││  LINKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  WRITES ＋                                                       │
+│                          ││                                                                  │
 │                          ││  WHEN ＋                                                         │
+│                          ││                                                                  │
 │                          ││  HOOKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││                                                                  │
 │                          ││  TOOLS ＋                                                        │
-│                          ││   node = 20 ✎                                                    │
-│                          ││  SECRETS ＋                                                      │
-│                          ││  MOUNTS ＋                                                       │
-│                          ││  SMB ＋                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter commit • esc cancel • ? help

@@ -167,6 +167,17 @@ func TestWorkspace_sectionsSeparated(t *testing.T) {
 				"a blank row separates the %s section", r.section)
 		}
 	}
+	// 0130: the separator renders as one empty line after the last
+	// item of a section, so a section does not run into the next
+	// header.
+	for i, r := range c.ws.rows {
+		if r.hint && r.text == "" {
+			lines := c.ws.rowView(r, i, c.th, 40)
+			require.Len(t, lines, 1, "the separator is one rendered line")
+			require.Empty(t, ansiRe.ReplaceAllString(lines[0], ""), "the separator line is empty")
+		}
+	}
+
 	// 0123: in an all-empty module no section earns the filled bar,
 	// so no eighth-block edge renders either — headings stack plain.
 	require.NotContains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "▇",

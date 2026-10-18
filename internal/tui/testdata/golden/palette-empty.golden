@@ -7,22 +7,22 @@
 │  ▸ other · invalid module│││  id demo                                                        │
 │  ▸ plain · invalid module││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
-│                          ││  P╭──────────────────────────────────╮                           │
-│                          ││   │                                  │                           │
+│                          ││   ╭──────────────────────────────────╮                           │
+│                          ││  P│                                  │                           │
 │                          ││   │  / ▏                             │                           │
-│                          ││  L│                                  │                           │
-│                          ││  W│  │ ◆ demo  module                │                           │
-│                          ││  W│    ◆ demo · user cri  module     │                           │
-│                          ││  H│    ◆ demo · host myhost  module  │                           │
-│                          ││  S│    ◆ other  module               │                           │
-│                          ││  T│    ◆ plain  module               │                           │
 │                          ││   │                                  │                           │
-│                          ││  S╰──────────────────────────────────╯                           │
-│                          ││  MOUNTS ＋                                                       │
-│                          ││  SMB ＋                                                          │
+│                          ││   │  │ ◆ demo  module                │                           │
+│                          ││  L│    ◆ demo · user cri  module     │                           │
+│                          ││   │    ◆ demo · host myhost  module  │                           │
+│                          ││  W│    ◆ other  module               │                           │
+│                          ││   │    ◆ plain  module               │                           │
+│                          ││  W│                                  │                           │
+│                          ││   ╰──────────────────────────────────╯                           │
+│                          ││  HOOKS ＋                                                        │
 │                          ││                                                                  │
+│                          ││  SYSTEMD.UNITS ＋                                                │
 │                          ││                                                                  │
-│                          ││                                                                  │
+│                          ││  TOOLS ＋                                                        │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

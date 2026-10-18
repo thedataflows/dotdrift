@@ -7,22 +7,22 @@
 │  ▸ plain                 │││  id demo                                                        │
 │                          ││   description  ✎                                                 │
 │                          ││   scope user ◂▸                                                  │
+│                          ││                                                                  │
 │                          ││  PACKAGES ＋                                                     │
+│                          ││                                                                  │
 │                          ││  LINKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  WRITES ＋                                                       │
+│                          ││                                                                  │
 │                          ││  WHEN ＋                                                         │
+│                          ││                                                                  │
 │                          ││  HOOKS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││                                                                  │
 │                          ││  TOOLS ＋                                                        │
+│                          ││                                                                  │
 │                          ││  SECRETS ＋                                                      │
-│                          ││  MOUNTS ＋                                                       │
-│                          ││  SMB ＋                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / filter modules • ? help • q quit

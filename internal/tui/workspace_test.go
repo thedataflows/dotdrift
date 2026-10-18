@@ -129,9 +129,9 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 	c.ws.cursor = idx
 	under := strip(c.ws.rowView(row, idx, c.th, 40)[0])
 
-	// 0119: a heading is text, not a filled bar — the cursor row is
-	// the only filled element, and the heading never shifts.
-	require.NotContains(t, plainRaw, "48;", "the section heading carries no background")
+	// 0121: the heading is a filled bar again, and it never shifts.
+	require.Contains(t, plainRaw, "48;", "the section heading is a filled bar")
+	require.Equal(t, 40, ansi.StringWidth(plain), "the section bar fills the pane width")
 	require.Equal(t, 40, ansi.StringWidth(under), "the cursor row fills the pane width")
 	require.Equal(t, col(plain, "packages"), col(under, "packages"),
 		"the section text stays in its column under the cursor")
@@ -161,9 +161,10 @@ func TestWorkspace_sectionsSeparated(t *testing.T) {
 				"a blank row separates the %s section", r.section)
 		}
 	}
-	// The separator renders as a hairline rule, not a blank row.
-	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "───",
-		"sections are separated by a hairline rule")
+	// The separator renders as an eighth-block edge row (0121):
+	// the next section's fill starts one eighth of a row late.
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "▇▇▇",
+		"sections are separated by an eighth-block edge")
 
 	// Walk the whole surface: the cursor never rests on a separator.
 	c.ws.cursor = c.ws.firstEntry(0)

@@ -108,8 +108,8 @@ func TestTheme_rowKey(t *testing.T) {
 func TestTheme_filledBars(t *testing.T) {
 	th := newTheme(true)
 	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
-	require.NotContains(t, th.sectionBar.Render("packages"), "48;",
-		"a section heading is text with no background (0119)")
+	require.Equal(t, 20, len([]rune(strip(th.barLine("packages", 20)))),
+		"the section bar fills the full width (0121)")
 	require.Equal(t, 20, len([]rune(strip(th.detailLine("dotfiles · x", 20)))),
 		"the detail header fills the full width")
 	cursor := th.cursorLine(" demo", 20)
@@ -128,7 +128,7 @@ func TestTheme_visualRoles(t *testing.T) {
 	require.NotContains(t, th.tabInactive.Render("x"), "48;", "the inactive tab stays flat")
 	require.Contains(t, th.footerBar.Render("x"), "48;", "the footer is a background bar")
 	require.Contains(t, th.detailHeader.Render("x"), "48;", "the detail header is a filled strip")
-	require.NotContains(t, th.sectionBar.Render("x"), "48;", "a section heading is text, not a filled bar")
+	require.Contains(t, th.sectionBar.Render("x"), "48;", "a section heading is a filled bar (0121)")
 	for _, pill := range []lipgloss.Style{th.pillOK, th.pillDrift, th.pillUnknown, th.pillUnauthorized} {
 		require.Contains(t, pill.Render("x"), "48;", "a status pill is a filled block")
 	}

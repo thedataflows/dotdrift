@@ -304,22 +304,18 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			// to say so.
 			return []string{th.cursorLine(" "+text+mark, width)}
 		}
-		// A section header is a heading (0119, the gh-dash preview
-		// treatment): bold underlined text, no background — the
-		// cursor row is the only filled element. The lead matches
-		// the cursor row's bar cell (0116): no shift under the cursor.
-		// The mark and the lead stay OUTSIDE the underlined run
-		// (0120): lipgloss re-applies underline over nested ANSI
-		// rune by rune and leaks the inner escape as literal text,
-		// and underlined lead spaces render as ticks.
-		return []string{"  " + th.sectionBar.Render(text) + mark}
+		// A section header is a filled bar (0121), no underline
+		// (the 0120 leak rule). The lead matches the cursor row's
+		// bar cell (0116): no shift under the cursor.
+		return []string{th.barLine(" "+text+mark, width)}
 	}
 	if r.hint {
 		if r.text == "" {
-			// The section separator (0117, 0119): a faint hairline
-			// rule across the pane — one cell row, a hairline stroke,
-			// where a blank row read as a full gap.
-			return []string{th.disabledMark.Render(strings.Repeat("─", width))}
+			// The section separator (0117, 0121): an eighth-block
+			// edge row in the bar color — the next section's fill
+			// starts one eighth of a row late, a ~2px gap where a
+			// blank row read as a full character height.
+			return []string{th.barEdge.Render(strings.Repeat("▇", width))}
 		}
 		return []string{th.disabledMark.MaxWidth(width).Render("   " + r.text)}
 	}

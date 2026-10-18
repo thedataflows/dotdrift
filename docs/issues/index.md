@@ -98,3 +98,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0108](0108-drift-unauthorized-status.md) | Drift status `unauthorized` for permission-denied findings (slice 2a) | done | medium |
 | [0109](0109-tui-plan-view.md) | TUI Plan view — merged plan sections with counts, copy-mode diff toggle (slice 3) | done | medium |
 | [0110](0110-tui-apply-gate-options.md) | TUI apply gate options — force, backup, section toggles before the preview (slice 4) | done | medium |
+| [0111](0111-tui-generate-volumes-polish.md) | TUI generate volume picker and view polish — counts, op-end marks, detail scroll (slice 5) | done | medium |

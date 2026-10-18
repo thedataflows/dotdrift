@@ -197,6 +197,27 @@ func TestFooter_failurePersistsUntilNextAction(t *testing.T) {
 	require.NotContains(t, c.View().Content, "apply failed", "the next user action clears the failure")
 }
 
+// 0111 slice 5: an ended op marks its note ✓ (success) or ✗ (failure).
+// The success mark rides the existing 4 s message-slot fade; the
+// failure mark persists like any failure note.
+func TestFooter_opEndMark(t *testing.T) {
+	c := newTestCompositor()
+	c, cmd := cstep(c, opFinishedMsg{note: "applied 12 links"})
+	require.NotNil(t, cmd, "a success end mark schedules the same fade")
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "✓ applied 12 links", "a success carries the ✓ end mark")
+
+	c, _ = cstep(c, msgFadeMsg{token: c.msgToken})
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.NotContains(t, frame, "✓", "the fade clears the end mark with the note")
+	require.NotContains(t, frame, "applied 12 links")
+
+	c, cmd = cstep(c, opFinishedMsg{note: "apply failed: link /etc/x", err: errors.New("boom")})
+	require.Nil(t, cmd, "a failure schedules no fade")
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "✗ apply failed: link /etc/x", "a failure carries the ✗ end mark")
+}
+
 func TestHeader_dirtyCountAndApplyBadge(t *testing.T) {
 	c := newTestCompositor()
 	frame := c.View().Content

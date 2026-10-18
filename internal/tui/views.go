@@ -9,6 +9,7 @@ package tui
 // row title carries the stale word until a refresh clears it.
 
 import (
+	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -51,8 +52,10 @@ func (m *Compositor) markReadViewsStale() {
 }
 
 // viewRow renders the view row: the titles joined by ·, the active view
-// accented, a stale view titled with the stale word. The counts slot on
-// each title stays empty until slice 5.
+// accented, a stale view titled with the stale word. The counts slot
+// (0111): a loaded read numbers its rows last on the title (after the
+// stale word and the scope, so those stay contiguous) — Status counts
+// its findings, Plan counts the plan's entries.
 func (m *Compositor) viewRow() string {
 	parts := make([]string, 0, viewCount)
 	for i, name := range viewNames {
@@ -69,6 +72,12 @@ func (m *Compositor) viewRow() string {
 		}
 		if v == viewPlan && len(m.planv.scope) > 0 {
 			name += " [" + strings.Join(m.planv.scope, ", ") + "]"
+		}
+		if v == viewStatus && m.status.read != nil {
+			name += " (" + strconv.Itoa(len(m.status.read.Findings)) + ")"
+		}
+		if v == viewPlan && m.planv.read != nil {
+			name += " (" + strconv.Itoa(planEntries(m.planv.read)) + ")"
 		}
 		if v == m.view {
 			parts = append(parts, m.th.viewTitle.Render(name))
@@ -94,17 +103,46 @@ func (m *Compositor) viewBody(paneH int) string {
 		// the Modules view's narrow nav.
 		listW := m.w / 2
 		left := m.pane(m.focus == focusNav, listW-2, paneH, m.statusList(listW-4, paneH-2))
-		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.statusDetail(m.w-listW-4))
+		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.statusDetail(m.w-listW-4, paneH-2))
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	case viewPlan:
 		// The report's entry lines run long: the same even split as
 		// the Status view (0109).
 		listW := m.w / 2
 		left := m.pane(m.focus == focusNav, listW-2, paneH, m.planList(listW-4, paneH-2))
-		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.planDetail(m.w-listW-4))
+		right := m.pane(m.focus == focusWork, m.w-listW-2, paneH, m.planDetail(m.w-listW-4, paneH-2))
 		return lipgloss.JoinHorizontal(lipgloss.Top, left, right)
 	}
 	return m.pane(false, m.w-2, paneH, m.th.loading.Render(" not loaded"))
+}
+
+// detailWindow cuts the visible window out of a detail pane's lines
+// (0111): offset scrolls, and a dim overflow row replaces the
+// first/last visible line when content is clipped on that side — a
+// long section never clips silently, and the mark names the way to the
+// tail.
+func detailWindow(th theme, lines []string, offset, h int) []string {
+	if h < 1 {
+		h = 1
+	}
+	if len(lines) <= h {
+		return lines
+	}
+	if offset > len(lines)-h {
+		offset = len(lines) - h
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	out := make([]string, h)
+	copy(out, lines[offset:offset+h])
+	if offset > 0 {
+		out[0] = th.meta.Render("  … more above")
+	}
+	if offset+h < len(lines) {
+		out[h-1] = th.meta.Render("  … more below (tab to the pane, j/k scroll)")
+	}
+	return out
 }
 
 // viewHook is the active view's pane-key handler: a non-Modules view

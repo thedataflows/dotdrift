@@ -614,6 +614,15 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 					return nil
 				}
 			}
+			// 0111: ctrl+o on the generate mounts source row lists the
+			// volumes; the landed list opens the volume picker below.
+			if vd, ok := m.d.(interface {
+				browseVolumes() (tea.Cmd, bool)
+			}); ok {
+				if cmd, yes := vd.browseVolumes(); yes {
+					return cmd
+				}
+			}
 		}
 		return m.d.HandleKey(k.String())
 	}
@@ -631,6 +640,23 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 		// targets row.
 		if rd, ok := m.d.(*restoreDialog); ok {
 			rd.applyPlan(rp)
+		}
+		return nil
+	}
+	if vm, ok := msg.(volumesLoadedMsg); ok {
+		// 0111: the volume list lands on the generate dialog that asked
+		// for it; a failure reports in the footer, never opens an empty
+		// picker.
+		if vm.err != nil {
+			m.c.message, m.c.msgErr = firstLineOf(vm.err.Error()), true
+			return nil
+		}
+		if gd, ok := m.d.(*generateDialog); ok {
+			m.c.modals = append(m.c.modals, &volumePickerModel{
+				th:   m.th,
+				vols: vm.vols,
+				sink: func(uuid string) { gd.mounts[1].field.set("UUID=" + uuid) },
+			})
 		}
 		return nil
 	}

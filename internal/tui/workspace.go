@@ -1,6 +1,6 @@
 package tui
 
-// The M15 workspace (T-tui-workspace): module.toml rendered as a
+// The workspace (T-tui-workspace): module.toml rendered as a
 // sectioned, status-annotated surface — meta, packages, links, writes,
 // when, hooks, systemd.units, tools, and a trailing "other" group for the
 // remaining schema sections. Rendering consumes the config area's strict

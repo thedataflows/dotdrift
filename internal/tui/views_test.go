@@ -77,6 +77,29 @@ func TestViews_modulesUnchanged(t *testing.T) {
 	require.Equal(t, before, c.View().Content, "the Modules view is byte-identical when active again")
 }
 
+// 0111 slice 5: a loaded read numbers its rows on the view title —
+// Status counts its findings, Plan counts the plan's entries; an
+// unloaded view shows no count.
+func TestViews_countsOnTabs(t *testing.T) {
+	stub, c := statusShell(statusFixtureRead())
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.NotContains(t, frame, "Status (", "an unloaded view shows no count")
+
+	c = loadStatusView(t, c)
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "Status (4)", "the Status title counts the findings")
+	require.NotContains(t, frame, "Plan (", "an unloaded Plan view shows no count")
+
+	stub.plan = planFixtureRead()
+	c, cmd := cstep(c, keyPress("3"))
+	require.NotNil(t, cmd, "entering the Plan view schedules the read")
+	c, _ = cstep(c, mustMsg(cmd))
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	// The fixture: 2 install + 1 remove + 2 tools + 1 dotfile + 1 pre +
+	// 1 post + 1 systemd + 1 mount + 1 smb.
+	require.Contains(t, frame, "Plan (11)", "the Plan title counts the plan's entries")
+}
+
 func TestViews_staleMark(t *testing.T) {
 	c := newTestCompositor()
 	require.NotContains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "stale", "nothing is stale at startup")

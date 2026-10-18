@@ -12,8 +12,10 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -463,6 +465,44 @@ func TestStatusView_applyFinishMarksStale(t *testing.T) {
 	require.True(t, c.stale[viewStatus], "a finished apply marks Status stale")
 	require.True(t, c.stale[viewPlan], "a finished apply marks Plan stale")
 	require.Equal(t, 1, stub.statusCalls, "the finish does not re-probe — r refreshes")
+}
+
+// 0111: the detail pane scrolls — a long diff never clips silently.
+// tab focuses the detail pane, the movement keys scroll it, a clipped
+// side carries an overflow mark, and moving the findings cursor resets
+// the scroll.
+func TestStatusView_detailScrolls(t *testing.T) {
+	stub, c := statusShell(statusFixtureRead())
+	var live strings.Builder
+	for i := range 50 {
+		fmt.Fprintf(&live, "live-%02d\n", i)
+	}
+	stub.diffs = []service.DiffEntry{{
+		Module:        "base",
+		Target:        "/etc/hosts",
+		Source:        "/home/cri/profiles/main/modules/base/hosts",
+		TargetContent: live.String(),
+		SourceContent: "127.0.0.1 localhost\n",
+	}}
+	c = loadStatusView(t, c)
+	c = cpress(c, "end") // the dotfiles finding: the detail pane shows the live diff
+
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "more below", "a clipped detail marks the hidden tail")
+	require.NotContains(t, frame, "live-49", "the diff tail starts out of the window")
+
+	c = cpress(c, "tab") // focus the detail pane
+	c = cpress(c, "end")
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "live-49", "end reaches the diff tail")
+	require.Contains(t, frame, "more above", "a scrolled detail marks the hidden head")
+	require.NotContains(t, frame, "more below", "the tail is the end")
+
+	// Moving the findings cursor resets the detail scroll.
+	c = cpress(c, "tab") // back to the findings list
+	c = cpress(c, "k")   // the all-OK row
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.NotContains(t, frame, "more above", "a cursor move resets the detail scroll")
 }
 
 func TestStatusView_golden(t *testing.T) {

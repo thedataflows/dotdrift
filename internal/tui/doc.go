@@ -1,5 +1,6 @@
-// Package tui holds the style registry for the dotdrift TUI shell
-// (ADR-0003). The generate wizard's huh front-end was absorbed —
-// generate is CLI-only and the interactive surfaces arrive with the
-// editor suite (issue 0065).
+// Package tui is the dotdrift shell — the one interactive surface
+// (ADR-0007): the compositor (header, view row, panes, footer, modal
+// stack), the workspace's inline editing, the read views (Status, Plan,
+// Profile), the write dialogs, and the apply session. Every visible
+// concept registers a style in ADR-0003's palette registry.
 package tui

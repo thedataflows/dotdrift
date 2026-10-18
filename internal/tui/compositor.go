@@ -1,12 +1,11 @@
 package tui
 
-// The compositor (M15, issue 0073): one full-screen base shell — header,
+// The compositor (issue 0073): one full-screen base shell — header,
 // nav, workspace, footer — plus a stack of modal layers over it. The top
 // layer owns all input while open; the base keeps rendering underneath,
 // dimmed. esc is owned here, not by individual views: it pops the top
 // layer — modal first, then edit mode, then focus back to the nav. This
-// kills the M14 per-view input fallthrough class of bug by construction.
-// The old view stack (shell.go) stays alive until T-tui-cleanup.
+// kills the per-view input fallthrough class of bug by construction.
 
 import (
 	"errors"
@@ -38,8 +37,9 @@ type modal interface {
 }
 
 // Footer chrome messages: any operation over ~200ms announces itself with
-// opStartedMsg and reports with opFinishedMsg. A success note fades after
-// msgFadeAfter; a failure persists until the next user action.
+// opStartedMsg and reports with opFinishedMsg — the note carries the op's
+// end mark, ✓ on success and ✗ on failure (0111). A success note fades
+// after msgFadeAfter; a failure persists until the next user action.
 type opStartedMsg struct{ name string }
 type opFinishedMsg struct {
 	note string
@@ -158,10 +158,9 @@ type Compositor struct {
 	help help.Model
 }
 
-// NewCompositor builds the M15 shell over a profile root. layerFor builds
+// NewCompositor builds the shell over a profile root. layerFor builds
 // the workspace's layer reader once facts land (nil: the workspace shows
-// identity placeholder text only). Experimental until it reaches parity
-// with the M14 shell (T-tui-cleanup).
+// identity placeholder text only).
 func NewCompositor(area Reads, root string, layerFor func(*facts.Facts) LayerReader) *Compositor {
 	return &Compositor{
 		th:       newTheme(true), // corrected by BackgroundColorMsg
@@ -310,7 +309,11 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.spinTick()
 	case opFinishedMsg:
 		m.op = ""
-		m.message, m.msgErr = msg.note, msg.err != nil
+		mark := "✓ "
+		if msg.err != nil {
+			mark = "✗ "
+		}
+		m.message, m.msgErr = mark+msg.note, msg.err != nil
 		m.msgToken++
 		if m.msgErr {
 			return m, nil

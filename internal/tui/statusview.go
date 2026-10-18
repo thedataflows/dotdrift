@@ -49,8 +49,8 @@ type statusLoadedMsg struct {
 }
 
 // statusModel is the Status view's state: the read, the diffs, the
-// yank-scope snapshot the read ran under, the section filter, and the
-// cursor/scroll pair.
+// yank-scope snapshot the read ran under, the section filter, the
+// cursor/scroll pair, and the detail pane's scroll offset (0111).
 type statusModel struct {
 	pending bool
 	loadErr string
@@ -61,6 +61,7 @@ type statusModel struct {
 	filter  string   // a section name; "" = all sections
 	cursor  int
 	offset  int
+	dOffset int
 }
 
 // statusSectionOrder mirrors drift's report order (its unexported
@@ -162,6 +163,7 @@ func (m *Compositor) statusLoaded(msg statusLoadedMsg) tea.Cmd {
 	m.status.read = msg.read
 	m.status.diffs = msg.diffs
 	m.stale[viewStatus] = m.staleSeq[viewStatus] != m.status.seq
+	m.status.dOffset = 0 // new data: the detail reads from the top
 	m.status.clamp(m.statusRows())
 	return nil
 }
@@ -372,7 +374,8 @@ func (s *statusModel) clamp(rows []statusRow) {
 }
 
 // statusMove steps the cursor d selectable rows (headers and blank rows
-// are not selectable).
+// are not selectable). A cursor move resets the detail pane's scroll
+// (0111): the new finding reads from the top.
 func (m *Compositor) statusMove(d int) {
 	rows := m.statusRows()
 	s := &m.status
@@ -390,6 +393,7 @@ func (m *Compositor) statusMove(d int) {
 		}
 		s.cursor = i
 	}
+	s.dOffset = 0
 }
 
 // statusHome/statusEnd jump to the first/last selectable row.
@@ -398,6 +402,7 @@ func (m *Compositor) statusHome() {
 	for i := range rows {
 		if rows[i].sel {
 			m.status.cursor = i
+			m.status.dOffset = 0
 			return
 		}
 	}
@@ -408,6 +413,7 @@ func (m *Compositor) statusEnd() {
 	for i := len(rows) - 1; i >= 0; i-- {
 		if rows[i].sel {
 			m.status.cursor = i
+			m.status.dOffset = 0
 			return
 		}
 	}
@@ -482,12 +488,16 @@ func (m *Compositor) statusApplyOwners() []string {
 
 // statusKey is the Status view's viewHook: the pane movement keys (they
 // live in the one binding table) drive the findings cursor, and enter on
-// a finding jumps to its first owning module on the Modules view. P is
-// a "both" binding: it never reaches this hook — its Status-view scope
-// override lives in startApply (statusApplyOwners), keeping the one
-// apply path.
+// a finding jumps to its first owning module on the Modules view. With
+// the detail pane focused the same keys scroll the detail instead
+// (0111). P is a "both" binding: it never reaches this hook — its
+// Status-view scope override lives in startApply (statusApplyOwners),
+// keeping the one apply path.
 func (m *Compositor) statusKey(s string) (tea.Cmd, bool) {
 	page := m.h - 8 // pane content height (layout: 6 chrome lines + 2 border)
+	if m.focus == focusWork {
+		return m.statusDetailKey(s, page)
+	}
 	switch s {
 	case "j", "down":
 		m.statusMove(1)
@@ -507,6 +517,33 @@ func (m *Compositor) statusKey(s string) (tea.Cmd, bool) {
 		}
 	default:
 		return nil, false
+	}
+	return nil, true
+}
+
+// statusDetailKey scrolls the focused detail pane (0111): the movement
+// keys walk the detail's own offset — the list panes' windowing idiom,
+// without a cursor. The render clamps the offset against the content.
+func (m *Compositor) statusDetailKey(s string, page int) (tea.Cmd, bool) {
+	d := &m.status.dOffset
+	switch s {
+	case "j", "down":
+		*d++
+	case "k", "up":
+		*d--
+	case "pgdown":
+		*d += page
+	case "pgup":
+		*d -= page
+	case "home":
+		*d = 0
+	case "end":
+		*d = len(m.statusDetailLines(m.w)) // overshoots; the render clamps
+	default:
+		return nil, false
+	}
+	if *d < 0 {
+		*d = 0
 	}
 	return nil, true
 }
@@ -539,6 +576,7 @@ func (m *Compositor) cycleStatusFilter() tea.Cmd {
 		m.status.filter = ""
 	}
 	m.status.cursor, m.status.offset = 0, 0
+	m.status.dOffset = 0
 	m.status.clamp(m.statusRows())
 	return nil
 }
@@ -589,34 +627,49 @@ func (m *Compositor) statusList(w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
-// statusDetail renders the right pane: the selected finding's module,
-// item, state, and detail; for a copy-mode dotfile finding the live
-// diff. The all-OK row shows its count.
-func (m *Compositor) statusDetail(w int) string {
+// statusDetail renders the right pane: the selected finding's detail
+// lines windowed to the pane height (0111) — the offset scrolls, a
+// clipped side carries the overflow mark.
+func (m *Compositor) statusDetail(w, h int) string {
+	lines := m.statusDetailLines(w)
+	if len(lines) == 0 {
+		return ""
+	}
+	s := &m.status
+	if top := len(lines) - h; s.dOffset > top {
+		s.dOffset = max(0, top)
+	}
+	return strings.Join(detailWindow(m.th, lines, s.dOffset, h), "\n")
+}
+
+// statusDetailLines builds the detail pane's lines: the selected
+// finding's module, item, state, and detail; for a copy-mode dotfile
+// finding the live diff. The all-OK row shows its count.
+func (m *Compositor) statusDetailLines(w int) []string {
 	s := &m.status
 	if s.read == nil {
-		return ""
+		return nil
 	}
 	rows := m.statusRows()
 	if s.cursor >= len(rows) {
-		return ""
+		return nil
 	}
 	row := rows[s.cursor]
-	var b strings.Builder
+	var lines []string
 	kv := func(k, v string) {
 		if v == "" {
 			return
 		}
-		b.WriteString(ansi.Truncate(m.th.rowKey.Render(fmt.Sprintf(" %-8s", k+":"))+" "+m.th.rowText.Render(v), w, "") + "\n")
+		lines = append(lines, ansi.Truncate(m.th.rowKey.Render(fmt.Sprintf(" %-8s", k+":"))+" "+m.th.rowText.Render(v), w, ""))
 	}
 	if row.okCount > 0 {
 		kv("state", "ok")
 		kv("detail", "all "+strconv.Itoa(row.okCount)+" checks passed")
-		return strings.TrimRight(b.String(), "\n")
+		return lines
 	}
 	f := row.finding
 	if f == nil {
-		return ""
+		return nil
 	}
 	kv("module", f.Module)
 	kv("item", f.Item)
@@ -630,11 +683,11 @@ func (m *Compositor) statusDetail(w int) string {
 			var db strings.Builder
 			if err := service.RenderDiff(&db, []service.DiffEntry{e}, "internal", false); err == nil {
 				for _, line := range strings.Split(strings.TrimRight(db.String(), "\n"), "\n") {
-					b.WriteString(ansi.Truncate(line, w, "") + "\n")
+					lines = append(lines, ansi.Truncate(line, w, ""))
 				}
 			}
 			break
 		}
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return lines
 }

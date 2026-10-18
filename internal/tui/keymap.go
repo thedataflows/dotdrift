@@ -203,6 +203,8 @@ func (m *Compositor) helpRows() []helpRow {
 			return []helpRow{{"up/down", "move"}, {"space", "toggle"}, {"y/enter", "run"}, {"esc", "cancel"}}
 		case *choiceModel:
 			return []helpRow{{"up/down", "pick"}, {"enter", "choose"}, {"esc", "cancel"}}
+		case *volumePickerModel:
+			return []helpRow{{"up/down", "pick"}, {"enter", "fill source"}, {"esc", "back"}}
 		case *filePicker:
 			return []helpRow{
 				{"up/down/pgup/pgdn/home/end", "move"}, {"enter", "pick / descend"},
@@ -227,10 +229,11 @@ func (m *Compositor) helpRows() []helpRow {
 		// keys.
 		var rows []helpRow
 		if m.view == viewStatus {
-			rows = append(rows, helpRow{"j/k", "move findings"})
+			rows = append(rows, helpRow{"j/k", "move findings"}, helpRow{"tab, then j/k", "scroll the detail"})
 		}
 		if m.view == viewPlan {
-			rows = append(rows, helpRow{"j/k", "move sections"}, helpRow{"d", "toggle diff list"})
+			rows = append(rows, helpRow{"j/k", "move sections"}, helpRow{"d", "toggle diff list"},
+				helpRow{"tab, then j/k", "scroll the detail"})
 		}
 		for _, b := range keyTable() {
 			if b.pane == "both" {

@@ -35,7 +35,8 @@ type planLoadedMsg struct {
 
 // planViewModel is the Plan view's state: the read, the rendered
 // report, the diffs, the yank-scope snapshot the read ran under, the
-// diff toggle, and the cursor/scroll pair.
+// diff toggle, the cursor/scroll pair, and the detail pane's scroll
+// offset (0111).
 type planViewModel struct {
 	pending  bool
 	loadErr  string
@@ -47,6 +48,7 @@ type planViewModel struct {
 	showDiff bool
 	cursor   int
 	offset   int
+	dOffset  int
 }
 
 // planSection is one left-pane row: the report section name and its
@@ -99,6 +101,19 @@ func planSections(r *service.PlanRead) []planSection {
 	return out
 }
 
+// planEntries counts the plan's entries across every section — the
+// view-row count slot's number (0111).
+func planEntries(r *service.PlanRead) int {
+	if r == nil || r.Plan == nil {
+		return 0
+	}
+	p := r.Plan
+	return len(p.Packages.Install) + len(p.Packages.Remove) +
+		len(p.Tools.Versions) + len(p.Dotfiles.Entries) +
+		len(p.Hooks.Pre) + len(p.Hooks.Post) +
+		len(p.Systemd.Units) + len(p.Mounts.Entries) + len(p.Smb.Modules)
+}
+
 // reloadPlan starts a plan read cycle (first entry, r): the probe-free
 // resolve, the report render, and the copy-mode diffs in one cmd — the
 // shell keeps rendering while it runs. A second r in flight is a
@@ -143,6 +158,7 @@ func (m *Compositor) planLoaded(msg planLoadedMsg) tea.Cmd {
 	m.planv.report = msg.report
 	m.planv.diffs = msg.diffs
 	m.stale[viewPlan] = m.staleSeq[viewPlan] != m.planv.seq
+	m.planv.dOffset = 0 // new data: the detail reads from the top
 	m.planv.clamp(len(planSections(msg.read)))
 	return nil
 }
@@ -171,17 +187,23 @@ func (p *planViewModel) clamp(n int) {
 	}
 }
 
-// planMove steps the cursor d section rows.
+// planMove steps the cursor d section rows. A cursor move resets the
+// detail pane's scroll (0111): the new section reads from the top.
 func (m *Compositor) planMove(d int) {
 	m.planv.cursor += d
+	m.planv.dOffset = 0
 	m.planv.clamp(len(planSections(m.planv.read)))
 }
 
 // planKey is the Plan view's viewHook: the pane movement keys (they
 // live in the one binding table) drive the section cursor, and d
-// toggles the copy-mode diff list in the detail pane.
+// toggles the copy-mode diff list in the detail pane. With the detail
+// pane focused the movement keys scroll the detail instead (0111).
 func (m *Compositor) planKey(s string) (tea.Cmd, bool) {
 	page := m.h - 8 // pane content height (layout: 6 chrome lines + 2 border)
+	if m.focus == focusWork {
+		return m.planDetailKey(s, page)
+	}
 	switch s {
 	case "j", "down":
 		m.planMove(1)
@@ -193,13 +215,42 @@ func (m *Compositor) planKey(s string) (tea.Cmd, bool) {
 		m.planMove(-page)
 	case "home":
 		m.planv.cursor = 0
+		m.planv.dOffset = 0
 	case "end":
 		m.planv.cursor = len(planSections(m.planv.read)) - 1
+		m.planv.dOffset = 0
 		m.planv.clamp(len(planSections(m.planv.read)))
 	case "d":
 		m.planv.showDiff = !m.planv.showDiff
 	default:
 		return nil, false
+	}
+	return nil, true
+}
+
+// planDetailKey scrolls the focused detail pane (0111): the movement
+// keys walk the detail's own offset — the list panes' windowing idiom,
+// without a cursor. The render clamps the offset against the content.
+func (m *Compositor) planDetailKey(s string, page int) (tea.Cmd, bool) {
+	d := &m.planv.dOffset
+	switch s {
+	case "j", "down":
+		*d++
+	case "k", "up":
+		*d--
+	case "pgdown":
+		*d += page
+	case "pgup":
+		*d -= page
+	case "home":
+		*d = 0
+	case "end":
+		*d = 1 << 30 // overshoots; the render clamps
+	default:
+		return nil, false
+	}
+	if *d < 0 {
+		*d = 0
 	}
 	return nil, true
 }
@@ -251,10 +302,11 @@ func (m *Compositor) planList(w, h int) string {
 	return strings.Join(lines, "\n")
 }
 
-// planDetail renders the right pane: the copy-mode diff list when the
-// toggle is on, otherwise the selected section's entries as
-// RenderPlanReport renders them.
-func (m *Compositor) planDetail(w int) string {
+// planDetail renders the right pane windowed to the pane height (0111):
+// the copy-mode diff list when the toggle is on, otherwise the selected
+// section's entries as RenderPlanReport renders them — the offset
+// scrolls, a clipped side carries the overflow mark.
+func (m *Compositor) planDetail(w, h int) string {
 	s := &m.planv
 	if s.read == nil {
 		return ""
@@ -264,20 +316,30 @@ func (m *Compositor) planDetail(w int) string {
 			return m.th.meta.Render(" no copy-mode diffs")
 		}
 		var b strings.Builder
-		if err := service.RenderDiff(&b, s.diffs, "internal", false); err == nil {
-			var lines []string
-			for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
-				lines = append(lines, ansi.Truncate(line, w, ""))
-			}
-			return strings.Join(lines, "\n")
+		if err := service.RenderDiff(&b, s.diffs, "internal", false); err != nil {
+			return ""
 		}
-		return ""
+		var lines []string
+		for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
+			lines = append(lines, ansi.Truncate(line, w, ""))
+		}
+		return m.planDetailWindow(lines, h)
 	}
 	secs := planSections(s.read)
 	if s.cursor >= len(secs) {
 		return ""
 	}
-	return m.planSectionDetail(secs[s.cursor].name, w)
+	return m.planDetailWindow(m.planSectionLines(secs[s.cursor].name, w), h)
+}
+
+// planDetailWindow applies the detail pane's scroll window and clamps
+// the offset against the content (0111).
+func (m *Compositor) planDetailWindow(lines []string, h int) string {
+	s := &m.planv
+	if top := len(lines) - h; s.dOffset > top {
+		s.dOffset = max(0, top)
+	}
+	return strings.Join(detailWindow(m.th, lines, s.dOffset, h), "\n")
 }
 
 // planReportBlocks maps a left-pane section to the report blocks that
@@ -287,9 +349,9 @@ var planReportBlocks = map[string][]string{
 	"packages": {"packages", "remove"},
 }
 
-// planSectionDetail cuts the section's lines out of the rendered
+// planSectionLines cuts the section's lines out of the rendered
 // report, clamped to the pane width.
-func (m *Compositor) planSectionDetail(sec string, w int) string {
+func (m *Compositor) planSectionLines(sec string, w int) []string {
 	names := planReportBlocks[sec]
 	if names == nil {
 		names = []string{sec}
@@ -301,7 +363,7 @@ func (m *Compositor) planSectionDetail(sec string, w int) string {
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, w, "")
 	}
-	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
+	return lines
 }
 
 // reportBlock extracts one section's lines from RenderPlanReport

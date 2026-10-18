@@ -18,4 +18,8 @@ type Writes interface {
 	Restore(opts service.RestoreOpts) error
 	GenerateSelection(sel generate.Selection) (generate.Selection, error)
 	WriteGenerate(root string, sel generate.Selection, input generate.Input, out io.Writer) error
+	// Volumes lists the detected volumes for the generate mounts
+	// dialog's source picker (0111), MANAGED-marked against the target
+	// module's existing sources.
+	Volumes(root string, sel generate.Selection) ([]generate.Volume, error)
 }

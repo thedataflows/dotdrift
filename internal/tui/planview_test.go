@@ -8,6 +8,7 @@ package tui
 // rule holds (a mark set after the read started survives its landing).
 
 import (
+	"fmt"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -161,6 +162,42 @@ func TestPlanView_midReadStaleMarkSurvivesLanding(t *testing.T) {
 	require.NotNil(t, cmd, "r re-resolves the plan")
 	c, _ = cstep(c, mustMsg(cmd))
 	require.False(t, c.stale[viewPlan], "an uninterrupted refresh clears the stale mark")
+}
+
+// 0111: the detail pane scrolls — a long section never clips silently.
+// tab focuses the detail pane, the movement keys scroll it, a clipped
+// side carries an overflow mark, and moving the section cursor resets
+// the scroll.
+func TestPlanView_detailScrolls(t *testing.T) {
+	read := planFixtureRead()
+	pkgs := make([]string, 40)
+	for i := range pkgs {
+		pkgs[i] = fmt.Sprintf("pkg-%02d", i)
+	}
+	read.Plan.Packages.Install = pkgs
+	_, c := planShell(read)
+	c = loadPlanView(t, c)
+
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "pkg-00", "the section's head renders")
+	require.NotContains(t, frame, "pkg-39", "the tail starts out of the window")
+	require.Contains(t, frame, "more below", "a clipped detail marks the hidden tail")
+
+	c = cpress(c, "tab") // focus the detail pane
+	c = cpress(c, "end")
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "pkg-39", "end reaches the section's tail")
+	require.Contains(t, frame, "more above", "a scrolled detail marks the hidden head")
+	require.NotContains(t, frame, "more below", "the tail is the end")
+
+	// Moving the section cursor resets the detail scroll.
+	c = cpress(c, "tab") // back to the section list
+	c = cpress(c, "j")   // tools
+	c = cpress(c, "k")   // packages again
+	frame = ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "pkg-00", "a cursor move resets the detail scroll to the head")
+	require.NotContains(t, frame, "pkg-39")
+	require.NotContains(t, frame, "more above")
 }
 
 func TestPlanView_golden(t *testing.T) {

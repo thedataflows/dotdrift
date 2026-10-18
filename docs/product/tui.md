@@ -37,9 +37,10 @@ view stack wholesale). Its parts:
   table; scrolling yields the footer to the verbs, and `?` lists
   everything (0078).
 - **The message slot.** Any operation longer than ~200 ms announces
-  itself (`opStartedMsg`) and reports (`opFinishedMsg`). A success note
-  fades after 4 s. A failure renders in the Error color and persists
-  until the next user action.
+  itself (`opStartedMsg`) and reports (`opFinishedMsg`) — the note
+  carries the op's end mark, `✓` on success and `✗` on failure (0111).
+  A success note fades after 4 s. A failure renders in the Error color
+  and persists until the next user action.
 - **The modal stack.** Modals render centered over the dimmed base
   (lipgloss v2 layers on a canvas, the composited final frame). While a
   modal is open it owns all input; covered modals render nothing and
@@ -62,7 +63,9 @@ view stack wholesale). Its parts:
   write (save, manage, onboard, generate, restore) or a finished apply
   marks the read views stale: the title carries `(stale)` until a
   refresh lands. `r` re-reads the active view, `R` re-reads all views; a
-  landed read clears its view's mark.
+  landed read clears its view's mark. A loaded view's title numbers its
+  rows (0111): Status counts its findings, Plan counts the plan's
+  entries — the count renders last, after the stale word and the scope.
 - **The Profile view** (0107). One read-only list, no cursor: the detect
   facts (host, user, os, kernel, distro, GPU, backend — an undetected
   fact renders nothing), the profile root, the state path, the resume
@@ -100,7 +103,11 @@ view stack wholesale). Its parts:
   never claims `no drift`. A non-empty yank set scopes the read and the
   title names the scope (`Status [shell]`); changing the yank set marks
   the view stale. A finished apply marks the Status and Plan views
-  stale — the views wait for `r`, no automatic re-probe.
+  stale — the views wait for `r`, no automatic re-probe. The detail
+  pane scrolls (0111): with the pane focused (`tab`) the movement keys
+  walk its own offset, a clipped side carries a dim overflow mark
+  naming the way to the tail, and moving the findings cursor resets
+  the scroll.
 - **The Plan view** (issue [0109](../issues/0109-tui-plan-view.md)).
   The full merged plan of `dotdrift plan`. Left: one row per non-empty
   section in the report's order with the merged counts (`packages:
@@ -114,7 +121,10 @@ view stack wholesale). Its parts:
   probe-free and async like the other views; a second `r` in flight is
   a no-op. A non-empty yank set scopes the read and the title names the
   scope (`Plan [shell]`); changing the yank set marks the view stale,
-  and a read that started before the mark never clears it.
+  and a read that started before the mark never clears it. The detail
+  pane scrolls like the Status view's (0111): `tab` focuses it, the
+  movement keys scroll, a clipped side is marked, and moving the
+  section cursor resets the scroll.
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
   64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
   and chrome behavior.
@@ -246,7 +256,13 @@ view stack wholesale). Its parts:
   directory symlink, so it browses in either mode too), the writes add form's `target`,
   the mounts/smb field forms' path values — browse with `ctrl+o`
   instead, because enter already means *commit the form*; the onboard
-  pick appends to its space-separated list. A link `source` browse is
+  pick appends to its space-separated list. The generate dialog's
+  mounts `source` row is the one `ctrl+o` that is not a file browse
+  (0111): it opens the volume picker — the detected volumes with UUID,
+  filesystem type, label, size, and mountpoints, a MANAGED mark on a
+  volume the target module already mounts (the list call snapshots the
+  dialog's layer/module/host/user fields) — and a pick fills `source`
+  with `UUID=<uuid>` only. A link `source` browse is
   module-relative (0100): the picker roots at the active layer's module
   directory — an empty field opens inside it, the edit modal's relative
   value seeds there with its entry selected — and the pick stores the
@@ -415,9 +431,9 @@ view stack wholesale). Its parts:
   Every cursor uses it — nav rows, workspace rows, the field input, the
   palette's query and selected row, modal menu and form rows (0075).
 - The footer: a spinner with the running operation's name or the message
-  slot (success notes stand, failures persist until the next user
-  action), then the focused pane's key hints rendered from the binding
-  table.
+  slot (an ended op's note carries its `✓`/`✗` mark; success notes
+  fade, failures persist until the next user action), then the focused
+  pane's key hints rendered from the binding table.
 - Modals render centered over the ANSI-stripped, dimmed base (lipgloss
   v2 layers on a canvas); the top modal owns all input; `esc` pops.
   Session events (apply) are compositor-level messages — they flow while

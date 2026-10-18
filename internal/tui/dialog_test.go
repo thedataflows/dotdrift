@@ -68,6 +68,11 @@ type fakeWrites struct {
 	genRoots  []string
 	genReport string
 	genErr    error
+
+	volSels  []generate.Selection
+	volRoots []string
+	volumes  []generate.Volume
+	volErr   error
 }
 
 func newFakeWrites() *fakeWrites {
@@ -113,6 +118,12 @@ func (f *fakeWrites) WriteGenerate(root string, sel generate.Selection, input ge
 	f.genRoots = append(f.genRoots, root)
 	fmt.Fprint(out, f.genReport)
 	return f.genErr
+}
+
+func (f *fakeWrites) Volumes(root string, sel generate.Selection) ([]generate.Volume, error) {
+	f.volRoots = append(f.volRoots, root)
+	f.volSels = append(f.volSels, sel)
+	return f.volumes, f.volErr
 }
 
 // dialogKey is the part of a dialog the tests type at.
@@ -451,6 +462,96 @@ func TestGenerateDialog_gatePromptOnlyWhenArmed(t *testing.T) {
 	require.Contains(t, d.View(th), "y runs", "the armed footer names the gate's keys")
 	d.HandleKey("n")
 	require.NotContains(t, d.View(th), "y/n", "n disarms the gate and hides the prompt")
+}
+
+// 0111: ctrl+o on the generate mounts source row lists the detected
+// volumes through the service — the call snapshots the dialog's
+// identity fields — and a pick fills source with UUID=<uuid> only.
+// The whole flow drives through the shell: the list lands through
+// Update, the picker opens over the dialog.
+func TestGenerate_volumesPickFillsSource(t *testing.T) {
+	_, c := wsShell(t, map[string]string{
+		"modules/demo/module.toml": "id = \"demo\"\napp = \"demo\"\n",
+	})
+	fake := newFakeWrites()
+	fake.volumes = []generate.Volume{
+		{UUID: "aaaa-1111", FSType: "ext4", Label: "data", Size: "100G", Mountpoints: []string{"/mnt/data"}},
+		{UUID: "bbbb-2222", FSType: "btrfs", Size: "500G"},
+	}
+	c.writesFor = func(*facts.Facts) Writes { return fake }
+
+	c = cpress(c, "tab") // focus the work pane (w is a work binding)
+	c = cpress(c, "w")
+	c = cpress(c, "down")
+	c = cpress(c, "down")
+	c, _ = cstep(c, keyPress("enter"))
+	require.NotEmpty(t, c.modals, "the generate dialog opens")
+	g := c.modals[len(c.modals)-1].(*dialogModal).d.(*generateDialog)
+
+	// Identity: layer host, hostname filled — the picker call must
+	// snapshot exactly these fields.
+	g.HandleKey("down")  // layer
+	g.HandleKey("right") // base -> host
+	for range 9 {
+		g.HandleKey("down") // hostname
+	}
+	typeInto(t, g, "myhost")
+	for range 7 {
+		g.HandleKey("up") // the mounts source row
+	}
+	require.Equal(t, "source", g.all()[g.cur].rowLabel(), "the cursor rests on the source row")
+
+	c, cmd := cstep(c, keyPress("ctrl+o"))
+	require.NotNil(t, cmd, "ctrl+o on the source row lists the volumes")
+	msg := mustMsg(cmd)
+	vm, ok := msg.(volumesLoadedMsg)
+	require.True(t, ok, "the list lands as a volumesLoadedMsg, got %T", msg)
+	require.NoError(t, vm.err)
+	require.Equal(t, []generate.Volume{fake.volumes[0], fake.volumes[1]}, vm.vols)
+	require.Len(t, fake.volSels, 1)
+	require.Equal(t, generate.Selection{Layer: "host", ModuleID: "mounts", Hostname: "myhost"},
+		fake.volSels[0], "the call snapshots the dialog's identity fields")
+	require.Equal(t, []string{c.root}, fake.volRoots)
+
+	c, _ = cstep(c, vm) // the delivery: the picker opens over the dialog
+	require.Len(t, c.modals, 2, "the volume picker opens over the dialog")
+	_, ok = c.modals[len(c.modals)-1].(*volumePickerModel)
+	require.True(t, ok, "the top modal is the volume picker")
+
+	c = cpress(c, "down") // the btrfs volume
+	c = cpress(c, "enter")
+	require.Len(t, c.modals, 1, "a pick pops the picker, the dialog stays")
+	require.Equal(t, "UUID=bbbb-2222", g.mounts[1].field.String(),
+		"the pick fills source with UUID=<uuid> only")
+
+	// Off the source row ctrl+o does nothing.
+	g.HandleKey("down") // destination
+	c, cmd = cstep(c, keyPress("ctrl+o"))
+	require.Nil(t, cmd, "ctrl+o off the source row lists nothing")
+	require.Len(t, fake.volSels, 1, "no second list call")
+}
+
+// 0111: the picker renders the volume's identity — UUID, type, label,
+// size, mountpoint — and marks only the volumes the target module
+// already mounts.
+func TestGenerate_volumesManagedMarked(t *testing.T) {
+	p := &volumePickerModel{
+		th: newTheme(true),
+		vols: []generate.Volume{
+			{UUID: "aaaa-1111", FSType: "ext4", Label: "data", Size: "100G", Mountpoints: []string{"/mnt/data"}, Managed: true},
+			{UUID: "bbbb-2222", FSType: "btrfs", Size: "500G"},
+		},
+		sink: func(string) {},
+	}
+	view := ansiRe.ReplaceAllString(p.view(100, 30), "")
+	require.Contains(t, view, "aaaa-1111")
+	require.Contains(t, view, "ext4")
+	require.Contains(t, view, "data")
+	require.Contains(t, view, "100G")
+	require.Contains(t, view, "/mnt/data")
+	require.Contains(t, view, "MANAGED", "a managed volume carries the mark")
+	require.Equal(t, 1, strings.Count(view, "MANAGED"), "only the managed volume carries the mark")
+	require.Contains(t, view, "bbbb-2222", "the unmanaged volume renders without the mark")
 }
 
 // 0089: the restore dialog's confirm prompt renders only while its

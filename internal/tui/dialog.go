@@ -3,6 +3,7 @@ package tui
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -33,6 +34,13 @@ type writeFinishedMsg struct {
 type restorePlanMsg struct {
 	key  string
 	plan []service.RestorePlanItem
+	err  error
+}
+
+// volumesLoadedMsg carries the detected volume list for the generate
+// mounts dialog's source picker (0111).
+type volumesLoadedMsg struct {
+	vols []generate.Volume
 	err  error
 }
 
@@ -795,6 +803,30 @@ func (d *generateDialog) paste(s string) {
 	d.all()[d.cur].insertRunes(pasteRunes(s))
 }
 
+// browseVolumes is the dialogModal's ctrl+o hook on the mounts source
+// row (0111): it snapshots the dialog's current identity fields into
+// the selection and lists the detected volumes through the service;
+// the landed list opens the volume picker.
+func (d *generateDialog) browseVolumes() (tea.Cmd, bool) {
+	if d.confirm || d.kind.String() != "mounts" {
+		return nil, false
+	}
+	if d.all()[d.cur].field != d.mounts[1].field {
+		return nil, false
+	}
+	sel := generate.Selection{
+		Layer:    d.layer.String(),
+		ModuleID: d.module.String(),
+		Hostname: d.hostname.String(),
+		Username: d.username.String(),
+	}
+	w, root := d.w, d.profile
+	return func() tea.Msg {
+		vols, err := w.Volumes(root, sel)
+		return volumesLoadedMsg{vols: vols, err: err}
+	}, true
+}
+
 func (d *generateDialog) run() tea.Msg {
 	sel, err := d.w.GenerateSelection(generate.Selection{
 		Layer:    d.layer.String(),
@@ -860,6 +892,70 @@ func (d *generateDialog) View(th theme) string {
 		b.WriteString("\n")
 	}
 	b.WriteString(finishView(th, gatePrompt(d.confirm, "run generate?"), d.report, d.err, d.running))
-	b.WriteString(gateFooter(th, d.confirm, "up/down pick a row · type to edit · enter runs · esc back"))
+	hint := "up/down pick a row · type to edit · enter runs · esc back"
+	if d.kind.String() == "mounts" && d.all()[d.cur].field == d.mounts[1].field {
+		hint = "up/down pick a row · type to edit · ^o volumes · enter runs · esc back"
+	}
+	b.WriteString(gateFooter(th, d.confirm, hint))
 	return b.String()
+}
+
+// volumePickerModel lists the detected volumes for the generate mounts
+// dialog's source field (0111): UUID, filesystem type, label, size,
+// mountpoints, and a MANAGED mark for a volume the target module
+// already mounts. enter fills source with UUID=<uuid> only; esc backs
+// out through the compositor's pop rule.
+type volumePickerModel struct {
+	th   theme
+	vols []generate.Volume
+	cur  int
+	sink func(uuid string)
+	done bool
+}
+
+func (p *volumePickerModel) finished() bool { return p.done }
+
+func (p *volumePickerModel) update(msg tea.Msg) tea.Cmd {
+	k, ok := msg.(tea.KeyPressMsg)
+	if !ok {
+		return nil
+	}
+	switch k.String() {
+	case "up", "k":
+		if p.cur > 0 {
+			p.cur--
+		}
+	case "down", "j":
+		if p.cur < len(p.vols)-1 {
+			p.cur++
+		}
+	case "enter":
+		if p.cur < len(p.vols) {
+			p.sink(p.vols[p.cur].UUID)
+			p.done = true
+		}
+	}
+	return nil
+}
+
+func (p *volumePickerModel) view(_, _ int) string {
+	var b strings.Builder
+	b.WriteString(p.th.modalTitle.Render("volumes — pick a mount source") + "\n\n")
+	if len(p.vols) == 0 {
+		b.WriteString("  " + p.th.disabledMark.Render("(no volumes with a usable filesystem UUID)") + "\n")
+	}
+	for i, v := range p.vols {
+		row := fmt.Sprintf("%s  %s  %s  %s  %s", v.UUID, v.FSType, v.Label, v.Size,
+			strings.Join(v.Mountpoints, ","))
+		if v.Managed {
+			row += "  MANAGED"
+		}
+		if i == p.cur {
+			b.WriteString(p.th.cursorRow.Render(" "+row) + "\n")
+		} else {
+			b.WriteString("  " + p.th.rowText.Render(row) + "\n")
+		}
+	}
+	b.WriteString("\n" + p.th.meta.Render("  up/down pick · enter fills source · esc back"))
+	return p.th.modalBorder.Padding(1, 2).Render(strings.TrimRight(b.String(), "\n"))
 }

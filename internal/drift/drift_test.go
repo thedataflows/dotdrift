@@ -473,7 +473,51 @@ func TestCheck_dotfileEditUnreadable(t *testing.T) {
 	fs := drift.Check(context.Background(),
 		dotfilePlan(resolve.DotfileEntry{Target: tgt + "/activate", Block: "alias ll='ls -l'", Module: "m"}),
 		t.TempDir(), pr, drift.CheckOptions{})
-	require.Equal(t, drift.Unknown, fs[0].Status, "EACCES → Unknown")
+	require.Equal(t, drift.Unauthorized, fs[0].Status, "EACCES → Unauthorized (issue 0108)")
+}
+
+// A dotfiles-section Unknown whose detail carries a permission error
+// (failed or declined sudo) classifies as Unauthorized at the end of Check;
+// the match on the detail is case-insensitive (issue 0108).
+func TestCheck_permissionDeniedIsUnauthorized(t *testing.T) {
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	pr.ReadFile = func(path string) ([]byte, error) {
+		if strings.Contains(path, "zshrc") {
+			return nil, fmt.Errorf("open %s: %w", path, os.ErrPermission)
+		}
+		return nil, errors.New("sudo: PERMISSION DENIED")
+	}
+	fs := drift.Check(context.Background(),
+		dotfilePlan(
+			resolve.DotfileEntry{Target: "/etc/zshrc/activate", Block: "x", Module: "m"},
+			resolve.DotfileEntry{Target: "/etc/bashrc/activate", Block: "x", Module: "m"},
+		),
+		t.TempDir(), pr, drift.CheckOptions{})
+	zsh := findByItem(t, fs, "/etc/zshrc/activate")
+	require.Equal(t, drift.Unauthorized, zsh.Status, "os.ErrPermission detail → Unauthorized")
+	require.Equal(t, "unauthorized", zsh.Status.String())
+	bash := findByItem(t, fs, "/etc/bashrc/activate")
+	require.Equal(t, drift.Unauthorized, bash.Status, "uppercase PERMISSION DENIED → Unauthorized")
+}
+
+// Unknown findings that are not dotfiles permission errors keep their
+// status: mise missing (tools section) and a dotfiles probe error without
+// a permission detail both stay Unknown (issue 0108).
+func TestCheck_otherUnknownStaysUnknown(t *testing.T) {
+	pr := fakeProbes()
+	pr.HomeDir = "/home/u"
+	pr.ToolCurrent = func(_ context.Context, tool string) (string, error) {
+		return "", fmt.Errorf("%w: %s", mise.ErrUnavailable, "mise: not found")
+	}
+	pr.ReadFile = func(string) ([]byte, error) { return nil, errors.New("disk on fire") }
+	plan := dotfilePlan(resolve.DotfileEntry{Target: "/etc/zshrc/activate", Block: "x", Module: "m"})
+	plan.Tools = resolve.ToolsStep{Versions: map[string]string{"node": "22"}}
+	fs := check(context.Background(), plan, pr)
+	tool := findByItem(t, fs, "node")
+	require.Equal(t, drift.Unknown, tool.Status, "mise missing stays Unknown")
+	dot := findByItem(t, fs, "/etc/zshrc/activate")
+	require.Equal(t, drift.Unknown, dot.Status, "non-permission dotfiles error stays Unknown")
 }
 
 func mountPlan(spec profile.MountSpec) *resolve.Plan {
@@ -891,6 +935,26 @@ func TestRender_noFindings(t *testing.T) {
 	var buf bytes.Buffer
 	drift.Render(&buf, nil)
 	require.Equal(t, "no drift\n", buf.String())
+}
+
+// Unauthorized findings render the word "unauthorized" (no "(?)" suffix)
+// and count separately in the summary (issue 0108).
+func TestRender_unauthorizedCounts(t *testing.T) {
+	findings := []drift.Finding{
+		{Section: "packages", Item: "ripgrep", Status: drift.Drift, Detail: "missing"},
+		{Section: "packages", Item: "jq", Status: drift.Unknown, Detail: "dpkg query failed"},
+		{Section: "dotfiles", Item: "/etc/zshrc", Status: drift.Unauthorized, Detail: "open /etc/zshrc: permission denied", Module: "m"},
+	}
+	var buf bytes.Buffer
+	drift.Render(&buf, findings)
+	want := "packages:\n" +
+		"  ?: ripgrep - missing\n" +
+		"  ?: jq - dpkg query failed (?)\n" +
+		"dotfiles:\n" +
+		"  m: /etc/zshrc - open /etc/zshrc: permission denied (unauthorized)\n" +
+		"\n" +
+		"drift: 1 item, 1 unknown, 1 unauthorized\n"
+	require.Equal(t, want, buf.String())
 }
 
 func TestRender_pluralSummary(t *testing.T) {

@@ -31,8 +31,11 @@ const (
 	OK Status = iota
 	Drift
 	// Unknown means a probe failed or the result was not decidable (e.g. mise
-	// missing, permission denied).
+	// missing, an unexpected read error).
 	Unknown
+	// Unauthorized means a dotfiles probe failed with permission denied and
+	// the elevated retry failed or was declined (issue 0108).
+	Unauthorized
 )
 
 func (s Status) String() string {
@@ -43,6 +46,8 @@ func (s Status) String() string {
 		return "drift"
 	case Unknown:
 		return "unknown"
+	case Unauthorized:
+		return "unauthorized"
 	}
 	return "unknown"
 }
@@ -183,6 +188,17 @@ func Check(ctx context.Context, plan *resolve.Plan, profileRoot string, pr Probe
 	}
 	close(work)
 	wg.Wait()
+	// One classification pass: a dotfiles probe that failed with permission
+	// denied (the elevated retry failed or was declined) reports
+	// Unauthorized, not Unknown (issue 0108). The detail string is the only
+	// carrier — probes return errors, not typed causes.
+	for i := range results {
+		f := &results[i]
+		if f.Section == "dotfiles" && f.Status == Unknown &&
+			strings.Contains(strings.ToLower(f.Detail), "permission denied") {
+			f.Status = Unauthorized
+		}
+	}
 	return results
 }
 
@@ -780,15 +796,17 @@ func checkService(ctx context.Context, section, name string, pr Probes) Finding 
 // drift), red (not-a-symlink/unknown), yellow (content differs), and magenta
 // (orphans). The final line is `no drift` when nothing drifted,
 // otherwise `drift: N item(s)` with `, K unknown` appended when there are
-// unknowns.
+// unknowns and `, U unauthorized` when there are unauthorized findings.
 func Render(w io.Writer, findings []Finding, renderOptions ...RenderOption) {
-	driftCount, unknownCount := 0, 0
+	driftCount, unknownCount, unauthCount := 0, 0, 0
 	for _, f := range findings {
 		switch f.Status {
 		case Drift:
 			driftCount++
 		case Unknown:
 			unknownCount++
+		case Unauthorized:
+			unauthCount++
 		}
 	}
 
@@ -830,7 +848,7 @@ func Render(w io.Writer, findings []Finding, renderOptions ...RenderOption) {
 	if wroteSection {
 		fmt.Fprintln(w)
 	}
-	if driftCount == 0 && unknownCount == 0 {
+	if driftCount == 0 && unknownCount == 0 && unauthCount == 0 {
 		line := "no drift"
 		if color {
 			line = seq(opts.pal.Seq(palette.OK)) + line + ansiReset
@@ -845,6 +863,9 @@ func Render(w io.Writer, findings []Finding, renderOptions ...RenderOption) {
 	summary := fmt.Sprintf("drift: %d %s", driftCount, itemWord)
 	if unknownCount > 0 {
 		summary += fmt.Sprintf(", %d unknown", unknownCount)
+	}
+	if unauthCount > 0 {
+		summary += fmt.Sprintf(", %d unauthorized", unauthCount)
 	}
 	fmt.Fprintln(w, summary)
 }
@@ -880,7 +901,8 @@ func WithPalette(p *palette.Palette) RenderOption {
 }
 
 // renderFinding writes one drift/unknown finding line. The owning module
-// replaces the redundant status prefix; unknown items get a (?) suffix. With
+// replaces the redundant status prefix; unknown items get a (?) suffix,
+// unauthorized items an (unauthorized) suffix. With
 // color on, the finding hue splits into two shades — faint for the module,
 // bold for the item — so the grouped owner and the item read as distinct
 // columns of the same color; the detail rides the plain hue.
@@ -890,8 +912,11 @@ func renderFinding(w io.Writer, f Finding, color bool, pal *palette.Palette) {
 		mod = "?"
 	}
 	suffix := ""
-	if f.Status == Unknown {
+	switch f.Status {
+	case Unknown:
 		suffix = " (?)"
+	case Unauthorized:
+		suffix = " (unauthorized)"
 	}
 	if color {
 		hue := seq(pal.Seq(findingRole(f, pal)))
@@ -946,7 +971,7 @@ func findingRole(f Finding, _ *palette.Palette) palette.Role {
 	if f.Section == "orphans" {
 		return palette.Orphan
 	}
-	if f.Status == Unknown || strings.Contains(f.Detail, "not a symlink") {
+	if f.Status == Unknown || f.Status == Unauthorized || strings.Contains(f.Detail, "not a symlink") {
 		return palette.Error
 	}
 	if f.Detail == "content differs" || strings.HasPrefix(f.Detail, "installed ") {

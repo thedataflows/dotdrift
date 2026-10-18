@@ -209,9 +209,10 @@ casualty.
   scoped `P` applies to all owning modules (the comma-joined owner
   list, split). Orphan findings jump to the module of that layer
   directory.
-- **Rows and counts, CLI parity.** The Status list shows only drift
-  and unknown findings, as the CLI report does. An all-OK section shows
-  one "ok: all N checks passed" row. Counts are drift + unknown.
+- **Rows and counts, CLI parity.** The Status list shows only drift,
+  unknown, and unauthorized findings, as the CLI report does. An
+  all-OK section shows one "ok: all N checks passed" row. Counts are
+  drift + unknown + unauthorized, each named.
 - **Gate toggles sit before Preview.** `P` opens the options gate
   (force / backup / sections) first; on confirm, one Preview runs with
   the snapshotted options, then the existing destructive and elevation
@@ -233,6 +234,12 @@ casualty.
   password, three failures abort) before the read starts; the probes
   then run elevated silently under the fresh timestamp, as the CLI's
   per-probe sudo does. No prompt ever reaches the altscreen. If
-  elevation is declined or fails, the read runs unelevated and
-  root-owned findings land as `unknown` with the reason — the probes'
-  existing behavior when elevation is unavailable.
+  elevation is declined or fails, the read runs unelevated and a
+  permission-denied probe reports **unauthorized**, never `unknown`:
+  the drift layer gains an unauthorized state (permission failure
+  after no working elevation), rendered as the word `unauthorized`
+  with no `(?)` mark, and counted on its own in the summary
+  ("…, U unauthorized" when U > 0). Both front ends use the word —
+  the CLI's `status` names it the same way when its own elevation
+  fails. Slice 2 carries this drift change and the contract 17
+  wording that names it.

@@ -19,27 +19,31 @@ func TestViews_cycleAndJump(t *testing.T) {
 	}
 	require.Contains(t, frame, "module: shell", "the Modules body renders by default")
 
-	// > cycles forward through the four views and wraps; < goes back.
-	c = cpress(c, ">")
+	// The right arrow cycles forward through the four views and
+	// wraps; the left arrow goes back (0115).
+	c = cpress(c, "right")
 	require.Equal(t, viewStatus, c.view)
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "not loaded", "an empty view shows the placeholder")
 	require.NotContains(t, frame, "module: shell", "the Modules body is gone off its view")
 
-	c = cpress(c, ">")
+	c = cpress(c, "right")
 	require.Equal(t, viewPlan, c.view)
-	c = cpress(c, ">")
+	c = cpress(c, "right")
 	require.Equal(t, viewProfile, c.view)
-	c = cpress(c, ">")
-	require.Equal(t, viewModules, c.view, "> wraps to Modules")
-	c = cpress(c, "<")
-	require.Equal(t, viewProfile, c.view, "< goes to the previous view")
+	c = cpress(c, "right")
+	require.Equal(t, viewModules, c.view, "right wraps to Modules")
+	c = cpress(c, "left")
+	require.Equal(t, viewProfile, c.view, "left goes to the previous view")
 	c = cpress(c, "1")
 	require.Equal(t, viewModules, c.view)
 
-	// s no longer switches views (0113).
+	// Neither s nor the literal > switches views (0113, 0115): view
+	// keys are the arrows, no Shift needed.
 	c = cpress(c, "s")
 	require.Equal(t, viewModules, c.view, "s is not a view key anymore")
+	c = cpress(c, ">")
+	require.Equal(t, viewModules, c.view, "the literal > is not a view key")
 
 	// 1-4 jump from the nav pane.
 	c = cpress(c, "3")
@@ -81,7 +85,7 @@ func TestViews_footerHintsOffModules(t *testing.T) {
 func TestViews_modulesUnchanged(t *testing.T) {
 	c := newTestCompositor()
 	before := c.View().Content
-	c = cpress(c, ">")
+	c = cpress(c, "right")
 	require.NotEqual(t, before, c.View().Content, "another view replaces the body")
 	c = cpress(c, "1")
 	require.Equal(t, before, c.View().Content, "the Modules view is byte-identical when active again")

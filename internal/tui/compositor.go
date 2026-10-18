@@ -719,7 +719,7 @@ func (m *Compositor) ShortHelp() []key.Binding {
 		// the table — a dead pane verb never reaches the footer. The
 		// number jumps stay in ? — the full list runs past the frame
 		// width, and truncation must not eat p/P/?/q (fix round 1).
-		for _, k := range []string{"enter", ">", "r", "p", "P", "?", "q"} {
+		for _, k := range []string{"enter", "right", "r", "p", "P", "?", "q"} {
 			if b, ok := byKey[k]; ok {
 				add(b.key, b.help)
 			}

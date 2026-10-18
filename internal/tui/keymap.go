@@ -43,8 +43,6 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"up", "nav", "up", func(m *Compositor) tea.Cmd { m.nav.move(-1); return m.syncWorkspace() }},
 		{"h", "nav", "collapse / parent", func(m *Compositor) tea.Cmd { m.nav.collapse(); return m.syncWorkspace() }},
 		{"l", "nav", "expand", func(m *Compositor) tea.Cmd { m.nav.expand(); return m.syncWorkspace() }},
-		{"left", "nav", "collapse / parent", func(m *Compositor) tea.Cmd { m.nav.collapse(); return m.syncWorkspace() }},
-		{"right", "nav", "expand", func(m *Compositor) tea.Cmd { m.nav.expand(); return m.syncWorkspace() }},
 		{"pgup", "nav", "page up", func(m *Compositor) tea.Cmd { m.nav.page(-1); return m.syncWorkspace() }},
 		{"pgdown", "nav", "page down", func(m *Compositor) tea.Cmd { m.nav.page(1); return m.syncWorkspace() }},
 		{"home", "nav", "first row", func(m *Compositor) tea.Cmd { m.nav.home(); return m.syncWorkspace() }},
@@ -63,10 +61,12 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
 		{"P", "both", "apply", func(m *Compositor) tea.Cmd { return m.startApply() }},
 		{"tab", "both", "switch pane", func(m *Compositor) tea.Cmd { m.focus = (m.focus + 1) % 2; return nil }},
-		// view row (0107, 0113): < and > cycle, 1-4 jump, r re-reads
-		// the active view, R re-reads all views — live in every view
-		{"<", "both", "previous view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + viewCount - 1) % viewCount) }},
-		{">", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
+		// view row (0107, 0115): the left and right arrows cycle,
+		// 1-4 jump, r re-reads the active view, R re-reads all views —
+		// live in every view. The arrows own view switching, so the
+		// pane-local horizontal jobs live on h/l alone.
+		{"left", "both", "previous view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + viewCount - 1) % viewCount) }},
+		{"right", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
 		{"1", "both", "modules view", func(m *Compositor) tea.Cmd { return m.switchView(viewModules) }},
 		{"2", "both", "status view", func(m *Compositor) tea.Cmd { return m.switchView(viewStatus) }},
 		{"3", "both", "plan view", func(m *Compositor) tea.Cmd { return m.switchView(viewPlan) }},
@@ -85,8 +85,8 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"end", "work", "last row", func(m *Compositor) tea.Cmd { m.ws.end(); return nil }},
 		{"enter", "work", "edit field", func(m *Compositor) tea.Cmd { m.startEdit(); return nil }},
 		{"e", "work", "edit field", func(m *Compositor) tea.Cmd { m.startEdit(); return nil }},
-		{"left", "work", "previous value", func(m *Compositor) tea.Cmd { m.cycleChoice(-1); return nil }},
-		{"right", "work", "next value", func(m *Compositor) tea.Cmd { m.cycleChoice(1); return nil }},
+		{"h", "work", "previous value", func(m *Compositor) tea.Cmd { m.cycleChoice(-1); return nil }},
+		{"l", "work", "next value", func(m *Compositor) tea.Cmd { m.cycleChoice(1); return nil }},
 		{"a", "both", "add entry / apply detail", func(m *Compositor) tea.Cmd {
 			// A live or ended run takes precedence from either pane;
 			// otherwise a is the workspace's add form.

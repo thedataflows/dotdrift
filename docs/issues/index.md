@@ -104,3 +104,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0114](0114-tui-visual-fixes-screenshot.md) | TUI visual fixes from the first screenshot — filled bars, calm cursor, tab rule | done | medium |
 | [0115](0115-arrow-key-view-navigation.md) | Arrow keys switch views; h/l keep the pane horizontal jobs | done | medium |
 | [0116](0116-section-bar-alignment.md) | Section bars align with the cursor row and fill the pane | done | medium |
+| [0117](0117-section-spacing.md) | Space between workspace sections | done | medium |

@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0142: Dialog form rows carry the same leading space
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: [0141](0141-modules-panes-leading-space.md)
 - **Related code**: [`internal/tui/dialog.go`](../../internal/tui/dialog.go)
-- **Closing commits**: none
+- **Closing commits**: `62a252f`
 
 ## Summary
 
@@ -41,9 +41,9 @@ renderers and stay unchanged.
 
 ## Acceptance Criteria
 
-- [ ] A focused dialog row renders `│<label> <value>`; a plain row
+- [x] A focused dialog row renders `│<label> <value>`; a plain row
   renders one space before the label.
-- [ ] TUI goldens are regenerated and reviewed.
+- [x] TUI goldens are regenerated and reviewed.
 
 ## Out of Scope
 

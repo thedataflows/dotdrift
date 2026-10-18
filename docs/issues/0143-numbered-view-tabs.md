@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0143: Number the view tabs
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: [0107](0107-tui-shell-views-profile.md)
 - **Related code**: [`internal/tui/views.go`](../../internal/tui/views.go)
-- **Closing commits**: none
+- **Closing commits**: `64cd7c3`
 
 ## Summary
 
@@ -27,8 +27,8 @@ working tree outside the agent session and kept by the user
 
 ## Acceptance Criteria
 
-- [ ] Tab labels carry their shortcut numbers.
-- [ ] TUI goldens are regenerated for the new labels.
+- [x] Tab labels carry their shortcut numbers.
+- [x] TUI goldens are regenerated for the new labels.
 
 ## Out of Scope
 

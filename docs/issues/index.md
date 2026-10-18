@@ -105,3 +105,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0115](0115-arrow-key-view-navigation.md) | Arrow keys switch views; h/l keep the pane horizontal jobs | done | medium |
 | [0116](0116-section-bar-alignment.md) | Section bars align with the cursor row and fill the pane | done | medium |
 | [0117](0117-section-spacing.md) | Space between workspace sections | done | medium |
+| [0118](0118-tab-cycles-views-arrows-panes.md) | Tab cycles views, arrows move between panes | done | medium |

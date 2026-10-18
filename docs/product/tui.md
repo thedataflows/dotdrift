@@ -51,17 +51,17 @@ view stack wholesale). Its parts:
   top modal first, then exits workspace edit mode, then returns focus to
   the nav. On the base it clears an applied nav filter first (0081). No
   per-view fallthrough.
-- **Focus.** `tab`/`shift+tab` move between nav and workspace; focus is
+- **Focus.** The left and right arrow keys move between the left and right panes (0118); focus is
   the border color; exactly one pane is focused.
 - **The tab bar** (issues [0107](../issues/0107-tui-shell-views-profile.md),
   [0113](../issues/0113-tui-visual-system.md)). Under the header:
   `Modules`, `Status`, `Plan`, `Profile` as padded tab blocks — the
   active tab is a filled indigo block, the inactive tabs flat faint
-  text, in the gh-dash treatment. The left and right arrow keys cycle
-  to the previous and next view, `1`–`4` jump — live in every view; no
-  view key needs Shift. The arrows own view switching, so the nav's
-  collapse/expand and the workspace's value cycling live on `h`/`l`
-  alone (dialogs, the picker, and editors keep their own arrows).
+  text, in the gh-dash treatment. `tab` cycles to the next view and
+  `shift+tab` to the previous view, `1`–`4` jump — live in every view.
+  The nav's collapse/expand and the workspace's value cycling live on
+  `h`/`l` alone (dialogs, the picker, and editors keep their own
+  arrows).
   The Modules view is the two-pane base screen. Off the Modules view the
   shared bindings live, and a view with a body owns the pane movement
   keys through its hook (0108); the footer and `?` hint exactly the

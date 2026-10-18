@@ -112,6 +112,13 @@ func TestTheme_filledBars(t *testing.T) {
 		"the section bar fills the full width (0121)")
 	require.Equal(t, 20, len([]rune(strip(th.detailLine("dotfiles · x", 20)))),
 		"the detail header fills the full width")
+	// 0122: a footer key is a deliberate chip — its background is the
+	// indigo hue, not the bar background it sits on.
+	require.Contains(t, th.helpKey.Render("x"), "48;2;117;113;249",
+		"the footer key chip carries the indigo background")
+	require.NotContains(t, th.footerBar.Render("x"), "48;2;117;113;249",
+		"the bar background is not the chip background")
+
 	cursor := th.cursorLine(" demo", 20)
 	require.Equal(t, 20, len([]rune(strip(cursor))), "the cursor row fills the full width")
 	require.Contains(t, cursor, "38;5;255", "the cursor text is the bright neutral hue")

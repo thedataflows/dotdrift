@@ -159,7 +159,7 @@ func newTheme(isDark bool) theme {
 		cardBorder:  pane.BorderForeground(p.dim).Padding(0, 1),
 		modalDanger: pane.BorderForeground(p.red),
 		modalInfo:   pane.BorderForeground(p.indigo),
-		helpKey:     lipgloss.NewStyle().Bold(true).Foreground(p.value).Background(p.selectedBg),
+		helpKey:     lipgloss.NewStyle().Bold(true).Padding(0, 1).Foreground(lipgloss.Color("#FFFFFF")).Background(p.indigo), // a deliberate chip on the bar (0122)
 		helpDesc:    lipgloss.NewStyle().Foreground(p.muted).Background(p.selectedBg),
 		tabBar: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, true, false).

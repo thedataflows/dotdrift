@@ -1,6 +1,10 @@
 # Directory Update Log
 
 
+## 2026-10-18
+
+* **Fixed (resume cursor ignores changed dotfile sources — issue [0106](issues/0106-resume-cursor-ignores-changed-sources.md))**: an apply that failed or was cancelled after the dotfiles step left a cursor; an edit to a copy-mode source before the next run was never placed, because the pipeline skipped through the cursor with no check that the input still matched (symlink targets showed no fault — the link reads the source). `state.State` gains `inputHash` next to `lastCompleted`; the new `resolve.InputHash` covers the selection fingerprint, the resolved plan, and the bytes of every dotfile source file. `ApplyArea.Start` uses the stored cursor only when the stored hash equals the current hash — a mismatch, and any pre-0106 state file with no hash, starts from the first step (safe: every step converges) — and the pipeline saves the current hash with each cursor write. `ReadsArea.Status` applies the same test, so `status` and `apply` agree on whether a cursor is pending. This restores the plan-hash rule that issue [0004](issues/0004-resume-cursor-and-status-drift.md) removed; contract invariants 2 and 4 state the new rule. TDD: `TestSession_changedCopySourceInvalidatesCursor` red first, `TestInputHash_changesWithSourceContent`, and the existing resume/status tests now store a cursor with its fixture hash (the unchanged-input case). Verified end-to-end with real mise: an interrupted apply (`lastCompleted: dotfiles` + hash) followed by a source edit places the new copy content on the next run. `go test ./...` and `go vet ./...` green.
+
 ## 2026-09-26
 
 * **Bumped (golangci-lint pin to 2.14 — issue [0105](issues/0105-ci-fails-nonhermetic-tests-go-toolchain.md) follow-up)**: `mise.toml`'s `"golangci-lint" = '2'` becomes `'2.14'` and the CI lint job's action pin moves `v2.13` → `v2.14`, so local and CI name the same release line. Verified with `act` on the lint job: the action resolves v2.14.0, the binary loads the `go 1.27` module, `Issues : 0`, job succeeded. Docs: issue 0105 resolution amendment, this entry.

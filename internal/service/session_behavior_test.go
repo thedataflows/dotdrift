@@ -19,8 +19,22 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
+	"github.com/thedataflows/dotdrift/internal/profile"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 	"github.com/thedataflows/dotdrift/internal/state"
 )
+
+// inputHashFor resolves the profile at root and returns the apply input
+// hash for its current on-disk content (issue 0106 test helper).
+func inputHashFor(t *testing.T, root string) string {
+	t.Helper()
+	f := testFacts()
+	p, err := profile.Load(root, f)
+	require.NoError(t, err)
+	plan, err := resolve.Resolve(p, f)
+	require.NoError(t, err)
+	return resolve.InputHash(p, f, plan)
+}
 
 func baseOpts(root, statePath string) ApplyOpts {
 	return ApplyOpts{
@@ -60,9 +74,13 @@ func TestSession_resumeSkipsThroughCursor(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	deps, events := stubSessionDeps(t, testFacts())
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "tools"}))
+	root := resolveFixture(t)
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "tools",
+		InputHash:     inputHashFor(t, root),
+	}))
 
-	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(resolveFixture(t), statePath))
+	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(root, statePath))
 	require.NoError(t, err)
 	evs := drain(t, sess)
 	res, err := sess.Wait()
@@ -83,15 +101,54 @@ func TestSession_resumeSkipsThroughCursor(t *testing.T) {
 	require.True(t, os.IsNotExist(statErr), "state file must be removed after a successful apply")
 }
 
+// A copy-mode source edited after an interrupted apply invalidates the
+// stored cursor (issue 0106): the dotfiles step runs again instead of
+// skipping through "dotfiles" and leaving the old copy at the target.
+// Symlink targets never showed the fault (the link reads the source).
+func TestSession_changedCopySourceInvalidatesCursor(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "modules", "demo", "home", "app.conf")
+	require.NoError(t, os.MkdirAll(filepath.Dir(src), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "modules", "demo", "module.toml"), []byte(
+		"[dotfiles]\n\"~/.config/demo/app.conf\" = { source = \"home/app.conf\", mode = \"copy\" }\n\n[hooks]\npost = [\"echo done\"]\n"), 0o644))
+	require.NoError(t, os.WriteFile(src, []byte("v1\n"), 0o644))
+
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	deps, _ := stubSessionDeps(t, testFacts())
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "dotfiles",
+		InputHash:     inputHashFor(t, root),
+	}))
+
+	// The user edits the copy source, then re-runs apply.
+	require.NoError(t, os.WriteFile(src, []byte("v2\n"), 0o644))
+
+	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(root, statePath))
+	require.NoError(t, err)
+	evs := drain(t, sess)
+	res, err := sess.Wait()
+	require.NoError(t, err)
+	require.Equal(t, OutcomeCompleted, res.Outcome)
+
+	pr := evs[0].(PlanResolved)
+	require.False(t, pr.CursorEffective, "changed input must not resume after dotfiles")
+	require.Contains(t, stepNames(evs), "dotfiles", "dotfiles step must run again after its source changed")
+}
+
 // A stale cursor (naming a step absent from this run) is ignored: every
 // step runs and CursorEffective says so (contract 2).
 func TestSession_staleCursorIgnored(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	deps, _ := stubSessionDeps(t, testFacts())
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "vanished"}))
+	root := resolveFixture(t)
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "vanished",
+		InputHash:     inputHashFor(t, root),
+	}))
 
-	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(resolveFixture(t), statePath))
+	sess, err := NewApplyArea(deps).Start(context.Background(), baseOpts(root, statePath))
 	require.NoError(t, err)
 	evs := drain(t, sess)
 	_, err = sess.Wait()

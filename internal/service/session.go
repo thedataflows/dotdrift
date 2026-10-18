@@ -239,6 +239,15 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		_ = store.Unlock()
 		return nil, fmt.Errorf("load state: %w", err)
 	}
+	// The stored cursor is valid only for the exact input it ran against
+	// (issue 0106): any change to the plan or a dotfile source, and any
+	// pre-0106 state file (no hash), starts from the first step. A full
+	// re-run is safe: every step converges.
+	inputHash := resolve.InputHash(p, f, plan)
+	cursor := s0.LastCompleted
+	if s0.InputHash != inputHash {
+		cursor = ""
+	}
 
 	// One mise instance drives both the pre-steps and every pipeline step.
 	m := a.deps.NewMise()
@@ -304,7 +313,8 @@ func (a *ApplyArea) Start(ctx context.Context, opts ApplyOpts) (*ApplySession, e
 		sections:    prep.sections,
 		paths:       paths,
 		profileRoot: prep.profileRoot,
-		cursor:      s0.LastCompleted,
+		cursor:      cursor,
+		inputHash:   inputHash,
 	})
 	return sess, nil
 }
@@ -367,6 +377,7 @@ type runSpec struct {
 	paths       configPaths
 	profileRoot string
 	cursor      string
+	inputHash   string
 }
 
 // run executes the absorbed orchestration (the cmd/apply.go Run body,
@@ -436,7 +447,7 @@ func (r *sessionRunner) run(ctx context.Context, spec *runSpec) {
 	}
 
 	pl := apply.NewPipeline(r.steps, r.store.Save)
-	pl.SetState(&state.State{LastCompleted: spec.cursor})
+	pl.SetState(&state.State{LastCompleted: spec.cursor, InputHash: spec.inputHash})
 	pl.SetObserver(r)
 	if err := pl.Run(ctx); err != nil {
 		r.finishPipelineOutcome(res, pl, err, ctx)

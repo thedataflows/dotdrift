@@ -151,7 +151,10 @@ func TestService_status_read(t *testing.T) {
 	dir := statusFixture(t)
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	statePath := filepath.Join(dir, "state.json")
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "packages",
+		InputHash:     inputHashFor(t, dir),
+	}))
 
 	probesFor := func(*facts.Facts) drift.Probes {
 		pr := drift.DefaultProbes()

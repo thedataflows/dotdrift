@@ -158,6 +158,17 @@ func resolveFixture(t *testing.T) string {
 	return filepath.Join("..", "testdata", "profiles", "resolve")
 }
 
+// inputHashFor resolves the profile at root and returns the apply input
+// hash for its current on-disk content (issue 0106 test helper).
+func inputHashFor(t *testing.T, root string, f *facts.Facts) string {
+	t.Helper()
+	p, err := profile.Load(root, f)
+	require.NoError(t, err)
+	plan, err := resolve.Resolve(p, f)
+	require.NoError(t, err)
+	return resolve.InputHash(p, f, plan)
+}
+
 // Happy path: detect → load → resolve → ensure → hooks-pre →
 // packages/tools/dotfiles → hooks-post in order; a successful apply removes
 // the state file so the next run starts from the beginning.
@@ -213,18 +224,23 @@ func TestApply_alreadyRunningErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "another apply is already running")
 }
 
-// A persisted cursor naming a completed step makes apply skip through it:
-// seeded {"lastCompleted":"tools"} skips hooks-pre/packages/tools (no install,
-// no packages:absent events), runs dotfiles, and removes the state file.
+// A persisted cursor naming a completed step makes apply skip through it,
+// when the stored input hash matches this run (issue 0106): seeded
+// "tools" skips hooks-pre/packages/tools (no install, no packages:absent
+// events), runs dotfiles, and removes the state file.
 func TestApply_resumeSkipsStepsThroughCursor(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	fk := stubApplyDeps(t, f)
 
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "tools"}))
+	root := resolveFixture(t)
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "tools",
+		InputHash:     inputHashFor(t, root, f),
+	}))
 
-	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: resolveFixture(t), State: statePath, Yes: true}).Run())
+	require.NoError(t, (&ApplyCmd{deps: &fk.deps, Profile: root, State: statePath, Yes: true}).Run())
 
 	for _, e := range *fk.events {
 		require.NotContains(t, e, "mise:run install", "tools step must be skipped after a tools cursor")

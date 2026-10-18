@@ -93,3 +93,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0103](0103-tui-workspace-key-shade.md) | Workspace entry rows shade the key half darker than the value | done | low |
 | [0104](0104-apply-never-pipes-mise-hook-tasks.md) | apply never pipes mise hook tasks — every task runs through the handover | done | high |
 | [0105](0105-ci-fails-nonhermetic-tests-go-toolchain.md) | CI runs fail — non-hermetic service tests and Go 1.26 toolchains behind a Go 1.27 module | done | high |
+| [0106](0106-resume-cursor-ignores-changed-sources.md) | Resume cursor ignores changed dotfile sources | done | high |

@@ -2,7 +2,12 @@
 package resolve
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"hash"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -284,6 +289,66 @@ func Fingerprint(p *profile.Profile, f *facts.Facts) string {
 	fmt.Fprintf(&b, "backend=%s\n", f.Backend)
 
 	return b.String()
+}
+
+// InputHash identifies the exact input one apply run converges: the
+// selection fingerprint, the resolved plan, and the bytes of every
+// dotfile source file (issue 0106). A resume cursor stored with one hash
+// is invalid under another. An unreadable source hashes as its error
+// text, so a fault can cause a full re-run, never a wrong skip.
+func InputHash(p *profile.Profile, f *facts.Facts, plan *Plan) string {
+	h := sha256.New()
+	fmt.Fprintf(h, "%s\n", Fingerprint(p, f))
+	if plan != nil {
+		if data, err := json.Marshal(plan); err == nil {
+			h.Write(data)
+		}
+		entries := append([]DotfileEntry{}, plan.Dotfiles.Entries...)
+		sort.Slice(entries, func(i, j int) bool {
+			if entries[i].Target != entries[j].Target {
+				return entries[i].Target < entries[j].Target
+			}
+			return entries[i].Source < entries[j].Source
+		})
+		for _, e := range entries {
+			for _, src := range []string{e.Source, e.EditSource} {
+				if src != "" {
+					hashSource(h, src)
+				}
+			}
+		}
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// hashSource folds one source file (or directory tree, walked in name
+// order) into h.
+func hashSource(h hash.Hash, src string) {
+	info, err := os.Stat(src)
+	if err != nil {
+		fmt.Fprintf(h, "\n%s: %v", src, err)
+		return
+	}
+	if !info.IsDir() {
+		hashFile(h, src)
+		return
+	}
+	_ = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			hashFile(h, path)
+		}
+		return nil
+	})
+}
+
+func hashFile(h hash.Hash, path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(h, "\n%s: %v", path, err)
+		return
+	}
+	fmt.Fprintf(h, "\n%s:", path)
+	h.Write(data)
 }
 
 func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {

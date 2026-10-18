@@ -88,7 +88,10 @@ func TestStatus_showsCursor(t *testing.T) {
 	profile := statusMinimalProfile(t)
 
 	statePath := filepath.Join(t.TempDir(), "state.json")
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "packages",
+		InputHash:     inputHashFor(t, profile, f),
+	}))
 
 	var buf bytes.Buffer
 	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, out: &buf}).Run())
@@ -117,7 +120,10 @@ func TestStatus_resumeLineColored(t *testing.T) {
 	require.NotContains(t, out, "\033[32mresume:", "the resume: prefix stays plain")
 
 	statePath := filepath.Join(t.TempDir(), "state.json")
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "packages",
+		InputHash:     inputHashFor(t, profile, f),
+	}))
 	buf.Reset()
 	require.NoError(t, (&StatusCmd{Profile: profile, State: statePath, out: &buf}).Run())
 	out = buf.String()

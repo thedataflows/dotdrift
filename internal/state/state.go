@@ -12,10 +12,13 @@ import (
 )
 
 // State holds the apply resume cursor: the last successfully completed
-// pipeline step. The file is deleted when the pipeline completes, so a
-// missing file means "start from the beginning".
+// pipeline step, plus the hash of the input that step ran against
+// (issue 0106). The cursor is valid only for that exact input. The file
+// is deleted when the pipeline completes, so a missing file means
+// "start from the beginning".
 type State struct {
 	LastCompleted string `json:"lastCompleted,omitempty"`
+	InputHash     string `json:"inputHash,omitempty"`
 }
 
 // New returns a fresh state (no step completed yet).

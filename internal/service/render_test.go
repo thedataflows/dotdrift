@@ -46,7 +46,10 @@ func TestRender_diff_golden(t *testing.T) {
 func TestRender_statusSummary_golden(t *testing.T) {
 	dir := statusFixture(t)
 	statePath := filepath.Join(dir, "state.json")
-	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{LastCompleted: "packages"}))
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "packages",
+		InputHash:     inputHashFor(t, dir),
+	}))
 
 	probesFor := func(*facts.Facts) drift.Probes {
 		pr := drift.DefaultProbes()
@@ -56,6 +59,7 @@ func TestRender_statusSummary_golden(t *testing.T) {
 	}
 
 	area := NewReadsArea(ReadsDeps{
+		Detect: func() (*facts.Facts, error) { return testFacts(), nil },
 		OtherAccounts: func(string, *facts.Facts) ([]profile.Account, error) {
 			return []profile.Account{
 				{Name: "alice", Uid: "1000", Home: "/home/alice"},

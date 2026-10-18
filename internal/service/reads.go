@@ -172,6 +172,13 @@ func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, e
 	if err != nil {
 		return nil, err
 	}
+	// Report the cursor apply will actually use (issue 0106): a cursor
+	// stored for a different input is not pending, it is dead.
+	if s.LastCompleted != "" && s.InputHash != resolve.InputHash(pr.Profile, pr.Facts, pr.Plan) {
+		cp := *s
+		cp.LastCompleted = ""
+		s = &cp
+	}
 	profileRoot, err := filepath.Abs(pr.Profile.Root)
 	if err != nil {
 		return nil, fmt.Errorf("resolve profile root: %w", err)

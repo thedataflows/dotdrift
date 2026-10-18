@@ -339,3 +339,19 @@ func TestFinalApplyChainReleasesAfterCancelOrPreviewFailure(t *testing.T) {
 		})
 	}
 }
+
+func TestFinalHeaderReservesDirtyAndApplyBadges(t *testing.T) {
+	_, _, c := editShell(t)
+	c = cpress(c, "enter")
+	c = typeText(c, "-next")
+	c = wsPress(t, c, "enter")
+	require.Equal(t, 1, c.dirtyDrafts())
+	c.root = strings.Repeat("directory/", 6) + "profile"
+	width := lipgloss.Width(" dotdrift · " + c.root + " · host " + c.host + " · user " + c.user)
+	c.applying = true
+	c, _ = cstep(c, tea.WindowSizeMsg{Width: width, Height: 30})
+	line := strings.Split(ansiRe.ReplaceAllString(c.View().Content, ""), "\n")[0]
+	require.Contains(t, line, "user cri")
+	require.Contains(t, line, "● 1")
+	require.Contains(t, line, "apply")
+}

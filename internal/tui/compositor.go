@@ -821,21 +821,18 @@ func (m *Compositor) headerView() string {
 	if m.host != "" {
 		context = " · host " + m.host + " · user " + m.user
 	}
-	if ansi.StringWidth(" dotdrift · "+root+context) > m.w {
-		root = "…/" + filepath.Base(root)
-	}
-	s := m.th.headerTitle.Render(" dotdrift") +
-		m.th.headerContext.Render(" · "+root)
-	if m.host != "" {
-		s += m.th.headerContext.Render(" · host " + m.host + " · user " + m.user)
-	}
-	if m.dirtyDrafts() > 0 {
-		s += "  " + m.th.dirtyMark.Render("● "+strconv.Itoa(m.dirtyDrafts()))
+	badges := ""
+	if n := m.dirtyDrafts(); n > 0 {
+		badges += "  " + m.th.dirtyMark.Render("● "+strconv.Itoa(n))
 	}
 	if m.applying {
-		s += m.th.applyBadge.Render("  ▶ apply")
+		badges += m.th.applyBadge.Render("  ▶ apply")
 	}
-	return s
+	if ansi.StringWidth(" dotdrift · "+root+context+badges) > m.w {
+		root = "…/" + filepath.Base(root)
+	}
+	return m.th.headerTitle.Render(" dotdrift") +
+		m.th.headerContext.Render(" · "+root+context) + badges
 }
 
 func (m *Compositor) footerView() string {

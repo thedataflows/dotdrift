@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: agent
 - **Related**: [TUI views design spec](../superpowers/specs/2026-10-18-tui-views-design.md), slice 4
 - **Related code**: [`internal/tui/modals.go`](../../internal/tui/modals.go)
-- **Closing commits**: recorded in the follow-up commit
+- **Closing commits**: 9e8ee27
 
 ## Summary
 

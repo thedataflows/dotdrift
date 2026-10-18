@@ -3,7 +3,6 @@ package profile
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -82,9 +81,7 @@ var probeInstalledTools = func(names []string) map[string]bool {
 		return installed
 	}
 	for _, name := range names {
-		cmd := exec.Command(path, "current", name)
-		cmd.Stdin = os.Stdin // mise subprocesses are always interactive (0136)
-		out, err := cmd.Output()
+		out, err := exec.Command(path, "current", name).Output()
 		if err == nil && strings.TrimSpace(string(out)) != "" {
 			installed[name] = true
 		}
@@ -101,9 +98,7 @@ var probeInstalledToolList = func() map[string]bool {
 	if err != nil {
 		return nil
 	}
-	cmd := exec.Command(path, "ls", "--json")
-	cmd.Stdin = os.Stdin // mise subprocesses are always interactive (0136)
-	out, err := cmd.Output()
+	out, err := exec.Command(path, "ls", "--json").Output()
 	if err != nil {
 		return nil
 	}

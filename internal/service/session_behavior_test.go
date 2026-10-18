@@ -503,9 +503,14 @@ func TestSession_previewReportsTTYClassification(t *testing.T) {
 	require.Equal(t, pv, sess.Preview(), "preview must be stable")
 }
 
-// The session's handover wrapper enforces the D9 contract: Setpgid on,
-// stdio cleared (the consumer wires them), then the consumer's callback
-// runs and its result (including a refusal) is returned unchanged.
+// The session's handover wrapper enforces the D9 contract: stdio cleared
+// (the consumer wires them), then the consumer's callback runs and its
+// result (including a refusal) is returned unchanged. The twin must NOT
+// get its own process group (issue 0136): a handover child runs on the
+// consumer's terminal, and a background process group cannot own that
+// terminal — sudo's password read then fails with EIO and the typed
+// password echoes in clear. Sharing the caller's group is what lets
+// mise's interactive marking (config-side) take effect.
 func TestSession_handoverWrapperEnforcesContract(t *testing.T) {
 	var got *exec.Cmd
 	refused := errors.New("refused")
@@ -523,23 +528,26 @@ func TestSession_handoverWrapperEnforcesContract(t *testing.T) {
 	require.Same(t, refused, err)
 	require.NotNil(t, got, "the consumer must receive the session-built cmd")
 	// The consumer gets a session-ctx twin of the step's command spec:
-	// same argv, own process group, group-kill armed on session cancel,
-	// stdio unwired (D9: wiring stdio is the consumer's job).
+	// same argv, stdio unwired (D9: wiring stdio is the consumer's job),
+	// and NO process group of its own — it stays in the caller's group,
+	// the terminal's foreground group, so a sudo prompt inside the child
+	// can own the terminal (issue 0136).
 	require.Equal(t, cmd.Path, got.Path)
 	require.Equal(t, cmd.Args, got.Args)
 	require.Equal(t, cmd.Env, got.Env)
 	require.Equal(t, cmd.Dir, got.Dir)
-	require.NotNil(t, got.SysProcAttr)
-	require.True(t, got.SysProcAttr.Setpgid, "handover cmds run in their own process group (D5)")
-	require.NotNil(t, got.Cancel, "session cancel must reach the handover child (D5)")
+	if got.SysProcAttr != nil {
+		require.False(t, got.SysProcAttr.Setpgid,
+			"handover cmds must not be backgrounded into their own process group")
+	}
+	require.NotNil(t, got.Cancel, "session cancel must reach the handover child")
 	require.Nil(t, got.Stdin)
 	require.Nil(t, got.Stdout)
 	require.Nil(t, got.Stderr)
 }
 
-// Cancel reaches a child mid-handover (D5): the consumer runs the cmd
-// outside the session's context, so the wrapper's watchdog kills the
-// process group when the session dies and the exec returns promptly.
+// Cancel reaches a child mid-handover: the twin rides the session
+// context, so cancelling kills the child and the exec returns promptly.
 func TestSession_cancelKillsMidHandover(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &sessionRunner{

@@ -59,7 +59,9 @@ type HandoverFunc func(*exec.Cmd) error
 // reach the controlling terminal — a sudo prompt, an interactive hook.
 // The session injects its HandoverFunc before Run; the cmd the step
 // builds has Path/Args/Env/Dir set, and the session's wrapper enforces
-// Setpgid plus nil stdio (the consumer wires it). A handover error fails
+// nil stdio (the consumer wires it) and no process group of its own —
+// the child must stay a foreground member of the caller's group or it
+// cannot own the terminal (issue 0136). A handover error fails
 // the step like any other: resumable, cursor untouched.
 type HandoverStep interface {
 	Step

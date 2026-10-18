@@ -20,7 +20,11 @@ func TestSession_cancelMidHandoverReportsCancelled(t *testing.T) {
 	dir := t.TempDir()
 	pidFile := filepath.Join(dir, "hook.pid")
 	script := filepath.Join(dir, "mise.sh")
-	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho $$ > "+pidFile+"\nsleep 30\n"), 0o755))
+	// exec: the sleeper IS the handover child, so the session's cancel
+	// (which kills the direct child — handover children share the
+	// caller's process group since issue 0136) reaches it without a
+	// group kill, and no orphan holds the test's stdout open.
+	require.NoError(t, os.WriteFile(script, []byte("#!/bin/sh\necho $$ > "+pidFile+"\nexec sleep 30\n"), 0o755))
 
 	deps, _ := stubSessionDeps(t, testFacts())
 	deps.NewMise = func() *mise.Mise {

@@ -109,15 +109,23 @@ func DefaultMise() *Mise {
 	}
 }
 
-// opStdin marks every mise subprocess interactive (issue 0136, amending
-// 0028): the child always receives the real stdin so an interactive
-// prompt can actually be answered — mise asks before changing files
-// (files: apply <target>?) and without wiring, the prompt reads the null
-// device, resolves as "No", and skips the change while still exiting 0.
-// The 0028 terminal gate is removed: how dotdrift itself was launched
-// (piped, redirected) must not strip the child's interactivity. A
-// package var so tests can swap it.
-var opStdin = func() *os.File { return os.Stdin }
+// opStdin returns os.Stdin when it is a terminal so an interactive child
+// can actually be answered: mise asks before changing files (files: apply
+// <target>?) and without wiring, the prompt reads the null device,
+// resolves as "No", and skips the change while still exiting 0 — the
+// pipeline then records the step complete and the drift persists (issue
+// 0028). Non-terminal stdin keeps the null device so nothing blocks on
+// input nobody will provide. Interactivity is marked in the generated
+// mise config, not forced through stdio (issue 0136): hook tasks carry
+// mise's `interactive = true` (0088), and terminal-bound children keep
+// the caller's process group so the marking can take effect (see
+// runOp). A package var so tests can swap it.
+var opStdin = func() *os.File {
+	if executil.IsStdinTerminal() {
+		return os.Stdin
+	}
+	return nil
+}
 
 // runContextEnv executes a command with extra environment entries appended
 // to the inherited environment; a later duplicate key wins over an inherited
@@ -217,7 +225,17 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	}
 	cmd := m.newOpCmd(ctx, extraEnv, name, args...)
 	cmd.Stdin = opStdin()
-	executil.SetGroupKill(cmd)
+	// A child streamed to real terminals keeps the caller's process
+	// group — the terminal's foreground group — so an interactive
+	// prompt inside it (sudo's password read, mise's own questions)
+	// can own the terminal (issue 0136). SetGroupKill would background
+	// it: the prompt's tty read fails with EIO and the typed password
+	// echoes in clear. Only piped children (ForceStream into the
+	// session collector) get their own group, where cancel must kill
+	// the whole tree and no terminal is involved.
+	if !(executil.IsTerminal(out) && executil.IsTerminal(errW)) {
+		executil.SetGroupKill(cmd)
+	}
 	cmd.Stdout = out
 	cmd.Stderr = errW
 	if runErr := cmd.Run(); runErr != nil {
@@ -308,7 +326,6 @@ func defaultInstall() (string, error) {
 	}
 	script := fmt.Sprintf("curl -fsSL %s | MISE_INSTALL_PATH=%s sh", InstallerURL, installPath)
 	cmd := exec.Command("sh", "-c", script)
-	cmd.Stdin = os.Stdin // the mise installer is a mise subprocess too (0136)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", installFailure(installPath, err, out)
@@ -701,7 +718,6 @@ func (m *Mise) runProbe(ctx context.Context, name string, args ...string) (strin
 	if dir := m.workDir(); dir != "" {
 		cmd.Dir = dir
 	}
-	cmd.Stdin = opStdin() // probes are mise subprocesses too (issue 0136)
 	out, err := cmd.Output()
 	var ee *exec.ExitError
 	if err != nil && errors.As(err, &ee) && len(ee.Stderr) > 0 {

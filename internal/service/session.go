@@ -34,8 +34,8 @@ type ApplyOpts struct {
 	Backup      bool
 	// Handover runs one child command under the consumer's real terminal
 	// (sudo prompts, interactive hooks). Required: the session wraps it
-	// with the D9 contract (session-built cmd, Setpgid, stdio wired by the
-	// consumer) before steps see it.
+	// with the D9 contract (session-built cmd in the caller's process
+	// group, stdio wired by the consumer) before steps see it.
 	Handover func(*exec.Cmd) error
 	Output   io.Writer // nil = event mode; attached = fd passthrough (D2)
 }
@@ -88,10 +88,11 @@ func (s *ApplySession) Preview() []StepPreview {
 	return out
 }
 
-// Cancel aborts the session: the run context dies, children are killed by
-// process group, and the pipeline returns without advancing the cursor
-// past the interrupted step (contract 2). Idempotent; a no-op after the
-// session already ended.
+// Cancel aborts the session: the run context dies (piped children die by
+// process group; terminal children share the caller's group and die as
+// the context's direct kill reaches them — issue 0136), and the pipeline
+// returns without advancing the cursor past the interrupted step
+// (contract 2). Idempotent; a no-op after the session already ended.
 func (s *ApplySession) Cancel() { s.cancelOnce.Do(func() { s.cancel() }) }
 
 // Wait blocks until the session ends and returns its result. The error is
@@ -341,27 +342,32 @@ type sessionRunner struct {
 func (r *sessionRunner) emit(ev Event) { r.ch <- ev }
 
 // handover is the D9 contract enforcement point: from the step's command
-// spec it derives a session-ctx twin — Setpgid on (D5's group kill reaches
-// handover children), stdio nil (wiring stdio is the consumer's job; a
-// pre-wired stream would strip the child's tty) — and hands the twin to
-// the consumer, which runs it synchronously and returns the outcome (a
-// refusal included); the step turns an error into a resumable failure.
-// Cancellation rides exec's own ctx watcher — twin.Cancel group-SIGKILLs,
-// synchronized with the consumer's Start/Wait, so cancel mid-handover
-// (sudo included) kills without racing the process handle (D5).
+// spec it derives a session-ctx twin — stdio nil (wiring stdio is the
+// consumer's job; a pre-wired stream would strip the child's tty) — and
+// hands the twin to the consumer, which runs it synchronously and
+// returns the outcome (a refusal included); the step turns an error into
+// a resumable failure. The twin deliberately gets NO process group of
+// its own (issue 0136): it runs on the consumer's terminal, and a
+// background process group cannot own that terminal — sudo's password
+// read inside mise then fails with EIO and the typed password echoes in
+// clear. In the caller's group the child is a foreground member, which
+// is what mise's config-side `interactive = true` marking (0088) needs
+// to take effect. Cancellation rides exec's own ctx watcher, which
+// kills the twin (the direct child) — synchronized with the consumer's
+// Start/Wait, so cancel mid-handover (sudo included) kills without
+// racing the process handle.
 func (r *sessionRunner) handover(cmd *exec.Cmd) error {
 	twin := exec.CommandContext(r.runCtx, cmd.Path, cmd.Args[1:]...)
 	twin.Args = cmd.Args // preserve the step's exact argv (argv[0] included)
 	twin.Env = cmd.Env
 	twin.Dir = cmd.Dir
 	twin.Err = cmd.Err
-	executil.SetGroupKill(twin)
 	twin.WaitDelay = 5 * time.Second
 	err := r.opts.Handover(twin)
 	if err != nil && r.runCtx.Err() != nil {
-		// The session died while the child ran: our own group kill produced
-		// this failure ("signal: killed" wraps no context error), so the
-		// step ends cancelled, not failed (contract 2, 0064-D5).
+		// The session died while the child ran: the context's kill
+		// produced this failure ("signal: killed" wraps no context
+		// error), so the step ends cancelled, not failed (contract 2).
 		return fmt.Errorf("%w: %v", context.Canceled, err)
 	}
 	return err

@@ -117,7 +117,15 @@ func (m *Compositor) viewRow() string {
 func (m *Compositor) viewBody(paneH int) string {
 	switch m.view {
 	case viewProfile:
-		return m.pane(false, m.w-2, paneH, m.profileBody(m.w-4))
+		// No outer pane (issue 0144): the group cards are the frame —
+		// at the full width they render width-2, with no larger card
+		// around them. The lines clip to the pane height the border
+		// used to enforce.
+		lines := strings.Split(m.profileBody(m.w), "\n")
+		if len(lines) > paneH {
+			lines = lines[:max(paneH, 0)]
+		}
+		return strings.Join(lines, "\n")
 	case viewStatus:
 		// Findings rows run long (paths + details): an even split, not
 		// the Modules view's narrow nav.

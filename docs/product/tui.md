@@ -101,7 +101,9 @@ view stack wholesale). Its parts:
   line (the same rule as `dotdrift status`: clean, or the last completed
   step when a cursor is pending — a cursor stored for a different input
   is dead, 0106), and the other-accounts note with each account's apply
-  command. The read is light — facts, the plan read, the state file, the
+  command. The groups render as titled cards with no outer pane
+  around them — each card stretches the frame width minus 2 chars
+  (issue 0144). The read is light — facts, the plan read, the state file, the
   accounts list; no probes — and async: the view shows its loading state
   on first entry and re-reads on `r`. A second refresh during a pending
   read does nothing. Lines clamp to the pane width.

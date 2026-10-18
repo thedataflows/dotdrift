@@ -140,6 +140,25 @@ func TestProfileView_rendersFactsAndResume(t *testing.T) {
 	require.NotContains(t, frame, "last completed")
 }
 
+// 0144: no outer pane card around the group cards — the cards sit
+// directly in the frame and stretch the full width minus 2 chars.
+func TestProfileView_cardsStretchFullWidth(t *testing.T) {
+	_, c := profileShell()
+	c = loadProfileView(t, c)
+
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.NotContains(t, frame, "│╭", "no card nests inside a larger pane border")
+	for _, line := range strings.Split(frame, "\n") {
+		if strings.Contains(line, "FACTS") {
+			break
+		}
+		if strings.HasPrefix(line, "╭") {
+			require.Equal(t, 98, len([]rune(strings.TrimRight(line, " "))),
+				"the card spans the 100-char frame minus 2 chars")
+		}
+	}
+}
+
 func TestProfileView_resumeLineFollowsTheHash(t *testing.T) {
 	// The 0106 rule through the real reads area: a cursor stored for a
 	// different input is dead — the view must show the clean line, like

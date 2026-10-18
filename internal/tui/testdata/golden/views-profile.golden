@@ -2,29 +2,27 @@
   1. Modules   2. Status   3. Plan   4. Profile
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭────────────────────────────────────────────────────────────────────────────────────────────────╮
-│╭────────────────────────────────────────────────────────────────────────────────────────────╮  │
-││ FACTS                                                                                      │  │
-││  host:    myhost                                                                           │  │
-││  user:    cri                                                                              │  │
-││  os:      linux                                                                            │  │
-││  kernel:  6.12.1-arch1-1                                                                   │  │
-││  distro:  arch                                                                             │  │
-││  gpu:     amd                                                                              │  │
-││  backend: paru                                                                             │  │
-│╰────────────────────────────────────────────────────────────────────────────────────────────╯  │
-│╭────────────────────────────────────────────────────────────────────────────────────────────╮  │
-││ PROFILE                                                                                    │  │
-││  profile: $PROFILE                                                          │  │
-││  state:   $STATE                                        │  │
-││  resume:  last completed "packages" - next apply resumes after it                          │  │
-│╰────────────────────────────────────────────────────────────────────────────────────────────╯  │
-│╭────────────────────────────────────────────────────────────────────────────────────────────╮  │
-││ OTHER ACCOUNTS                                                                             │  │
-││ configuration exists for other accounts on this machine:                                   │  │
-││  users/alice — apply with: sudo -iu alice dotdrift apply                                   │  │
-││  users/root — apply with: sudo dotdrift apply                                              │  │
-││  (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system  │  │
-││ sc                                                                                         │  │
-│╰────────────────────────────────────────────────────────────────────────────────────────────╯  │
+│ FACTS                                                                                          │
+│  host:    myhost                                                                               │
+│  user:    cri                                                                                  │
+│  os:      linux                                                                                │
+│  kernel:  6.12.1-arch1-1                                                                       │
+│  distro:  arch                                                                                 │
+│  gpu:     amd                                                                                  │
+│  backend: paru                                                                                 │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ PROFILE                                                                                        │
+│  profile: $PROFILE                                                              │
+│  state:   $STATE                                            │
+│  resume:  last completed "packages" - next apply resumes after it                              │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────────────────────╮
+│ OTHER ACCOUNTS                                                                                 │
+│ configuration exists for other accounts on this machine:                                       │
+│  users/alice — apply with: sudo -iu alice dotdrift apply                                       │
+│  users/root — apply with: sudo dotdrift apply                                                  │
+│  (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system      │
+│ scope)                                                                                         │
 
  tab next view • r refresh view • p plan • P apply yanked/all • ? help • q quit

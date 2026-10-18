@@ -173,6 +173,18 @@ func TestWorkspace_sectionsSeparated(t *testing.T) {
 	}
 }
 
+// 0120: the underlined heading must not wrap a styled segment —
+// lipgloss re-applies underline rune by rune over nested ANSI and
+// leaks the inner escape as literal text. The goldens pinned the
+// mangled output once; this test checks the bytes, not the picture.
+func TestWorkspace_headingNoANSILeak(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
+	raw := c.View().Content
+	require.NotContains(t, raw, "\x1b\x1b", "no mangled escape in the raw frame")
+	require.NotContains(t, ansiRe.ReplaceAllString(raw, ""), "[38;",
+		"no leaked escape text in the stripped frame")
+}
+
 func TestWorkspace_emptyStatesDesigned(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
 	requireGolden(t, "workspace-empty.golden", c.View().Content, subs)

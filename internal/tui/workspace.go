@@ -294,20 +294,25 @@ func (w *workspaceModel) titleView(th theme) string {
 func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.header {
 		text := r.text
+		mark := ""
 		if addable(r.section) {
-			text += " " + th.disabledMark.Render("＋")
+			mark = " " + th.disabledMark.Render("＋")
 		}
 		if i == w.cursor {
 			// A selectable header under the cursor renders the bar
 			// (0076) — an empty section's header is the way in, it has
 			// to say so.
-			return []string{th.cursorLine(" "+text, width)}
+			return []string{th.cursorLine(" "+text+mark, width)}
 		}
 		// A section header is a heading (0119, the gh-dash preview
 		// treatment): bold underlined text, no background — the
 		// cursor row is the only filled element. The lead matches
 		// the cursor row's bar cell (0116): no shift under the cursor.
-		return []string{th.sectionBar.Render("  " + text)}
+		// The mark and the lead stay OUTSIDE the underlined run
+		// (0120): lipgloss re-applies underline over nested ANSI
+		// rune by rune and leaks the inner escape as literal text,
+		// and underlined lead spaces render as ticks.
+		return []string{"  " + th.sectionBar.Render(text) + mark}
 	}
 	if r.hint {
 		if r.text == "" {

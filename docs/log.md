@@ -3,6 +3,8 @@
 
 ## 2026-10-18
 
+* **Fixed (tui, Profile view outer card removed — issue [0144](issues/0144-profile-view-outer-card.md))**: the Profile view wrapped its group cards (FACTS, PROFILE, OTHER ACCOUNTS) in a larger pane border. The view now returns the cards unwrapped at the full frame width, so each card spans the frame width minus 2 chars; the body lines clip to the pane height the border used to enforce. The Status and Plan panes are unchanged. A test pins the card width and the absent nesting. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0. Docs: issue 0144 + index, tui.md Profile bullet, this entry.
+
 * **Feat (tui, numbered view tabs — issue [0143](issues/0143-numbered-view-tabs.md))**: the view tabs read `1. Modules`, `2. Status`, `3. Plan`, `4. Profile`, each naming the number key that jumps to it. The change arrived in the working tree outside the agent session and was kept by the user; the 41 regenerated goldens differ only in the tab-bar line. Docs: issue 0143 + index, tui.md tab-bar bullet, this entry.
 
 * **Fixed (tui, dialog form rows carried the same leading space — issue [0142](issues/0142-dialog-rows-leading-space.md))**: follow-up to 0141 — the add/edit modals from the Modules workspace (and every dialog form, through the shared `dlgRow.renderRow`) rendered `│ name value` on the focused row and two spaces on plain rows. The focused row now puts the pipe next to the label and plain rows keep one space, so the label column never shifts. A unit test pins both shapes. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0. Docs: issue 0142 + index, this entry.

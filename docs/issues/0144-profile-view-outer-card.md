@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0144: Profile view: remove the outer card around the group cards
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [tui, profile]
 - **Assignee**: none
 - **Related**: [0107](0107-tui-shell-views-profile.md)
 - **Related code**: [`internal/tui/views.go`](../../internal/tui/views.go), [`internal/tui/profileview.go`](../../internal/tui/profileview.go)
-- **Closing commits**: none
+- **Closing commits**: `17b74ec`
 
 ## Summary
 
@@ -37,9 +37,9 @@ naturally.
 
 ## Acceptance Criteria
 
-- [ ] No outer pane border around the Profile view's cards.
-- [ ] Each group card spans the frame width minus 2 chars.
-- [ ] Profile goldens are regenerated and reviewed.
+- [x] No outer pane border around the Profile view's cards.
+- [x] Each group card spans the frame width minus 2 chars.
+- [x] Profile goldens are regenerated and reviewed.
 
 ## Out of Scope
 

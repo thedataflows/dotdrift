@@ -131,4 +131,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0141](0141-modules-panes-leading-space.md) | Modules panes carry one leading space too many | done | low |
 | [0142](0142-dialog-rows-leading-space.md) | Dialog form rows carry the same leading space | done | low |
 | [0143](0143-numbered-view-tabs.md) | Number the view tabs | done | low |
-| [0144](0144-profile-view-outer-card.md) | Profile view: remove the outer card around the group cards | open | low |
+| [0144](0144-profile-view-outer-card.md) | Profile view: remove the outer card around the group cards | done | low |

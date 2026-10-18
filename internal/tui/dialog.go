@@ -88,6 +88,29 @@ func runeWindow(runes []rune, cur, off, cells int) (window []rune, newOff, caret
 	return runes[off:min(off+cells, len(runes))], off, cur - off
 }
 
+// framedWindow is runeWindow with continuation marks accounted
+// (0133): when text hides beyond an edge, three cells of the budget
+// go to a faded "..." the caller renders at that edge, so the input
+// never grows — the window just shows three fewer runes.
+func framedWindow(runes []rune, cur, off, cells int) (window []rune, newOff, caret int, moreLeft, moreRight bool) {
+	window, off, caret = runeWindow(runes, cur, off, cells)
+	moreLeft = off > 0
+	moreRight = off+len(window) < len(runes)
+	if moreLeft || moreRight {
+		budget := cells
+		if moreLeft {
+			budget -= 3
+		}
+		if moreRight {
+			budget -= 3
+		}
+		window, off, caret = runeWindow(runes, cur, off, budget)
+		moreLeft = off > 0
+		moreRight = off+len(window) < len(runes)
+	}
+	return window, off, caret, moreLeft, moreRight
+}
+
 type dlgField struct {
 	label  string
 	value  []rune
@@ -164,28 +187,36 @@ func (f *dlgField) right() {
 	}
 }
 
-// visible returns the window of the value that contains the cursor
-// and the cursor's offset inside it (0131).
-func (f *dlgField) visible() (string, int) {
-	win, off, caret := runeWindow(f.value, f.cursor, f.off, fieldViewCells)
+// visible returns the window of the value that contains the cursor,
+// the cursor's offset inside it, and whether text continues past
+// either edge (0131, 0133).
+func (f *dlgField) visible() (window []rune, caret int, moreLeft, moreRight bool) {
+	win, off, caret, moreLeft, moreRight := framedWindow(f.value, f.cursor, f.off, fieldViewCells)
 	f.off = off
-	return string(win), caret
+	return win, caret, moreLeft, moreRight
 }
 
 // renderValue renders the field's visible window in the value style,
-// with the block caret at the cursor on the focused row (0131).
+// with the block caret at the cursor on the focused row (0131) and a
+// faded "..." at each edge where text continues (0133).
 func (f *dlgField) renderValue(th theme, focused bool) string {
-	text, caret := f.visible()
+	win, caret, moreLeft, moreRight := f.visible()
+	left, right := "", ""
+	if moreLeft {
+		left = th.disabledMark.Render("...")
+	}
+	if moreRight {
+		right = th.disabledMark.Render("...")
+	}
 	if !focused {
-		return th.rowText.Render(text)
+		return left + th.rowText.Render(string(win)) + right
 	}
-	runes := []rune(text)
 	at, after := " ", ""
-	if caret < len(runes) {
-		at = string(runes[caret])
-		after = string(runes[caret+1:])
+	if caret < len(win) {
+		at = string(win[caret])
+		after = string(win[caret+1:])
 	}
-	return th.rowText.Render(string(runes[:caret])) + th.caretCell(at) + th.rowText.Render(after)
+	return left + th.rowText.Render(string(win[:caret])) + th.caretCell(at) + th.rowText.Render(after) + right
 }
 
 // dlgChoice is one choice line: a fixed option list cycled with

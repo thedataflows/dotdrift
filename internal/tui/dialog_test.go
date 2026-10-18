@@ -73,6 +73,15 @@ func TestDlgField_windowFollowsCursor(t *testing.T) {
 	got = plain()
 	require.Contains(t, got, strings.Repeat("a", 20), "the arrow keys reach the start of long text")
 	require.NotContains(t, got, strings.Repeat("b", 20), "the window followed the cursor to the left")
+
+	// 0133: a faded ... marks the edge where text continues — on the
+	// right at the start position, on the left at the end position.
+	require.Greater(t, strings.Index(got, "..."), strings.Index(got, "aaa"),
+		"a right ... shows hidden text at the start position")
+	f.set(strings.Repeat("a", 30) + strings.Repeat("b", 30))
+	got = plain()
+	require.Less(t, strings.Index(got, "..."), strings.Index(got, "bbb"),
+		"a left ... shows hidden text at the end position")
 }
 
 // 0131: typing a long value must not stretch the modal.

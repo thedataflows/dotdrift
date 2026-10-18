@@ -91,6 +91,19 @@ func TestEdit_windowFollowsCaret(t *testing.T) {
 	plain = ansiRe.ReplaceAllString(lines[0], "")
 	require.Contains(t, plain, strings.Repeat("a", 20), "the arrows reach the start of long text")
 	require.NotContains(t, plain, strings.Repeat("b", 20), "the window followed the caret to the left")
+
+	// 0133: a faded ... marks each edge where text continues.
+	e.cur = 60
+	plain = ansiRe.ReplaceAllString(w.editLines(e, th, 30)[0], "")
+	require.Less(t, strings.Index(plain, "..."), strings.Index(plain, "bbb"),
+		"a left ... shows hidden text at the end position")
+	e.cur = 0
+	plain = ansiRe.ReplaceAllString(w.editLines(e, th, 30)[0], "")
+	require.Greater(t, strings.Index(plain, "..."), strings.Index(plain, "aaa"),
+		"a right ... shows hidden text at the start position")
+	e.cur = 30
+	plain = ansiRe.ReplaceAllString(w.editLines(e, th, 30)[0], "")
+	require.Equal(t, 2, strings.Count(plain, "..."), "both edges mark in the middle")
 }
 
 func TestEdit_caretKeepsTailColor(t *testing.T) {

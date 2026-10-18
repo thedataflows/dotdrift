@@ -439,10 +439,21 @@ func (n *navModel) filterView(th theme, w int) string {
 	if n.filtering {
 		// The tail window (0132): the caret sits at the query's end,
 		// so a long query shows its end, never clips the caret away.
-		win, _, _ := runeWindow(n.query, len(n.query), len(n.query), max(w-4, 1))
-		return th.inputText.Render(" / "+string(win)) + th.dirtyMark.Render("▏") // a plain input line, no fill (0124)
+		// A faded "..." marks the left edge, where text continues
+		// (0133).
+		win, _, _, moreLeft, _ := framedWindow(n.query, len(n.query), len(n.query), max(w-4, 1))
+		mark := ""
+		if moreLeft {
+			mark = th.disabledMark.Render("...")
+		}
+		return th.inputText.Render(" / ") + mark + th.inputText.Render(string(win)) + th.dirtyMark.Render("▏") // a plain input line, no fill (0124)
 	}
-	return th.meta.Render(" / " + string(n.query) + " · esc clears")
+	win, _, _, moreLeft, _ := framedWindow(n.query, len(n.query), len(n.query), max(w-16, 1))
+	mark := ""
+	if moreLeft {
+		mark = "..."
+	}
+	return th.meta.Render(" / " + mark + string(win) + " · esc clears")
 }
 
 // rowView renders one row: expansion marker, label, dirty and reason

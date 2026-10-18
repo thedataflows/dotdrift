@@ -490,14 +490,23 @@ func (p *filePicker) view(w, h int) string {
 	lines = append(lines, p.th.fieldLabel.Render(cwd))
 	if p.filtering || len(p.filter) > 0 {
 		// Tail windows (0132): both typed lines show their end, where
-		// the caret sits, and never stretch the modal.
-		win, _, _ := runeWindow(p.filter, len(p.filter), len(p.filter), max(w-24, 8))
-		lines = append(lines, p.th.meta.Render("filter: "+string(win))+
+		// the caret sits, and never stretch the modal. A faded "..."
+		// marks the left edge, where text continues (0133).
+		win, _, _, moreLeft, _ := framedWindow(p.filter, len(p.filter), len(p.filter), max(w-24, 8))
+		mark := ""
+		if moreLeft {
+			mark = "..."
+		}
+		lines = append(lines, p.th.meta.Render("filter: "+mark+string(win))+
 			p.th.disabledMark.Render("  ("+itoa(len(p.visible()))+"/"+itoa(len(p.entries))+")"))
 	}
 	if p.locating {
-		win, _, _ := runeWindow(p.loc, len(p.loc), len(p.loc), max(w-24, 8))
-		lines = append(lines, p.th.fieldLabel.Render("path: ")+string(win)+p.th.caretCell(" "))
+		win, _, _, moreLeft, _ := framedWindow(p.loc, len(p.loc), len(p.loc), max(w-24, 8))
+		mark := ""
+		if moreLeft {
+			mark = p.th.disabledMark.Render("...")
+		}
+		lines = append(lines, p.th.fieldLabel.Render("path: ")+mark+string(win)+p.th.caretCell(" "))
 	}
 	if p.err != "" {
 		lines = append(lines, p.th.errorMark.Render("✗ "+p.err))

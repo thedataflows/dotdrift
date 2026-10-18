@@ -113,6 +113,14 @@ func TestMultiline_caretLineWindowFollowsCaret(t *testing.T) {
 	plain = ansiRe.ReplaceAllString(e.view(60, 30), "")
 	require.Contains(t, plain, strings.Repeat("a", 20), "the arrows reach the start of a long line")
 	require.NotContains(t, plain, strings.Repeat("b", 20), "the window followed the caret to the left")
+
+	// 0133: a faded ... marks the edge where the line continues.
+	require.Greater(t, strings.Index(plain, "..."), strings.Index(plain, "aaa"),
+		"a right ... shows the hidden tail at the start position")
+	e.cx = 60
+	plain = ansiRe.ReplaceAllString(e.view(60, 30), "")
+	require.Less(t, strings.Index(plain, "..."), strings.Index(plain, "bbb"),
+		"a left ... shows the hidden head at the end position")
 }
 
 func TestMultiline_pasteKeepsNewlines(t *testing.T) {

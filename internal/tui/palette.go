@@ -420,9 +420,14 @@ func (e paletteEntry) glyph() string {
 func (p *paletteModel) view(w, h int) string {
 	var b strings.Builder
 	// The tail window (0132): the caret sits at the query's end, so
-	// a long query shows its end and the modal does not stretch.
-	win, _, _ := runeWindow(p.query, len(p.query), len(p.query), max(w-9, 1))
-	b.WriteString(p.th.inputText.Render("/ "+string(win)) + p.th.dirtyMark.Render("▏")) // a plain input line, no fill (0124)
+	// a long query shows its end and the modal does not stretch. A
+	// faded "..." marks the left edge, where text continues (0133).
+	win, _, _, moreLeft, _ := framedWindow(p.query, len(p.query), len(p.query), max(w-9, 1))
+	mark := ""
+	if moreLeft {
+		mark = p.th.disabledMark.Render("...")
+	}
+	b.WriteString(p.th.inputText.Render("/ ") + mark + p.th.inputText.Render(string(win)) + p.th.dirtyMark.Render("▏")) // a plain input line, no fill (0124)
 	b.WriteString("\n\n")
 	if len(p.rows) == 0 {
 		b.WriteString(p.th.disabledMark.Render("  no matches") + "\n")

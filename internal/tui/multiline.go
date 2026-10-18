@@ -280,8 +280,9 @@ func (e *multiline) view(w, h int) string {
 			// under the caret, never an inserted glyph — and never
 			// token colors, which the reversed cell cannot survive.
 			// The line renders through the caret window (0132), so a
-			// long line's tail stays reachable.
-			win, off, caret := runeWindow(e.lines[i], e.cx, e.hoff, maxw)
+			// long line's tail stays reachable. A faded "..." marks
+			// each edge where the line continues (0133).
+			win, off, caret, moreLeft, moreRight := framedWindow(e.lines[i], e.cx, e.hoff, maxw)
 			e.hoff = off
 			at, after := " ", ""
 			if caret < len(win) {
@@ -289,6 +290,12 @@ func (e *multiline) view(w, h int) string {
 				after = string(win[caret+1:])
 			}
 			body = string(win[:caret]) + e.th.caretCell(at) + after
+			if moreLeft {
+				body = e.th.disabledMark.Render("...") + body
+			}
+			if moreRight {
+				body += e.th.disabledMark.Render("...")
+			}
 		case ok:
 			body = colored[i]
 		default:

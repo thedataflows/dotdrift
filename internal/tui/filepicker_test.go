@@ -74,6 +74,9 @@ func TestPicker_pathWindowShowsTail(t *testing.T) {
 	}
 	require.Contains(t, plain, strings.Repeat("b", 10), "the tail at the caret is visible")
 	require.NotContains(t, plain, strings.Repeat("a", 10), "text far left of the window is not rendered")
+	// 0133: a faded ... marks the left edge, where text continues.
+	require.Less(t, strings.Index(plain, "..."), strings.Index(plain, "bbb"),
+		"a left ... shows the hidden head of the path")
 }
 
 func TestPicker_dirsFirstCaseInsensitive(t *testing.T) {

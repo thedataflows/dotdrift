@@ -35,6 +35,9 @@ func TestNavFilter_windowShowsTail(t *testing.T) {
 	require.Contains(t, filterLine, strings.Repeat("b", 10), "the tail at the caret is visible")
 	require.NotContains(t, filterLine, "a", "text far left of the window is not rendered")
 	require.Contains(t, filterLine, "▏", "the caret is visible")
+	// 0133: a faded ... marks the left edge, where text continues.
+	require.Less(t, strings.Index(filterLine, "..."), strings.Index(filterLine, "bbb"),
+		"a left ... shows the hidden head of the query")
 }
 
 // navShell builds a compositor over the real reads area and the named

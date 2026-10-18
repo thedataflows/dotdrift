@@ -376,8 +376,9 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
 	// The window contains the caret (0132): a value wider than the
 	// pane (a long description under meta) used to clip the caret
-	// and everything right of the pane edge away.
-	win, off, caret := runeWindow(e.input, e.cur, e.off, max(width-3, 1))
+	// and everything right of the pane edge away. A faded "..."
+	// marks each edge where text continues (0133).
+	win, off, caret, moreLeft, moreRight := framedWindow(e.input, e.cur, e.off, max(width-4, 1)) // lead + cursor bar take 4
 	e.off = off
 	at, after := " ", ""
 	if caret < len(win) {
@@ -385,6 +386,12 @@ func (w *workspaceModel) editLines(e *wsEdit, th theme, width int) []string {
 		after = string(win[caret+1:])
 	}
 	shown := string(win[:caret]) + th.caretCell(at) + after
+	if moreLeft {
+		shown = th.disabledMark.Render("...") + shown
+	}
+	if moreRight {
+		shown += th.disabledMark.Render("...")
+	}
 	lines := []string{th.cursorRow.MaxWidth(width).Render(" ▸ " + shown)}
 	if e.err != "" {
 		lines = append(lines, th.errorMark.MaxWidth(width).Render("    ✗ "+e.err))

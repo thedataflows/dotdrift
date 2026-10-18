@@ -51,6 +51,9 @@ func TestPalette_queryWindowShowsTail(t *testing.T) {
 	}
 	require.Contains(t, plain, strings.Repeat("b", 10), "the tail at the caret is visible")
 	require.NotContains(t, plain, strings.Repeat("a", 25), "the head of the query is outside the window")
+	// 0133: a faded ... marks the left edge, where text continues.
+	require.Less(t, strings.Index(plain, "..."), strings.Index(plain, "bbb"),
+		"a left ... shows the hidden head of the query")
 }
 
 func TestPalette_emptyQueryShowsRecents(t *testing.T) {

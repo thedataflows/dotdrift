@@ -115,3 +115,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0125](0125-remove-section-edge-row.md) | Remove the section edge row | done | medium |
 | [0126](0126-section-header-dark-border.md) | Thin dark border on section headers | done | medium |
 | [0127](0127-remove-section-header-rule.md) | Remove the section header rule | done | medium |
+| [0128](0128-addable-headers-selectable.md) | Addable section headers are selectable | done | medium |

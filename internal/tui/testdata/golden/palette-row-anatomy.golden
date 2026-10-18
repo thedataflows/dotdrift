@@ -4,25 +4,25 @@
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
 ││ ▸ demo                  ││  meta                                                            │
-│  ▸ other · invalid module│││  id demo                                                        │
-│  ▸ plain · invalid module││   description the demo module ✎                                  │
+│  ▸ other · invalid module││──────────────────────────────────────────────────────────────────│
+│  ▸ plain · invalid module│││  id demo                                                        │
+│                          ││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
 │                          ││  packages ＋                                                     │
-│                          ││   + neovim ✎                                                     │
-│                          ││   ╭──────────────────────────────────╮                           │
+│                          ││───╭──────────────────────────────────╮───────────────────────────│
+│                          ││   │                                  │                           │
+│                          ││   │  / demo · host▏                  │                           │
 │                          ││  l│                                  │                           │
-│                          ││  w│  / demo · host▏                  │                           │
+│                          ││  w│  │ ◆ demo · host myhost  module  │                           │
 │                          ││  w│                                  │                           │
-│                          ││  h│  │ ◆ demo · host myhost  module  │                           │
-│                          ││  s│                                  │                           │
-│                          ││  t╰──────────────────────────────────╯                           │
+│                          ││  h╰──────────────────────────────────╯                           │
+│                          ││  systemd.units ＋                                                │
+│                          ││  tools ＋                                                        │
+│                          ││──────────────────────────────────────────────────────────────────│
 │                          ││   node = 20 ✎                                                    │
 │                          ││  secrets ＋                                                      │
 │                          ││  mounts ＋                                                       │
 │                          ││  smb ＋                                                          │
-│                          ││                                                                  │
-│                          ││                                                                  │
-│                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

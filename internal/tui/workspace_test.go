@@ -136,6 +136,17 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 	require.Equal(t, col(plain, "packages"), col(under, "packages"),
 		"the section text stays in its column under the cursor")
 
+	// 0126: a filled header carries a thin dark border — a hairline
+	// rule under the bar, present under the cursor too so the rows
+	// below never shift.
+	plainLines := c.ws.rowView(row, idx, c.th, 40)
+	require.Len(t, plainLines, 2, "the header is the bar plus its border rule")
+	require.Equal(t, strings.Repeat("─", 40), strip(plainLines[1]),
+		"the border is a dark hairline across the pane")
+	c.ws.cursor = idx
+	require.Len(t, c.ws.rowView(row, idx, c.th, 40), 2,
+		"the border stays under the cursor")
+
 	// Items indent one column under their heading.
 	for i, r := range c.ws.rows {
 		if !r.header && !r.hint && r.section == "meta" {

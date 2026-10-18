@@ -305,10 +305,15 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		if addable(r.section) {
 			mark = " " + th.disabledMark.Render("＋")
 		}
+		rule := th.sectionRule.Render(strings.Repeat("─", width))
 		if i == w.cursor {
 			// A selectable header under the cursor renders the bar
 			// (0076) — an empty section's header is the way in, it has
-			// to say so.
+			// to say so. The border rule stays (0126): the rows
+			// below never shift when the cursor lands.
+			if sectionFilled(w.rows, i) {
+				return []string{th.cursorLine(" "+text+mark, width), rule}
+			}
 			return []string{th.cursorLine(" "+text+mark, width)}
 		}
 		// A section header is a filled bar (0121) only when the
@@ -318,7 +323,10 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		// 0120 leak rule). The lead matches the cursor row's bar
 		// cell (0116): no shift under the cursor.
 		if sectionFilled(w.rows, i) {
-			return []string{th.barLine(" "+text+mark, width)}
+			// The filled bar plus its thin dark border (0126): a
+			// hairline rule under the bar, not a box — a box would
+			// add two rows per header.
+			return []string{th.barLine(" "+text+mark, width), rule}
 		}
 		return []string{th.sectionLabel.Render("  " + text + mark)}
 	}

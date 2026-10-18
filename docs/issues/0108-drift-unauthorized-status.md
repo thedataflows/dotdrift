@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: agent
 - **Related**: [TUI views design spec](../superpowers/specs/2026-10-18-tui-views-design.md), contract invariant 17
 - **Related code**: [`internal/drift/`](../../internal/drift/)
-- **Closing commits**: none
+- **Closing commits**: 095bddf, 49035ce, 58693c3, ce74d0c, 155c4b8
 
 ## Summary
 

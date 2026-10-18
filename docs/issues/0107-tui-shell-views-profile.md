@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: agent
 - **Related**: [TUI views design spec](../superpowers/specs/2026-10-18-tui-views-design.md)
 - **Related code**: [`internal/service/`](../../internal/service/), [`internal/tui/`](../../internal/tui/)
-- **Closing commits**: f92d976
+- **Closing commits**: f92d976, 210ab3f
 
 ## Summary
 

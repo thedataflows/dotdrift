@@ -110,12 +110,20 @@ func TestTheme_filledBars(t *testing.T) {
 	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
 	require.Equal(t, 20, len([]rune(strip(th.barLine("packages", 20)))),
 		"the section bar fills the full width (0121)")
+	require.Contains(t, th.headerFill.Render("x"), "48;", "the bar edge pad carries the header tint")
 	require.Equal(t, 20, len([]rune(strip(th.detailLine("dotfiles · x", 20)))),
 		"the detail header fills the full width")
 	// 0124: footer keys are plain text again — no background slab
 	// under the footer or its keys.
 	require.NotContains(t, th.helpKey.Render("x"), "48;", "a footer key carries no background")
 	require.NotContains(t, th.helpDesc.Render("x"), "48;", "a footer description carries no background")
+
+	// 0129: the section bar's background is its own tint — a header
+	// and a selection never share a fill.
+	for _, isDark := range []bool{true, false} {
+		p := paletteFor(isDark)
+		require.NotEqual(t, p.headerBg, p.selectedBg, "header tint differs from selection tint")
+	}
 
 	cursor := th.cursorLine(" demo", 20)
 	require.Equal(t, 20, len([]rune(strip(cursor))), "the cursor row fills the full width")

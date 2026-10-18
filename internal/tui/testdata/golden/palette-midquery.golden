@@ -3,23 +3,23 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
-││ ▸ demo                  ││  meta                                                            │
+││ ▸ demo                  ││  META                                                            │
 │  ▸ other · invalid module│││  id demo                                                        │
 │  ▸ plain · invalid module││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
-│                          ││  packages ＋                                                     │
+│                          ││  PACKAGES ＋                                                     │
 │                          ││   ╭──────────────────────────────────╮                           │
 │                          ││   │                                  │                           │
-│                          ││  l│  / dem▏                          │                           │
-│                          ││  w│                                  │                           │
-│                          ││  w│  │ ◆ demo  module                │                           │
-│                          ││  h│    ◆ demo · user cri  module     │                           │
-│                          ││  s│    ◆ demo · host myhost  module  │                           │
-│                          ││  t│    ▶ onboard into demo  action   │                           │
+│                          ││  L│  / dem▏                          │                           │
+│                          ││  W│                                  │                           │
+│                          ││  W│  │ ◆ demo  module                │                           │
+│                          ││  H│    ◆ demo · user cri  module     │                           │
+│                          ││  S│    ◆ demo · host myhost  module  │                           │
+│                          ││  T│    ▶ onboard into demo  action   │                           │
 │                          ││   │                                  │                           │
-│                          ││  s╰──────────────────────────────────╯                           │
-│                          ││  mounts ＋                                                       │
-│                          ││  smb ＋                                                          │
+│                          ││  S╰──────────────────────────────────╯                           │
+│                          ││  MOUNTS ＋                                                       │
+│                          ││  SMB ＋                                                          │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

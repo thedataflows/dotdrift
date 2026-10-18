@@ -300,7 +300,8 @@ func sectionFilled(rows []wsRow, hdr int) bool {
 // ● replaces the mark.
 func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	if r.header {
-		text := r.text
+		// Section labels render ALL CAPS (0129).
+		text := strings.ToUpper(r.text)
 		mark := ""
 		if addable(r.section) {
 			mark = " " + th.disabledMark.Render("＋")

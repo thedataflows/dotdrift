@@ -3,26 +3,26 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · meta                                              │
-││ ▸ demo                  ││  meta                                                            │
+││ ▸ demo                  ││  META                                                            │
 │                          │││  id demo                                                        │
 │                          ││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
-│                          ││  packages ＋                                                     │
+│                          ││  PACKAGES ＋                                                     │
 │                          ││   + neovim ✎                                                     │
 │                          ││   + ripgrep ✎                                                    │
 │                          ││   − emacs ✎                                                      │
-│                          ││  links ＋                                                        │
+│                          ││  LINKS ＋                                                        │
 │                          ││   ~/.bashrc ← .bashrc (symlink) ✎                                │
-│                          ││  writes ＋                                                       │
+│                          ││  WRITES ＋                                                       │
 │                          ││   ~/.config/demo.toml (edit: line) ✎                             │
 │                          ││   ~/.profile (edit: block) ✎                                     │
-│                          ││  when ＋                                                         │
+│                          ││  WHEN ＋                                                         │
 │                          ││   hosts myhost ✎                                                 │
 │                          ││   os linux ✎                                                     │
-│                          ││  hooks ＋                                                        │
+│                          ││  HOOKS ＋                                                        │
 │                          ││   pre: echo pre ✎                                                │
 │                          ││   post: echo post ✎                                              │
-│                          ││  systemd.units ＋                                                │
+│                          ││  SYSTEMD.UNITS ＋                                                │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / filter modules • ? help • q quit

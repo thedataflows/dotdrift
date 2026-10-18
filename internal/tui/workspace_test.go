@@ -121,7 +121,7 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 	require.GreaterOrEqual(t, idx, 0, "the fixture has a packages section")
 	row := c.ws.rows[idx]
 	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
-	col := func(s, sub string) int { return len([]rune(s[:strings.Index(s, sub)])) }
+	col := func(s, sub string) int { return len([]rune(s[:strings.Index(s, sub)])) } // labels render ALL CAPS (0129)
 
 	c.ws.cursor = 0
 	plainRaw := c.ws.rowView(row, idx, c.th, 40)[0]
@@ -133,7 +133,7 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 	require.Contains(t, plainRaw, "48;", "the section heading is a filled bar")
 	require.Equal(t, 40, ansi.StringWidth(plain), "the section bar fills the pane width")
 	require.Equal(t, 40, ansi.StringWidth(under), "the cursor row fills the pane width")
-	require.Equal(t, col(plain, "packages"), col(under, "packages"),
+	require.Equal(t, col(plain, "PACKAGES"), col(under, "PACKAGES"),
 		"the section text stays in its column under the cursor")
 
 	// 0127: no rule under the header — a border line there reads as
@@ -146,7 +146,7 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 	for i, r := range c.ws.rows {
 		if !r.header && !r.hint && r.section == "meta" {
 			item := strip(c.ws.rowView(r, i, c.th, 40)[0])
-			require.Greater(t, col(item, "id"), col(plain, "packages"),
+			require.Greater(t, col(item, "id"), col(plain, "PACKAGES"),
 				"items indent under the heading")
 			break
 		}
@@ -454,7 +454,7 @@ func TestWorkspace_headerCursorBar(t *testing.T) {
 	}
 	require.True(t, c.ws.rows[c.ws.cursor].header, "the cursor rests on the header")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "│ packages", "the header under the cursor renders the bar")
+	require.Contains(t, frame, "│ PACKAGES", "the header under the cursor renders the bar, label in caps (0129)")
 }
 
 func TestWorkspace_titleShowsSection(t *testing.T) {

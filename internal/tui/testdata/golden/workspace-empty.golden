@@ -3,20 +3,20 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · meta                                              │
-││ ▸ demo                  ││  meta                                                            │
+││ ▸ demo                  ││  META                                                            │
 │                          │││  id demo                                                        │
 │                          ││   description  ✎                                                 │
 │                          ││   scope user ◂▸                                                  │
-│                          ││  packages ＋                                                     │
-│                          ││  links ＋                                                        │
-│                          ││  writes ＋                                                       │
-│                          ││  when ＋                                                         │
-│                          ││  hooks ＋                                                        │
-│                          ││  systemd.units ＋                                                │
-│                          ││  tools ＋                                                        │
-│                          ││  secrets ＋                                                      │
-│                          ││  mounts ＋                                                       │
-│                          ││  smb ＋                                                          │
+│                          ││  PACKAGES ＋                                                     │
+│                          ││  LINKS ＋                                                        │
+│                          ││  WRITES ＋                                                       │
+│                          ││  WHEN ＋                                                         │
+│                          ││  HOOKS ＋                                                        │
+│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││  TOOLS ＋                                                        │
+│                          ││  SECRETS ＋                                                      │
+│                          ││  MOUNTS ＋                                                       │
+│                          ││  SMB ＋                                                          │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

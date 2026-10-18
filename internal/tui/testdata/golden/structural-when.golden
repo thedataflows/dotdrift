@@ -3,14 +3,14 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · when                                              │
-││ ▸ demo                  ││  meta                                                            │
+││ ▸ demo                  ││  META                                                            │
 │                          ││   id demo                                                        │
 │                          ││   description  ✎                                                 │
 │                          ││   scope user ◂▸                                                  │
-│                          ││  packages ＋                                                     │
-│                          ││  links ＋                                                        │
-│                          ││  writes ＋                                                       │
-│                          ││  when ＋                                                         │
+│                          ││  PACKAGES ＋                                                     │
+│                          ││  LINKS ＋                                                        │
+│                          ││  WRITES ＋                                                       │
+│                          ││  WHEN ＋                                                         │
 │                          ││   hosts myhost ✎                                                 │
 │                          ││   and[0] ＋                                                      │
 │                          ││     os linux ✎                                                   │
@@ -22,7 +22,7 @@
 │                          ││       kernel >= 6 ✎                                              │
 │                          ││   not ＋                                                         │
 │                          ││     packages emacs ✎                                             │
-│                          ││  hooks ＋                                                        │
+│                          ││  HOOKS ＋                                                        │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

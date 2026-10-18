@@ -3,23 +3,23 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   · meta  ●                                │
-│  ▾ demo ●                ││  meta                                                            │
+│  ▾ demo ●                ││  META                                                            │
 ││     base ●              │││  id demo                                                        │
 │      user cri            ││   description the demo module-next ●                             │
 │  ▸ other                 ││   scope user ◂▸                                                  │
-│                          ││  packages ＋                                                     │
+│                          ││  PACKAGES ＋                                                     │
 │                          ││   + neovim ✎                                                     │
 │                          ││   + ripgrep ✎                                                    │
-│                          ││  links ＋                                                        │
-│                          ││  writes ＋                                                       │
-│                          ││  when ＋                                                         │
-│                          ││  hooks ＋                                                        │
-│                          ││  systemd.units ＋                                                │
-│                          ││  tools ＋                                                        │
+│                          ││  LINKS ＋                                                        │
+│                          ││  WRITES ＋                                                       │
+│                          ││  WHEN ＋                                                         │
+│                          ││  HOOKS ＋                                                        │
+│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││  TOOLS ＋                                                        │
 │                          ││   node = 20 ✎                                                    │
-│                          ││  secrets ＋                                                      │
-│                          ││  mounts ＋                                                       │
-│                          ││  smb ＋                                                          │
+│                          ││  SECRETS ＋                                                      │
+│                          ││  MOUNTS ＋                                                       │
+│                          ││  SMB ＋                                                          │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

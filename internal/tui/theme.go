@@ -17,7 +17,7 @@ import (
 // means a new registry entry, never an inline lipgloss.NewStyle chain.
 
 type palette struct {
-	indigo, fuchsia, red, amber, green, muted, dim, value, selectedBg color.Color
+	indigo, fuchsia, red, amber, green, muted, dim, value, selectedBg, headerBg color.Color
 }
 
 // paletteFor resolves the shared hues for one background. Light variants
@@ -40,6 +40,10 @@ func paletteFor(isDark bool) palette {
 		// gh-dash: an indigo tint behind the active tab, the cursor row,
 		// and detail header strips.
 		selectedBg: ld(lipgloss.Color("#DDDBFF"), lipgloss.Color("#2E2B5C")),
+		// headerBg (0129) is the section bar's own tint, deeper than
+		// the selection tint: a header and a selection never read as
+		// the same state.
+		headerBg: ld(lipgloss.Color("#C2BEF0"), lipgloss.Color("#1D1B3D")),
 	}
 }
 
@@ -91,6 +95,7 @@ type theme struct {
 	fillBg           lipgloss.Style // the background cells that fill a cursor row to the edge
 	detailHeader     lipgloss.Style // the filled strip atop a detail pane
 	sectionBar       lipgloss.Style // a workspace section heading bar
+	headerFill       lipgloss.Style // background-only pad for the section bar's edge (0129)
 	pillOK           lipgloss.Style // filled status pill: ok
 	pillDrift        lipgloss.Style // filled status pill: drift / unauthorized
 	pillUnknown      lipgloss.Style // filled status pill: unknown
@@ -147,7 +152,8 @@ func newTheme(isDark bool) theme {
 		detailHeader: lipgloss.NewStyle().Bold(true).Padding(0, 1).
 			Foreground(p.value).Background(p.selectedBg),
 		sectionBar: lipgloss.NewStyle().Bold(true).Padding(0, 1).
-			Foreground(p.indigo).Background(p.selectedBg), // the filled heading bar (0121)
+			Foreground(p.indigo).Background(p.headerBg), // the filled heading bar, its own tint (0129)
+		headerFill: lipgloss.NewStyle().Background(p.headerBg),
 		pillOK: lipgloss.NewStyle().Padding(0, 1).
 			Foreground(lipgloss.Color("#FFFFFF")).Background(p.green),
 		pillDrift: lipgloss.NewStyle().Padding(0, 1).
@@ -193,22 +199,25 @@ func (t theme) caretCell(s string) string {
 // plain background cells (0113, 0114): the styled run first, then the
 // bar background to the edge — a style Width would wrap long rows
 // instead of filling. All filled styles share the selectedBg fill.
-func (t theme) fillLine(style lipgloss.Style, s string, w int) string {
+func (t theme) fillLine(style, padStyle lipgloss.Style, s string, w int) string {
 	line := style.MaxWidth(w).Render(s)
 	if pad := w - ansi.StringWidth(line); pad > 0 {
-		line += t.fillBg.Render(strings.Repeat(" ", pad))
+		line += padStyle.Render(strings.Repeat(" ", pad))
 	}
 	return line
 }
 
 // cursorLine renders the cursor row as a filled block across the pane.
-func (t theme) cursorLine(s string, w int) string { return t.fillLine(t.cursorRow, s, w) }
+func (t theme) cursorLine(s string, w int) string { return t.fillLine(t.cursorRow, t.fillBg, s, w) }
 
-// barLine renders a workspace section heading bar across the pane.
-func (t theme) barLine(s string, w int) string { return t.fillLine(t.sectionBar, s, w) }
+// barLine renders a workspace section heading bar across the pane:
+// its edge padding carries the header tint itself (0129).
+func (t theme) barLine(s string, w int) string { return t.fillLine(t.sectionBar, t.headerFill, s, w) }
 
 // detailLine renders a detail pane's header strip across the pane.
-func (t theme) detailLine(s string, w int) string { return t.fillLine(t.detailHeader, s, w) }
+func (t theme) detailLine(s string, w int) string {
+	return t.fillLine(t.detailHeader, t.fillBg, s, w)
+}
 
 // Meta renders dim, parenthetical chrome text.
 func (t theme) Meta(s string) string { return t.meta.Render(s) }

@@ -221,9 +221,10 @@ public = false
   global config, XDG_CONFIG_HOME respected), so installed tools resolve on
   PATH in every shell. The snippets are dotdrift-owned (generated-by
   marker) and regenerated per apply — hand edits are lost; `config.toml`
-  itself is never touched. A run whose plan has no tools removes every
-  marked snippet, and issue 0037's combined `dotdrift.toml` fragment is
-  removed as stale (issue 0137).
+  itself is never touched. The tools step never deletes files in
+  `conf.d` — the directory may hold user files — so a module removed
+  from the profile leaves its snippet behind until the user deletes it
+  (issues 0137, 0138).
 - `secrets` declares sensitive inputs a module's templates need, without
   storing values in git (issue 0044). Each entry maps a logical name to the
   environment variable that supplies the value at apply time (via fnox, CI,

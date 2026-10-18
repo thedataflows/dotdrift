@@ -9,6 +9,7 @@ package tui
 
 import (
 	"errors"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/service"
 )
@@ -107,6 +109,7 @@ type Compositor struct {
 	applyFor      func(*facts.Facts) ApplyLauncher
 	sudoCheck     func(pw []byte) error
 	send          func(tea.Msg)
+	applyGating   bool // serializes the options, preview, and start chain
 	apply         *applyRunState
 	applyPreviews []service.StepPreview
 	applyModules  []string          // the scope P pressed with: the yank set (0093), or a Status finding's owners (0108 2d)
@@ -272,7 +275,20 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.profile.read = msg.read
 			m.profile.loadErr = ""
 		}
-		m.stale[viewProfile] = false
+		m.stale[viewProfile] = msg.err != nil || m.staleSeq[viewProfile] != m.profile.seq
+		return m, nil
+	case writeFinishedMsg:
+		if msg.err == nil {
+			m.markReadViewsStale()
+		}
+		for _, modal := range m.modals {
+			if d, ok := modal.(*dialogModal); ok {
+				return m, d.update(msg)
+			}
+		}
+		if msg.err == nil {
+			return m, m.reloadNav()
+		}
 		return m, nil
 	case statusPlanMsg:
 		// 0108 slice 2c: the Status view's plan check landed — the
@@ -686,8 +702,8 @@ func (m *Compositor) ShortHelp() []key.Binding {
 		}
 	}
 	byKey := map[string]keyTableEntry{}
-	for _, b := range keyTable() {
-		if b.pane == pane || b.pane == "both" {
+	for _, b := range keyTable(m) {
+		if b.pane == pane || b.pane == "both" || b.pane == "read" {
 			if _, ok := byKey[b.key]; !ok {
 				byKey[b.key] = b
 			}
@@ -703,7 +719,7 @@ func (m *Compositor) ShortHelp() []key.Binding {
 		// the table — a dead pane verb never reaches the footer. The
 		// number jumps stay in ? — the full list runs past the frame
 		// width, and truncation must not eat p/P/?/q (fix round 1).
-		for _, k := range []string{"s", "r", "R", "p", "P", "?", "q"} {
+		for _, k := range []string{"enter", "s", "r", "p", "P", "?", "q"} {
 			if b, ok := byKey[k]; ok {
 				add(b.key, b.help)
 			}
@@ -775,7 +791,7 @@ func (m *Compositor) baseFrame() string {
 		body = m.viewBody(paneH)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left,
-		m.headerView(),
+		ansi.Truncate(m.headerView(), m.w, "…"),
 		m.viewRow(),
 		body,
 		m.footerView(),
@@ -796,12 +812,20 @@ func (m *Compositor) pane(focused bool, w, h int, content string) string {
 	if focused {
 		st = m.th.focusedBorder
 	}
-	return st.Width(w).Height(h).Render(content)
+	return st.Width(w).Height(h).MaxWidth(w + 2).MaxHeight(h + 2).Render(content)
 }
 
 func (m *Compositor) headerView() string {
+	root := m.root
+	context := ""
+	if m.host != "" {
+		context = " · host " + m.host + " · user " + m.user
+	}
+	if ansi.StringWidth(" dotdrift · "+root+context) > m.w {
+		root = "…/" + filepath.Base(root)
+	}
 	s := m.th.headerTitle.Render(" dotdrift") +
-		m.th.headerContext.Render(" · "+m.root)
+		m.th.headerContext.Render(" · "+root)
 	if m.host != "" {
 		s += m.th.headerContext.Render(" · host " + m.host + " · user " + m.user)
 	}
@@ -826,5 +850,5 @@ func (m *Compositor) footerView() string {
 	default:
 		slot = " "
 	}
-	return slot + "\n" + m.th.statusBar.Render(" "+m.help.View(m))
+	return ansi.Truncate(slot, m.w, "…") + "\n" + ansi.Truncate(m.th.statusBar.Render(" "+m.help.View(m)), m.w, "…")
 }

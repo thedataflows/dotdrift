@@ -340,6 +340,7 @@ func (m *Compositor) overrideHere() tea.Cmd {
 		m.message, m.msgErr = firstLineOf(err.Error()), true
 		return nil
 	}
+	m.markReadViewsStale()
 	m.message = "created overlay of " + sel.moduleID + " in " + to
 	m.pendTab = service.ModuleDir(m.root, to, sel.moduleID)
 	return m.reloadNav()

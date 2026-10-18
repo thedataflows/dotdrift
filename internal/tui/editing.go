@@ -1645,6 +1645,12 @@ type confirmModel struct {
 
 func (c *confirmModel) finished() bool { return c.done }
 
+func (c *confirmModel) cancel() {
+	if c.onAnswer != nil {
+		c.onAnswer(false)
+	}
+}
+
 func (c *confirmModel) update(msg tea.Msg) tea.Cmd {
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {

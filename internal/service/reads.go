@@ -26,10 +26,12 @@ import (
 // pinned test seams. Zero-value fields are replaced by the real
 // implementations by WithDefaults.
 type ReadsDeps struct {
-	Detect        func() (*facts.Facts, error)
-	LoadProfile   func(root string, f *facts.Facts) (*profile.Profile, error)
-	Resolve       func(p *profile.Profile, f *facts.Facts) (*resolve.Plan, error)
-	OtherAccounts func(root string, f *facts.Facts) ([]profile.Account, error)
+	// NonInteractive prevents elevated status probes from prompting on the terminal.
+	NonInteractive bool
+	Detect         func() (*facts.Facts, error)
+	LoadProfile    func(root string, f *facts.Facts) (*profile.Profile, error)
+	Resolve        func(p *profile.Profile, f *facts.Facts) (*resolve.Plan, error)
+	OtherAccounts  func(root string, f *facts.Facts) ([]profile.Account, error)
 	// WarnLoad renders the load-time skip nudges (superuser overlays,
 	// misplaced dirs — issues 0029/0033) after load, before the filter.
 	// It is the CLI renderer's zerolog output; nil = quiet (the modules
@@ -201,7 +203,7 @@ func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, e
 	probesFor := opts.ProbesFor
 	if probesFor == nil {
 		probesFor = func(f *facts.Facts) drift.Probes {
-			return defaultProbes(f, opts.Elevated, r.deps.PackagesFor, r.deps.NewMise)
+			return defaultProbes(f, opts.Elevated, r.deps.PackagesFor, r.deps.NewMise, r.deps.NonInteractive)
 		}
 	}
 	findings := drift.Check(ctx, pr.Plan, profileRoot, probesFor(pr.Facts), drift.CheckOptions{

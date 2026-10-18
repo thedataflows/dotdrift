@@ -38,17 +38,18 @@ type planLoadedMsg struct {
 // diff toggle, the cursor/scroll pair, and the detail pane's scroll
 // offset (0111).
 type planViewModel struct {
-	pending  bool
-	loadErr  string
-	read     *service.PlanRead
-	report   string
-	diffs    []service.DiffEntry
-	scope    []string // the yank snapshot the read ran under (0093); names the title
-	seq      int      // staleSeq[viewPlan] when the read started (0108 fix round 1)
-	showDiff bool
-	cursor   int
-	offset   int
-	dOffset  int
+	pending      bool
+	loadErr      string
+	read         *service.PlanRead
+	report       string
+	diffs        []service.DiffEntry
+	scope        []string // the successful read's scope; names the title
+	pendingScope []string
+	seq          int // staleSeq[viewPlan] when the read started (0108 fix round 1)
+	showDiff     bool
+	cursor       int
+	offset       int
+	dOffset      int
 }
 
 // planSection is one left-pane row: the report section name and its
@@ -124,9 +125,9 @@ func (m *Compositor) reloadPlan() tea.Cmd {
 	}
 	m.planv.pending = true
 	m.planv.loadErr = ""
-	m.planv.scope = m.nav.yankedIDs()
+	m.planv.pendingScope = m.nav.yankedIDs()
 	m.planv.seq = m.staleSeq[viewPlan] // a mark landing after this point survives the read
-	root, scope := m.root, m.planv.scope
+	root, scope := m.root, m.planv.pendingScope
 	return func() tea.Msg {
 		r, err := m.area.Plan(root, scope, nil)
 		if err != nil {
@@ -155,6 +156,7 @@ func (m *Compositor) planLoaded(msg planLoadedMsg) tea.Cmd {
 	m.planv.pending = false
 	m.planv.loadErr = ""
 	m.planv.read = msg.read
+	m.planv.scope = m.planv.pendingScope
 	m.planv.report = msg.report
 	m.planv.diffs = msg.diffs
 	m.stale[viewPlan] = m.staleSeq[viewPlan] != m.planv.seq
@@ -268,6 +270,9 @@ func (m *Compositor) planList(w, h int) string {
 		return m.th.loading.Render(" not loaded")
 	}
 	var head []string
+	if s.pending {
+		head = append(head, m.th.loading.Render(" resolving…"))
+	}
 	if len(s.scope) > 0 {
 		head = append(head, m.th.meta.Render(" scope: "+strings.Join(s.scope, ", ")))
 	}

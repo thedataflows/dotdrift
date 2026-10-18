@@ -40,11 +40,13 @@ view stack wholesale). Its parts:
   itself (`opStartedMsg`) and reports (`opFinishedMsg`) — the note
   carries the op's end mark, `✓` on success and `✗` on failure (0111).
   A success note fades after 4 s. A failure renders in the Error color
-  and persists until the next user action.
+  and persists until the next user action. The task and message line
+  truncate to the frame width.
 - **The modal stack.** Modals render centered over the dimmed base
   (lipgloss v2 layers on a canvas, the composited final frame). While a
   modal is open it owns all input; covered modals render nothing and
-  receive nothing.
+  receive no user input. Write completion and apply events are handled
+  by the compositor even when a dialog is covered or closed.
 - **One esc rule.** The compositor owns `esc`, not the views: it pops the
   top modal first, then exits workspace edit mode, then returns focus to
   the nav. On the base it clears an applied nav filter first (0081). No
@@ -61,11 +63,17 @@ view stack wholesale). Its parts:
   under `?` — and truncates to the frame width; the full table is
   always under `?`). A
   write (save, manage, onboard, generate, restore) or a finished apply
-  marks the read views stale: the title carries `(stale)` until a
-  refresh lands. `r` re-reads the active view, `R` re-reads all views; a
-  landed read clears its view's mark. A loaded view's title numbers its
+  marks the read views stale, including an override made with `O`. This
+  also works when the write dialog is closed or covered by help. The title
+  carries `(stale)` until a successful refresh lands. `r` re-reads the active
+  view, `R` re-reads all views; a read clears its mark only if no newer
+  write, apply, or scope change marked the view during that read. A loaded view's title numbers its
   rows (0111): Status counts its findings, Plan counts the plan's
   entries — the count renders last, after the stale word and the scope.
+  If the row is too wide, titles keep the view name and `stale`, replace
+  module names with `[N]` for N scoped modules, and omit entry counts. The
+  row stays within the frame width. A long header path uses its final
+  directory name; the full path remains in Profile.
 - **The Profile view** (0107). One read-only list, no cursor: the detect
   facts (host, user, os, kernel, distro, GPU, backend — an undetected
   fact renders nothing), the profile root, the state path, the resume
@@ -74,11 +82,14 @@ view stack wholesale). Its parts:
   is dead, 0106), and the other-accounts note with each account's apply
   command. The read is light — facts, the plan read, the state file, the
   accounts list; no probes — and async: the view shows its loading state
-  on first entry and re-reads on `r`. Lines clamp to the pane width.
+  on first entry and re-reads on `r`. A second refresh during a pending
+  read does nothing. Lines clamp to the pane width.
 - **The Status view** (issue [0108](../issues/0108-drift-unauthorized-status.md)).
   Left: the findings list of `dotdrift status`, grouped by section in
   the CLI's order with named counts (`packages: 1 drift, 1 unknown`).
-  Only drift, unknown, and unauthorized findings render as rows; an
+  The list starts with the resume line: clean, or the valid last completed
+  step, under the same rule as Profile. Only drift, unknown, and
+  unauthorized findings render as rows; an
   all-OK section shows one `ok: all N checks passed` row; the summary
   line is the CLI's (`drift: N items, M unknown, U unauthorized`, or
   `no drift`). Right: the selected finding's detail (module, item,
@@ -88,15 +99,21 @@ view stack wholesale). Its parts:
   to the Modules view with the cursor on the finding's first owning
   module (a multi-owner finding's module list is comma-joined; an
   orphan finding jumps to the module owning its layer dir), the
-  workspace following the jump. `P` on a finding runs the usual apply
+  workspace following the jump. The jump clears the nav filter and opens
+  the known dotfile, mount, or orphan layer, otherwise the base layer. `P` on a
+  finding runs the usual apply
   flow scoped to all of the finding's owners — the owners beat the
   yank set. The read runs as a
   command, so the shell stays responsive while probes run; the pane
-  shows `probing…` until the read lands, and a second `r` during a
+  shows `probing…` until the read lands. A refresh keeps the current list
+  and its scope visible with this indication. A second `r` during a
   probe is a no-op. A failed re-run keeps the old list only with the
-  `(stale)` mark. When the scoped plan holds a system-scope dotfile,
+  `(stale)` mark and its previous scope title. When the scoped plan holds
+  a system-scope dotfile,
   mount, or smb entry, the elevation modal validates sudo before the
-  read starts — no prompt ever reaches the altscreen; a declined or
+  read starts. Elevated TUI probes use `sudo -n`: an expired ticket cannot
+  prompt on the terminal and keeps the original permission error. CLI
+  status keeps its prompt behavior. A declined or
   failed validation runs the read unelevated, and permission-denied
   probes report `unauthorized`, never `unknown`. Loads stay tolerant: a
   broken module surfaces in a `load problems:` block and the summary
@@ -116,10 +133,14 @@ view stack wholesale). Its parts:
   section's entries exactly as `dotdrift plan` renders them — the full
   report renders once when the read lands and the detail cuts the
   section's block from it. `j`/`k` and the paging keys move the
-  section cursor; `d` toggles the copy-mode diff list (the `dotdrift
+  section cursor; `d`, with the section list focused, toggles the copy-mode
+  diff list (the `dotdrift
   status --diff` data) in place of the section entries. The read is
   probe-free and async like the other views; a second `r` in flight is
-  a no-op. A non-empty yank set scopes the read and the title names the
+  a no-op. A refresh keeps the current list and displayed scope, with a
+  `resolving…` indication. Only a successful read changes the displayed
+  scope; a failed read keeps the old data and title under the stale mark.
+  A non-empty yank set scopes the read and the title names the
   scope (`Plan [shell]`); changing the yank set marks the view stale,
   and a read that started before the mark never clears it. The detail
   pane scrolls like the Status view's (0111): `tab` focuses it, the
@@ -262,7 +283,10 @@ view stack wholesale). Its parts:
   filesystem type, label, size, and mountpoints, a MANAGED mark on a
   volume the target module already mounts (the list call snapshots the
   dialog's layer/module/host/user fields) — and a pick fills `source`
-  with `UUID=<uuid>` only. A link `source` browse is
+  with `UUID=<uuid>` only. The picker uses three width-bounded lines per
+  volume and a visible window that follows the selection, including at
+  64 columns. UUID, MANAGED, type, label, size, and mountpoint have separate
+  space instead of one long row. A link `source` browse is
   module-relative (0100): the picker roots at the active layer's module
   directory — an empty field opens inside it, the edit modal's relative
   value seeds there with its entry selected — and the pick stores the
@@ -377,13 +401,17 @@ view stack wholesale). Its parts:
   the old set). On the Status view `enter` on a finding jumps to its
   first owning module on the Modules view, and `P` scopes the apply to
   the finding's owners instead of the yank set (0108). On the Plan view
-  `d` toggles the copy-mode diff list in the detail pane (0109).
+  `d` toggles the copy-mode diff list only with the section list focused
+  (0109); help does not list it while the detail pane has focus.
   `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /
   generate as absorbed dialogs); `n` opens module creation; `o` opens
   the onboard dialog prefilled with the selected module and layer
-  (either pane, 0079); `O` overrides the selected module into your user
+  (either pane in Modules, 0079). Off Modules, `a` and `o` do not add or
+  onboard into the hidden selection; `a` still opens an existing apply
+  detail. Help lists Status enter, the current `P` scope, and
+  `pgup`/`pgdown`/`home`/`end` for Status and Plan. `O` overrides the selected module into your user
   layer in one step (nav pane, 0082). Every form dialog gates its run
   the same way (0089): enter arms a confirm whose prompt — and a `y
   runs · n/esc back` footer — renders only while the gate is armed, and
@@ -451,7 +479,11 @@ Apply runs **inside** the shell, over the service apply session
   0110): force (off), backup (off), and one toggle row per plan section
   (all on) — `space` toggles, `y`/`enter` snapshots the choices into
   `ApplyOpts{Force, Backup, Sections}`, `esc` runs nothing. The choices
-  reset on every `P`. The apply area's read-only `Preview()` then
+  reset on each new chain. A second `P` during the gate, preview, or
+  start chain does nothing. The snapshot stays fixed through Preview and
+  Start. All sections off is an explicit empty selection: the service
+  rejects it with `no sections selected`, and no apply starts. The apply
+  area's read-only `Preview()` then
   classifies the would-be session under that snapshot; `p` shows the
   same classification (defaults) as the read-only plan modal.
 - **Gates, in order**: the options gate, then a destructive confirm when

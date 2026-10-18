@@ -23,6 +23,10 @@ func requireGolden(t *testing.T, name, got string, subs map[string]string) {
 	t.Helper()
 	got = ansiRe.ReplaceAllString(got, "")
 	for from, to := range subs {
+		// A long temporary root can use the compact header on one run only.
+		if to == "$PROFILE" && strings.HasPrefix(got, " dotdrift · …/"+filepath.Base(from)) {
+			got = strings.Replace(got, "…/"+filepath.Base(from), to, 1)
+		}
 		got = strings.ReplaceAll(got, from, to)
 	}
 	// Viewport padding trails every line; its width depends on substituted

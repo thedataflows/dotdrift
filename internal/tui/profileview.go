@@ -32,6 +32,7 @@ type profileLoadedMsg struct {
 // list fits the pane or the pane clips it.
 type profileModel struct {
 	pending bool
+	seq     int
 	loadErr string
 	read    *service.ProfileRead
 }
@@ -55,10 +56,11 @@ func (m *Compositor) switchView(v viewKind) tea.Cmd {
 // reloadProfile re-runs the light profile read (r on the Profile view,
 // first entry). Read-only and probe-free, like every read on the seam.
 func (m *Compositor) reloadProfile() tea.Cmd {
-	if m.area == nil {
+	if m.area == nil || m.profile.pending {
 		return nil
 	}
 	m.profile.pending = true
+	m.profile.seq = m.staleSeq[viewProfile]
 	m.profile.loadErr = ""
 	return func() tea.Msg {
 		r, err := m.area.Profile(m.root, nil)

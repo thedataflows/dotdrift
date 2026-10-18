@@ -14,6 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // viewKind names the base views on the view row.
@@ -85,7 +86,33 @@ func (m *Compositor) viewRow() string {
 			parts = append(parts, m.th.headerContext.Render(name))
 		}
 	}
-	return " " + strings.Join(parts, m.th.headerContext.Render(" · "))
+	row := " " + strings.Join(parts, m.th.headerContext.Render(" · "))
+	if ansi.StringWidth(row) > m.w {
+		parts = parts[:0]
+		for i, name := range viewNames {
+			v := viewKind(i)
+			if m.stale[v] {
+				name += " stale"
+			}
+			var scope []string
+			if v == viewStatus {
+				scope = m.status.scope
+			}
+			if v == viewPlan {
+				scope = m.planv.scope
+			}
+			if len(scope) > 0 {
+				name += "[" + strconv.Itoa(len(scope)) + "]"
+			}
+			style := m.th.headerContext
+			if v == m.view {
+				style = m.th.viewTitle
+			}
+			parts = append(parts, style.Render(name))
+		}
+		row = " " + strings.Join(parts, m.th.headerContext.Render(" · "))
+	}
+	return ansi.Truncate(row, m.w, "…")
 }
 
 // viewBody renders the active non-Modules view: the Profile view's list

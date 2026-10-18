@@ -384,6 +384,10 @@ func (m *Compositor) runPaletteEntry(e paletteEntry) tea.Cmd {
 // jumpToModule moves the nav cursor onto the module (expanding for a
 // layer child) without touching drafts — jumping away never prompts.
 func (m *Compositor) jumpToModule(id, layer string) {
+	m.nav.query = nil
+	m.nav.filtering = false
+	m.nav.offset = 0
+	m.filterSeq++
 	if m.nav.expanded == nil {
 		m.nav.expanded = map[string]bool{}
 	}
@@ -391,6 +395,9 @@ func (m *Compositor) jumpToModule(id, layer string) {
 		m.nav.expanded[id] = true
 	}
 	for i, r := range m.nav.rows() {
+		if r.moduleID == id && r.layer == "" {
+			m.nav.cursor = i
+		}
 		if r.moduleID == id && r.layer == layer {
 			m.nav.cursor = i
 			return

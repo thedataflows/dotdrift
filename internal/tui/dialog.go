@@ -3,11 +3,11 @@ package tui
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"os/exec"
 	"strings"
 
 	"charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/service"
@@ -938,24 +938,33 @@ func (p *volumePickerModel) update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-func (p *volumePickerModel) view(_, _ int) string {
-	var b strings.Builder
-	b.WriteString(p.th.modalTitle.Render("volumes — pick a mount source") + "\n\n")
+func (p *volumePickerModel) view(w, h int) string {
+	width := max(1, w-6)
+	var lines []string
+	lines = append(lines, ansi.Truncate(p.th.modalTitle.Render("volumes — pick a mount source"), width, "…"), "")
 	if len(p.vols) == 0 {
-		b.WriteString("  " + p.th.disabledMark.Render("(no volumes with a usable filesystem UUID)") + "\n")
+		lines = append(lines, ansi.Truncate("(no volumes with a usable filesystem UUID)", width, "…"))
 	}
-	for i, v := range p.vols {
-		row := fmt.Sprintf("%s  %s  %s  %s  %s", v.UUID, v.FSType, v.Label, v.Size,
-			strings.Join(v.Mountpoints, ","))
+	// Three lines keep a normal UUID and the volume facts readable at 64 columns.
+	visible := max(1, (h-8)/3)
+	start := max(0, p.cur-visible+1)
+	for i := start; i < len(p.vols) && i < start+visible; i++ {
+		v := p.vols[i]
+		mark := ""
 		if v.Managed {
-			row += "  MANAGED"
+			mark = " MANAGED"
 		}
-		if i == p.cur {
-			b.WriteString(p.th.cursorRow.Render(" "+row) + "\n")
-		} else {
-			b.WriteString("  " + p.th.rowText.Render(row) + "\n")
+		rows := []string{v.UUID + mark, v.FSType + "  " + v.Label + "  " + v.Size, strings.Join(v.Mountpoints, ",")}
+		for _, row := range rows {
+			row = ansi.Truncate(" "+row, width, "…")
+			if i == p.cur {
+				row = p.th.cursorRow.Render(row)
+			} else {
+				row = p.th.rowText.Render(row)
+			}
+			lines = append(lines, row)
 		}
 	}
-	b.WriteString("\n" + p.th.meta.Render("  up/down pick · enter fills source · esc back"))
-	return p.th.modalBorder.Padding(1, 2).Render(strings.TrimRight(b.String(), "\n"))
+	lines = append(lines, "", ansi.Truncate(p.th.meta.Render("up/down pick · enter fills source · esc back"), width, "…"))
+	return p.th.modalBorder.Padding(1, 2).MaxWidth(w).MaxHeight(h).Render(strings.Join(lines, "\n"))
 }

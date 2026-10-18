@@ -20,6 +20,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -52,16 +53,17 @@ type statusLoadedMsg struct {
 // yank-scope snapshot the read ran under, the section filter, the
 // cursor/scroll pair, and the detail pane's scroll offset (0111).
 type statusModel struct {
-	pending bool
-	loadErr string
-	read    *service.StatusRead
-	diffs   []service.DiffEntry
-	scope   []string // the yank snapshot the read ran under (0093); names the title
-	seq     int      // staleSeq[viewStatus] when the read started (0108 fix round 1)
-	filter  string   // a section name; "" = all sections
-	cursor  int
-	offset  int
-	dOffset int
+	pending      bool
+	loadErr      string
+	read         *service.StatusRead
+	diffs        []service.DiffEntry
+	scope        []string // the successful read's scope; names the title
+	pendingScope []string
+	seq          int    // staleSeq[viewStatus] when the read started (0108 fix round 1)
+	filter       string // a section name; "" = all sections
+	cursor       int
+	offset       int
+	dOffset      int
 }
 
 // statusSectionOrder mirrors drift's report order (its unexported
@@ -87,9 +89,9 @@ func (m *Compositor) reloadStatus() tea.Cmd {
 	}
 	m.status.pending = true
 	m.status.loadErr = ""
-	m.status.scope = m.nav.yankedIDs()
+	m.status.pendingScope = m.nav.yankedIDs()
 	m.status.seq = m.staleSeq[viewStatus] // a mark landing after this point survives the read
-	root, scope := m.root, m.status.scope
+	root, scope := m.root, m.status.pendingScope
 	return func() tea.Msg {
 		pr, err := m.area.Plan(root, scope, nil)
 		if err != nil {
@@ -131,7 +133,7 @@ func (m *Compositor) statusPlanChecked(msg statusPlanMsg) tea.Cmd {
 // Elevated says the sudo gate passed: the probes then run under the
 // fresh timestamp, as the CLI's per-probe sudo does.
 func (m *Compositor) startStatusRead(elevated bool) tea.Cmd {
-	root, scope := m.root, m.status.scope
+	root, scope := m.root, m.status.pendingScope
 	return func() tea.Msg {
 		r, err := m.area.Status(context.Background(), service.StatusOpts{
 			ProfilePath: root,
@@ -161,6 +163,7 @@ func (m *Compositor) statusLoaded(msg statusLoadedMsg) tea.Cmd {
 	m.status.pending = false
 	m.status.loadErr = ""
 	m.status.read = msg.read
+	m.status.scope = m.status.pendingScope
 	m.status.diffs = msg.diffs
 	m.stale[viewStatus] = m.staleSeq[viewStatus] != m.status.seq
 	m.status.dOffset = 0 // new data: the detail reads from the top
@@ -468,7 +471,36 @@ func (m *Compositor) statusJumpToOwner(f *drift.Finding) tea.Cmd {
 		return nil
 	}
 	m.switchView(viewModules)
-	m.jumpToModule(owners[0], "")
+	layer := "base"
+	if f.Section == "orphans" {
+		if strings.HasPrefix(f.Group, "users/") {
+			layer = "user"
+		}
+		if strings.HasPrefix(f.Group, "hosts/") {
+			layer = "host"
+		}
+	}
+	if m.status.read != nil && m.status.read.Plan != nil {
+		plan := m.status.read.Plan
+		switch f.Section {
+		case "dotfiles":
+			home, _ := os.UserHomeDir()
+			for _, e := range plan.Dotfiles.Entries {
+				if e.Module == owners[0] && e.Layer != "" && (e.Target == f.Item || expandHome(e.Target, home) == f.Item) {
+					layer = e.Layer
+					break
+				}
+			}
+		case "mounts":
+			for _, e := range plan.Mounts.Entries {
+				if e.Module == owners[0] && e.Layer != "" && e.Spec.Destination == f.Item {
+					layer = e.Layer
+					break
+				}
+			}
+		}
+	}
+	m.jumpToModule(owners[0], layer)
 	m.focus = focusWork
 	return m.syncWorkspace()
 }
@@ -594,6 +626,14 @@ func (m *Compositor) statusList(w, h int) string {
 		return m.th.loading.Render(" not loaded")
 	}
 	var head []string
+	if s.pending {
+		head = append(head, m.th.loading.Render(" probing…"))
+	}
+	resume := "clean - next apply starts from the beginning"
+	if s.read.State != nil && s.read.State.LastCompleted != "" {
+		resume = fmt.Sprintf("last completed %q - next apply resumes after it", s.read.State.LastCompleted)
+	}
+	head = append(head, ansi.Truncate(m.th.meta.Render(" resume: "+resume), w, "…"))
 	if len(s.scope) > 0 {
 		head = append(head, m.th.meta.Render(" scope: "+strings.Join(s.scope, ", ")))
 	}

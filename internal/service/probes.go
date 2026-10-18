@@ -24,12 +24,12 @@ var sudoRead = func(name string, args ...string) ([]byte, error) {
 // defaultProbes builds the status probes from the reads deps: the OS-backed
 // defaults plus the package backend and mise seams, wrapped for sudo
 // elevation when elevated is true.
-func defaultProbes(f *facts.Facts, elevated bool, packagesFor func(string) packages.Backend, newMise func() *mise.Mise) drift.Probes {
+func defaultProbes(f *facts.Facts, elevated bool, packagesFor func(string) packages.Backend, newMise func() *mise.Mise, nonInteractive ...bool) drift.Probes {
 	pr := drift.DefaultProbes()
 	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
 	pr.ToolCurrent = mise.NewExecMise(newMise()).Current
 	if elevated {
-		return elevateProbes(pr) // retry elevated on permission denied (system files)
+		return elevateProbes(pr, nonInteractive...) // retry elevated on permission denied (system files)
 	}
 	return pr
 }
@@ -40,21 +40,21 @@ func defaultProbes(f *facts.Facts, elevated bool, packagesFor func(string) packa
 // as-is. Already-root processes skip the wrapping entirely. Run (external
 // commands like systemctl/getent) is left untouched; those commands work for
 // normal users in the read-only status path.
-func elevateProbes(pr drift.Probes) drift.Probes {
+func elevateProbes(pr drift.Probes, nonInteractive ...bool) drift.Probes {
 	if os.Geteuid() == 0 {
 		return pr
 	}
 	if pr.Readlink != nil {
-		pr.Readlink = elevateReadlink(pr.Readlink)
+		pr.Readlink = elevateReadlink(pr.Readlink, nonInteractive...)
 	}
 	if pr.ReadFile != nil {
-		pr.ReadFile = elevateReadFile(pr.ReadFile)
+		pr.ReadFile = elevateReadFile(pr.ReadFile, nonInteractive...)
 	}
 	if pr.StatDir != nil {
-		pr.StatDir = elevateStatDir(pr.StatDir)
+		pr.StatDir = elevateStatDir(pr.StatDir, nonInteractive...)
 	}
 	if pr.ListDir != nil {
-		pr.ListDir = elevateListDir(pr.ListDir)
+		pr.ListDir = elevateListDir(pr.ListDir, nonInteractive...)
 	}
 	return pr
 }
@@ -77,9 +77,9 @@ func elevate[T any](inner func(string) (T, error), sudo func(string) (T, error))
 	}
 }
 
-func elevateReadlink(inner func(string) (string, error)) func(string) (string, error) {
+func elevateReadlink(inner func(string) (string, error), nonInteractive ...bool) func(string) (string, error) {
 	return elevate(inner, func(path string) (string, error) {
-		out, err := sudoRead("readlink", path)
+		out, err := readWithSudo(nonInteractive, "readlink", path)
 		if err != nil {
 			return "", err
 		}
@@ -87,15 +87,15 @@ func elevateReadlink(inner func(string) (string, error)) func(string) (string, e
 	})
 }
 
-func elevateReadFile(inner func(string) ([]byte, error)) func(string) ([]byte, error) {
+func elevateReadFile(inner func(string) ([]byte, error), nonInteractive ...bool) func(string) ([]byte, error) {
 	return elevate(inner, func(path string) ([]byte, error) {
-		return sudoRead("cat", path)
+		return readWithSudo(nonInteractive, "cat", path)
 	})
 }
 
-func elevateStatDir(inner func(string) (bool, error)) func(string) (bool, error) {
+func elevateStatDir(inner func(string) (bool, error), nonInteractive ...bool) func(string) (bool, error) {
 	return elevate(inner, func(path string) (bool, error) {
-		out, err := sudoRead("stat", "-c", "%F", path)
+		out, err := readWithSudo(nonInteractive, "stat", "-c", "%F", path)
 		if err != nil {
 			return false, err
 		}
@@ -103,9 +103,9 @@ func elevateStatDir(inner func(string) (bool, error)) func(string) (bool, error)
 	})
 }
 
-func elevateListDir(inner func(string) ([]string, error)) func(string) ([]string, error) {
+func elevateListDir(inner func(string) ([]string, error), nonInteractive ...bool) func(string) ([]string, error) {
 	return elevateSlice(inner, func(path string) ([]string, error) {
-		out, err := sudoRead("ls", "-1", path)
+		out, err := readWithSudo(nonInteractive, "ls", "-1", path)
 		if err != nil {
 			return nil, err
 		}
@@ -131,4 +131,12 @@ func elevateSlice[T any](inner func(string) ([]T, error), sudo func(string) ([]T
 		}
 		return sudoResult, nil
 	}
+}
+
+// A TUI probe must not prompt if its validated sudo ticket has expired.
+func readWithSudo(nonInteractive []bool, name string, args ...string) ([]byte, error) {
+	if len(nonInteractive) > 0 && nonInteractive[0] {
+		return sudoRead("-n", append([]string{name}, args...)...)
+	}
+	return sudoRead(name, args...)
 }

@@ -34,8 +34,8 @@ type keyTableEntry struct {
 // keyTable is the whole base keymap (a func: a package var's initializer
 // would cycle through the help handler back to the table).
 // TestKeys_noOrphanedBindings pins the set; TestKeys_table pins behavior.
-func keyTable() []keyTableEntry {
-	return []keyTableEntry{
+func keyTable(context ...*Compositor) []keyTableEntry {
+	table := []keyTableEntry{
 		// nav pane
 		{"j", "nav", "down", func(m *Compositor) tea.Cmd { m.nav.move(1); return m.syncWorkspace() }},
 		{"k", "nav", "up", func(m *Compositor) tea.Cmd { m.nav.move(-1); return m.syncWorkspace() }},
@@ -93,7 +93,7 @@ func keyTable() []keyTableEntry {
 				m.openApplyDetail()
 				return nil
 			}
-			if m.focus == focusWork {
+			if m.view == viewModules && m.focus == focusWork {
 				m.startAdd()
 			}
 			return nil
@@ -105,8 +105,61 @@ func keyTable() []keyTableEntry {
 		{"ctrl+shift+z", "work", "redo", func(m *Compositor) tea.Cmd { m.redoEdit(); return nil }},
 		{"L", "work", "cycle layer", func(m *Compositor) tea.Cmd { return m.cycleLayer() }},
 		{"w", "work", "writes actions", func(m *Compositor) tea.Cmd { m.openWritesMenu(); return nil }},
-		{"o", "both", "onboard into module", func(m *Compositor) tea.Cmd { m.openOnboardHere(); return nil }},
+		{"o", "both", "onboard into module", func(m *Compositor) tea.Cmd {
+			if m.view == viewModules {
+				m.openOnboardHere()
+			}
+			return nil
+		}},
 	}
+	if len(context) == 0 || context[0].view == viewModules {
+		return table
+	}
+	m := context[0]
+	for i := range table {
+		b := &table[i]
+		if b.pane == "both" {
+			switch b.key {
+			case "a":
+				if m.apply == nil {
+					b.pane = "disabled"
+				} else {
+					b.help = "apply detail"
+				}
+			case "o":
+				b.pane = "disabled"
+			case "f":
+				if m.view != viewStatus {
+					b.pane = "disabled"
+				}
+			case "P":
+				b.help = "apply yanked/all"
+				if m.view == viewStatus && len(m.statusApplyOwners()) > 0 {
+					b.help = "apply owners"
+				}
+			}
+			continue
+		}
+		originalPane := b.pane
+		b.pane = "disabled"
+		if m.view != viewStatus && m.view != viewPlan {
+			continue
+		}
+		if originalPane == "nav" {
+			switch b.key {
+			case "j", "k", "up", "down", "pgup", "pgdown", "home", "end":
+				b.pane = "read"
+			case "enter":
+				if m.view == viewStatus && m.focus == focusNav {
+					b.pane, b.help = "read", "jump owner"
+				}
+			}
+		}
+		if m.view == viewPlan && m.focus == focusNav && b.key == "d" {
+			b.pane, b.help = "read", "toggle diff list"
+		}
+	}
+	return table
 }
 
 // dispatchKey runs the binding for the pressed key and focused pane.
@@ -123,7 +176,7 @@ func (m *Compositor) dispatchKey(s string) (tea.Cmd, bool) {
 	if m.focus == focusWork {
 		pane = "work"
 	}
-	for _, b := range keyTable() {
+	for _, b := range keyTable(m) {
 		if b.key != s {
 			continue
 		}
@@ -223,20 +276,9 @@ func (m *Compositor) helpRows() []helpRow {
 		return []helpRow{{"type", "edit the field"}, {"enter", "commit"}, {"esc", "cancel"}, {"?", "this help"}}
 	}
 	if m.view != viewModules {
-		// Off the Modules view the "both" bindings run (0107); the
-		// Status and Plan views also own the pane movement keys through
-		// their hooks (0108, 0109) — the help names exactly the live
-		// keys.
 		var rows []helpRow
-		if m.view == viewStatus {
-			rows = append(rows, helpRow{"j/k", "move findings"}, helpRow{"tab, then j/k", "scroll the detail"})
-		}
-		if m.view == viewPlan {
-			rows = append(rows, helpRow{"j/k", "move sections"}, helpRow{"d", "toggle diff list"},
-				helpRow{"tab, then j/k", "scroll the detail"})
-		}
-		for _, b := range keyTable() {
-			if b.pane == "both" {
+		for _, b := range keyTable(m) {
+			if b.pane == "both" || b.pane == "read" {
 				rows = append(rows, helpRow{b.key, b.help})
 			}
 		}

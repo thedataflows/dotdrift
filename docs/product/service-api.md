@@ -93,7 +93,10 @@ func (r *ReadsArea) ModuleConfigAt(dir string) (*profile.ModuleConfig, error)
   restore's backup index).
 - `ReadsDeps` carries the seams (detect/load/resolve, `OtherAccounts`,
   `WarnLoad`); zero values fall back to the real implementations via
-  `WithDefaults`, composing exactly like `ApplyDeps`.
+  `WithDefaults`, composing exactly like `ApplyDeps`. The TUI sets
+  `NonInteractive` so elevated Status file probes retry through `sudo -n`.
+  A failed retry returns the original permission error. The CLI leaves this
+  flag false and can prompt as before.
 
 # Writes area
 

@@ -201,6 +201,11 @@ func (g *applyGateModel) snapshot() (force, backup bool, sections map[string]boo
 			sections[r.name] = true
 		}
 	}
+	if len(sections) == 0 {
+		for _, r := range g.rows[2:] {
+			sections[r.name] = false
+		}
+	}
 	return force, backup, sections
 }
 
@@ -268,9 +273,10 @@ type applyDrainedMsg struct{}
 // 2d) — same snapshot field, same one apply path. The gate is built
 // fresh, so its choices reset each press (0110).
 func (m *Compositor) startApply() tea.Cmd {
-	if m.applying || m.applyFor == nil {
+	if m.applying || m.applyGating || m.applyFor == nil {
 		return nil
 	}
+	m.applyGating = true
 	m.applyModules = m.nav.yankedIDs()
 	if owners := m.statusApplyOwners(); len(owners) > 0 {
 		m.applyModules = owners
@@ -282,6 +288,7 @@ func (m *Compositor) startApply() tea.Cmd {
 		m.afterPop = m.previewApply
 	}
 	gate.onCancel = func() {
+		m.applyGating = false
 		m.message, m.msgErr = "apply cancelled", false
 	}
 	m.modals = append(m.modals, gate)
@@ -294,9 +301,9 @@ func (m *Compositor) startApply() tea.Cmd {
 func (m *Compositor) previewApply() tea.Cmd {
 	l := m.applyFor(m.facts)
 	opts := m.applyOpts
+	opts.ProfilePath = m.root
+	opts.Modules = append([]string(nil), m.applyModules...)
 	return func() tea.Msg {
-		opts.ProfilePath = m.root
-		opts.Modules = m.applyModules
 		previews, err := l.Preview(opts)
 		return applyPreviewMsg{previews: previews, err: err}
 	}
@@ -305,6 +312,7 @@ func (m *Compositor) previewApply() tea.Cmd {
 // applyPreview routes the landed classification through the gates.
 func (m *Compositor) applyPreview(msg applyPreviewMsg) tea.Cmd {
 	if msg.err != nil {
+		m.applyGating = false
 		m.message, m.msgErr = firstLineOf(msg.err.Error()), true
 		return nil
 	}
@@ -326,6 +334,7 @@ func (m *Compositor) applyPreview(msg applyPreviewMsg) tea.Cmd {
 				if ok {
 					m.afterPop = m.gateElevation
 				} else {
+					m.applyGating = false
 					m.message, m.msgErr = "apply cancelled", false
 				}
 			},
@@ -348,6 +357,7 @@ func (m *Compositor) gateElevation() tea.Cmd {
 				m.afterPop = m.startApplyRun
 			},
 			onCancel: func(aborted bool) {
+				m.applyGating = false
 				m.message, m.msgErr = "apply cancelled", aborted
 			},
 		})
@@ -381,6 +391,7 @@ func (m *Compositor) startApplyRun() tea.Cmd {
 
 // applyStarted arms the event pump on the started run.
 func (m *Compositor) applyStarted(msg applyStartedMsg) tea.Cmd {
+	m.applyGating = false
 	if msg.err != nil {
 		m.applying = false
 		m.apply = nil
@@ -663,9 +674,6 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	if wf, ok := msg.(writeFinishedMsg); ok {
 		m.d.applyFinished(wf)
 		if wf.err == nil {
-			// 0107: a dialog write (manage / onboard / generate /
-			// restore) outlives the read views' data.
-			m.c.markReadViewsStale()
 			if m.reload != nil {
 				return m.reload()
 			}

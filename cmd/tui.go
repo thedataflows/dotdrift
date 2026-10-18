@@ -32,12 +32,13 @@ type TUICmd struct {
 // executil.SudoValidate (the elevation modal's seam).
 func (c *TUICmd) Run() error {
 	area := service.NewReadsArea(service.ReadsDeps{
-		Detect:        detectFacts,
-		LoadProfile:   profileLoadTolerant,
-		Resolve:       resolvePlan,
-		OtherAccounts: otherAccounts,
-		PackagesFor:   packagesFor,
-		NewMise:       defaultMise,
+		NonInteractive: true,
+		Detect:         detectFacts,
+		LoadProfile:    profileLoadTolerant,
+		Resolve:        resolvePlan,
+		OtherAccounts:  otherAccounts,
+		PackagesFor:    packagesFor,
+		NewMise:        defaultMise,
 	})
 	comp := tui.NewCompositor(area, c.Profile, func(f *facts.Facts) tui.LayerReader {
 		return service.NewConfigArea(c.Profile, service.ConfigDeps{Facts: f})

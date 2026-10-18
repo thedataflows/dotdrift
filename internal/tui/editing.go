@@ -1597,6 +1597,7 @@ func (m *Compositor) saveFinished(msg saveFinishedMsg) tea.Cmd {
 		return nil
 	}
 	delete(m.store, msg.dir)
+	m.markReadViewsStale() // 0107: a write outlives the read views' data
 	if m.ws.activeDir() == msg.dir {
 		m.ws.draft = nil
 		m.ws.loadedDir = "" // force a re-read of the saved file

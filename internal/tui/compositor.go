@@ -83,9 +83,11 @@ type Compositor struct {
 	focus paneFocus
 
 	// view is the active base view on the view row (0107); stale marks
-	// the views whose data a write or apply outlived (markStale).
-	view  viewKind
-	stale [viewCount]bool
+	// the views whose data a write or apply outlived (markStale);
+	// profile is the Profile view's read state (slice 1c).
+	view    viewKind
+	stale   [viewCount]bool
+	profile profileModel
 
 	modals []modal
 
@@ -230,6 +232,7 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.modulesRead = msg.read
+		m.stale[viewModules] = false // the fresh nav read clears the mark
 		m.nav.restore(sel)
 		if dir := m.pendTab; dir != "" && sel.moduleID != "" {
 			// An override just landed (O, 0082): refresh the module's
@@ -249,6 +252,18 @@ func (m *Compositor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.syncNavToActiveLayer()
 		}
 		return m, m.syncWorkspace()
+	case profileLoadedMsg:
+		// 0107 slice 1c: the Profile view's light read landed — the
+		// fresh data clears the view's stale mark either way.
+		m.profile.pending = false
+		if msg.err != nil {
+			m.profile.loadErr = msg.err.Error()
+		} else {
+			m.profile.read = msg.read
+			m.profile.loadErr = ""
+		}
+		m.stale[viewProfile] = false
+		return m, nil
 	case layerLoadedMsg:
 		if msg.dir != m.ws.activeDir() {
 			return m, nil // stale: the cursor moved on
@@ -656,7 +671,7 @@ func (m *Compositor) ShortHelp() []key.Binding {
 		// Off the Modules view only the "both" bindings live (0107):
 		// hint the view keys and the shared verbs, all resolved from
 		// the table — a dead pane verb never reaches the footer.
-		for _, k := range []string{"s", "1", "2", "3", "4", "p", "P", "?", "q"} {
+		for _, k := range []string{"s", "1", "2", "3", "4", "r", "R", "p", "P", "?", "q"} {
 			if b, ok := byKey[k]; ok {
 				add(b.key, b.help)
 			}

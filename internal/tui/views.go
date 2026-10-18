@@ -2,11 +2,11 @@ package tui
 
 // T-tui-views slice 1b (issue 0107): the view row under the header —
 // Modules · Status · Plan · Profile, one active at a time. Modules is
-// the nav+workspace base screen, unchanged; the Status, Plan, and
-// Profile bodies land in later slices and render the not-loaded
-// placeholder until then. A write or a finished apply marks a read
-// view stale (later slices wire the marking); the row title carries
-// the stale word until a refresh clears it.
+// the nav+workspace base screen, unchanged; the Profile body landed in
+// slice 1c (profileview.go), the Status and Plan bodies land in later
+// slices and render the not-loaded placeholder until then. A write or
+// a finished apply marks a read view stale (markReadViewsStale); the
+// row title carries the stale word until a refresh clears it.
 
 import (
 	"strings"
@@ -31,10 +31,19 @@ const viewCount = 4
 var viewNames = [viewCount]string{"Modules", "Status", "Plan", "Profile"}
 
 // markStale marks a view's data as out of date: the row shows the stale
-// word on its title. Later slices call this on writes and finished
-// applies, and clear the mark on refresh.
+// word on its title. A refresh clears the mark when the fresh read
+// lands.
 func (m *Compositor) markStale(v viewKind) {
 	m.stale[v] = true
+}
+
+// markReadViewsStale marks every read view stale: a write (save, manage,
+// onboard, generate, restore) or a finished apply outlived their data
+// (0107). Modules re-reads itself on writes, so it is never marked.
+func (m *Compositor) markReadViewsStale() {
+	m.markStale(viewStatus)
+	m.markStale(viewPlan)
+	m.markStale(viewProfile)
 }
 
 // viewRow renders the view row: the titles joined by ·, the active view
@@ -56,9 +65,14 @@ func (m *Compositor) viewRow() string {
 	return " " + strings.Join(parts, m.th.headerContext.Render(" · "))
 }
 
-// viewBody renders the active non-Modules view: a full-width pane with
-// the not-loaded placeholder until the view's body lands (later slices).
+// viewBody renders the active non-Modules view: the Profile view's list
+// (slice 1c), or a full-width pane with the not-loaded placeholder for
+// the views whose bodies land later. The pane content gets the outer
+// dimensions minus the border, like the base panes.
 func (m *Compositor) viewBody(paneH int) string {
+	if m.view == viewProfile {
+		return m.pane(false, m.w-2, paneH, m.profileBody(m.w-4))
+	}
 	return m.pane(false, m.w-2, paneH, m.th.loading.Render(" not loaded"))
 }
 

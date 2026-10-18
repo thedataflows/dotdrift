@@ -50,6 +50,25 @@ view stack wholesale). Its parts:
   per-view fallthrough.
 - **Focus.** `tab`/`shift+tab` move between nav and workspace; focus is
   the border color; exactly one pane is focused.
+- **The view row** (issue [0107](../issues/0107-tui-shell-views-profile.md)).
+  Under the header: `Modules · Status · Plan · Profile`, the active view
+  accented. `s` cycles, `1`–`4` jump — live in every view. The Modules
+  view is the two-pane base screen, unchanged. Off the Modules view only
+  the shared bindings live; the footer and `?` hint exactly those. A
+  write (save, manage, onboard, generate, restore) or a finished apply
+  marks the read views stale: the title carries `(stale)` until a
+  refresh lands. `r` re-reads the active view, `R` re-reads all views; a
+  landed read clears its view's mark. The Status and Plan bodies land in
+  later slices and show the not-loaded placeholder until then.
+- **The Profile view** (0107). One read-only list, no cursor: the detect
+  facts (host, user, os, kernel, distro, GPU, backend — an undetected
+  fact renders nothing), the profile root, the state path, the resume
+  line (the same rule as `dotdrift status`: clean, or the last completed
+  step when a cursor is pending — a cursor stored for a different input
+  is dead, 0106), and the other-accounts note with each account's apply
+  command. The read is light — facts, the plan read, the state file, the
+  accounts list; no probes — and async: the view shows its loading state
+  on first entry and re-reads on `r`. Lines clamp to the pane width.
 - **Goldens** pin the composited final frames at fixed sizes (100x30 and
   64x24), ANSI stripped; message-driven tests pin focus, esc, capture,
   and chrome behavior.
@@ -289,6 +308,7 @@ view stack wholesale). Its parts:
   quits). `/` is pane-scoped: the nav pane's filters the module list in
   place, the workspace pane's opens the palette (0081) — the footer
   hint resolves the verb from the table per focused pane.
+  `r` re-reads the active view and `R` re-reads all views (0107).
   `p` opens the read-only
   plan modal (step classification, sudo reasons, overwrite counts —
   never credentials); `w` opens the writes menu (onboard / restore /

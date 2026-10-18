@@ -63,12 +63,15 @@ func keyTable() []keyTableEntry {
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
 		{"P", "both", "apply", func(m *Compositor) tea.Cmd { return m.startApply() }},
 		{"tab", "both", "switch pane", func(m *Compositor) tea.Cmd { m.focus = (m.focus + 1) % 2; return nil }},
-		// view row (0107): s cycles, 1-4 jump — live in every view
-		{"s", "both", "next view", func(m *Compositor) tea.Cmd { m.view = (m.view + 1) % viewCount; return nil }},
-		{"1", "both", "modules view", func(m *Compositor) tea.Cmd { m.view = viewModules; return nil }},
-		{"2", "both", "status view", func(m *Compositor) tea.Cmd { m.view = viewStatus; return nil }},
-		{"3", "both", "plan view", func(m *Compositor) tea.Cmd { m.view = viewPlan; return nil }},
-		{"4", "both", "profile view", func(m *Compositor) tea.Cmd { m.view = viewProfile; return nil }},
+		// view row (0107): s cycles, 1-4 jump, r re-reads the active
+		// view, R re-reads all views — live in every view
+		{"s", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
+		{"1", "both", "modules view", func(m *Compositor) tea.Cmd { return m.switchView(viewModules) }},
+		{"2", "both", "status view", func(m *Compositor) tea.Cmd { return m.switchView(viewStatus) }},
+		{"3", "both", "plan view", func(m *Compositor) tea.Cmd { return m.switchView(viewPlan) }},
+		{"4", "both", "profile view", func(m *Compositor) tea.Cmd { return m.switchView(viewProfile) }},
+		{"r", "both", "refresh view", func(m *Compositor) tea.Cmd { return m.refreshView() }},
+		{"R", "both", "refresh all views", func(m *Compositor) tea.Cmd { return m.refreshAllViews() }},
 		// workspace pane
 		{"j", "work", "scroll down", func(m *Compositor) tea.Cmd { m.ws.move(1); return nil }},
 		{"k", "work", "scroll up", func(m *Compositor) tea.Cmd { m.ws.move(-1); return nil }},

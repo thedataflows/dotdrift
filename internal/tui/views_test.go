@@ -61,6 +61,7 @@ func TestViews_footerHintsOffModules(t *testing.T) {
 	require.NotContains(t, frame, "open in workspace", "a dead nav verb must not be hinted")
 	require.NotContains(t, frame, "filter modules", "a dead nav verb must not be hinted")
 	require.Contains(t, frame, "next view", "the footer hints the live view keys")
+	require.Contains(t, frame, "refresh view", "r stays live and hinted")
 	require.Contains(t, frame, "plan", "p stays live and hinted")
 	require.Contains(t, frame, "apply", "P stays live and hinted")
 	require.Contains(t, frame, "help")

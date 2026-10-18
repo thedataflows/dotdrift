@@ -94,4 +94,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0104](0104-apply-never-pipes-mise-hook-tasks.md) | apply never pipes mise hook tasks — every task runs through the handover | done | high |
 | [0105](0105-ci-fails-nonhermetic-tests-go-toolchain.md) | CI runs fail — non-hermetic service tests and Go 1.26 toolchains behind a Go 1.27 module | done | high |
 | [0106](0106-resume-cursor-ignores-changed-sources.md) | Resume cursor ignores changed dotfile sources | done | high |
-| [0107](0107-tui-shell-views-profile.md) | TUI shell views + Profile view (slice 1) | open | medium |
+| [0107](0107-tui-shell-views-profile.md) | TUI shell views + Profile view (slice 1) | done | medium |

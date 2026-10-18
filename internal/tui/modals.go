@@ -317,6 +317,9 @@ func (m *Compositor) applyWaited(msg applyWaitedMsg) tea.Cmd {
 	end := applyEndState(msg.res, msg.err)
 	m.apply.ended = &end
 	m.applying = false
+	// 0107: a finished apply outlives the read views' data, whatever the
+	// outcome — even a failed or cancelled run moved the resume cursor.
+	m.markReadViewsStale()
 	switch end.outcome {
 	case service.OutcomeCompleted:
 		m.message, m.msgErr = "apply: completed", false
@@ -496,8 +499,13 @@ func (m *dialogModal) update(msg tea.Msg) tea.Cmd {
 	}
 	if wf, ok := msg.(writeFinishedMsg); ok {
 		m.d.applyFinished(wf)
-		if wf.err == nil && m.reload != nil {
-			return m.reload()
+		if wf.err == nil {
+			// 0107: a dialog write (manage / onboard / generate /
+			// restore) outlives the read views' data.
+			m.c.markReadViewsStale()
+			if m.reload != nil {
+				return m.reload()
+			}
 		}
 	}
 	return nil

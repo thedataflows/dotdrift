@@ -1,5 +1,5 @@
  dotdrift · $PROFILE · host myhost · user cri
- Modules · Status · Plan · Profile
+ Modules · Status (stale) · Plan (stale) · Profile (stale)
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo  [base]  · raw                                               │
 ││ ▸ demo · invalid module.││broken module.toml — raw text mode                                │

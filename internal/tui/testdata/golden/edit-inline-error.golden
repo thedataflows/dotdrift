@@ -1,25 +1,25 @@
  dotdrift · $PROFILE · host myhost · user cri
- Modules · Status · Plan · Profile
+  Modules   Status   Plan   Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo  [base]  · packages                                          │
-││ ▸ demo                  ││meta                                                              │
+│MODULES                   ││demo   base   · packages                                          │
+││ ▸ demo                  ││ meta                                                             │
 │                          ││  id demo                                                         │
 │                          ││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
-│                          ││packages ＋                                                       │
+│                          ││ packages ＋                                                      │
 │                          │││ ▸                                                               │
 │                          ││    ✗ package name must not be empty                              │
 │                          ││  + ripgrep ✎                                                     │
-│                          ││links ＋                                                          │
-│                          ││writes ＋                                                         │
-│                          ││when ＋                                                           │
-│                          ││hooks ＋                                                          │
-│                          ││systemd.units ＋                                                  │
-│                          ││tools ＋                                                          │
+│                          ││ links ＋                                                         │
+│                          ││ writes ＋                                                        │
+│                          ││ when ＋                                                          │
+│                          ││ hooks ＋                                                         │
+│                          ││ systemd.units ＋                                                 │
+│                          ││ tools ＋                                                         │
 │                          ││  node = 20 ✎                                                     │
-│                          ││secrets ＋                                                        │
-│                          ││mounts ＋                                                         │
-│                          ││smb ＋                                                            │
+│                          ││ secrets ＋                                                       │
+│                          ││ mounts ＋                                                        │
+│                          ││ smb ＋                                                           │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

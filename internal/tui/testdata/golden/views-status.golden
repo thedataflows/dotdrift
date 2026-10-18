@@ -1,19 +1,19 @@
  dotdrift · $PROFILE
- Modules · Status (4) · Plan · Profile
+  Modules   Status (4)   Plan   Profile
 ╭──────────────────────────────────────────────╮╭──────────────────────────────────────────────╮
-│ resume: clean - next apply starts from the b…││ module:  base                                │
-│ packages: 1 drift, 1 unknown                 ││ item:    /etc/hosts                          │
-│  apps: firefox - not installed               ││ state:   unauthorized                        │
-│  shell: ripgrep - probe failed (?)           ││ detail:  read failed: permission denied      │
-│ tools:                                       ││                                              │
-│  ok: all 1 checks passed                     ││[base] /etc/hosts                             │
-│ dotfiles: 1 unauthorized                     ││--- /etc/hosts                                │
-││ base: /etc/hosts - read failed: permission d││+++ $PROFILE/modules/base/hosts│
+│ resume: clean - next apply starts from the b…││ dotfiles · /etc/hosts                        │
+│ packages: 1 drift, 1 unknown                 ││ unauthorized                                 │
+│  apps: firefox - not installed               ││ module:  base                                │
+│  shell: ripgrep - probe failed (?)           ││ item:    /etc/hosts                          │
+│ tools:                                       ││ state:   unauthorized                        │
+│  ✓ ok: all 1 checks passed                   ││ detail:  read failed: permission denied      │
+│ dotfiles: 1 unauthorized                     ││                                              │
+││ base: /etc/hosts - read failed: permission d││[base] /etc/hosts                             │
+│                                              ││--- /etc/hosts                                │
+│ drift: 1 item, 1 unknown, 1 unauthorized     ││+++ $PROFILE/modules/base/hosts│
 │                                              ││@@ -1,2 +1,3 @@                               │
-│ drift: 1 item, 1 unknown, 1 unauthorized     ││ 127.0.0.1 localhost                          │
+│                                              ││ 127.0.0.1 localhost                          │
 │                                              ││+127.0.1.1 myhost                             │
-│                                              ││                                              │
-│                                              ││                                              │
 │                                              ││                                              │
 │                                              ││                                              │
 │                                              ││                                              │
@@ -25,4 +25,4 @@
 │                                              ││                                              │
 ╰──────────────────────────────────────────────╯╰──────────────────────────────────────────────╯
 
- enter jump owner • s next view • r refresh view • p plan • P apply owners • ? help • q quit
+ enter jump owner • > next view • r refresh view • p plan • P apply owners • ? help • q quit

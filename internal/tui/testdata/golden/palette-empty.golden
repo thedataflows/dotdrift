@@ -1,24 +1,24 @@
  dotdrift · $PROFILE · host myhost · user cri
- Modules · Status · Plan · Profile
+  Modules   Status   Plan   Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo  [base] · user cri · host myhost  · meta                     │
-││ ▸ demo                  ││meta                                                              │
+│MODULES                   ││demo   base   user cri   host myhost   · meta                     │
+││ ▸ demo                  ││ meta                                                             │
 │  ▸ other · invalid module│││ id demo                                                         │
 │  ▸ plain · invalid module││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
-│                          ││packages ＋                                                       │
+│                          ││ packages ＋                                                      │
 │                          ││  +╭──────────────────────────────────╮                           │
 │                          ││  +│                                  │                           │
-│                          ││lin│  │/ ▏                            │                           │
-│                          ││wri│                                  │                           │
-│                          ││whe│  │ ◆ demo  module                │                           │
-│                          ││hoo│    ◆ demo · user cri  module     │                           │
-│                          ││sys│    ◆ demo · host myhost  module  │                           │
-│                          ││too│    ◆ other  module               │                           │
+│                          ││ li│  │/ ▏                            │                           │
+│                          ││ wr│                                  │                           │
+│                          ││ wh│  │ ◆ demo  module                │                           │
+│                          ││ ho│    ◆ demo · user cri  module     │                           │
+│                          ││ sy│    ◆ demo · host myhost  module  │                           │
+│                          ││ to│    ◆ other  module               │                           │
 │                          ││  n│    ◆ plain  module               │                           │
-│                          ││sec│                                  │                           │
-│                          ││mou╰──────────────────────────────────╯                           │
-│                          ││smb ＋                                                            │
+│                          ││ se│                                  │                           │
+│                          ││ mo╰──────────────────────────────────╯                           │
+│                          ││ smb ＋                                                           │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

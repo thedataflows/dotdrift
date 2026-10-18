@@ -259,16 +259,18 @@ func (w *workspaceModel) titleView(th theme) string {
 		return ""
 	}
 	s := th.viewTitle.Render(w.moduleID)
+	// Layer tabs are blocks like the view tabs (0113): the active
+	// layer filled, the rest flat — brackets are not a tab treatment.
 	var tabs []string
 	for i, t := range w.tabs {
 		if i == w.active {
-			tabs = append(tabs, th.sectionLabel.Render("["+t.label+"]"))
+			tabs = append(tabs, th.tabActive.Render(t.label))
 		} else {
-			tabs = append(tabs, th.meta.Render(t.label))
+			tabs = append(tabs, th.tabInactive.Render(t.label))
 		}
 	}
 	if len(tabs) > 0 {
-		s += "  " + strings.Join(tabs, th.meta.Render(" · "))
+		s += "  " + strings.Join(tabs, " ")
 	}
 	// The cursor's section rides the title line (0076): an empty stretch
 	// of surface still says where you are.
@@ -299,9 +301,11 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			// A selectable header under the cursor renders the bar
 			// (0076) — an empty section's header is the way in, it has
 			// to say so.
-			return []string{th.cursorRow.MaxWidth(width).Render(" " + text)}
+			return []string{th.cursorLine(" "+text, width)}
 		}
-		return []string{th.sectionLabel.Render(text)}
+		// A section header is a heading bar (0113): a filled strip, so
+		// a section reads as a block, not as one more text row.
+		return []string{th.sectionBar.MaxWidth(width).Render(text)}
 	}
 	if r.hint {
 		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}
@@ -328,13 +332,13 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		}
 	}
 	if i == w.cursor {
-		return []string{th.cursorRow.MaxWidth(width).Render(" " + text)}
+		return []string{th.cursorLine(" "+text, width)}
 	}
 	if r.valueAt > 0 && r.valueAt < len(r.text) {
-		// 0103: the key half recedes one shade under the value. The
-		// halves render as self-styled runs inside the rowText wrap —
-		// the 0080/0102 pattern, so the ANSI-aware clamp and the marks
-		// appended after the value are untouched.
+		// 0113: the key half uses the indigo label hue, the value the
+		// bright neutral. The halves render as self-styled runs inside
+		// the rowText wrap — the 0080/0102 pattern, so the ANSI-aware
+		// clamp and the marks appended after the value are untouched.
 		body := th.rowKey.Render(r.text[:r.valueAt]) + th.rowText.Render(r.text[r.valueAt:]) + text[len(r.text):]
 		return []string{th.rowText.MaxWidth(width).Render("  " + body)}
 	}

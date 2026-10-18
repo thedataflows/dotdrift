@@ -14,22 +14,32 @@ func TestViews_cycleAndJump(t *testing.T) {
 	c := newTestCompositor()
 
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "Modules · Status · Plan · Profile", "the view row renders under the header")
+	for _, name := range []string{"Modules", "Status", "Plan", "Profile"} {
+		require.Contains(t, frame, name, "the tab bar renders every view")
+	}
 	require.Contains(t, frame, "module: shell", "the Modules body renders by default")
 
-	// s cycles forward through the four views and wraps.
-	c = cpress(c, "s")
+	// > cycles forward through the four views and wraps; < goes back.
+	c = cpress(c, ">")
 	require.Equal(t, viewStatus, c.view)
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "not loaded", "an empty view shows the placeholder")
 	require.NotContains(t, frame, "module: shell", "the Modules body is gone off its view")
 
-	c = cpress(c, "s")
+	c = cpress(c, ">")
 	require.Equal(t, viewPlan, c.view)
-	c = cpress(c, "s")
+	c = cpress(c, ">")
 	require.Equal(t, viewProfile, c.view)
+	c = cpress(c, ">")
+	require.Equal(t, viewModules, c.view, "> wraps to Modules")
+	c = cpress(c, "<")
+	require.Equal(t, viewProfile, c.view, "< goes to the previous view")
+	c = cpress(c, "1")
+	require.Equal(t, viewModules, c.view)
+
+	// s no longer switches views (0113).
 	c = cpress(c, "s")
-	require.Equal(t, viewModules, c.view, "s wraps to Modules")
+	require.Equal(t, viewModules, c.view, "s is not a view key anymore")
 
 	// 1-4 jump from the nav pane.
 	c = cpress(c, "3")
@@ -71,7 +81,7 @@ func TestViews_footerHintsOffModules(t *testing.T) {
 func TestViews_modulesUnchanged(t *testing.T) {
 	c := newTestCompositor()
 	before := c.View().Content
-	c = cpress(c, "s")
+	c = cpress(c, ">")
 	require.NotEqual(t, before, c.View().Content, "another view replaces the body")
 	c = cpress(c, "1")
 	require.Equal(t, before, c.View().Content, "the Modules view is byte-identical when active again")
@@ -106,17 +116,18 @@ func TestViews_staleMark(t *testing.T) {
 
 	c.markStale(viewStatus)
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "Status (stale)", "a marked view's title shows the stale word")
-	require.NotContains(t, frame, "Plan (stale)", "unmarked views stay clean")
+	require.Contains(t, frame, "Status ●", "a marked view's tab shows the stale dot badge")
+	require.NotContains(t, frame, "Plan ●", "unmarked views stay clean")
+	require.NotContains(t, frame, "(stale)", "the stale word is gone from tabs")
 
-	// The mark is on the row title: it shows while the view is active too.
+	// The mark is on the tab: it shows while the view is active too.
 	c = cpress(c, "2")
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "Status (stale)")
+	require.Contains(t, frame, "Status ●")
 
 	c.markStale(viewPlan)
 	c.markStale(viewProfile)
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "Plan (stale)")
-	require.Contains(t, frame, "Profile (stale)")
+	require.Contains(t, frame, "Plan ●")
+	require.Contains(t, frame, "Profile ●")
 }

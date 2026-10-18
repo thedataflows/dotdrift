@@ -63,9 +63,10 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
 		{"P", "both", "apply", func(m *Compositor) tea.Cmd { return m.startApply() }},
 		{"tab", "both", "switch pane", func(m *Compositor) tea.Cmd { m.focus = (m.focus + 1) % 2; return nil }},
-		// view row (0107): s cycles, 1-4 jump, r re-reads the active
-		// view, R re-reads all views — live in every view
-		{"s", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
+		// view row (0107, 0113): < and > cycle, 1-4 jump, r re-reads
+		// the active view, R re-reads all views — live in every view
+		{"<", "both", "previous view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + viewCount - 1) % viewCount) }},
+		{">", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
 		{"1", "both", "modules view", func(m *Compositor) tea.Cmd { return m.switchView(viewModules) }},
 		{"2", "both", "status view", func(m *Compositor) tea.Cmd { return m.switchView(viewStatus) }},
 		{"3", "both", "plan view", func(m *Compositor) tea.Cmd { return m.switchView(viewPlan) }},
@@ -226,7 +227,7 @@ func (h *helpModel) view(w, _ int) string {
 	for _, r := range h.rows {
 		b.WriteString("  " + h.th.sectionLabel.Render(r.keys) + "  " + r.what + "\n")
 	}
-	return h.th.modalBorder.Padding(1, 2).Render(strings.TrimRight(b.String(), "\n"))
+	return h.th.modalInfo.Padding(1, 2).Render(strings.TrimRight(b.String(), "\n"))
 }
 
 // openHelp pushes the help modal built for the current state.

@@ -9,8 +9,8 @@ package tui
 // The read is async: entering the view schedules it, profileLoadedMsg
 // lands it (the navLoadedMsg pattern). r re-reads the active view, R
 // re-reads all views; a write or a finished apply marks the read views
-// stale (markReadViewsStale) and the row titles carry the stale word
-// until a refresh clears it.
+// stale (markReadViewsStale) and the tabs carry the stale dot
+// badge until a refresh clears it.
 
 import (
 	"fmt"
@@ -101,26 +101,39 @@ func (m *Compositor) profileBody(w int) string {
 		return m.th.loading.Render(" not loaded")
 	}
 	r := p.read
-	var b strings.Builder
-	row := func(label, value string) {
+	// The groups render as titled cards (0113): a bordered block per
+	// group, its name as the card title. Rows truncate to the card's
+	// inner width (border and padding take four cells).
+	inner := max(w-4, 8)
+	row := func(lines *[]string, label, value string) {
 		if value == "" { // an undetected fact (kernel, distro, gpu) renders nothing
 			return
 		}
 		line := m.th.rowKey.Render(fmt.Sprintf(" %-8s", label+":")) + " " + m.th.rowText.Render(value)
-		b.WriteString(ansi.Truncate(line, w, "") + "\n")
+		*lines = append(*lines, ansi.Truncate(line, inner, ""))
 	}
+	card := func(title string, lines []string) string {
+		body := m.th.groupTitle.Render(title)
+		if len(lines) > 0 {
+			body += "\n" + strings.Join(lines, "\n")
+		}
+		return m.th.cardBorder.Width(w - 2).Render(body)
+	}
+	var cards []string
 	if f := r.Facts; f != nil {
-		row("host", f.Hostname)
-		row("user", f.Username)
-		row("os", f.OS)
-		row("kernel", f.Kernel)
-		row("distro", f.Distro)
-		row("gpu", f.GPU)
-		row("backend", f.Backend)
+		var lines []string
+		row(&lines, "host", f.Hostname)
+		row(&lines, "user", f.Username)
+		row(&lines, "os", f.OS)
+		row(&lines, "kernel", f.Kernel)
+		row(&lines, "distro", f.Distro)
+		row(&lines, "gpu", f.GPU)
+		row(&lines, "backend", f.Backend)
+		cards = append(cards, card("FACTS", lines))
 	}
-	b.WriteString("\n")
-	row("profile", r.ProfilePath)
-	row("state", r.StatePath)
+	var lines []string
+	row(&lines, "profile", r.ProfilePath)
+	row(&lines, "state", r.StatePath)
 	// The resume rule is Status's (RenderStatusHeader): clean unless a
 	// cursor is pending. A pending message carries the warn hue (the
 	// reasonMark amber); the clean message renders as a plain value.
@@ -135,18 +148,20 @@ func (m *Compositor) profileBody(w int) string {
 	} else {
 		resumeLine += m.th.rowText.Render(resume)
 	}
-	b.WriteString(ansi.Truncate(resumeLine, w, "") + "\n")
+	lines = append(lines, ansi.Truncate(resumeLine, inner, ""))
+	cards = append(cards, card("PROFILE", lines))
 	if len(r.Others) > 0 {
 		// The 0038 note, Status's wording: name each other account with
 		// configuration on this machine and its apply command.
-		b.WriteString("\n")
-		b.WriteString(ansi.Truncate(" note: configuration exists for other accounts on this machine:", w, "") + "\n")
+		var lines []string
+		lines = append(lines, ansi.Truncate("configuration exists for other accounts on this machine:", inner, ""))
 		for _, acct := range r.Others {
-			b.WriteString(ansi.Truncate(m.th.rowText.Render("   users/"+acct.Name+" — apply with: "+accountApplyCmd(acct)), w, "") + "\n")
+			lines = append(lines, ansi.Truncate(m.th.rowText.Render(" users/"+acct.Name+" — apply with: "+accountApplyCmd(acct)), inner, ""))
 		}
-		b.WriteString(ansi.Truncate(m.th.meta.Render("   (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system scope)"), w, "") + "\n")
+		lines = append(lines, ansi.Truncate(m.th.meta.Render(" (each account needs dotdrift on its PATH — install it system-wide, e.g. via mise, system scope)"), inner, ""))
+		cards = append(cards, card("OTHER ACCOUNTS", lines))
 	}
-	return strings.TrimRight(b.String(), "\n")
+	return strings.Join(cards, "\n")
 }
 
 // accountApplyCmd is the per-account apply instruction (the rule of

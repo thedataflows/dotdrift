@@ -1,27 +1,27 @@
  dotdrift · $PROFILE · host myhost · user cri
- Modules · Status · Plan · Profile
+  Modules   Status   Plan   Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo  [base]  · meta                                              │
-││ ▸ demo                  ││meta                                                              │
+│MODULES                   ││demo   base   · meta                                              │
+││ ▸ demo                  ││ meta                                                             │
 │                          │││ id demo                                                         │
 │                          ││  description the demo module ✎                                   │
 │                          ││  scope user ◂▸                                                   │
-│                          ││packages ＋                                                       │
+│                          ││ packages ＋                                                      │
 │                          ││  + neovim ✎                                                      │
 │                          ││  + ripgrep ✎                                                     │
 │                          ││  − emacs ✎                                                       │
-│                          ││links ＋                                                          │
+│                          ││ links ＋                                                         │
 │                          ││  ~/.bashrc ← .bashrc (symlink) ✎                                 │
-│                          ││writes ＋                                                         │
+│                          ││ writes ＋                                                        │
 │                          ││  ~/.config/demo.toml (edit: line) ✎                              │
 │                          ││  ~/.profile (edit: block) ✎                                      │
-│                          ││when ＋                                                           │
+│                          ││ when ＋                                                          │
 │                          ││  hosts myhost ✎                                                  │
 │                          ││  os linux ✎                                                      │
-│                          ││hooks ＋                                                          │
+│                          ││ hooks ＋                                                         │
 │                          ││  pre: echo pre ✎                                                 │
 │                          ││  post: echo post ✎                                               │
-│                          ││systemd.units ＋                                                  │
+│                          ││ systemd.units ＋                                                 │
 │                          ││  demo.service ＋                                                 │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 

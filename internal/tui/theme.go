@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // TUI style registry (ADR-0003), rebuilt on charm v2 for the shell
@@ -16,7 +17,7 @@ import (
 // means a new registry entry, never an inline lipgloss.NewStyle chain.
 
 type palette struct {
-	indigo, fuchsia, red, amber, muted, dim, value, key color.Color
+	indigo, fuchsia, red, amber, green, muted, dim, value, selectedBg color.Color
 }
 
 // paletteFor resolves the shared hues for one background. Light variants
@@ -31,13 +32,14 @@ func paletteFor(isDark bool) palette {
 		fuchsia: ld(lipgloss.Color("#D647A3"), lipgloss.Color("#F780E2")),
 		red:     ld(lipgloss.Color("#FF4672"), lipgloss.Color("#ED567A")),
 		amber:   ld(lipgloss.Color("#B45309"), lipgloss.Color("#F59E0B")),
+		green:   ld(lipgloss.Color("#16A34A"), lipgloss.Color("#3DF294")),
 		muted:   ld(lipgloss.Color("245"), lipgloss.Color("245")),
 		dim:     ld(lipgloss.Color("248"), lipgloss.Color("240")),
 		value:   ld(lipgloss.Color("234"), lipgloss.Color("255")),
-		// The key hue (0103) sits one step between value and muted: an
-		// entry row's key half recedes from its content without falling
-		// all the way to the label/hint shades.
-		key: ld(lipgloss.Color("238"), lipgloss.Color("250")),
+		// selectedBg (0113) is the filled-block background borrowed from
+		// gh-dash: an indigo tint behind the active tab, the cursor row,
+		// and detail header strips.
+		selectedBg: ld(lipgloss.Color("#DDDBFF"), lipgloss.Color("#2E2B5C")),
 	}
 }
 
@@ -55,12 +57,11 @@ type theme struct {
 	headerTitle   lipgloss.Style // "dotdrift tui"
 	headerContext lipgloss.Style // host/user context
 	dirtyMark     lipgloss.Style // the ● unsaved indicator
-	statusBar     lipgloss.Style // help hints line
 	applyBadge    lipgloss.Style // the ▶ apply header badge (M15)
 	dimBase       lipgloss.Style // the base frame under a modal (M15)
 	cursorRow     lipgloss.Style // the cursor row: bar + accent text (0075)
 	rowText       lipgloss.Style // value/content text (0080); the truncation carrier
-	rowKey        lipgloss.Style // an entry row's key half — one shade under the value (0103)
+	rowKey        lipgloss.Style // an entry row's key half — the indigo label hue (0113)
 	caret         lipgloss.Style // the block caret: reverse video on the cell under it (0092)
 	fieldLabel    lipgloss.Style // a dialog/form row's fixed label (0080)
 	modalBorder   lipgloss.Style // the confirm modal's frame (M15)
@@ -78,6 +79,27 @@ type theme struct {
 	sectionLabel lipgloss.Style // the key half of "packages  …" lines
 	meta         lipgloss.Style // parenthetical context under titles
 	errorMark    lipgloss.Style // load errors surfaced in a view
+
+	// Visual system (0113, borrowed from gh-dash): filled tab blocks, a
+	// footer bar, detail header strips, status pills, cards, and modal
+	// severity frames. Labels use the indigo hue; values the bright
+	// neutral — the two differ by hue, not by a shade of gray.
+	tabActive        lipgloss.Style // the active view tab: filled indigo block
+	tabInactive      lipgloss.Style // an inactive view tab: flat faint text
+	staleBadge       lipgloss.Style // the amber ● on a stale view's tab
+	successMark      lipgloss.Style // green ✓ / ok text (the first success role)
+	footerBar        lipgloss.Style // the bottom bar background
+	detailHeader     lipgloss.Style // the filled strip atop a detail pane
+	sectionBar       lipgloss.Style // a workspace section heading bar
+	pillOK           lipgloss.Style // filled status pill: ok
+	pillDrift        lipgloss.Style // filled status pill: drift / unauthorized
+	pillUnknown      lipgloss.Style // filled status pill: unknown
+	pillUnauthorized lipgloss.Style // filled status pill: unauthorized
+	cardBorder       lipgloss.Style // a titled card frame (Profile groups)
+	modalDanger      lipgloss.Style // destructive confirm frame: red
+	modalInfo        lipgloss.Style // information frame (help, palette): indigo
+	helpKey          lipgloss.Style // a key chip in the footer bar
+	helpDesc         lipgloss.Style // a help description in the footer bar
 }
 
 func newTheme(isDark bool) theme {
@@ -90,17 +112,16 @@ func newTheme(isDark bool) theme {
 		headerTitle:   lipgloss.NewStyle().Bold(true),
 		headerContext: lipgloss.NewStyle().Foreground(p.muted),
 		dirtyMark:     lipgloss.NewStyle().Bold(true).Foreground(p.fuchsia),
-		statusBar:     lipgloss.NewStyle().Foreground(p.dim),
 		applyBadge:    lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 		dimBase:       lipgloss.NewStyle().Foreground(p.dim),
 		cursorRow: lipgloss.NewStyle().
-			Bold(true).Foreground(p.fuchsia).
+			Bold(true).Foreground(p.fuchsia).Background(p.selectedBg).
 			Border(lipgloss.NormalBorder(), false, false, false, true).
-			BorderForeground(p.fuchsia), // the bubbles delegate treatment
-		rowText:     lipgloss.NewStyle().Foreground(p.value), // values read as content (0080)
-		rowKey:      lipgloss.NewStyle().Foreground(p.key),   // the key half recedes one shade (0103)
-		caret:       lipgloss.NewStyle().Reverse(true),       // the block caret: the cell itself, no glyph (0092)
-		fieldLabel:  lipgloss.NewStyle().Foreground(p.muted), // fixed labels recede (0080)
+			BorderForeground(p.fuchsia), // the bubbles delegate treatment, filled (0113)
+		rowText:     lipgloss.NewStyle().Foreground(p.value),  // values read as content (0080)
+		rowKey:      lipgloss.NewStyle().Foreground(p.indigo), // labels differ from values by hue (0113)
+		caret:       lipgloss.NewStyle().Reverse(true),        // the block caret: the cell itself, no glyph (0092)
+		fieldLabel:  lipgloss.NewStyle().Foreground(p.indigo), // form labels share the label hue (0113)
 		modalBorder: pane.BorderForeground(p.amber),
 		modalTitle:  lipgloss.NewStyle().Bold(true).Foreground(p.amber),
 
@@ -114,6 +135,30 @@ func newTheme(isDark bool) theme {
 		sectionLabel: lipgloss.NewStyle().Bold(true).Foreground(p.indigo),
 		meta:         lipgloss.NewStyle().Foreground(p.muted),
 		errorMark:    lipgloss.NewStyle().Bold(true).Foreground(p.red),
+
+		tabActive: lipgloss.NewStyle().Bold(true).Padding(0, 1).
+			Foreground(lipgloss.Color("#FFFFFF")).Background(p.indigo),
+		tabInactive: lipgloss.NewStyle().Padding(0, 1).Foreground(p.muted),
+		staleBadge:  lipgloss.NewStyle().Bold(true).Foreground(p.amber),
+		successMark: lipgloss.NewStyle().Bold(true).Foreground(p.green),
+		footerBar:   lipgloss.NewStyle().Background(p.selectedBg),
+		detailHeader: lipgloss.NewStyle().Bold(true).Padding(0, 1).
+			Foreground(p.value).Background(p.selectedBg),
+		sectionBar: lipgloss.NewStyle().Bold(true).Padding(0, 1).
+			Foreground(p.indigo).Background(p.selectedBg),
+		pillOK: lipgloss.NewStyle().Padding(0, 1).
+			Foreground(lipgloss.Color("#FFFFFF")).Background(p.green),
+		pillDrift: lipgloss.NewStyle().Padding(0, 1).
+			Foreground(lipgloss.Color("#FFFFFF")).Background(p.red),
+		pillUnknown: lipgloss.NewStyle().Padding(0, 1).
+			Foreground(lipgloss.Color("#000000")).Background(p.amber),
+		pillUnauthorized: lipgloss.NewStyle().Padding(0, 1).
+			Foreground(lipgloss.Color("#FFFFFF")).Background(p.fuchsia),
+		cardBorder:  pane.BorderForeground(p.dim).Padding(0, 1),
+		modalDanger: pane.BorderForeground(p.red),
+		modalInfo:   pane.BorderForeground(p.indigo),
+		helpKey:     lipgloss.NewStyle().Bold(true).Foreground(p.value).Background(p.selectedBg),
+		helpDesc:    lipgloss.NewStyle().Foreground(p.muted).Background(p.selectedBg),
 	}
 }
 
@@ -136,6 +181,17 @@ func (t theme) caretCell(s string) string {
 		}
 	}
 	return cell
+}
+
+// cursorLine renders the cursor row as a filled block across the full
+// pane width (0113): the styled row first, then plain background cells
+// to the edge — a style Width would wrap long rows instead of filling.
+func (t theme) cursorLine(s string, w int) string {
+	line := t.cursorRow.MaxWidth(w).Render(s)
+	if pad := w - ansi.StringWidth(line); pad > 0 {
+		line += t.footerBar.Render(strings.Repeat(" ", pad))
+	}
+	return line
 }
 
 // Meta renders dim, parenthetical chrome text.

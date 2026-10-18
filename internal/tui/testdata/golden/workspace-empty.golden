@@ -1,21 +1,21 @@
  dotdrift · $PROFILE · host myhost · user cri
- Modules · Status · Plan · Profile
+  Modules   Status   Plan   Profile
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
-│MODULES                   ││demo  [base]  · meta                                              │
-││ ▸ demo                  ││meta                                                              │
+│MODULES                   ││demo   base   · meta                                              │
+││ ▸ demo                  ││ meta                                                             │
 │                          │││ id demo                                                         │
 │                          ││  description  ✎                                                  │
 │                          ││  scope user ◂▸                                                   │
-│                          ││packages ＋                                                       │
-│                          ││links ＋                                                          │
-│                          ││writes ＋                                                         │
-│                          ││when ＋                                                           │
-│                          ││hooks ＋                                                          │
-│                          ││systemd.units ＋                                                  │
-│                          ││tools ＋                                                          │
-│                          ││secrets ＋                                                        │
-│                          ││mounts ＋                                                         │
-│                          ││smb ＋                                                            │
+│                          ││ packages ＋                                                      │
+│                          ││ links ＋                                                         │
+│                          ││ writes ＋                                                        │
+│                          ││ when ＋                                                          │
+│                          ││ hooks ＋                                                         │
+│                          ││ systemd.units ＋                                                 │
+│                          ││ tools ＋                                                         │
+│                          ││ secrets ＋                                                       │
+│                          ││ mounts ＋                                                        │
+│                          ││ smb ＋                                                           │
 │                          ││                                                                  │
 │                          ││                                                                  │
 │                          ││                                                                  │

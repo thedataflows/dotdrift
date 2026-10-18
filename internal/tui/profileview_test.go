@@ -116,7 +116,8 @@ func TestProfileView_rendersFactsAndResume(t *testing.T) {
 		"profile: /home/cri/profiles/main",
 		"state:   /home/cri/.local/state/dotdrift/main.json",
 		`resume:  last completed "packages" - next apply resumes after it`,
-		"note: configuration exists for other accounts on this machine:",
+		"OTHER ACCOUNTS",
+		"configuration exists for other accounts on this machine:",
 		"users/alice — apply with: sudo -iu alice dotdrift apply",
 		"users/root — apply with: sudo dotdrift apply",
 	} {

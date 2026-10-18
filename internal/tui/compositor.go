@@ -719,7 +719,7 @@ func (m *Compositor) ShortHelp() []key.Binding {
 		// the table — a dead pane verb never reaches the footer. The
 		// number jumps stay in ? — the full list runs past the frame
 		// width, and truncation must not eat p/P/?/q (fix round 1).
-		for _, k := range []string{"enter", "s", "r", "p", "P", "?", "q"} {
+		for _, k := range []string{"enter", ">", "r", "p", "P", "?", "q"} {
 			if b, ok := byKey[k]; ok {
 				add(b.key, b.help)
 			}
@@ -836,6 +836,12 @@ func (m *Compositor) headerView() string {
 }
 
 func (m *Compositor) footerView() string {
+	// The footer is a background bar (0113): the help segments carry
+	// the bar background through the theme's help styles, and the bar
+	// style pads both lines to the frame width behind them.
+	m.help.Styles.ShortKey = m.th.helpKey
+	m.help.Styles.ShortDesc = m.th.helpDesc
+	m.help.Styles.ShortSeparator = m.th.helpDesc
 	var slot string
 	switch {
 	case m.op != "":
@@ -843,9 +849,10 @@ func (m *Compositor) footerView() string {
 	case m.message != "" && m.msgErr:
 		slot = m.th.errorMark.Render(" " + m.message)
 	case m.message != "":
-		slot = m.th.statusBar.Render(" " + m.message)
+		slot = m.th.successMark.Render(" " + m.message)
 	default:
 		slot = " "
 	}
-	return ansi.Truncate(slot, m.w, "…") + "\n" + ansi.Truncate(m.th.statusBar.Render(" "+m.help.View(m)), m.w, "…")
+	bar := ansi.Truncate(slot, m.w, "…") + "\n" + ansi.Truncate(" "+m.help.View(m), m.w, "…")
+	return m.th.footerBar.Width(m.w).Render(bar)
 }

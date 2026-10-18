@@ -296,12 +296,15 @@ func (m *Compositor) planList(w, h int) string {
 		lines = append(lines, " plan is empty")
 	}
 	for i := s.offset; i < len(secs) && len(lines) < h; i++ {
-		text := " " + secs[i].name + ": " + secs[i].count
 		if i == s.cursor {
 			// The cursor bar replaces the row's leading space (the nav
-			// idiom).
-			text = m.th.cursorRow.MaxWidth(w).Render(strings.TrimPrefix(text, " "))
+			// idiom), filled across the pane (0113).
+			lines = append(lines, ansi.Truncate(m.th.cursorLine(secs[i].name+": "+secs[i].count, w), w, ""))
+			continue
 		}
+		// The section name is a label, the count a value (0113): the
+		// two differ by hue, not by shade.
+		text := m.th.sectionLabel.Render(" "+secs[i].name+":") + " " + m.th.rowText.Render(secs[i].count)
 		lines = append(lines, ansi.Truncate(text, w, ""))
 	}
 	return strings.Join(lines, "\n")
@@ -324,9 +327,9 @@ func (m *Compositor) planDetail(w, h int) string {
 		if err := service.RenderDiff(&b, s.diffs, "internal", false); err != nil {
 			return ""
 		}
-		var lines []string
+		lines := []string{ansi.Truncate(m.th.detailHeader.Render("diff"), w, "")}
 		for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
-			lines = append(lines, ansi.Truncate(line, w, ""))
+			lines = append(lines, ansi.Truncate(diffLine(m.th, line), w, ""))
 		}
 		return m.planDetailWindow(lines, h)
 	}
@@ -334,7 +337,11 @@ func (m *Compositor) planDetail(w, h int) string {
 	if s.cursor >= len(secs) {
 		return ""
 	}
-	return m.planDetailWindow(m.planSectionLines(secs[s.cursor].name, w), h)
+	// The detail pane opens with a header strip naming the section
+	// (0113), then the section's report lines.
+	lines := []string{ansi.Truncate(m.th.detailHeader.Render(secs[s.cursor].name), w, "")}
+	lines = append(lines, m.planSectionLines(secs[s.cursor].name, w)...)
+	return m.planDetailWindow(lines, h)
 }
 
 // planDetailWindow applies the detail pane's scroll window and clamps

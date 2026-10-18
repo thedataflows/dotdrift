@@ -1470,8 +1470,9 @@ func (m *Compositor) confirmDiscard() {
 		changes = fmt.Sprintf("%d changes", d.changes)
 	}
 	m.modals = append(m.modals, &confirmModel{
-		th:    m.th,
-		title: "discard draft?",
+		th:     m.th,
+		title:  "discard draft?",
+		danger: true,
 		body: []string{
 			m.ws.moduleID + " · " + m.ws.tabs[m.ws.active].label,
 			changes + " — this cannot be undone",
@@ -1510,8 +1511,9 @@ func (m *Compositor) confirmRemoveRow() {
 		return
 	}
 	m.modals = append(m.modals, &confirmModel{
-		th:    m.th,
-		title: "remove row?",
+		th:     m.th,
+		title:  "remove row?",
+		danger: true,
 		body: []string{
 			m.ws.moduleID + " · " + m.ws.tabs[m.ws.active].label,
 			row.text + "  (" + row.section + ")",
@@ -1613,8 +1615,9 @@ func (m *Compositor) saveFinished(msg saveFinishedMsg) tea.Cmd {
 // discarded) or keep editing (0065-D8: no merge, no clobber).
 func (m *Compositor) pushConflictModal(dir string) {
 	m.modals = append(m.modals, &confirmModel{
-		th:    m.th,
-		title: "file changed on disk",
+		th:     m.th,
+		title:  "file changed on disk",
+		danger: true,
 		body: []string{
 			m.ws.moduleID + " · " + m.ws.tabs[m.ws.active].label,
 			"y reloads the file (draft discarded)",
@@ -1641,6 +1644,7 @@ type confirmModel struct {
 	body     []string
 	onAnswer func(ok bool)
 	done     bool
+	danger   bool // a destructive confirm renders the red frame (0113)
 }
 
 func (c *confirmModel) finished() bool { return c.done }
@@ -1671,7 +1675,13 @@ func (c *confirmModel) update(msg tea.Msg) tea.Cmd {
 
 func (c *confirmModel) view(w, h int) string {
 	lines := []string{c.th.modalTitle.Render(c.title), ""}
-	lines = append(lines, c.body...)
+	for _, line := range c.body {
+		lines = append(lines, c.th.rowText.Render(line))
+	}
 	lines = append(lines, "", c.th.meta.Render("y confirm · n/esc cancel"))
-	return c.th.modalBorder.Padding(1, 2).Render(strings.Join(lines, "\n"))
+	frame := c.th.modalBorder
+	if c.danger {
+		frame = c.th.modalDanger
+	}
+	return frame.Padding(1, 2).Render(strings.Join(lines, "\n"))
 }

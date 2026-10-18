@@ -282,8 +282,8 @@ func (m *Compositor) statusRows() []statusRow {
 		}
 		rows = append(rows, statusRow{text: header, style: m.th.sectionLabel})
 		if driftN+unkN+unauthN == 0 {
-			rows = append(rows, statusRow{sel: true, okCount: n,
-				text: "  ok: all " + strconv.Itoa(n) + " checks passed"})
+			rows = append(rows, statusRow{sel: true, okCount: n, style: m.th.successMark,
+				text: "  ✓ ok: all " + strconv.Itoa(n) + " checks passed"})
 			continue
 		}
 		for i := range r.Findings {
@@ -300,7 +300,7 @@ func (m *Compositor) statusRows() []statusRow {
 	switch {
 	case totalDrift == 0 && totalUnknown == 0 && totalUnauth == 0:
 		if len(broken) == 0 {
-			rows = append(rows, statusRow{}, statusRow{text: " no drift"})
+			rows = append(rows, statusRow{}, statusRow{text: " ✓ no drift", style: m.th.successMark})
 		}
 	default:
 		word := "items"
@@ -658,13 +658,41 @@ func (m *Compositor) statusList(w, h int) string {
 		if i == s.cursor && rows[i].sel {
 			// The cursor bar replaces the row's leading space (the nav
 			// idiom); the row's own hue survives inside it.
-			line = m.th.cursorRow.MaxWidth(w).Render(rows[i].style.Render(strings.TrimPrefix(rows[i].text, " ")))
+			line = m.th.cursorLine(rows[i].style.Render(strings.TrimPrefix(rows[i].text, " ")), w)
 		} else {
 			line = rows[i].style.Render(rows[i].text)
 		}
 		lines = append(lines, ansi.Truncate(line, w, ""))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// statusPill renders a finding's state as a filled pill (0113): the
+// state word on its role background, readable before the detail text.
+func (m *Compositor) statusPill(f *drift.Finding) string {
+	switch f.Status {
+	case drift.OK:
+		return m.th.pillOK.Render("ok")
+	case drift.Unknown:
+		return m.th.pillUnknown.Render("unknown")
+	case drift.Unauthorized:
+		return m.th.pillUnauthorized.Render("unauthorized")
+	default:
+		return m.th.pillDrift.Render("drift")
+	}
+}
+
+// diffLine colors one rendered diff line (0113): added lines green,
+// removed lines red, headers and context plain. The +++ and --- file
+// headers keep the plain treatment.
+func diffLine(th theme, line string) string {
+	switch {
+	case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+		return th.successMark.Render(line)
+	case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
+		return th.errorMark.Render(line)
+	}
+	return line
 }
 
 // statusDetail renders the right pane: the selected finding's detail
@@ -703,14 +731,18 @@ func (m *Compositor) statusDetailLines(w int) []string {
 		lines = append(lines, ansi.Truncate(m.th.rowKey.Render(fmt.Sprintf(" %-8s", k+":"))+" "+m.th.rowText.Render(v), w, ""))
 	}
 	if row.okCount > 0 {
-		kv("state", "ok")
-		kv("detail", "all "+strconv.Itoa(row.okCount)+" checks passed")
+		lines = append(lines, ansi.Truncate(m.th.detailHeader.Render("ok"), w, ""))
+		lines = append(lines, m.th.pillOK.Render("ok")+" "+m.th.rowText.Render("all "+strconv.Itoa(row.okCount)+" checks passed"))
 		return lines
 	}
 	f := row.finding
 	if f == nil {
 		return nil
 	}
+	// The detail pane opens with a header strip and a status pill
+	// (0113): the section and item name the finding before its fields.
+	lines = append(lines, ansi.Truncate(m.th.detailHeader.Render(f.Section+" · "+f.Item), w, ""))
+	lines = append(lines, m.statusPill(f))
 	kv("module", f.Module)
 	kv("item", f.Item)
 	kv("state", f.Status.String())
@@ -723,7 +755,7 @@ func (m *Compositor) statusDetailLines(w int) []string {
 			var db strings.Builder
 			if err := service.RenderDiff(&db, []service.DiffEntry{e}, "internal", false); err == nil {
 				for _, line := range strings.Split(strings.TrimRight(db.String(), "\n"), "\n") {
-					lines = append(lines, ansi.Truncate(line, w, ""))
+					lines = append(lines, ansi.Truncate(diffLine(m.th, line), w, ""))
 				}
 			}
 			break

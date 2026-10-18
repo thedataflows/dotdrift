@@ -306,7 +306,7 @@ func TestStatusView_midProbeStaleMarkSurvivesLanding(t *testing.T) {
 	c, _ = cstep(c, mustMsg(cmd)) // the old-scope read lands
 	require.True(t, c.stale[viewStatus],
 		"a mark set after the read started survives its landing (old-scope data is not current)")
-	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Status (stale)")
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Status (4) ●")
 
 	// The other leg: no mid-probe mark, a landed refresh clears the mark.
 	_, c = statusShell(statusFixtureRead())
@@ -334,7 +334,7 @@ func TestStatusView_failedRefreshKeepsStaleList(t *testing.T) {
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "firefox", "the old list survives a failed refresh")
 	require.True(t, c.stale[viewStatus], "the surviving list carries the stale mark")
-	require.Contains(t, frame, "Status (stale)")
+	require.Contains(t, frame, "Status (4) ●")
 	require.Equal(t, "probe blew up", c.message, "the failure lands in the footer")
 }
 
@@ -449,7 +449,7 @@ func TestStatusView_yankChangeMarksStale(t *testing.T) {
 	c = cpress(c, "y")
 	require.True(t, c.stale[viewStatus], "a yank change marks Status stale")
 	require.True(t, c.stale[viewPlan], "a yank change marks Plan stale")
-	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Status (stale)",
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Status (4) ●",
 		"the row title carries the mark")
 }
 

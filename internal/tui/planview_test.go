@@ -154,7 +154,7 @@ func TestPlanView_midReadStaleMarkSurvivesLanding(t *testing.T) {
 	c, _ = cstep(c, mustMsg(cmd)) // the old-scope read lands
 	require.True(t, c.stale[viewPlan],
 		"a mark set after the read started survives its landing (old-scope data is not current)")
-	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Plan (stale)")
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "Plan (11) ●")
 
 	// The other leg: no mid-read mark, a landed refresh clears the mark.
 	c, _ = cstep(c, keyPress("3")) // back to the Plan view (already loaded: no new read)

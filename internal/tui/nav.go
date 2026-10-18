@@ -473,7 +473,7 @@ func (n *navModel) rowView(r navRow, cursor bool, th theme, drafts map[string]bo
 		rest += " " + th.yankMark.Render("✓")
 	}
 	if cursor {
-		return th.cursorRow.MaxWidth(w).Render(" " + rest)
+		return th.cursorLine(" "+rest, w)
 	}
 	return th.rowText.MaxWidth(w).Render("  " + rest)
 }

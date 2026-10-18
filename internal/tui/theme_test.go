@@ -87,26 +87,40 @@ func TestTheme_cursorRow(t *testing.T) {
 	require.NotEqual(t, th.cursorRow.Render("x"), th.rowText.Render(" x"), "the cursor style is visible")
 }
 
-// 0103: an entry row's key half recedes one step toward the label hues
-// while the value keeps the bright content hue — close enough to read as
-// the same text, far enough to tell the field's name from its content.
-// The key hue is its own registry entry, distinct from the label and
-// hint hues on both backgrounds.
+// 0113: a label and a value differ by hue, not by one shade of gray —
+// labels (rowKey, fieldLabel) use the indigo hue, values keep the bright
+// neutral hue, on both backgrounds.
 func TestTheme_rowKey(t *testing.T) {
-	require.Equal(t, lipgloss.Color("250"), paletteFor(true).key, "dark key sits one step under the 255 value")
-	require.Equal(t, lipgloss.Color("238"), paletteFor(false).key, "light key sits one step over the 234 value")
 	for _, isDark := range []bool{true, false} {
 		th := newTheme(isDark)
 		p := paletteFor(isDark)
-		require.NotEqual(t, "x", th.rowKey.Render("x"), "the key style is visible")
+		label := lipgloss.NewStyle().Foreground(p.indigo).Render("x")
+		require.Equal(t, label, th.rowKey.Render("x"), "the key half uses the indigo label hue")
 		require.NotEqual(t, th.rowKey.Render("x"), th.rowText.Render("x"),
-			"key and value are visibly different shades")
-		require.NotEqual(t, th.rowKey.Render("x"), th.fieldLabel.Render("x"),
-			"the key shade is not the label hue")
-		require.NotEqual(t, p.key, p.value)
-		require.NotEqual(t, p.key, p.muted, "the key shade is not the label hue")
-		require.NotEqual(t, p.key, p.dim, "the key shade is not the hint hue")
+			"key and value differ by hue")
+		require.NotEqual(t, p.indigo, p.value)
 	}
+}
+
+// 0113: the gh-dash visual roles — filled blocks carry a background,
+// status pills carry a background, cards carry a border, and modal
+// severity differs by frame color.
+func TestTheme_visualRoles(t *testing.T) {
+	th := newTheme(true)
+	require.Contains(t, th.cursorRow.Render("x"), "48;", "the cursor row is a filled block")
+	require.Contains(t, th.tabActive.Render("x"), "48;", "the active tab is a filled block")
+	require.NotContains(t, th.tabInactive.Render("x"), "48;", "the inactive tab stays flat")
+	require.Contains(t, th.footerBar.Render("x"), "48;", "the footer is a background bar")
+	require.Contains(t, th.detailHeader.Render("x"), "48;", "the detail header is a filled strip")
+	for _, pill := range []lipgloss.Style{th.pillOK, th.pillDrift, th.pillUnknown, th.pillUnauthorized} {
+		require.Contains(t, pill.Render("x"), "48;", "a status pill is a filled block")
+	}
+	require.Contains(t, th.cardBorder.Render("x"), "╭", "a card carries a rounded border")
+	require.NotEqual(t, th.modalDanger.Render("x"), th.modalBorder.Render("x"),
+		"a destructive confirm frame differs from the gate frame")
+	require.NotEqual(t, th.modalInfo.Render("x"), th.modalBorder.Render("x"),
+		"an information frame differs from the gate frame")
+	require.NotEqual(t, th.successMark.Render("x"), "x", "the success mark is colored")
 }
 
 // 0102: the caret renders nested inside styled rows, so it must release

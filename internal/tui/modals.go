@@ -238,9 +238,10 @@ func (g *applyGateModel) view(w, h int) string {
 	var b strings.Builder
 	b.WriteString(g.th.modalTitle.Render("apply options") + "\n\n")
 	for i, r := range g.rows {
-		mark := "[ ]"
+		// A checkbox is a box glyph, not bracketed text (0113).
+		mark := "▢"
 		if r.on {
-			mark = "[x]"
+			mark = "▣"
 		}
 		line := "  " + mark + " " + r.name + "\n"
 		if i == g.cur {
@@ -327,9 +328,10 @@ func (m *Compositor) applyPreview(msg applyPreviewMsg) tea.Cmd {
 			body = append(body, ow[:6]...)
 		}
 		m.modals = append(m.modals, &confirmModel{
-			th:    m.th,
-			title: "apply overwrites existing files?",
-			body:  body,
+			th:     m.th,
+			title:  "apply overwrites existing files?",
+			danger: true,
+			body:   body,
 			onAnswer: func(ok bool) {
 				if ok {
 					m.afterPop = m.gateElevation

@@ -127,7 +127,7 @@ func TestFinalChromeFitsLoadedStaleScopedViews(t *testing.T) {
 					require.LessOrEqual(t, lipgloss.Width(frame), size[0])
 					require.LessOrEqual(t, lipgloss.Height(frame), size[1])
 					row := ansiRe.ReplaceAllString(c.viewRow(), "")
-					require.Contains(t, row, "stale")
+					require.Contains(t, row, "●", "the stale badge shows on the tab")
 					require.Contains(t, row, "[")
 				}
 			})

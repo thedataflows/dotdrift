@@ -34,7 +34,7 @@ const viewCount = 4
 var viewNames = [viewCount]string{"Modules", "Status", "Plan", "Profile"}
 
 // markStale marks a view's data as out of date: the row shows the stale
-// word on its title. A refresh clears the mark when the fresh read
+// dot badge on its tab. A refresh clears the mark when the fresh read
 // lands. The seq bump orders the mark against in-flight reads: a read
 // that started before this mark landed carries older data and must not
 // clear it (0108 fix round 1).
@@ -52,48 +52,19 @@ func (m *Compositor) markReadViewsStale() {
 	m.markStale(viewProfile)
 }
 
-// viewRow renders the view row: the titles joined by ·, the active view
-// accented, a stale view titled with the stale word. The counts slot
-// (0111): a loaded read numbers its rows last on the title (after the
-// stale word and the scope, so those stay contiguous) — Status counts
-// its findings, Plan counts the plan's entries.
+// viewRow renders the tab bar (0113): each view is a padded block, the
+// active tab filled, an inactive tab flat. A stale view carries an
+// amber ● badge after its tab, not the stale word. The counts slot
+// (0111): a loaded read numbers its rows last on the tab (after the
+// scope, so those stay contiguous) — Status counts its findings, Plan
+// counts the plan's entries. The Status and Plan tabs name the yank
+// scope their data was read under (0108, 0109).
 func (m *Compositor) viewRow() string {
-	parts := make([]string, 0, viewCount)
-	for i, name := range viewNames {
-		v := viewKind(i)
-		if m.stale[v] {
-			name += " (stale)"
-		}
-		// The Status and Plan titles name the yank scope their data was
-		// read under (0108, 0109): a scoped read is visible, and a yank
-		// change marks the view stale until a refresh re-reads under
-		// the new scope.
-		if v == viewStatus && len(m.status.scope) > 0 {
-			name += " [" + strings.Join(m.status.scope, ", ") + "]"
-		}
-		if v == viewPlan && len(m.planv.scope) > 0 {
-			name += " [" + strings.Join(m.planv.scope, ", ") + "]"
-		}
-		if v == viewStatus && m.status.read != nil {
-			name += " (" + strconv.Itoa(len(m.status.read.Findings)) + ")"
-		}
-		if v == viewPlan && m.planv.read != nil {
-			name += " (" + strconv.Itoa(planEntries(m.planv.read)) + ")"
-		}
-		if v == m.view {
-			parts = append(parts, m.th.viewTitle.Render(name))
-		} else {
-			parts = append(parts, m.th.headerContext.Render(name))
-		}
-	}
-	row := " " + strings.Join(parts, m.th.headerContext.Render(" · "))
-	if ansi.StringWidth(row) > m.w {
-		parts = parts[:0]
+	build := func(compact bool) string {
+		parts := make([]string, 0, viewCount)
 		for i, name := range viewNames {
 			v := viewKind(i)
-			if m.stale[v] {
-				name += " stale"
-			}
+			label := name
 			var scope []string
 			if v == viewStatus {
 				scope = m.status.scope
@@ -102,15 +73,35 @@ func (m *Compositor) viewRow() string {
 				scope = m.planv.scope
 			}
 			if len(scope) > 0 {
-				name += "[" + strconv.Itoa(len(scope)) + "]"
+				if compact {
+					label += "[" + strconv.Itoa(len(scope)) + "]"
+				} else {
+					label += " [" + strings.Join(scope, ", ") + "]"
+				}
 			}
-			style := m.th.headerContext
+			if !compact {
+				if v == viewStatus && m.status.read != nil {
+					label += " (" + strconv.Itoa(len(m.status.read.Findings)) + ")"
+				}
+				if v == viewPlan && m.planv.read != nil {
+					label += " (" + strconv.Itoa(planEntries(m.planv.read)) + ")"
+				}
+			}
+			style := m.th.tabInactive
 			if v == m.view {
-				style = m.th.viewTitle
+				style = m.th.tabActive
 			}
-			parts = append(parts, style.Render(name))
+			part := style.Render(label)
+			if m.stale[v] {
+				part += m.th.staleBadge.Render("●")
+			}
+			parts = append(parts, part)
 		}
-		row = " " + strings.Join(parts, m.th.headerContext.Render(" · "))
+		return " " + strings.Join(parts, " ")
+	}
+	row := build(false)
+	if ansi.StringWidth(row) > m.w {
+		row = build(true)
 	}
 	return ansi.Truncate(row, m.w, "…")
 }

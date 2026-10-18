@@ -15,7 +15,7 @@ timestamp: 2026-10-19T00:00:00Z
 - **Assignee**: none
 - **Related**: [0136](0136-mise-interactive-foreground.md)
 - **Related code**: [`internal/mise/mise.go`](../../internal/mise/mise.go), [`internal/tui/`](../../internal/tui/)
-- **Closing commits**: `PENDING`
+- **Closing commits**: `1c94443`
 
 ## Summary
 

@@ -107,9 +107,10 @@ func keyTable() []keyTableEntry {
 
 // dispatchKey runs the binding for the pressed key and focused pane.
 // shift+tab aliases tab (two panes: reverse is forward). Off the
-// Modules view, "both" bindings still run (view switching, help, quit)
-// and pane keys go to the active view's hook (0107) — nil until the
-// view has a body, so pane keys are dead on an empty view.
+// Modules view, every "both" binding still runs (view switching, help,
+// quit, plan, apply, …) and pane keys go to the active view's hook
+// (0107) — nil until the view has a body, so pane keys are dead on an
+// empty view.
 func (m *Compositor) dispatchKey(s string) (tea.Cmd, bool) {
 	if s == "shift+tab" {
 		s = "tab"

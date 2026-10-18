@@ -652,6 +652,17 @@ func (m *Compositor) ShortHelp() []key.Binding {
 	add := func(k, h string) {
 		out = append(out, key.NewBinding(key.WithKeys(k), key.WithHelp(k, h)))
 	}
+	if m.view != viewModules {
+		// Off the Modules view only the "both" bindings live (0107):
+		// hint the view keys and the shared verbs, all resolved from
+		// the table — a dead pane verb never reaches the footer.
+		for _, k := range []string{"s", "1", "2", "3", "4", "p", "P", "?", "q"} {
+			if b, ok := byKey[k]; ok {
+				add(b.key, b.help)
+			}
+		}
+		return out
+	}
 	for _, k := range primary {
 		if b, ok := byKey[k]; ok {
 			add(b.key, b.help)

@@ -53,6 +53,20 @@ func TestViews_cycleAndJump(t *testing.T) {
 	require.Equal(t, before, c.nav.cursor, "an empty view swallows pane keys")
 }
 
+func TestViews_footerHintsOffModules(t *testing.T) {
+	c := newTestCompositor()
+	c = cpress(c, "2") // the Status view
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "not loaded")
+	require.NotContains(t, frame, "open in workspace", "a dead nav verb must not be hinted")
+	require.NotContains(t, frame, "filter modules", "a dead nav verb must not be hinted")
+	require.Contains(t, frame, "next view", "the footer hints the live view keys")
+	require.Contains(t, frame, "plan", "p stays live and hinted")
+	require.Contains(t, frame, "apply", "P stays live and hinted")
+	require.Contains(t, frame, "help")
+	require.Contains(t, frame, "quit")
+}
+
 func TestViews_modulesUnchanged(t *testing.T) {
 	c := newTestCompositor()
 	before := c.View().Content

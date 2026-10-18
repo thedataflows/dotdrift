@@ -303,14 +303,20 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 			// to say so.
 			return []string{th.cursorLine(" "+text, width)}
 		}
-		// A section header is a heading bar (0113): a filled strip, so
-		// a section reads as a block, not as one more text row. The
-		// lead matches the cursor row's bar cell (0116): the text must
-		// not shift when the cursor lands on the section.
-		return []string{th.barLine(" "+text, width)}
+		// A section header is a heading (0119, the gh-dash preview
+		// treatment): bold underlined text, no background — the
+		// cursor row is the only filled element. The lead matches
+		// the cursor row's bar cell (0116): no shift under the cursor.
+		return []string{th.sectionBar.Render("  " + text)}
 	}
 	if r.hint {
-		return []string{th.disabledMark.MaxWidth(width).Render("  " + r.text)}
+		if r.text == "" {
+			// The section separator (0117, 0119): a faint hairline
+			// rule across the pane — one cell row, a hairline stroke,
+			// where a blank row read as a full gap.
+			return []string{th.disabledMark.Render(strings.Repeat("─", width))}
+		}
+		return []string{th.disabledMark.MaxWidth(width).Render("   " + r.text)}
 	}
 	if w.editing != nil && w.editing.row == i {
 		return w.editLines(w.editing, th, width)
@@ -334,7 +340,7 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		}
 	}
 	if i == w.cursor {
-		return []string{th.cursorLine(" "+text, width)}
+		return []string{th.cursorLine("  "+text, width)}
 	}
 	if r.valueAt > 0 && r.valueAt < len(r.text) {
 		// 0113: the key half uses the indigo label hue, the value the
@@ -342,9 +348,9 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		// the rowText wrap — the 0080/0102 pattern, so the ANSI-aware
 		// clamp and the marks appended after the value are untouched.
 		body := th.rowKey.Render(r.text[:r.valueAt]) + th.rowText.Render(r.text[r.valueAt:]) + text[len(r.text):]
-		return []string{th.rowText.MaxWidth(width).Render("  " + body)}
+		return []string{th.rowText.MaxWidth(width).Render("   " + body)}
 	}
-	return []string{th.rowText.MaxWidth(width).Render("  " + text)}
+	return []string{th.rowText.MaxWidth(width).Render("   " + text)}
 }
 
 // editLines renders the active input: the buffer with a block caret, plus

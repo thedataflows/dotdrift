@@ -121,16 +121,30 @@ func TestWorkspace_sectionHeaderNoShift(t *testing.T) {
 	require.GreaterOrEqual(t, idx, 0, "the fixture has a packages section")
 	row := c.ws.rows[idx]
 	strip := func(s string) string { return ansiRe.ReplaceAllString(s, "") }
-	col := func(s string) int { return len([]rune(s[:strings.Index(s, "packages")])) }
+	col := func(s, sub string) int { return len([]rune(s[:strings.Index(s, sub)])) }
 
 	c.ws.cursor = 0
-	plain := strip(c.ws.rowView(row, idx, c.th, 40)[0])
+	plainRaw := c.ws.rowView(row, idx, c.th, 40)[0]
+	plain := strip(plainRaw)
 	c.ws.cursor = idx
 	under := strip(c.ws.rowView(row, idx, c.th, 40)[0])
 
-	require.Equal(t, 40, ansi.StringWidth(plain), "the section bar fills the pane width")
-	require.Equal(t, col(plain), col(under),
+	// 0119: a heading is text, not a filled bar — the cursor row is
+	// the only filled element, and the heading never shifts.
+	require.NotContains(t, plainRaw, "48;", "the section heading carries no background")
+	require.Equal(t, 40, ansi.StringWidth(under), "the cursor row fills the pane width")
+	require.Equal(t, col(plain, "packages"), col(under, "packages"),
 		"the section text stays in its column under the cursor")
+
+	// Items indent one column under their heading.
+	for i, r := range c.ws.rows {
+		if !r.header && !r.hint && r.section == "meta" {
+			item := strip(c.ws.rowView(r, i, c.th, 40)[0])
+			require.Greater(t, col(item, "id"), col(plain, "packages"),
+				"items indent under the heading")
+			break
+		}
+	}
 }
 
 // 0117: sections are separated by one blank row, so empty sections do
@@ -147,6 +161,10 @@ func TestWorkspace_sectionsSeparated(t *testing.T) {
 				"a blank row separates the %s section", r.section)
 		}
 	}
+	// The separator renders as a hairline rule, not a blank row.
+	require.Contains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "───",
+		"sections are separated by a hairline rule")
+
 	// Walk the whole surface: the cursor never rests on a separator.
 	c.ws.cursor = c.ws.firstEntry(0)
 	for range c.ws.rows {
@@ -368,8 +386,8 @@ func TestWorkspace_cursorRowBar(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
 	c = cpress(c, "right")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "│ id demo", "the cursor row renders the bar")
-	require.Contains(t, frame, "  description", "plain rows keep the two-space lead")
+	require.Contains(t, frame, "│  id demo", "the cursor row renders the bar")
+	require.Contains(t, frame, "   description", "plain rows indent one column under the heading (0119)")
 
 	c = cpress(c, "j") // the description row
 	c = cpress(c, "enter")

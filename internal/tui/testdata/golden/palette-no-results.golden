@@ -4,25 +4,25 @@
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
 ││ ▸ demo                  ││  meta                                                            │
-│  ▸ other · invalid module│││ id demo                                                         │
-│  ▸ plain · invalid module││  description the demo module ✎                                   │
-│                          ││  scope user ◂▸                                                   │
-│                          ││                                                                  │
-│                          ││  packages ＋                                                     │
+│  ▸ other · invalid module│││  id demo                                                        │
+│  ▸ plain · invalid module││   description the demo module ✎                                  │
+│                          ││   scope user ◂▸                                                  │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  packages ＋                                         │
 │                       ╭─────────────────────────────────────────────────╮                    │
 │                       │                                                 │                    │
-│                       │  │/ zzzznothing▏                                │                    │
-│                       │                                                 │                    │
-│                       │    no matches                                   │                    │
-│                       │    ctrl+n creates a module named «zzzznothing»  │                    │
-│                       │                                                 │                    │
-│                       ╰─────────────────────────────────────────────────╯                    │
-│                          ││                                                                  │
-│                          ││  hooks ＋                                                        │
-│                          ││                                                                  │
-│                          ││  systemd.units ＋                                                │
-│                          ││                                                                  │
-│                          ││  tools ＋                                                        │
+│                       │  │/ zzzznothing▏                                │────────────────────│
+│                       │                                                 │        │
+│                       │    no matches                                   │────────────────────│
+│                       │    ctrl+n creates a module named «zzzznothing»  │        │
+│                       │                                                 │────────────────────│
+│                       ╰─────────────────────────────────────────────────╯        │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  hooks ＋                                            │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  systemd.units ＋                                    │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  tools ＋                                            │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

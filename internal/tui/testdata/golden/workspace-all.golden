@@ -4,25 +4,25 @@
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · meta                                              │
 ││ ▸ demo                  ││  meta                                                            │
-│                          │││ id demo                                                         │
-│                          ││  description the demo module ✎                                   │
-│                          ││  scope user ◂▸                                                   │
-│                          ││                                                                  │
-│                          ││  packages ＋                                                     │
-│                          ││  + neovim ✎                                                      │
-│                          ││  + ripgrep ✎                                                     │
-│                          ││  − emacs ✎                                                       │
-│                          ││                                                                  │
-│                          ││  links ＋                                                        │
-│                          ││  ~/.bashrc ← .bashrc (symlink) ✎                                 │
-│                          ││                                                                  │
-│                          ││  writes ＋                                                       │
-│                          ││  ~/.config/demo.toml (edit: line) ✎                              │
-│                          ││  ~/.profile (edit: block) ✎                                      │
-│                          ││                                                                  │
-│                          ││  when ＋                                                         │
-│                          ││  hosts myhost ✎                                                  │
-│                          ││  os linux ✎                                                      │
+│                          │││  id demo                                                        │
+│                          ││   description the demo module ✎                                  │
+│                          ││   scope user ◂▸                                                  │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  packages [38;5;240m＋[m                                         │
+│                          ││   + neovim ✎                                                     │
+│                          ││   + ripgrep ✎                                                    │
+│                          ││   − emacs ✎                                                      │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  links [38;5;240m＋[m                                            │
+│                          ││   ~/.bashrc ← .bashrc (symlink) ✎                                │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  writes [38;5;240m＋[m                                           │
+│                          ││   ~/.config/demo.toml (edit: line) ✎                             │
+│                          ││   ~/.profile (edit: block) ✎                                     │
+│                          ││──────────────────────────────────────────────────────────────────│
+│                          ││  when [38;5;240m＋[m                                             │
+│                          ││   hosts myhost ✎                                                 │
+│                          ││   os linux ✎                                                     │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter open in workspace • / filter modules • ? help • q quit

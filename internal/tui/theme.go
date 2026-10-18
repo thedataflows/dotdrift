@@ -145,8 +145,8 @@ func newTheme(isDark bool) theme {
 		footerBar:   lipgloss.NewStyle().Background(p.selectedBg),
 		detailHeader: lipgloss.NewStyle().Bold(true).Padding(0, 1).
 			Foreground(p.value).Background(p.selectedBg),
-		sectionBar: lipgloss.NewStyle().Bold(true).Padding(0, 1).
-			Foreground(p.indigo).Background(p.selectedBg),
+		sectionBar: lipgloss.NewStyle().Bold(true).Underline(true).
+			Foreground(p.indigo), // a heading is text, no fill (0119)
 		pillOK: lipgloss.NewStyle().Padding(0, 1).
 			Foreground(lipgloss.Color("#FFFFFF")).Background(p.green),
 		pillDrift: lipgloss.NewStyle().Padding(0, 1).
@@ -201,9 +201,6 @@ func (t theme) fillLine(style lipgloss.Style, s string, w int) string {
 
 // cursorLine renders the cursor row as a filled block across the pane.
 func (t theme) cursorLine(s string, w int) string { return t.fillLine(t.cursorRow, s, w) }
-
-// barLine renders a workspace section heading bar across the pane.
-func (t theme) barLine(s string, w int) string { return t.fillLine(t.sectionBar, s, w) }
 
 // detailLine renders a detail pane's header strip across the pane.
 func (t theme) detailLine(s string, w int) string { return t.fillLine(t.detailHeader, s, w) }

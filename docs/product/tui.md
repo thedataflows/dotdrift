@@ -86,7 +86,7 @@ view stack wholesale). Its parts:
   headers are filled heading bars; detail panes open with a filled
   header strip and a filled status pill (`ok`, `drift`, `unknown`,
   `unauthorized`); the Profile groups render as titled cards; the
-  footer is a background bar where success is green and errors red.
+  footer is plain text where success is green and errors red.
   Labels (row keys, form labels) use the indigo hue and values the
   bright neutral hue — the two differ by hue, not by a shade of gray.
   Diff lines are green when added and red when removed. Modal frames

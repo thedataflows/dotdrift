@@ -118,3 +118,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0128](0128-addable-headers-selectable.md) | Addable section headers are selectable | done | medium |
 | [0129](0129-header-color-caps.md) | Section headers get their own background and ALL CAPS labels | done | medium |
 | [0130](0130-section-end-space.md) | One empty line after each workspace section | done | medium |
+| [0131](0131-modal-input-window.md) | Modal text inputs must not stretch the modal; long text scrolls | done | medium |

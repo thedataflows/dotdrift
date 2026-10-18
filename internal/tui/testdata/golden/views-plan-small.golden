@@ -3,11 +3,11 @@
 ────────────────────────────────────────────────────────────────
 ╭────────────────────────────╮╭────────────────────────────╮
 ││packages: 2 install, 1 remo││ packages                   │
-│ tools: 2                   ││packages:                   │
-│ dotfiles: 1                ││  - firefox                 │
-│ hooks: 1 pre, 1 post       ││  - ripgrep                 │
-│ systemd: 1                 ││remove:                     │
-│ mounts: 1                  ││  - nano                    │
+│ tools: 2                   ││  - firefox                 │
+│ dotfiles: 1                ││  - ripgrep                 │
+│ hooks: 1 pre, 1 post       ││remove:                     │
+│ systemd: 1                 ││  - nano                    │
+│ mounts: 1                  ││                            │
 │ smb: 1                     ││                            │
 │                            ││                            │
 │                            ││                            │

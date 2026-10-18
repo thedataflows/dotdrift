@@ -151,7 +151,8 @@ view stack wholesale). Its parts:
   1 post`, `systemd: 1`, `mounts: 1`, `smb: 1`). Right: the selected
   section's entries exactly as `dotdrift plan` renders them — the full
   report renders once when the read lands and the detail cuts the
-  section's block from it. `j`/`k` and the paging keys move the
+  section's block from it, minus the block's own header line: the
+  detail header strip already names the section (issue 0140). `j`/`k` and the paging keys move the
   section cursor; `d`, with the section list focused, toggles the copy-mode
   diff list (the `dotdrift
   status --diff` data) in place of the section entries. The read is

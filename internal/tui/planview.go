@@ -362,7 +362,10 @@ var planReportBlocks = map[string][]string{
 }
 
 // planSectionLines cuts the section's lines out of the rendered
-// report, clamped to the pane width.
+// report, clamped to the pane width. The first block's own header
+// line is dropped: the detail pane's header strip already names the
+// section (issue 0140). Later sub-block headers (packages' "remove:")
+// stay — they separate lists inside the section.
 func (m *Compositor) planSectionLines(sec string, w int) []string {
 	names := planReportBlocks[sec]
 	if names == nil {
@@ -371,6 +374,9 @@ func (m *Compositor) planSectionLines(sec string, w int) []string {
 	var lines []string
 	for _, name := range names {
 		lines = append(lines, reportBlock(m.planv.report, name)...)
+	}
+	if len(lines) > 0 && lines[0] == sec+":" {
+		lines = lines[1:]
 	}
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, w, "")

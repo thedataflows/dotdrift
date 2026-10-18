@@ -100,6 +100,21 @@ func TestPlanView_rendersMergedSections(t *testing.T) {
 	require.NotContains(t, frame, "  - firefox", "the detail follows the cursor")
 }
 
+// 0140: the detail pane's header strip already names the section, so
+// the report block's own "<section>:" header line must not repeat in
+// the body. Sub-block headers (packages' "remove:") stay.
+func TestPlanSectionLines_dropsDuplicatedHeader(t *testing.T) {
+	c := &Compositor{}
+	c.planv.report = "packages:\n  - firefox\nremove:\n  - nano\ntools:\n  go: 1.25.0"
+
+	require.Equal(t, []string{"  - firefox", "remove:", "  - nano"},
+		c.planSectionLines("packages", 80),
+		"the packages header drops, the remove sub-header stays")
+	require.Equal(t, []string{"  go: 1.25.0"},
+		c.planSectionLines("tools", 80),
+		"a single-block section drops its header line")
+}
+
 func TestPlanView_diffToggle(t *testing.T) {
 	stub, c := planShell(planFixtureRead())
 	stub.diffs = []service.DiffEntry{{

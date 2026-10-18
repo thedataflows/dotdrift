@@ -9,13 +9,13 @@ timestamp: 2026-10-18T00:00:00Z
 # ISSUE 0141: Modules panes carry one leading space too many
 
 - **Type**: bug
-- **Status**: open
+- **Status**: done
 - **Priority**: low
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: [0116](0116-section-bar-alignment.md)
 - **Related code**: [`internal/tui/nav.go`](../../internal/tui/nav.go), [`internal/tui/workspace.go`](../../internal/tui/workspace.go)
-- **Closing commits**: none
+- **Closing commits**: `0d90e26`
 
 ## Summary
 
@@ -47,11 +47,11 @@ Workspace item rows, the inline editor row, and the other views
 
 ## Acceptance Criteria
 
-- [ ] Nav cursor row renders `│▸ shell` (pipe next to the marker);
+- [x] Nav cursor row renders `│▸ shell` (pipe next to the marker);
   plain nav rows start with one space.
-- [ ] Workspace section labels render `│PACKAGES` under the cursor;
+- [x] Workspace section labels render `│PACKAGES` under the cursor;
   filled-bar and plain labels keep the same text column.
-- [ ] TUI goldens are regenerated and reviewed; no other view's
+- [x] TUI goldens are regenerated and reviewed; no other view's
   spacing changes.
 
 ## Out of Scope

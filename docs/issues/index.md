@@ -128,4 +128,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0138](0138-confd-sweep-partial-apply.md) | Apply must never delete files in mise conf.d | done | high |
 | [0139](0139-status-unmanaged-confd.md) | Status lists unmanaged files in mise conf.d | done | medium |
 | [0140](0140-plan-detail-duplicated-header.md) | Plan detail pane repeats the section header | done | low |
-| [0141](0141-modules-panes-leading-space.md) | Modules panes carry one leading space too many | open | low |
+| [0141](0141-modules-panes-leading-space.md) | Modules panes carry one leading space too many | done | low |

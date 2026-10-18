@@ -42,9 +42,53 @@ func TestDlgRow_labelValueHintColors(t *testing.T) {
 	require.Contains(t, got, th.rowText.Render("base"))
 	require.Contains(t, got, th.disabledMark.Render("(< > to change)"), "the cycle affordance stays dim")
 
+	// 0131: the focused row shows the caret at the cursor; at the end
+	// of the input the value itself keeps its style.
+	typed.field.cursor = len(typed.field.value)
 	focused := typed.renderRow(th, true)
 	require.True(t, strings.HasPrefix(ansiRe.ReplaceAllString(focused, ""), "│"), "the focused row keeps the cursor bar")
 	require.Contains(t, focused, th.rowText.Render("shell"), "the value keeps its style under the cursor treatment")
+	require.Contains(t, focused, th.caretCell(" "), "the caret renders at the end of the input")
+}
+
+// 0131: a dialog field renders a fixed-width window of its value that
+// follows the cursor, so long text does not stretch the modal and the
+// arrow keys can reach text outside the visible window. The focused
+// row shows the block caret at the cursor.
+func TestDlgField_windowFollowsCursor(t *testing.T) {
+	th := newTheme(true)
+	f := newDlgField("paths", strings.Repeat("a", 30)+strings.Repeat("b", 30))
+	row := fieldRow(f)
+	plain := func() string { return ansiRe.ReplaceAllString(row.renderRow(th, true), "") }
+
+	got := plain()
+	require.Contains(t, got, strings.Repeat("b", 20), "the window shows the text at the cursor (the end)")
+	require.NotContains(t, got, strings.Repeat("a", 20), "text far left of the window is not rendered")
+	require.LessOrEqual(t, len([]rune(got)), 60, "the rendered row is bounded")
+	require.Contains(t, row.renderRow(th, true), th.caretCell(" "), "the caret shows at the end of the input")
+
+	for range 60 {
+		f.left()
+	}
+	got = plain()
+	require.Contains(t, got, strings.Repeat("a", 20), "the arrow keys reach the start of long text")
+	require.NotContains(t, got, strings.Repeat("b", 20), "the window followed the cursor to the left")
+}
+
+// 0131: typing a long value must not stretch the modal.
+func TestDialogModal_widthStableWhileTyping(t *testing.T) {
+	d := newOnboardDialog(newFakeWrites(), "/profile")
+	dm := &dialogModal{d: d, th: newTheme(true)}
+	width := func() int {
+		w := 0
+		for _, line := range strings.Split(ansiRe.ReplaceAllString(dm.view(120, 40), ""), "\n") {
+			w = max(w, len([]rune(line)))
+		}
+		return w
+	}
+	before := width()
+	typeInto(t, d, strings.Repeat("x", 80))
+	require.Equal(t, before, width(), "typing must not stretch the modal")
 }
 
 // fakeWrites records every write the dialogs attempt; it is the only

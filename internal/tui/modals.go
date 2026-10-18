@@ -112,7 +112,9 @@ func (e *elevationModel) view(w, h int) string {
 	for _, r := range e.reasons {
 		b.WriteString("  • " + r + "\n")
 	}
-	b.WriteString("\n  password: " + strings.Repeat("•", len(e.input)) + "▏\n")
+	// The dots cap at the dialog field width (0131): a long password
+	// must not stretch the modal either.
+	b.WriteString("\n  password: " + strings.Repeat("•", min(len(e.input), fieldViewCells)) + "▏\n")
 	if e.failed {
 		b.WriteString(e.th.errorMark.Render("  ✗ authentication failed") + "\n")
 	}
@@ -608,7 +610,9 @@ type dialogModal struct {
 }
 
 func (m *dialogModal) view(w, h int) string {
-	return m.th.modalBorder.Padding(1, 2).Render(m.d.View(m.th))
+	// MaxWidth is the backstop (0131): dialog fields render a fixed
+	// window, and no other line may stretch the modal past the frame.
+	return m.th.modalBorder.Padding(1, 2).MaxWidth(w).Render(m.d.View(m.th))
 }
 
 func (m *dialogModal) update(msg tea.Msg) tea.Cmd {

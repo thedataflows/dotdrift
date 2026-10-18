@@ -62,10 +62,16 @@ func tuiRestoreHandover(*exec.Cmd) error {
 }
 
 // dlgField is one editable text line: a label and a value with a cursor.
+// fieldViewCells is the width of a dialog field's visible window
+// (0131): a field renders at most this many runes of its value, so
+// typing never stretches the modal.
+const fieldViewCells = 40
+
 type dlgField struct {
 	label  string
 	value  []rune
 	cursor int
+	off    int // the visible window's left edge, in runes (0131)
 	hint   string
 	// browse marks a path-kind field (0094): ctrl+o opens the file
 	// picker with that pick mode and the pick fills the field.
@@ -135,6 +141,42 @@ func (f *dlgField) right() {
 	if f.cursor < len(f.value) {
 		f.cursor++
 	}
+}
+
+// visible returns the window of the value that contains the cursor
+// and the cursor's offset inside it (0131). The window's left edge
+// moves only when the cursor leaves the window, so the text does
+// not slide on every keystroke; the left and right arrows walk the
+// cursor, and the window follows, which makes text outside the
+// window reachable.
+func (f *dlgField) visible() (string, int) {
+	if f.cursor < f.off {
+		f.off = f.cursor
+	}
+	if f.cursor >= f.off+fieldViewCells {
+		f.off = f.cursor - fieldViewCells + 1
+	}
+	if maxOff := max(len(f.value)-fieldViewCells, 0); f.off > maxOff {
+		f.off = maxOff
+	}
+	end := min(f.off+fieldViewCells, len(f.value))
+	return string(f.value[f.off:end]), f.cursor - f.off
+}
+
+// renderValue renders the field's visible window in the value style,
+// with the block caret at the cursor on the focused row (0131).
+func (f *dlgField) renderValue(th theme, focused bool) string {
+	text, caret := f.visible()
+	if !focused {
+		return th.rowText.Render(text)
+	}
+	runes := []rune(text)
+	at, after := " ", ""
+	if caret < len(runes) {
+		at = string(runes[caret])
+		after = string(runes[caret+1:])
+	}
+	return th.rowText.Render(string(runes[:caret])) + th.caretCell(at) + th.rowText.Render(after)
 }
 
 // dlgChoice is one choice line: a fixed option list cycled with
@@ -236,6 +278,10 @@ func (r dlgRow) renderRow(th theme, focused bool) string {
 		val = th.disabledMark.Render(value)
 	} else if r.choice != nil {
 		val += "  " + th.disabledMark.Render("(< > to change)")
+	} else if r.field != nil {
+		// A field renders its visible window, not its whole value
+		// (0131): the modal width must not grow while typing.
+		val = r.field.renderValue(th, focused)
 	}
 	body := th.fieldLabel.Render(label) + " " + val
 	if focused {

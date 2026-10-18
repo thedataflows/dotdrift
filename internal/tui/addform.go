@@ -136,7 +136,7 @@ func (f *addForm) view(w, h int) string {
 		hint = "up/down row · type edits · ^o browse · enter " + f.verb + " · esc cancels"
 	}
 	lines = append(lines, "", f.th.meta.Render(hint))
-	box := f.th.modalBorder.Padding(1, 2).Render(strings.Join(lines, "\n"))
+	box := f.th.modalBorder.Padding(1, 2).MaxWidth(w).Render(strings.Join(lines, "\n"))
 	f.boxY = max((h-lipgloss.Height(box))/2, 0)
 	return box
 }

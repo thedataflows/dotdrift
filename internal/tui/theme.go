@@ -100,6 +100,7 @@ type theme struct {
 	pillDrift        lipgloss.Style // filled status pill: drift / unauthorized
 	pillUnknown      lipgloss.Style // filled status pill: unknown
 	pillUnauthorized lipgloss.Style // filled status pill: unauthorized
+	pillUnmanaged    lipgloss.Style // filled status pill: unmanaged (gray, information only)
 	cardBorder       lipgloss.Style // a titled card frame (Profile groups)
 	modalDanger      lipgloss.Style // destructive confirm frame: red
 	modalInfo        lipgloss.Style // information frame (help, palette): indigo
@@ -162,6 +163,8 @@ func newTheme(isDark bool) theme {
 			Foreground(lipgloss.Color("#000000")).Background(p.amber),
 		pillUnauthorized: lipgloss.NewStyle().Padding(0, 1).
 			Foreground(lipgloss.Color("#FFFFFF")).Background(p.fuchsia),
+		pillUnmanaged: lipgloss.NewStyle().Padding(0, 1).
+			Foreground(lipgloss.Color("#FFFFFF")).Background(p.dim),
 		cardBorder:  pane.BorderForeground(p.dim).Padding(0, 1),
 		modalDanger: pane.BorderForeground(p.red),
 		modalInfo:   pane.BorderForeground(p.indigo),

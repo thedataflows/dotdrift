@@ -145,6 +145,25 @@ func TestStatusView_allOKSectionRow(t *testing.T) {
 	require.Contains(t, frame, "no drift")
 }
 
+// 0139: unmanaged conf.d files render as information rows in the tools
+// section; they are not checks and never reach the summary.
+func TestStatusView_unmanagedRows(t *testing.T) {
+	read := statusFixtureRead()
+	read.Findings = []drift.Finding{
+		{Section: "tools", Item: "node", Status: drift.OK, Module: "shell"},
+		{Section: "tools", Item: "conf.d/mine.toml", Status: drift.Unmanaged, Detail: "not written by dotdrift"},
+	}
+	_, c := statusShell(read)
+	c = loadStatusView(t, c)
+	c, _ = cstep(c, tea.WindowSizeMsg{Width: 140, Height: 30})
+
+	frame := ansiRe.ReplaceAllString(c.View().Content, "")
+	require.Contains(t, frame, "tools:")
+	require.Contains(t, frame, "ok: all 1 checks passed", "unmanaged lines are not checks")
+	require.Contains(t, frame, "conf.d/mine.toml - not written by dotdrift (unmanaged)")
+	require.Contains(t, frame, "no drift", "unmanaged findings never count as drift")
+}
+
 func TestStatusView_sudoGate(t *testing.T) {
 	// Review Focus 1: a system-scope entry in the scoped plan gates the
 	// read behind the elevation modal; declined or failed validation runs

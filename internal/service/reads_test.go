@@ -394,6 +394,8 @@ func TestReads_lockFree(t *testing.T) {
 // statusFixture writes the minimal one-package profile the status tests use.
 func statusFixture(t *testing.T) string {
 	t.Helper()
+	// Isolate the conf.d listing (0139) from the developer's real config.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	dir := t.TempDir()
 	modDir := filepath.Join(dir, "modules", "demo")
 	require.NoError(t, os.MkdirAll(modDir, 0o755))

@@ -211,6 +211,9 @@ func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, e
 		Verbose: opts.Verbose,
 	})
 	findings = append(findings, drift.CheckOrphans(ModuleLayers(pr.Profile))...)
+	// Unmanaged conf.d files, for information (issue 0139): apply never
+	// deletes there (0138), so status is where stale snippets surface.
+	findings = append(findings, drift.CheckConfD(pr.Plan, mise.ToolsFragmentDir())...)
 
 	others, err := r.deps.OtherAccounts(pr.Profile.Root, pr.Facts)
 	if err != nil {

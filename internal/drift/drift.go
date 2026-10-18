@@ -36,6 +36,10 @@ const (
 	// Unauthorized means a dotfiles probe failed with permission denied and
 	// the elevated retry failed or was declined (issue 0108).
 	Unauthorized
+	// Unmanaged is information only (issue 0139): a file dotdrift does not
+	// manage (a conf.d file outside the plan). It never counts as drift,
+	// unknown, or unauthorized.
+	Unmanaged
 )
 
 func (s Status) String() string {
@@ -48,6 +52,8 @@ func (s Status) String() string {
 		return "unknown"
 	case Unauthorized:
 		return "unauthorized"
+	case Unmanaged:
+		return "unmanaged"
 	}
 	return "unknown"
 }
@@ -829,19 +835,29 @@ func Render(w io.Writer, findings []Finding, renderOptions ...RenderOption) {
 			continue
 		}
 		allOK := true
+		checks := 0
+		var unmanaged []Finding
 		for _, f := range secFindings {
-			if f.Status == OK {
-				continue
+			switch f.Status {
+			case OK:
+				checks++
+			case Unmanaged:
+				unmanaged = append(unmanaged, f) // information, not a check
+			default:
+				allOK = false
+				checks++
+				renderFinding(w, f, color, opts.pal)
 			}
-			allOK = false
-			renderFinding(w, f, color, opts.pal)
 		}
-		if allOK {
-			line := fmt.Sprintf("  ok: all %d checks passed", len(secFindings))
+		if allOK && checks > 0 {
+			line := fmt.Sprintf("  ok: all %d checks passed", checks)
 			if color {
 				line = seq(opts.pal.Seq(palette.OK)) + line + ansiReset
 			}
 			fmt.Fprintln(w, line)
+		}
+		for _, f := range unmanaged {
+			renderFinding(w, f, color, opts.pal)
 		}
 	}
 
@@ -917,6 +933,8 @@ func renderFinding(w io.Writer, f Finding, color bool, pal *palette.Palette) {
 		suffix = " (?)"
 	case Unauthorized:
 		suffix = " (unauthorized)"
+	case Unmanaged:
+		suffix = " (unmanaged)"
 	}
 	if color {
 		hue := seq(pal.Seq(findingRole(f, pal)))
@@ -970,6 +988,9 @@ func renderOrphans(w io.Writer, findings []Finding, color bool, pal *palette.Pal
 func findingRole(f Finding, _ *palette.Palette) palette.Role {
 	if f.Section == "orphans" {
 		return palette.Orphan
+	}
+	if f.Status == Unmanaged {
+		return palette.Dim
 	}
 	if f.Status == Unknown || f.Status == Unauthorized || strings.Contains(f.Detail, "not a symlink") {
 		return palette.Error

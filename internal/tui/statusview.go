@@ -254,7 +254,7 @@ func (m *Compositor) statusRows() []statusRow {
 		if m.status.filter != "" && m.status.filter != sec {
 			continue
 		}
-		var driftN, unkN, unauthN, n int
+		var driftN, unkN, unauthN, n, unmN int
 		for i := range r.Findings {
 			f := &r.Findings[i]
 			if f.Section != sec {
@@ -268,6 +268,8 @@ func (m *Compositor) statusRows() []statusRow {
 				unkN++
 			case drift.Unauthorized:
 				unauthN++
+			case drift.Unmanaged:
+				unmN++ // information, not a check (issue 0139)
 			}
 		}
 		if n == 0 {
@@ -281,10 +283,9 @@ func (m *Compositor) statusRows() []statusRow {
 			header += " " + counts
 		}
 		rows = append(rows, statusRow{text: header, style: m.th.sectionLabel})
-		if driftN+unkN+unauthN == 0 {
-			rows = append(rows, statusRow{sel: true, okCount: n, style: m.th.successMark,
-				text: "  ✓ ok: all " + strconv.Itoa(n) + " checks passed"})
-			continue
+		if driftN+unkN+unauthN == 0 && n-unmN > 0 {
+			rows = append(rows, statusRow{sel: true, okCount: n - unmN, style: m.th.successMark,
+				text: "  ✓ ok: all " + strconv.Itoa(n-unmN) + " checks passed"})
 		}
 		for i := range r.Findings {
 			f := &r.Findings[i]
@@ -321,7 +322,7 @@ func (m *Compositor) statusRows() []statusRow {
 
 // statusFindingLine renders one finding row with the CLI's wording:
 // "module: item - detail", unknown marked (?), unauthorized marked
-// (unauthorized).
+// (unauthorized), unmanaged marked (unmanaged).
 func (m *Compositor) statusFindingLine(f *drift.Finding) string {
 	mod := f.Module
 	if mod == "" {
@@ -333,13 +334,18 @@ func (m *Compositor) statusFindingLine(f *drift.Finding) string {
 		suffix = " (?)"
 	case drift.Unauthorized:
 		suffix = " (unauthorized)"
+	case drift.Unmanaged:
+		suffix = " (unmanaged)"
 	}
 	return fmt.Sprintf("  %s: %s - %s%s", mod, f.Item, f.Detail, suffix)
 }
 
 // statusFindingStyle picks the row hue: drift and unauthorized carry the
-// error mark, unknown the warn mark.
+// error mark, unknown the reason mark, unmanaged gray (information only).
 func statusFindingStyle(th theme, f *drift.Finding) lipgloss.Style {
+	if f.Status == drift.Unmanaged {
+		return th.disabledMark
+	}
 	if f.Status == drift.Unknown {
 		return th.reasonMark
 	}
@@ -677,6 +683,8 @@ func (m *Compositor) statusPill(f *drift.Finding) string {
 		return m.th.pillUnknown.Render("unknown")
 	case drift.Unauthorized:
 		return m.th.pillUnauthorized.Render("unauthorized")
+	case drift.Unmanaged:
+		return m.th.pillUnmanaged.Render("unmanaged")
 	default:
 		return m.th.pillDrift.Render("drift")
 	}

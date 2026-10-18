@@ -15,7 +15,7 @@ timestamp: 2026-10-18T00:00:00Z
 - **Assignee**: none
 - **Related**: [0137](0137-tools-per-module-confd.md), [0138](0138-confd-sweep-partial-apply.md)
 - **Related code**: [`internal/drift/`](../../internal/drift/), [`internal/service/reads.go`](../../internal/service/reads.go), [`internal/tui/statusview.go`](../../internal/tui/statusview.go)
-- **Closing commits**: `f19f415`
+- **Closing commits**: `f19f415`, corrected by `87f5ef8`
 
 ## Summary
 

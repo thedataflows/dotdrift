@@ -3,26 +3,26 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   · meta  ●                                │
-│  ▾ demo ●                ││  META                                                            │
-││     base ●              │││  id demo                                                        │
-│      user cri            ││   description the demo module-next ●                             │
-│  ▸ other                 ││   scope user ◂▸                                                  │
+│ ▾ demo ●                 ││ META                                                             │
+││    base ●               │││  id demo                                                        │
+│     user cri             ││   description the demo module-next ●                             │
+│ ▸ other                  ││   scope user ◂▸                                                  │
 │                          ││                                                                  │
-│                          ││  PACKAGES ＋                                                     │
+│                          ││ PACKAGES ＋                                                      │
 │                          ││   + neovim ✎                                                     │
 │                          ││   + ripgrep ✎                                                    │
 │                          ││                                                                  │
-│                          ││  LINKS ＋                                                        │
+│                          ││ LINKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  WRITES ＋                                                       │
+│                          ││ WRITES ＋                                                        │
 │                          ││                                                                  │
-│                          ││  WHEN ＋                                                         │
+│                          ││ WHEN ＋                                                          │
 │                          ││                                                                  │
-│                          ││  HOOKS ＋                                                        │
+│                          ││ HOOKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││ SYSTEMD.UNITS ＋                                                 │
 │                          ││                                                                  │
-│                          ││  TOOLS ＋                                                        │
+│                          ││ TOOLS ＋                                                         │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • ctrl+z undo …

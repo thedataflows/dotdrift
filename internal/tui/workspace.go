@@ -309,19 +309,21 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 		if i == w.cursor {
 			// A selectable header under the cursor renders the bar
 			// (0076) — an empty section's header is the way in, it has
-			// to say so.
-			return []string{th.cursorLine(" "+text+mark, width)}
+			// to say so. The pipe sits next to the label, as in the
+			// Plan view (0141).
+			return []string{th.cursorLine(text+mark, width)}
 		}
 		// A section header is a filled bar (0121) only when the
 		// section has entries (0123): emphasis follows content, so
 		// an empty section is a plain bold heading in the same
 		// column and empty sections stack calm. No underline (the
-		// 0120 leak rule). The lead matches the cursor row's bar
-		// cell (0116): no shift under the cursor.
+		// 0120 leak rule). In every variant the label starts in the
+		// same column (0116): right after the cursor pipe, the bar's
+		// padding cell, or one plain lead.
 		if sectionFilled(w.rows, i) {
-			return []string{th.barLine(" "+text+mark, width)}
+			return []string{th.barLine(text+mark, width)}
 		}
-		return []string{th.sectionLabel.Render("  " + text + mark)}
+		return []string{th.sectionLabel.Render(" " + text + mark)}
 	}
 	if r.hint {
 		if r.text == "" {

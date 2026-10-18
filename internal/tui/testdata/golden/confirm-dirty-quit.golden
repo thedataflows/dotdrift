@@ -3,7 +3,7 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · meta  ●                                           │
-││ ▸ demo ●                ││  META                                                            │
+││▸ demo ●                 ││ META                                                             │
 │                          ││   id demo                                                        │
 │                          │││  description the demo module-next ●                             │
 │                          ││   scope user ◂▸                                                  │
@@ -18,11 +18,11 @@
 │                      │  y confirm · n/esc cancel                          │                  │
 │                      │                                                    │                  │
 │                      ╰────────────────────────────────────────────────────╯                  │
-│                          ││  HOOKS ＋                                                        │
+│                          ││ HOOKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││ SYSTEMD.UNITS ＋                                                 │
 │                          ││                                                                  │
-│                          ││  TOOLS ＋                                                        │
+│                          ││ TOOLS ＋                                                         │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • ctrl+z undo …

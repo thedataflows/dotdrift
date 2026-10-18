@@ -3,26 +3,26 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
-││ ▸ demo                  ││  META                                                            │
-│  ▸ plain                 │││  id demo                                                        │
+││▸ demo                   ││ META                                                             │
+│ ▸ plain                  │││  id demo                                                        │
 │                          ││   description  ✎                                                 │
 │                          ││   scope user ◂▸                                                  │
 │                          ││                                                                  │
-│                          ││  PACKAGES ＋                                                     │
+│                          ││ PACKAGES ＋                                                      │
 │                          ││                                                                  │
-│                          ││  LINKS ＋                                                        │
+│                          ││ LINKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  WRITES ＋                                                       │
+│                          ││ WRITES ＋                                                        │
 │                          ││                                                                  │
-│                          ││  WHEN ＋                                                         │
+│                          ││ WHEN ＋                                                          │
 │                          ││                                                                  │
-│                          ││  HOOKS ＋                                                        │
+│                          ││ HOOKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││ SYSTEMD.UNITS ＋                                                 │
 │                          ││                                                                  │
-│                          ││  TOOLS ＋                                                        │
+│                          ││ TOOLS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  SECRETS ＋                                                      │
+│                          ││ SECRETS ＋                                                       │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter expand/collapse • / filter modules • ? help • q quit

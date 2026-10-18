@@ -3,22 +3,22 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · systemd.units                                     │
-││ ▸ demo                  ││  META                                                            │
+││▸ demo                   ││ META                                                             │
 │                          ││   id demo                                                        │
 │                          ││   description  ✎                                                 │
 │                          ││   scope user ◂▸                                                  │
 │                          ││                                                                  │
-│                          ││  PACKAGES ＋                                                     │
+│                          ││ PACKAGES ＋                                                      │
 │                          ││                                                                  │
-│                          ││  LINKS ＋                                                        │
+│                          ││ LINKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  WRITES ＋                                                       │
+│                          ││ WRITES ＋                                                        │
 │                          ││                                                                  │
-│                          ││  WHEN ＋                                                         │
+│                          ││ WHEN ＋                                                          │
 │                          ││                                                                  │
-│                          ││  HOOKS ＋                                                        │
+│                          ││ HOOKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││ SYSTEMD.UNITS ＋                                                 │
 │                          ││   backup.timer ＋                                                │
 │                          ││     OnBootSec = 30 ✎                                             │
 │                          ││   demo.service ＋                                                │

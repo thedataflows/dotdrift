@@ -3,26 +3,26 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   user cri   host myhost   · meta                     │
-││ ▸ demo                  ││  META                                                            │
-│  ▸ other · invalid module│││  id demo                                                        │
-│  ▸ plain · invalid module││   description the demo module ✎                                  │
+││▸ demo                   ││ META                                                             │
+│ ▸ other · invalid module.│││  id demo                                                        │
+│ ▸ plain · invalid module.││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
 │                          ││   ╭──────────────────────────────────╮                           │
-│                          ││  P│                                  │                           │
+│                          ││ PA│                                  │                           │
 │                          ││   │  /                               │                           │
 │                          ││   │                                  │                           │
 │                          ││   │  │ ◆ demo  module                │                           │
-│                          ││  L│    ◆ demo · user cri  module     │                           │
+│                          ││ LI│    ◆ demo · user cri  module     │                           │
 │                          ││   │    ◆ demo · host myhost  module  │                           │
-│                          ││  W│    ◆ other  module               │                           │
+│                          ││ WR│    ◆ other  module               │                           │
 │                          ││   │    ◆ plain  module               │                           │
-│                          ││  W│                                  │                           │
+│                          ││ WH│                                  │                           │
 │                          ││   ╰──────────────────────────────────╯                           │
-│                          ││  HOOKS ＋                                                        │
+│                          ││ HOOKS ＋                                                         │
 │                          ││                                                                  │
-│                          ││  SYSTEMD.UNITS ＋                                                │
+│                          ││ SYSTEMD.UNITS ＋                                                 │
 │                          ││                                                                  │
-│                          ││  TOOLS ＋                                                        │
+│                          ││ TOOLS ＋                                                         │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 
  enter edit field • a add entry / apply detail • d remove row • ctrl+s save draft • / palette …

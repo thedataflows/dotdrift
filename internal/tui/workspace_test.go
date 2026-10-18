@@ -465,7 +465,7 @@ func TestWorkspace_headerCursorBar(t *testing.T) {
 	}
 	require.True(t, c.ws.rows[c.ws.cursor].header, "the cursor rests on the header")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "│ PACKAGES", "the header under the cursor renders the bar, label in caps (0129)")
+	require.Contains(t, frame, "│PACKAGES", "the header under the cursor renders the bar, label in caps, pipe next to the label (0129, 0141)")
 }
 
 func TestWorkspace_titleShowsSection(t *testing.T) {

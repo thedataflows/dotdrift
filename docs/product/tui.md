@@ -485,7 +485,11 @@ view stack wholesale). Its parts:
   keeps the flat accent — selection already owns its color.
 - The cursor row is the bubbles list-delegate treatment: a left bar in
   the highlight hue plus bold accent text (the `cursorRow` registry
-  entry), plain rows keeping a two-space lead so text columns align.
+  entry), plain rows keeping a lead so text columns align — in the
+  Modules nav the pipe sits directly next to the marker and plain
+  rows keep one space, as in the Plan view (issue 0141); workspace
+  section labels follow the same rule in all three variants (cursor
+  bar, filled bar, plain heading).
   Every cursor uses it — nav rows, workspace rows, the field input, the
   palette's query and selected row, modal menu and form rows (0075).
 - The footer: a spinner with the running operation's name or the message

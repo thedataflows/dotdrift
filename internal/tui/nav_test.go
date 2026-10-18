@@ -265,13 +265,15 @@ func TestNav_pageKeys(t *testing.T) { // 0075 T-tui-page: pgup/pgdown move a vis
 func TestNav_cursorRowBar(t *testing.T) {
 	// 0075 T-tui-selection: the nav's cursor row renders the bar and its
 	// label column aligns with the plain rows (marker column, then text).
+	// 0141: the pipe sits directly next to the marker, as in the Plan
+	// view — no space between the bar cell and the row text.
 	_, c := navShell(t, "resolve")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "│ ▸ shell", "the cursor row renders bar + marker + label")
+	require.Contains(t, frame, "│▸ shell", "the cursor row renders bar + marker + label")
 
 	c = cpress(c, "l")
 	c = cpress(c, "j") // onto the base child
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
-	require.Contains(t, frame, "│     base", "the cursor child row keeps the bar and the child indent")
-	require.Contains(t, frame, "  ▾ shell", "plain rows keep the lead and marker")
+	require.Contains(t, frame, "│    base", "the cursor child row keeps the bar and the child indent")
+	require.Contains(t, frame, " ▾ shell", "plain rows keep one lead and the marker")
 }

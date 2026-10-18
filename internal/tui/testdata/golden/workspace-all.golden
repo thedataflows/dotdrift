@@ -3,24 +3,24 @@
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 ╭──────────────────────────╮╭──────────────────────────────────────────────────────────────────╮
 │MODULES                   ││demo   base   · meta                                              │
-││ ▸ demo                  ││  META                                                            │
+││▸ demo                   ││ META                                                             │
 │                          │││  id demo                                                        │
 │                          ││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
 │                          ││                                                                  │
-│                          ││  PACKAGES ＋                                                     │
+│                          ││ PACKAGES ＋                                                      │
 │                          ││   + neovim ✎                                                     │
 │                          ││   + ripgrep ✎                                                    │
 │                          ││   − emacs ✎                                                      │
 │                          ││                                                                  │
-│                          ││  LINKS ＋                                                        │
+│                          ││ LINKS ＋                                                         │
 │                          ││   ~/.bashrc ← .bashrc (symlink) ✎                                │
 │                          ││                                                                  │
-│                          ││  WRITES ＋                                                       │
+│                          ││ WRITES ＋                                                        │
 │                          ││   ~/.config/demo.toml (edit: line) ✎                             │
 │                          ││   ~/.profile (edit: block) ✎                                     │
 │                          ││                                                                  │
-│                          ││  WHEN ＋                                                         │
+│                          ││ WHEN ＋                                                          │
 │                          ││   hosts myhost ✎                                                 │
 │                          ││   os linux ✎                                                     │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯

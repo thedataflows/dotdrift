@@ -492,9 +492,11 @@ func (n *navModel) rowView(r navRow, cursor bool, th theme, drafts map[string]bo
 		rest += " " + th.yankMark.Render("✓")
 	}
 	if cursor {
-		return th.cursorLine(" "+rest, w)
+		// No lead: the cursor pipe sits next to the marker, as in the
+		// Plan view (issue 0141).
+		return th.cursorLine(rest, w)
 	}
-	return th.rowText.MaxWidth(w).Render("  " + rest)
+	return th.rowText.MaxWidth(w).Render(" " + rest)
 }
 
 // rowDirty: a layer child is dirty when its file has a draft; a module

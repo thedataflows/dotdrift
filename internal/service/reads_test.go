@@ -228,6 +228,51 @@ func TestService_status_probeErrorsStayFindings(t *testing.T) {
 	require.NotEmpty(t, r.Findings)
 }
 
+func TestService_profileRead_noProbes(t *testing.T) {
+	// The Profile view's read is light (spec slice 1, builder-check): it
+	// never probes the live system. The fixture carries a package that is
+	// not installed — a probing read would flag it; this read must still
+	// return clean, and its model carries no findings at all.
+	dir := statusFixture(t)
+	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
+	// The read has no state-path option: it always uses the profile's
+	// default. Pin XDG_STATE_HOME so the default lands in a temp dir.
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	statePath := state.ProfileStatePath(dir)
+	require.NoError(t, os.MkdirAll(filepath.Dir(statePath), 0o755))
+	require.NoError(t, state.NewFileStore(statePath).Save(&state.State{
+		LastCompleted: "packages",
+		InputHash:     inputHashFor(t, dir),
+	}))
+
+	var detectCalls, otherCalls int
+	area := NewReadsArea(ReadsDeps{
+		Detect: func() (*facts.Facts, error) {
+			detectCalls++
+			return f, nil
+		},
+		OtherAccounts: func(string, *facts.Facts) ([]profile.Account, error) {
+			otherCalls++
+			return []profile.Account{{Name: "root", Uid: "0", Home: "/root"}}, nil
+		},
+	}.WithDefaults())
+
+	r, err := area.Profile(dir, nil)
+	require.NoError(t, err, "an uninstalled fixture package is not an error — the read never probes")
+
+	require.Equal(t, dir, r.ProfilePath)
+	require.Equal(t, statePath, r.StatePath, "default state path for the profile")
+	require.NotNil(t, r.State, "the profile read returns the loaded state")
+	require.Equal(t, "packages", r.State.LastCompleted)
+	require.Equal(t, f.Username, r.Facts.Username)
+	require.Equal(t, 1, detectCalls, "the read detects once, through the seam")
+	require.NotNil(t, r.Profile)
+	require.NotNil(t, r.Plan)
+	require.Contains(t, r.Plan.Packages.Install, "demo-pkg", "the plan is resolved, not probed")
+	require.Len(t, r.Others, 1)
+	require.Equal(t, 1, otherCalls, "the accounts listing rides the read")
+}
+
 func TestService_diff_read(t *testing.T) {
 	dir, plan := diffFixture(t)
 	area := NewReadsArea(ReadsDeps{}.WithDefaults())

@@ -208,6 +208,50 @@ func (r *ReadsArea) Status(ctx context.Context, opts StatusOpts) (*StatusRead, e
 	}, nil
 }
 
+// ProfileRead is the profile model: facts, profile paths, resume state,
+// resolved plan, and the other configured accounts. It carries no
+// findings — the read never probes the live system.
+type ProfileRead struct {
+	ProfilePath string
+	StatePath   string
+	State       *state.State
+	Facts       *facts.Facts
+	Profile     *profile.Profile
+	Plan        *resolve.Plan
+	Others      []profile.Account
+}
+
+// Profile loads state and resolves the plan without probing — the TUI
+// Profile view's light read (issue 0107). Read-only and lock-free, like
+// every read here.
+func (r *ReadsArea) Profile(profilePath string, modules []string) (*ProfileRead, error) {
+	statePath := state.ProfileStatePath(profilePath)
+	s, err := state.NewFileStore(statePath).Load()
+	if err != nil {
+		return nil, fmt.Errorf("load state: %w", err)
+	}
+
+	pr, err := r.Plan(profilePath, modules, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	others, err := r.deps.OtherAccounts(pr.Profile.Root, pr.Facts)
+	if err != nil {
+		return nil, fmt.Errorf("list other accounts: %w", err)
+	}
+
+	return &ProfileRead{
+		ProfilePath: profilePath,
+		StatePath:   statePath,
+		State:       s,
+		Facts:       pr.Facts,
+		Profile:     pr.Profile,
+		Plan:        pr.Plan,
+		Others:      others,
+	}, nil
+}
+
 // DiffEntry is one copy-mode dotfile whose live target differs from the
 // profile source.
 type DiffEntry struct {

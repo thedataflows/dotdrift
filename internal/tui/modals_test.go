@@ -345,7 +345,7 @@ func TestApplyGate_resetsEachPress(t *testing.T) {
 	for _, r := range gate.rows[2:] {
 		require.True(t, r.on, "section %q resets to on", r.name)
 	}
-	c = cpress(c, "esc")
+	cpress(c, "esc")
 }
 
 func TestApplyGate_backupEventRenders(t *testing.T) {

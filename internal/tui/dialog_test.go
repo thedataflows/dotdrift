@@ -594,7 +594,7 @@ func TestGenerate_volumesPickFillsSource(t *testing.T) {
 
 	// Off the source row ctrl+o does nothing.
 	g.HandleKey("down") // destination
-	c, cmd = cstep(c, keyPress("ctrl+o"))
+	_, cmd = cstep(c, keyPress("ctrl+o"))
 	require.Nil(t, cmd, "ctrl+o off the source row lists nothing")
 	require.Len(t, fake.volSels, 1, "no second list call")
 }

@@ -136,3 +136,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0146](0146-ctrl-c-quits.md) | ctrl+c quits the TUI, like q | done | medium |
 | [0147](0147-blank-line-above-tabs.md) | Empty line between the header text and the tab bar | done | low |
 | [0148](0148-quickfilter-read-views.md) | Quickfilter on the Status, Plan, and Profile views | done | medium |
+| [0149](0149-ci-lint-staticcheck.md) | CI lint job fails on 9 staticcheck findings | done | medium |

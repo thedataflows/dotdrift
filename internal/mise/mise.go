@@ -233,7 +233,7 @@ func (m *Mise) runOp(ctx context.Context, extraEnv []string, name string, args .
 	// echoes in clear. Only piped children (ForceStream into the
 	// session collector) get their own group, where cancel must kill
 	// the whole tree and no terminal is involved.
-	if !(executil.IsTerminal(out) && executil.IsTerminal(errW)) {
+	if !executil.IsTerminal(out) || !executil.IsTerminal(errW) {
 		executil.SetGroupKill(cmd)
 	}
 	cmd.Stdout = out

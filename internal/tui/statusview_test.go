@@ -191,7 +191,7 @@ func TestStatusView_sudoGate(t *testing.T) {
 	c, cmd = cstep(c, keyPress("esc"))
 	require.Empty(t, c.modals, "esc closes the gate")
 	require.NotNil(t, cmd, "a declined gate still runs the read")
-	c, _ = cstep(c, mustMsg(cmd))
+	cstep(c, mustMsg(cmd))
 	require.Equal(t, 1, stub.statusCalls)
 	require.False(t, stub.lastOpts.Elevated, "declined elevation reads unelevated (0108)")
 
@@ -213,7 +213,7 @@ func TestStatusView_sudoGate(t *testing.T) {
 	c, cmd = cstep(c, keyPress("enter")) // the third failure aborts
 	require.Empty(t, c.modals)
 	require.NotNil(t, cmd, "an aborted gate still runs the read")
-	c, _ = cstep(c, mustMsg(cmd))
+	cstep(c, mustMsg(cmd))
 	require.False(t, stub.lastOpts.Elevated, "failed validation reads unelevated (0108)")
 
 	// Validated sudo: the read runs elevated.
@@ -226,7 +226,7 @@ func TestStatusView_sudoGate(t *testing.T) {
 	c, cmd = cstep(c, keyPress("enter"))
 	require.Empty(t, c.modals)
 	require.NotNil(t, cmd, "a validated gate runs the read")
-	c, _ = cstep(c, mustMsg(cmd))
+	cstep(c, mustMsg(cmd))
 	require.True(t, stub.lastOpts.Elevated, "validated sudo reads elevated")
 }
 
@@ -283,7 +283,7 @@ func TestStatusView_probePendingKeepsShell(t *testing.T) {
 	// a probe is a no-op (builder's call, named in reloadStatus).
 	c, cmd = cstep(c, keyPress("2"))
 	require.Nil(t, cmd, "re-entering a probing view schedules nothing")
-	c, cmd = cstep(c, keyPress("r"))
+	_, cmd = cstep(c, keyPress("r"))
 	require.Nil(t, cmd, "a second r during a probe is a no-op")
 	require.Equal(t, 0, stub.statusCalls, "the read runs only through the scheduled cmd")
 }
@@ -433,7 +433,7 @@ func TestStatusView_applyScopesAllOwners(t *testing.T) {
 	c.pumpNoBlock = true
 	c = loadStatusView(t, c)
 	c = wsPress(t, c, "P")
-	c = applyGateY(t, c)
+	applyGateY(t, c)
 	require.Equal(t, []string{"other"}, fl.startedOpts[0].Modules,
 		"with no finding under the cursor the yank snapshot stands")
 }

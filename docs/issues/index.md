@@ -112,3 +112,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0122](0122-footer-key-chips.md) | Footer keys as deliberate chips | done | medium |
 | [0123](0123-empty-sections-unfilled.md) | Empty sections render unfilled | done | medium |
 | [0124](0124-footer-filter-no-fill.md) | Remove background fill from footer and filter inputs | done | medium |
+| [0125](0125-remove-section-edge-row.md) | Remove the section edge row | done | medium |

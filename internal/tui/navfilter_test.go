@@ -108,7 +108,7 @@ func TestFilter_cursorStaysOnMatch(t *testing.T) {
 
 func TestFilter_workSlashStillOpensPalette(t *testing.T) {
 	c := filterShell(t)
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	c = cpress(c, "/")
 	require.Len(t, c.modals, 1, "the workspace pane's / is still the palette")
 	require.IsType(t, &paletteModel{}, c.modals[0])
@@ -129,7 +129,7 @@ func TestFilter_footerHintFollowsPane(t *testing.T) {
 	}
 	c := filterShell(t)
 	require.Equal(t, "filter modules", slashHelp(c), "nav names the filter")
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	require.Equal(t, "palette", slashHelp(c), "work keeps the palette")
 }
 

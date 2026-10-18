@@ -34,7 +34,7 @@ func cursorTo(t *testing.T, c *Compositor, substr string) *Compositor {
 func choiceShell(t *testing.T) (string, *Compositor) {
 	t.Helper()
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": editFixture})
-	c = cursorTo(t, cpress(c, "tab"), "scope")
+	c = cursorTo(t, cpress(c, "right"), "scope")
 	return c.ws.activeDir(), c
 }
 
@@ -42,7 +42,7 @@ func choiceShell(t *testing.T) (string, *Compositor) {
 func choiceShellFile(t *testing.T, toml string) *Compositor {
 	t.Helper()
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": toml})
-	return cpress(c, "tab")
+	return cpress(c, "right")
 }
 
 const choiceFixture = `id = "demo"

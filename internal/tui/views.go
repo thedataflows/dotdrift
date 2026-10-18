@@ -160,7 +160,7 @@ func detailWindow(th theme, lines []string, offset, h int) []string {
 		out[0] = th.meta.Render("  … more above")
 	}
 	if offset+h < len(lines) {
-		out[h-1] = th.meta.Render("  … more below (tab to the pane, j/k scroll)")
+		out[h-1] = th.meta.Render("  … more below (right arrow to the pane, j/k scroll)")
 	}
 	return out
 }

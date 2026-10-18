@@ -40,7 +40,7 @@ type = "ext4"
 func typedShell(t *testing.T) *Compositor {
 	t.Helper()
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": typedFixture})
-	return cpress(c, "tab")
+	return cpress(c, "right")
 }
 
 // topModal asserts the modal stack's top type and returns it.
@@ -131,7 +131,7 @@ func TestTyped_smbPathRowOpensPickerAndCommits(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(share, "sub"), 0o755))
 	fixture := fmt.Sprintf("id = \"demo\"\n\n[smb.shares.media]\npath = %q\n", share)
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": fixture})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	dir := c.ws.activeDir()
 
 	c = cursorTo(t, c, "path ")

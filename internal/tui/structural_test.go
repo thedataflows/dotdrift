@@ -34,7 +34,7 @@ OnBootSec = 30
 func systemdShell(t *testing.T) (map[string]string, *Compositor) {
 	t.Helper()
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": systemdFixture})
-	return subs, cpress(c, "tab")
+	return subs, cpress(c, "right")
 }
 
 // wsToKey parks the cursor on the row with the given key (from the top
@@ -138,7 +138,7 @@ writable = true
 func entriesShell(t *testing.T) (map[string]string, *Compositor) {
 	t.Helper()
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": entriesFixture})
-	return subs, cpress(c, "tab")
+	return subs, cpress(c, "right")
 }
 
 func TestEntries_sectionsReplaceOther(t *testing.T) {
@@ -442,7 +442,7 @@ const whenRootFixture = `id = "demo"
 func whenShell(t *testing.T, fixture string) (map[string]string, *Compositor) {
 	t.Helper()
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": fixture})
-	return subs, cpress(c, "tab")
+	return subs, cpress(c, "right")
 }
 
 func TestWhen_treeRenders(t *testing.T) {
@@ -870,7 +870,7 @@ func TestRemove_whenLeaf(t *testing.T) {
 
 func TestRemove_writesBlockRow(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 
 	// enter never opens a text edit on a block write (committing there
 	// would write into Source) — the add-form fallback stands.

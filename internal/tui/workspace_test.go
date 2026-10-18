@@ -245,7 +245,7 @@ func TestWorkspace_layerTabCycles(t *testing.T) {
 	_, c := wsThreeLayer(t)
 	require.Equal(t, "base", c.ws.tabs[c.ws.active].layer)
 
-	c = cpress(c, "tab") // focus the workspace
+	c = cpress(c, "right") // focus the workspace
 	c = wsPress(t, c, "L")
 	require.Equal(t, "user", c.ws.tabs[c.ws.active].layer, "L cycles base → user")
 
@@ -267,7 +267,7 @@ func TestWorkspace_layerTabsSyncWithNav(t *testing.T) {
 	require.Contains(t, c.ws.placeholderOrBody(), "user layer")
 
 	// Workspace → nav: L cycles the tab, the nav cursor follows.
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	c = wsPress(t, c, "L")
 	require.Equal(t, "host", c.ws.tabs[c.ws.active].layer)
 	sel := c.nav.selected()
@@ -288,7 +288,7 @@ func TestWorkspace_selectionFollowsNav(t *testing.T) {
 
 func TestWorkspace_cursorWalksEntryRows(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	start := c.ws.cursor
 	c = cpress(c, "j")
 	require.Greater(t, c.ws.cursor, start, "j walks to the next entry row")
@@ -315,7 +315,7 @@ func TestWorkspace_disclosureRendersOnlySet(t *testing.T) {
 	}
 
 	// a on an empty section's header opens the section's add form.
-	c = cpress(c, "tab") // focus the workspace
+	c = cpress(c, "right") // focus the workspace
 	wsToHeader(t, c, "packages")
 	c = cpress(c, "a")
 	addFormTop(t, c)
@@ -334,7 +334,7 @@ func TestWorkspace_pageKeysFollowTheCursor(t *testing.T) {
 	files := map[string]string{"modules/demo/module.toml": "id = \"demo\"\n\n[packages]\npresent = [" +
 		strings.Join(present, ", ") + "]\n"}
 	_, c := wsShell(t, files)
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	require.Equal(t, "id demo", c.ws.rows[c.ws.cursor].text, "the cursor starts on the first entry")
 
 	page := c.ws.bodyH - 1 // the title line takes one body row
@@ -366,7 +366,7 @@ func TestWorkspace_cursorRowBar(t *testing.T) {
 	// 0075 T-tui-selection: the workspace's cursor row renders the bar;
 	// the active field input carries it too.
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "│ id demo", "the cursor row renders the bar")
 	require.Contains(t, frame, "  description", "plain rows keep the two-space lead")
@@ -381,7 +381,7 @@ func TestWorkspace_headerCursorBar(t *testing.T) {
 	// 0076 T-tui-location: a selectable header under the cursor renders
 	// the bar — an empty section's header is the way in, it must say so.
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	for i := 0; !c.ws.atSection("packages") || !c.ws.rows[c.ws.cursor].header; i++ {
 		require.Less(t, i, 32, "the packages header never took the cursor")
 		c = cpress(c, "j")
@@ -395,7 +395,7 @@ func TestWorkspace_titleShowsSection(t *testing.T) {
 	// 0076 T-tui-location: the title line names the cursor's section, so
 	// an empty stretch of surface still says where you are.
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "· meta", "the title names the cursor's section")
 

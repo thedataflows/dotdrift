@@ -28,7 +28,7 @@ func linkShell(t *testing.T) (map[string]string, string, *Compositor) {
 	t.Helper()
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": linkFixture})
 	dir := c.ws.activeDir()
-	return subs, dir, cpress(c, "tab")
+	return subs, dir, cpress(c, "right")
 }
 
 // backspaces sends n backspace keys — clearing a prefilled field from

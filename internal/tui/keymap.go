@@ -60,13 +60,14 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 		{"q", "both", "quit", func(m *Compositor) tea.Cmd { return m.quit() }},
 		{"p", "both", "plan", func(m *Compositor) tea.Cmd { return m.openPlan() }},
 		{"P", "both", "apply", func(m *Compositor) tea.Cmd { return m.startApply() }},
-		{"tab", "both", "switch pane", func(m *Compositor) tea.Cmd { m.focus = (m.focus + 1) % 2; return nil }},
-		// view row (0107, 0115): the left and right arrows cycle,
+		{"tab", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
+		{"shift+tab", "both", "previous view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + viewCount - 1) % viewCount) }},
+		{"left", "both", "left pane", func(m *Compositor) tea.Cmd { m.focus = focusNav; return nil }},
+		{"right", "both", "right pane", func(m *Compositor) tea.Cmd { m.focus = focusWork; return nil }},
+		// view row (0107, 0118): tab and shift+tab cycle the views,
 		// 1-4 jump, r re-reads the active view, R re-reads all views —
-		// live in every view. The arrows own view switching, so the
-		// pane-local horizontal jobs live on h/l alone.
-		{"left", "both", "previous view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + viewCount - 1) % viewCount) }},
-		{"right", "both", "next view", func(m *Compositor) tea.Cmd { return m.switchView((m.view + 1) % viewCount) }},
+		// live in every view. The pane-local horizontal jobs live on
+		// h/l alone.
 		{"1", "both", "modules view", func(m *Compositor) tea.Cmd { return m.switchView(viewModules) }},
 		{"2", "both", "status view", func(m *Compositor) tea.Cmd { return m.switchView(viewStatus) }},
 		{"3", "both", "plan view", func(m *Compositor) tea.Cmd { return m.switchView(viewPlan) }},
@@ -164,15 +165,11 @@ func keyTable(context ...*Compositor) []keyTableEntry {
 }
 
 // dispatchKey runs the binding for the pressed key and focused pane.
-// shift+tab aliases tab (two panes: reverse is forward). Off the
-// Modules view, every "both" binding still runs (view switching, help,
-// quit, plan, apply, …) and pane keys go to the active view's hook
-// (0107) — nil until the view has a body, so pane keys are dead on an
-// empty view.
+// Off the Modules view, every "both" binding still runs (view
+// switching, pane focus, help, quit, plan, apply, …) and pane keys go
+// to the active view's hook (0107) — nil until the view has a body, so
+// pane keys are dead on an empty view.
 func (m *Compositor) dispatchKey(s string) (tea.Cmd, bool) {
-	if s == "shift+tab" {
-		s = "tab"
-	}
 	pane := "nav"
 	if m.focus == focusWork {
 		pane = "work"

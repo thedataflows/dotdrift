@@ -3,7 +3,7 @@ package tui
 // T-tui-cycle: h/l on a closed-set row cycles its value in place
 // through the same commit seam as the picker — no modal for a one-key
 // flip. The cycle wraps; non-choice rows ignore the keys; every step is
-// one undo step. The arrows switch views instead (0115).
+// one undo step. The arrows move pane focus instead (0118).
 
 import (
 	"testing"
@@ -47,16 +47,20 @@ func TestCycle_nonChoiceRowsIgnoreHL(t *testing.T) {
 	require.Empty(t, c.modals, "no modal opens")
 }
 
-// 0115: in the workspace the arrows leave the view instead of cycling.
-func TestCycle_arrowsSwitchViewFromWorkspace(t *testing.T) {
+// 0118: in the workspace the arrows move pane focus instead of
+// cycling, and tab leaves the view.
+func TestCycle_arrowsMoveFocusFromWorkspace(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
 	c.focus = focusWork
 	c.ws.cursor = wsRowBySectionText(c, "meta", "scope")
 
-	c = wsPress(t, c, "right")
-	require.Equal(t, viewStatus, c.view, "right switches to the next view")
+	c = wsPress(t, c, "left")
+	require.Equal(t, focusNav, c.focus, "left focuses the nav")
+	require.Equal(t, viewModules, c.view, "the view did not change")
 	require.Equal(t, "user", wsScopeValue(c), "the value did not cycle")
 
-	c = wsPress(t, c, "left")
-	require.Equal(t, viewModules, c.view, "left switches back")
+	c = wsPress(t, c, "right")
+	require.Equal(t, focusWork, c.focus, "right focuses the workspace")
+	c = wsPress(t, c, "tab")
+	require.Equal(t, viewStatus, c.view, "tab switches to the next view")
 }

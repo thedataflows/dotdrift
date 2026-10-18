@@ -183,7 +183,7 @@ func TestPlanView_detailScrolls(t *testing.T) {
 	require.NotContains(t, frame, "pkg-39", "the tail starts out of the window")
 	require.Contains(t, frame, "more below", "a clipped detail marks the hidden tail")
 
-	c = cpress(c, "tab") // focus the detail pane
+	c = cpress(c, "right") // focus the detail pane
 	c = cpress(c, "end")
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "pkg-39", "end reaches the section's tail")
@@ -191,7 +191,7 @@ func TestPlanView_detailScrolls(t *testing.T) {
 	require.NotContains(t, frame, "more below", "the tail is the end")
 
 	// Moving the section cursor resets the detail scroll.
-	c = cpress(c, "tab") // back to the section list
+	c = cpress(c, "left") // back to the section list
 	c = cpress(c, "j")   // tools
 	c = cpress(c, "k")   // packages again
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")

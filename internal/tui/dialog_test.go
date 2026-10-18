@@ -313,7 +313,7 @@ func TestRestoreDialog_planLandsThroughCompositor(t *testing.T) {
 	}
 	c.writesFor = func(*facts.Facts) Writes { return fake }
 
-	c = cpress(c, "tab")               // focus the work pane (w is a work binding)
+	c = cpress(c, "right")               // focus the work pane (w is a work binding)
 	c = cpress(c, "w")                 // the writes menu
 	c = cpress(c, "down")              // restore
 	c, _ = cstep(c, keyPress("enter")) // the menu pops, the dialog pushes
@@ -388,7 +388,7 @@ func TestWritesDialogs_successfulWritesReloadNav(t *testing.T) {
 
 	// The w menu: generate (third entry).
 	c = cpress(c, "esc")
-	c = cpress(c, "tab") // focus the work pane (w is a work binding)
+	c = cpress(c, "right") // focus the work pane (w is a work binding)
 	c = cpress(c, "w")
 	c = cpress(c, "down")
 	c = cpress(c, "down")
@@ -480,7 +480,7 @@ func TestGenerate_volumesPickFillsSource(t *testing.T) {
 	}
 	c.writesFor = func(*facts.Facts) Writes { return fake }
 
-	c = cpress(c, "tab") // focus the work pane (w is a work binding)
+	c = cpress(c, "right") // focus the work pane (w is a work binding)
 	c = cpress(c, "w")
 	c = cpress(c, "down")
 	c = cpress(c, "down")

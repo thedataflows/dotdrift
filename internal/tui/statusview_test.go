@@ -505,7 +505,7 @@ func TestStatusView_detailScrolls(t *testing.T) {
 	require.Contains(t, frame, "more below", "a clipped detail marks the hidden tail")
 	require.NotContains(t, frame, "live-49", "the diff tail starts out of the window")
 
-	c = cpress(c, "tab") // focus the detail pane
+	c = cpress(c, "right") // focus the detail pane
 	c = cpress(c, "end")
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "live-49", "end reaches the diff tail")
@@ -513,7 +513,7 @@ func TestStatusView_detailScrolls(t *testing.T) {
 	require.NotContains(t, frame, "more below", "the tail is the end")
 
 	// Moving the findings cursor resets the detail scroll.
-	c = cpress(c, "tab") // back to the findings list
+	c = cpress(c, "left") // back to the findings list
 	c = cpress(c, "k")   // the all-OK row
 	frame = ansiRe.ReplaceAllString(c.View().Content, "")
 	require.NotContains(t, frame, "more above", "a cursor move resets the detail scroll")

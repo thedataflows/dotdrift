@@ -47,7 +47,7 @@ func editShell(t *testing.T) (map[string]string, string, *Compositor) {
 	t.Helper()
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": editFixture})
 	dir := c.ws.activeDir()
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	return subs, dir, cpress(c, "j") // id row → description row
 }
 
@@ -148,7 +148,7 @@ func TestEdit_draftSurvivesNavigationAndLayerSwitch(t *testing.T) {
 	})
 	active := c.ws.activeDir()
 
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	c = cpress(c, "j") // id row → app row
 	c = cpress(c, "enter")
 	c = typeText(c, "-next")
@@ -156,8 +156,8 @@ func TestEdit_draftSurvivesNavigationAndLayerSwitch(t *testing.T) {
 	require.NotNil(t, c.wsDraftFor(active))
 
 	// Away to another module and back: the draft is file-scoped. Module
-	// navigation is the nav's vocabulary — tab back first.
-	c = cpress(c, "tab")
+	// navigation is the nav's vocabulary — left back first (0118).
+	c = cpress(c, "left")
 	c = wsPress(t, c, "j") // demo → other
 	require.Nil(t, c.ws.draft, "the other module has no draft")
 	c = wsPress(t, c, "k") // back to demo
@@ -165,7 +165,7 @@ func TestEdit_draftSurvivesNavigationAndLayerSwitch(t *testing.T) {
 	require.Contains(t, c.ws.placeholderOrBody(), "the demo module-next")
 
 	// Layer switch: the user layer has no draft; back to base it returns.
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	c = wsPress(t, c, "L")
 	require.Nil(t, c.ws.draft)
 	require.Contains(t, c.ws.placeholderOrBody(), "user layer")
@@ -303,7 +303,7 @@ func TestEdit_rowAddRemove(t *testing.T) {
 
 func TestEdit_rawTextDegradedMode(t *testing.T) {
 	subs, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n[broken\n"})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 
 	// Raw rows are selectable and line-editable.
 	c = cpress(c, "j") // line 2: [broken

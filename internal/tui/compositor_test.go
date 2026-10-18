@@ -97,21 +97,28 @@ func TestCompositor_modalStackRendersTopOwnsInput(t *testing.T) {
 	require.Contains(t, c.View().Content, "AAAA", "popping the top reveals the next modal")
 }
 
-func TestFocus_tabCyclesPanes(t *testing.T) {
+// 0118: the arrows move between the panes of the current view.
+func TestFocus_arrowsMoveBetweenPanes(t *testing.T) {
 	c := newTestCompositor()
 	require.Equal(t, focusNav, c.focus)
-	c = cpress(c, "tab")
-	require.Equal(t, focusWork, c.focus)
-	c = cpress(c, "tab")
-	require.Equal(t, focusNav, c.focus, "tab wraps around")
+	c = cpress(c, "right")
+	require.Equal(t, focusWork, c.focus, "right focuses the right pane")
+	c = cpress(c, "right")
+	require.Equal(t, focusWork, c.focus, "right at the right pane stays")
+	c = cpress(c, "left")
+	require.Equal(t, focusNav, c.focus, "left focuses the left pane")
 }
 
-func TestFocus_shiftTabReverses(t *testing.T) {
+// 0118: tab cycles the main views, shift+tab cycles back.
+func TestFocus_tabCyclesViews(t *testing.T) {
 	c := newTestCompositor()
+	require.Equal(t, viewModules, c.view)
 	c = cpress(c, "tab")
-	require.Equal(t, focusWork, c.focus)
+	require.Equal(t, viewStatus, c.view, "tab moves to the next view")
 	c = cpress(c, "shift+tab")
-	require.Equal(t, focusNav, c.focus)
+	require.Equal(t, viewModules, c.view, "shift+tab moves back")
+	c = cpress(c, "shift+tab")
+	require.Equal(t, viewProfile, c.view, "shift+tab wraps to the last view")
 }
 
 func TestFocus_exactlyOnePaneFocused(t *testing.T) {
@@ -121,7 +128,7 @@ func TestFocus_exactlyOnePaneFocused(t *testing.T) {
 	borderCell := func(st lipgloss.Style) string {
 		return strings.Split(strings.Split(st.Render("x"), "\n")[1], "x")[0]
 	}
-	for _, seq := range []string{"", "tab", "tab"} {
+	for _, seq := range []string{"", "right", "left"} {
 		if seq != "" {
 			c = cpress(c, seq)
 		}

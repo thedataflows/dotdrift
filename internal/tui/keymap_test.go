@@ -100,14 +100,14 @@ func TestKeys_table(t *testing.T) {
 	c = cpress(c, "?")
 	require.IsType(t, &helpModel{}, c.modals[0], "? opens contextual help")
 	c = cpress(c, "esc")
-	c = cpress(c, "tab") // nav focus
+	c = cpress(c, "left") // nav focus
 	c = cpress(c, "m")
 	require.IsType(t, &dialogModal{}, c.modals[0], "m opens manage as a modal")
 	c = cpress(c, "esc")
 	c = cpress(c, "n")
 	require.IsType(t, &dialogModal{}, c.modals[0], "n opens module creation")
 	c = cpress(c, "esc")
-	c = cpress(c, "tab") // w lives on the workspace pane
+	c = cpress(c, "right") // w lives on the workspace pane
 	c = cpress(c, "w")
 	require.IsType(t, &writesMenuModel{}, c.modals[0], "w opens the writes menu")
 	c = cpress(c, "esc")
@@ -136,7 +136,7 @@ func TestKeys_shiftIsTheDangerousVersion(t *testing.T) {
 		return &fakeLauncher{run: closedRun(&service.SessionResult{Outcome: service.OutcomeCompleted})}
 	}
 	c.pumpNoBlock = true
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 
 	// p plans (read-only), P applies (gates).
 	c = wsPress(t, c, "p")
@@ -176,7 +176,7 @@ func TestHelp_contextual(t *testing.T) {
 	c = cpress(c, "esc")
 
 	// editing: edit keys, no nav keys
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	c = cpress(c, "j")
 	c = cpress(c, "enter")
 	c = cpress(c, "?") // swallowed by edit mode? no — help must still work
@@ -197,7 +197,7 @@ func TestHelp_contextual(t *testing.T) {
 
 func TestKeys_modalOverrides(t *testing.T) {
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": editFixture})
-	c = cpress(c, "tab") // the palette lives on the workspace pane (nav / filters)
+	c = cpress(c, "right") // the palette lives on the workspace pane (nav / filters)
 	c = cpress(c, "/")
 	c = cpress(c, "m") // captured by the palette, not manage
 	require.Len(t, c.modals, 1)
@@ -260,7 +260,7 @@ func TestKeys_noOrphanedBindings(t *testing.T) {
 	}
 	require.ElementsMatch(t, keys, []string{
 		"j:nav", "k:nav", "down:nav", "up:nav", "h:nav", "l:nav",
-		"enter:nav", "/:nav", "n:nav", "m:nav", "O:nav", "space:nav", "y:nav", "P:both", "p:both", "?:both", "q:both", "tab:both", "o:both",
+		"enter:nav", "/:nav", "n:nav", "m:nav", "O:nav", "space:nav", "y:nav", "P:both", "p:both", "?:both", "q:both", "tab:both", "shift+tab:both", "o:both",
 		"left:both", "right:both", "1:both", "2:both", "3:both", "4:both", "r:both", "R:both", "f:both",
 		"j:work", "k:work", "down:work", "up:work", "enter:work", "e:work", "h:work", "l:work", "a:both",
 		"d:work", "D:work", "ctrl+s:work", "ctrl+z:work", "ctrl+shift+z:work", "L:work", "w:work", "/:work",

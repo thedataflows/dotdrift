@@ -103,7 +103,7 @@ func TestPaste_navFilter(t *testing.T) {
 
 func TestPaste_palette(t *testing.T) {
 	c := filterShell(t)
-	c = cpress(c, "tab") // workspace focus: / opens the palette there
+	c = cpress(c, "right") // workspace focus: / opens the palette there
 	c = cpress(c, "/")
 	require.IsType(t, &paletteModel{}, c.modals[0])
 	c, _ = cstep(c, tea.PasteMsg{Content: "demo"})

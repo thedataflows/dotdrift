@@ -26,7 +26,7 @@ func paletteShell(t *testing.T) (map[string]string, *Compositor) {
 		"modules/other/module.toml":             "id = \"other\"\napp = \"other\"\n",
 	})
 	c.applyFor = func(*facts.Facts) ApplyLauncher { return &fakeLauncher{} }
-	c = cpress(c, "tab") // the palette lives on the workspace pane (nav / filters)
+	c = cpress(c, "right") // the palette lives on the workspace pane (nav / filters)
 	c = cpress(c, "/")
 	require.Len(t, c.modals, 1, "/ opens the palette")
 	require.IsType(t, &paletteModel{}, c.modals[0])
@@ -187,7 +187,7 @@ func TestPalette_dirtyDraftNeverWarnsOnJump(t *testing.T) {
 		"modules/demo/module.toml":  editFixture,
 		"modules/plain/module.toml": "id = \"plain\"\n",
 	})
-	c = cpress(c, "tab")
+	c = cpress(c, "right")
 	c = cpress(c, "j") // id row → description row
 	c = cpress(c, "enter")
 	c = typeText(c, "-next")
@@ -205,7 +205,7 @@ func TestPalette_dirtyDraftNeverWarnsOnJump(t *testing.T) {
 func TestPalette_cursorRowBar(t *testing.T) {
 	// 0075 T-tui-selection: the palette's selected row renders the bar.
 	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n"})
-	c = cpress(c, "tab") // the palette lives on the workspace pane (nav / filters)
+	c = cpress(c, "right") // the palette lives on the workspace pane (nav / filters)
 	c = cpress(c, "/")
 	frame := ansiRe.ReplaceAllString(c.View().Content, "")
 	require.Contains(t, frame, "│ ◆", "the palette's selected row renders the bar")

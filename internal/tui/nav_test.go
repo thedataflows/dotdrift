@@ -116,14 +116,18 @@ func TestNav_expandCollapseWithHL(t *testing.T) {
 	require.Len(t, c.nav.rows(), 1, "h collapses")
 }
 
-// 0115: the arrows switch views, so nav expand/collapse is h/l only.
-func TestNav_arrowsSwitchViewNotExpand(t *testing.T) {
+// 0118: the arrows move pane focus, so nav expand/collapse is h/l
+// only and tab switches the view from the nav.
+func TestNav_arrowsMoveFocusNotExpand(t *testing.T) {
 	_, c := navShell(t, "resolve")
 	c = cpress(c, "right")
-	require.Equal(t, viewStatus, c.view, "right switches the view")
+	require.Equal(t, focusWork, c.focus, "right focuses the workspace")
+	require.Equal(t, viewModules, c.view, "the view did not change")
 	require.Len(t, c.nav.rows(), 1, "the tree did not expand")
 	c = cpress(c, "left")
-	require.Equal(t, viewModules, c.view, "left switches back")
+	require.Equal(t, focusNav, c.focus, "left focuses the nav")
+	c = cpress(c, "tab")
+	require.Equal(t, viewStatus, c.view, "tab switches the view")
 }
 
 func TestNav_childHumpsToParent(t *testing.T) {

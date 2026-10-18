@@ -64,7 +64,7 @@ func TestUndo_removeRestoresRowAndCursor(t *testing.T) {
 	require.GreaterOrEqual(t, row, 0)
 	c.ws.cursor = row
 
-	c = wsPress(t, c, "tab") // to the work pane
+	c = wsPress(t, c, "right") // to the work pane
 	c = wsPress(t, c, "d")   // the remove confirm
 	c = wsPress(t, c, "y")   // removed
 	require.Equal(t, 1, c.ws.draft.changes)

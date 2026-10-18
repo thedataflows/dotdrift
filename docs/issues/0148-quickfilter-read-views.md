@@ -9,13 +9,13 @@ timestamp: 2026-10-19T00:00:00Z
 # ISSUE 0148: Quickfilter on the Status, Plan, and Profile views
 
 - **Type**: feature
-- **Status**: open
+- **Status**: done
 - **Priority**: medium
 - **Labels**: [tui]
 - **Assignee**: none
 - **Related**: [0081](0081-tui-nav-inplace-filter.md), [0108](0108-tui-status-view.md), [0109](0109-tui-plan-view.md), [0135](0135-shared-text-input.md)
 - **Related code**: [`internal/tui/`](../../internal/tui/)
-- **Closing commits**: none
+- **Closing commits**: `2d42ad8`
 
 ## Summary
 

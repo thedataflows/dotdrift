@@ -135,4 +135,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0145](0145-view-bodies-fill-frame.md) | View bodies must fill the frame (right padding, Profile bottom) | done | medium |
 | [0146](0146-ctrl-c-quits.md) | ctrl+c quits the TUI, like q | done | medium |
 | [0147](0147-blank-line-above-tabs.md) | Empty line between the header text and the tab bar | done | low |
-| [0148](0148-quickfilter-read-views.md) | Quickfilter on the Status, Plan, and Profile views | open | medium |
+| [0148](0148-quickfilter-read-views.md) | Quickfilter on the Status, Plan, and Profile views | done | medium |

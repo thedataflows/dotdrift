@@ -102,7 +102,6 @@ type theme struct {
 	helpDesc         lipgloss.Style // a description in the footer help (plain text, 0124)
 	inputText        lipgloss.Style // a filter/query input line (plain text, 0124)
 	tabBar           lipgloss.Style // the tab bar's bottom rule (0114)
-	barEdge          lipgloss.Style // the eighth-block edge above a section bar (0121)
 }
 
 func newTheme(isDark bool) theme {
@@ -166,7 +165,6 @@ func newTheme(isDark bool) theme {
 		tabBar: lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, false, true, false).
 			BorderForeground(p.dim),
-		barEdge: lipgloss.NewStyle().Foreground(p.selectedBg),
 	}
 }
 

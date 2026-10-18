@@ -324,15 +324,10 @@ func (w *workspaceModel) rowView(r wsRow, i int, th theme, width int) []string {
 	}
 	if r.hint {
 		if r.text == "" {
-			// The section separator (0117, 0121): an eighth-block
-			// edge row in the bar color — the next section's fill
-			// starts one eighth of a row late, a ~2px gap where a
-			// blank row read as a full character height. Only a
-			// filled bar earns the edge (0123); before a plain
-			// heading the separator renders nothing.
-			if i+1 < len(w.rows) && w.rows[i+1].header && sectionFilled(w.rows, i+1) {
-				return []string{th.barEdge.Render(strings.Repeat("▇", width))}
-			}
+			// The section separator renders nothing (0125): since
+			// 0123 empty sections are unfilled, filled bars never
+			// touch, and the bar itself is the separation. The
+			// model row stays — movement and structure are unchanged.
 			return nil
 		}
 		return []string{th.disabledMark.MaxWidth(width).Render("   " + r.text)}

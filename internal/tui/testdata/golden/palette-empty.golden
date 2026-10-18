@@ -7,21 +7,21 @@
 │  ▸ other · invalid module│││  id demo                                                        │
 │  ▸ plain · invalid module││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
-│                          ││▇▇▇╭──────────────────────────────────╮▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇│
-│                          ││  p│                                  │                           │
-│                          ││   │  / ▏                             │                           │
+│                          ││  p╭──────────────────────────────────╮                           │
 │                          ││   │                                  │                           │
-│                          ││  l│  │ ◆ demo  module                │                           │
+│                          ││   │  / ▏                             │                           │
+│                          ││  l│                                  │                           │
+│                          ││  w│  │ ◆ demo  module                │                           │
 │                          ││  w│    ◆ demo · user cri  module     │                           │
-│                          ││  w│    ◆ demo · host myhost  module  │                           │
-│                          ││  h│    ◆ other  module               │                           │
-│                          ││  s│    ◆ plain  module               │                           │
-│                          ││▇▇▇│                                  │▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇│
-│                          ││  t╰──────────────────────────────────╯                           │
-│                          ││   node = 20 ✎                                                    │
-│                          ││  secrets ＋                                                      │
+│                          ││  h│    ◆ demo · host myhost  module  │                           │
+│                          ││  s│    ◆ other  module               │                           │
+│                          ││  t│    ◆ plain  module               │                           │
+│                          ││   │                                  │                           │
+│                          ││  s╰──────────────────────────────────╯                           │
 │                          ││  mounts ＋                                                       │
 │                          ││  smb ＋                                                          │
+│                          ││                                                                  │
+│                          ││                                                                  │
 │                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 

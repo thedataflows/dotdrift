@@ -166,10 +166,11 @@ func TestWorkspace_sectionsSeparated(t *testing.T) {
 	require.NotContains(t, ansiRe.ReplaceAllString(c.View().Content, ""), "▇",
 		"empty sections render unfilled, with no edge row")
 
-	// A section with items keeps the bar and its edge (0121).
+	// 0125: no edge row anywhere — a filled header is one row, the
+	// bar itself is the separation.
 	_, c2 := wsShell(t, map[string]string{"modules/demo/module.toml": wsAllSections})
-	require.Contains(t, ansiRe.ReplaceAllString(c2.View().Content, ""), "▇▇▇",
-		"a filled section carries the eighth-block edge")
+	require.NotContains(t, ansiRe.ReplaceAllString(c2.View().Content, ""), "▇",
+		"no eighth-block edge above a filled section")
 
 	// Walk the whole surface: the cursor never rests on a separator.
 	c.ws.cursor = c.ws.firstEntry(0)

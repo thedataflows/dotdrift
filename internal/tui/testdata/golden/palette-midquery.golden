@@ -7,21 +7,21 @@
 │  ▸ other · invalid module│││  id demo                                                        │
 │  ▸ plain · invalid module││   description the demo module ✎                                  │
 │                          ││   scope user ◂▸                                                  │
-│                          ││▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇│
-│                          ││  p╭──────────────────────────────────╮                           │
+│                          ││  packages ＋                                                     │
+│                          ││   ╭──────────────────────────────────╮                           │
 │                          ││   │                                  │                           │
-│                          ││   │  / dem▏                          │                           │
-│                          ││  l│                                  │                           │
+│                          ││  l│  / dem▏                          │                           │
+│                          ││  w│                                  │                           │
 │                          ││  w│  │ ◆ demo  module                │                           │
-│                          ││  w│    ◆ demo · user cri  module     │                           │
-│                          ││  h│    ◆ demo · host myhost  module  │                           │
-│                          ││  s│    ▶ onboard into demo  action   │                           │
-│                          ││▇▇▇│                                  │▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇│
-│                          ││  t╰──────────────────────────────────╯                           │
-│                          ││   node = 20 ✎                                                    │
-│                          ││  secrets ＋                                                      │
+│                          ││  h│    ◆ demo · user cri  module     │                           │
+│                          ││  s│    ◆ demo · host myhost  module  │                           │
+│                          ││  t│    ▶ onboard into demo  action   │                           │
+│                          ││   │                                  │                           │
+│                          ││  s╰──────────────────────────────────╯                           │
 │                          ││  mounts ＋                                                       │
 │                          ││  smb ＋                                                          │
+│                          ││                                                                  │
+│                          ││                                                                  │
 │                          ││                                                                  │
 ╰──────────────────────────╯╰──────────────────────────────────────────────────────────────────╯
 

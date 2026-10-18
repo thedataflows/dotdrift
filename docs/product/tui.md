@@ -53,10 +53,13 @@ view stack wholesale). Its parts:
   per-view fallthrough.
 - **Focus.** `tab`/`shift+tab` move between nav and workspace; focus is
   the border color; exactly one pane is focused.
-- **The view row** (issue [0107](../issues/0107-tui-shell-views-profile.md)).
-  Under the header: `Modules · Status · Plan · Profile`, the active view
-  accented. `s` cycles, `1`–`4` jump — live in every view. The Modules
-  view is the two-pane base screen, unchanged. Off the Modules view the
+- **The tab bar** (issues [0107](../issues/0107-tui-shell-views-profile.md),
+  [0113](../issues/0113-tui-visual-system.md)). Under the header:
+  `Modules`, `Status`, `Plan`, `Profile` as padded tab blocks — the
+  active tab is a filled indigo block, the inactive tabs flat faint
+  text, in the gh-dash treatment. `<` and `>` cycle to the previous and
+  next view, `1`–`4` jump — live in every view; `s` is not a view key.
+  The Modules view is the two-pane base screen. Off the Modules view the
   shared bindings live, and a view with a body owns the pane movement
   keys through its hook (0108); the footer and `?` hint exactly the
   live keys (the footer keeps the primary verbs — the number jumps stay
@@ -64,16 +67,29 @@ view stack wholesale). Its parts:
   always under `?`). A
   write (save, manage, onboard, generate, restore) or a finished apply
   marks the read views stale, including an override made with `O`. This
-  also works when the write dialog is closed or covered by help. The title
-  carries `(stale)` until a successful refresh lands. `r` re-reads the active
+  also works when the write dialog is closed or covered by help. The tab
+  carries an amber `●` badge until a successful refresh lands. `r` re-reads the active
   view, `R` re-reads all views; a read clears its mark only if no newer
-  write, apply, or scope change marked the view during that read. A loaded view's title numbers its
+  write, apply, or scope change marked the view during that read. A loaded view's tab numbers its
   rows (0111): Status counts its findings, Plan counts the plan's
-  entries — the count renders last, after the stale word and the scope.
-  If the row is too wide, titles keep the view name and `stale`, replace
+  entries — the count renders last, after the scope.
+  If the row is too wide, tabs keep the view name and the badge, replace
   module names with `[N]` for N scoped modules, and omit entry counts. The
   row stays within the frame width. A long header path uses its final
   directory name; the full path remains in Profile.
+- **The visual system** (issue [0113](../issues/0113-tui-visual-system.md),
+  borrowed from gh-dash). Filled blocks carry meaning: the cursor row is
+  a filled block across the pane width with the accent bar; section
+  headers are filled heading bars; detail panes open with a filled
+  header strip and a filled status pill (`ok`, `drift`, `unknown`,
+  `unauthorized`); the Profile groups render as titled cards; the
+  footer is a background bar where success is green and errors red.
+  Labels (row keys, form labels) use the indigo hue and values the
+  bright neutral hue — the two differ by hue, not by a shade of gray.
+  Diff lines are green when added and red when removed. Modal frames
+  carry severity: red for destructive confirms, amber for sudo and
+  gates, indigo for information. All styles stay in the theme registry;
+  no new dependency, no Nerd Font icons, no mouse.
 - **The Profile view** (0107). One read-only list, no cursor: the detect
   facts (host, user, os, kernel, distro, GPU, backend — an undetected
   fact renders nothing), the profile root, the state path, the resume
@@ -108,7 +124,7 @@ view stack wholesale). Its parts:
   shows `probing…` until the read lands. A refresh keeps the current list
   and its scope visible with this indication. A second `r` during a
   probe is a no-op. A failed re-run keeps the old list only with the
-  `(stale)` mark and its previous scope title. When the scoped plan holds
+  stale badge and its previous scope tab. When the scoped plan holds
   a system-scope dotfile,
   mount, or smb entry, the elevation modal validates sudo before the
   read starts. Elevated TUI probes use `sudo -n`: an expired ticket cannot
@@ -139,7 +155,7 @@ view stack wholesale). Its parts:
   probe-free and async like the other views; a second `r` in flight is
   a no-op. A refresh keeps the current list and displayed scope, with a
   `resolving…` indication. Only a successful read changes the displayed
-  scope; a failed read keeps the old data and title under the stale mark.
+  scope; a failed read keeps the old data and tab under the stale badge.
   A non-empty yank set scopes the read and the title names the
   scope (`Plan [shell]`); changing the yank set marks the view stale,
   and a read that started before the mark never clears it. The detail

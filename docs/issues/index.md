@@ -100,3 +100,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0110](0110-tui-apply-gate-options.md) | TUI apply gate options — force, backup, section toggles before the preview (slice 4) | done | medium |
 | [0111](0111-tui-generate-volumes-polish.md) | TUI generate volume picker and view polish — counts, op-end marks, detail scroll (slice 5) | done | medium |
 | [0112](0112-tui-views-final-review-fixes.md) | TUI views final review fixes | done | critical |
+| [0113](0113-tui-visual-system.md) | TUI visual system from gh-dash — filled tabs and rows, cards, pills, footer bar, < > view keys | done | high |

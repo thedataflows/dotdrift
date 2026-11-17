@@ -13,7 +13,7 @@ Progressive disclosure for agents implementing [dotdrift](product/contract.md).
 * [Profile layout](product/profile-layout.md) - Git-backed profile structure
 * [Merge rules](product/merge-rules.md) - Host vs user precedence
 * [Mise bootstrap](product/mise-bootstrap.md) - Detect, min version, upgrade policy
-* [Mise bootstrap alignment](product/mise-bootstrap-alignment.md) - Gap analysis vs the mise bootstrap spec: latent misalignments, deletions, adoptable features
+* [Mise bootstrap alignment](product/mise-bootstrap-alignment.md) - Which mise capabilities dotdrift adopts, adopts in part, or does not adopt, and why (current at mise 2026.11.9)
 * [Migrate from pimp-my-cachyos](product/migrate-pimp-my-cachyos.md) - Legacy mounts/shares migration recipe
 
 # Engineering

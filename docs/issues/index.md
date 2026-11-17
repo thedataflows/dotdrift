@@ -148,3 +148,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0158](0158-adopt-mise-dotfiles-depends.md) | Adopt mise dotfiles depends and raise the mise floor | done | high |
 | [0159](0159-declare-services-instead-of-systemctl-hooks.md) | Declare services in module.toml instead of systemctl hooks | done | high |
 | [0160](0160-services-entry-scope.md) | Per-entry scope for declared services | done | medium |
+| [0161](0161-refresh-mise-alignment-map.md) | Refresh the mise alignment map to mise 2026.11.9 | done | low |

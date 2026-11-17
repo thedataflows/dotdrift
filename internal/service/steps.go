@@ -173,10 +173,18 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 	// Parent directories of every target (issue 0151): bootstrap.files
 	// creates no parents, so each whole-file target's parent (the target
 	// directory itself for expanded symlink-each children) and each edit
-	// file's parent joins the mount destinations as a
-	// [bootstrap.directories] entry. mise creates them in the same run,
-	// before the files and edits land, with its normal privilege handling.
+	// file's parent becomes a [bootstrap.directories] entry next to the
+	// mount destinations, and mise creates it in the same run.
+	//
+	// Only a parent that does not exist is declared (issue 0154):
+	// declaring an existing parent makes mise plan the files under it as
+	// user-level changes, so a copy into /root runs as the current user
+	// and fails with Permission denied instead of escalating in mise's
+	// privileged batch. Undeclared, mise classifies each file by its own
+	// target. A missing parent is declared: mise escalates its creation
+	// when that needs privilege, and the files ride along.
 	dirs := append([]string{}, s.dirs...)
+	var parents []string
 	var files []mise.BootstrapFile
 	if len(whole) > 0 {
 		var err error
@@ -185,7 +193,7 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 			return fmt.Errorf("resolve system files: %w", err)
 		}
 		for _, f := range files {
-			dirs = append(dirs, filepath.Dir(f.Target))
+			parents = append(parents, filepath.Dir(f.Target))
 		}
 	}
 	for _, e := range edit {
@@ -193,7 +201,12 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		if strings.HasPrefix(file, "~/") {
 			file = filepath.Join(s.homeDir, file[2:])
 		}
-		dirs = append(dirs, filepath.Dir(file))
+		parents = append(parents, filepath.Dir(file))
+	}
+	for _, parent := range parents {
+		if _, err := os.Stat(parent); err != nil {
+			dirs = append(dirs, parent)
+		}
 	}
 
 	// Whole-file entries + all directories → bootstrap files.

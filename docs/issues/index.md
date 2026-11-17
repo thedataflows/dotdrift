@@ -141,3 +141,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0151](0151-dotfile-operations-create-parent-directories.md) | Dotfile operations create parent directories | done | medium |
 | [0152](0152-invalid-package-name-names-module-and-config.md) | Invalid package name names its module and config | done | medium |
 | [0153](0153-absolute-dotfile-source-paths.md) | Absolute dotfile source paths are used as-is | done | medium |
+| [0154](0154-system-files-existing-parent-suppresses-sudo.md) | System files under an existing parent lose their sudo prompt | done | high |

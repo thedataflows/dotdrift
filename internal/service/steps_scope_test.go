@@ -151,20 +151,18 @@ func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 	require.Contains(t, handed[0].Args, "apply")
 	require.Contains(t, handed[0].Args, editsPath[0:len(editsPath)-len("/mise.toml")],
 		"the elevated child applies the system-edits config dir")
-	require.Equal(t, []string{"/fake/mise"}, names, "only the parent-directory bootstrap run uses the piped runner; the elevated apply does not")
+	require.Empty(t, names, "the edit parent (/etc) already exists, so no directories bootstrap pass runs (issue 0154); the elevated apply does not use the piped runner")
 
 	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)
 	require.Contains(t, string(cfg), "[dotfiles]")
 	require.Contains(t, string(cfg), `line = "127.0.0.1 dev.local"`)
 
-	// The edit file's parent (/etc) is created through a
-	// [bootstrap.directories] entry in the system config (issue 0151),
-	// written and applied before the elevated edit apply.
-	sysCfg, err := os.ReadFile(filepath.Join(dir, "system", "mise.toml"))
-	require.NoError(t, err)
-	require.Contains(t, string(sysCfg), "[bootstrap.directories]")
-	require.Contains(t, string(sysCfg), "\"/etc\" = { state = \"present\" }")
+	// The edit file's parent (/etc) already exists, so it is not declared
+	// as a [bootstrap.directories] entry and no system config is written
+	// at all (issue 0154); a missing parent would ride a bootstrap pass
+	// before the elevated edit apply (TestSystemFilesStep_createsParentDirectories).
+	require.NoFileExists(t, filepath.Join(dir, "system", "mise.toml"))
 }
 
 // Every system dotfile operation creates its target's parent directory
@@ -225,6 +223,53 @@ func TestSystemFilesStep_createsParentDirectories(t *testing.T) {
 // Mount destination directories are emitted as [bootstrap.directories] in the
 // same system config and converge in the same bootstrap --only files call —
 // no dotdrift-side mkdir/ensureDir (issue 0042).
+// A dotfile parent that already exists is NOT declared as a
+// [bootstrap.directories] entry (issue 0154, regression from 0151):
+// declaring it makes mise plan the files under it as user-level changes,
+// so a copy into /root runs as the current user and fails with Permission
+// denied instead of escalating in mise's privileged batch. A missing
+// parent is still declared, so mise creates it in the same run.
+func TestSystemFilesStep_existingParentNotDeclared(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing")
+	require.NoError(t, os.MkdirAll(existing, 0o755))
+	missing := filepath.Join(dir, "missing", "deep")
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + string(rune(10)), nil
+			}
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: filepath.Join(existing, "a.conf"), Source: "a.conf", Mode: "copy"},
+			{Target: filepath.Join(missing, "b.conf"), Source: "b.conf", Mode: "copy"},
+		},
+		sourceRoot: dir,
+		homeDir:    dir,
+		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "[bootstrap.files]")
+	require.NotContains(t, string(cfg), fmt.Sprintf("%q = { state = \"present\" }", existing),
+		"an existing parent must not be declared: it suppresses mise's privilege escalation for the files under it")
+	require.Contains(t, string(cfg), fmt.Sprintf("%q = { state = \"present\" }", missing),
+		"a missing parent must still be declared so mise creates it")
+}
+
 func TestSystemFilesStep_mountDirsViaBootstrapDirectories(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")

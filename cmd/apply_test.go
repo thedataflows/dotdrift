@@ -445,8 +445,9 @@ func TestApply_onlyToolsAndDotfiles(t *testing.T) {
 
 // Section flags drop the mounts machinery too: on the mounts fixture with
 // only dotfiles selected, no mount services bootstrap runs and no mount
-// destination reaches the system files config. The [bootstrap.directories]
-// section that remains holds only dotfile target parents (issue 0151).
+// destination reaches the system files config. (A [bootstrap.directories]
+// section, when present, holds only missing dotfile target parents —
+// issues 0151/0154; the service tests pin that with temp dirs.)
 func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -467,7 +468,7 @@ func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, string(cfg), "/mnt/data", "mount destinations are section-gated out of the system files config")
 	require.NotContains(t, string(cfg), "/mnt/backup", "mount destinations are section-gated out of the system files config")
-	require.Contains(t, string(cfg), "\"/etc/systemd/system\" = { state = \"present\" }", "dotfile target parents stay (issue 0151)")
+	require.NotContains(t, string(cfg), "state = \"present\"", "no mount destination directory entries remain")
 }
 
 // DOTDRIFT_NO_HOOKS=1 suppresses hooks exactly like --no-hooks.

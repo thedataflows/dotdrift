@@ -324,7 +324,21 @@ func (s *servicesStep) Run(ctx context.Context) error {
 	if err := writeBootstrapConfig(s.configPath, content); err != nil {
 		return fmt.Errorf("write services config: %w", err)
 	}
-	return s.runner.Bootstrap(ctx, s.configPath, s.yes, "services")
+	if err := s.runner.Bootstrap(ctx, s.configPath, s.yes, "services"); err != nil {
+		return fmt.Errorf("mise bootstrap services: %w; services in this run: %s", err, serviceAttribution(s.entries))
+	}
+	return nil
+}
+
+// serviceAttribution lists each declared service with its module and
+// scope, so a failure inside mise (which names only the service) can
+// be traced to the declaration to inspect (issue 0162).
+func serviceAttribution(entries []resolve.ServiceEntry) string {
+	parts := make([]string, 0, len(entries))
+	for _, e := range entries {
+		parts = append(parts, fmt.Sprintf("%s (module %s, %s)", e.Name, e.Module, e.Scope))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for

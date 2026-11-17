@@ -873,7 +873,9 @@ func GenerateConfig(plan *resolve.Plan) string {
 }
 
 // GenerateHookTasks emits one mise task per hook command, named
-// <phase>-<index> ("hooks-pre-0", "hooks-pre-1", "hooks-post-0", ...). One
+// hooks-<module>-<phase>-<NN> ("hooks-shell-pre-01", "hooks-shell-pre-02",
+// "hooks-nas-post-01", ...). NN counts from 01 per module and phase. A
+// command with no module name gives hooks-<phase>-<NN>. One
 // task per command lets HooksStep run and tolerate them individually while
 // preserving order (an optional hook that fails does not skip later ones).
 // Each task runs from dir (the absolute profile root) with the DOTDRIFT_*
@@ -886,17 +888,27 @@ func GenerateConfig(plan *resolve.Plan) string {
 // are unchanged. Returns "" when both lists are empty.
 func GenerateHookTasks(hooks resolve.HooksStep, profileRoot string, f *facts.Facts) string {
 	var b strings.Builder
-	writeHookTask(&b, "hooks-pre", hooks.Pre, profileRoot, f)
-	writeHookTask(&b, "hooks-post", hooks.Post, profileRoot, f)
+	writeHookTask(&b, "pre", hooks.Pre, profileRoot, f)
+	writeHookTask(&b, "post", hooks.Post, profileRoot, f)
 	return b.String()
 }
 
-func writeHookTask(b *strings.Builder, prefix string, commands []profile.HookCommand, profileRoot string, f *facts.Facts) {
-	for i, c := range commands {
+// hookTaskName names one hook task. HooksStep.Run uses the same name.
+func hookTaskName(module, phase string, n int) string {
+	if module == "" {
+		return fmt.Sprintf("hooks-%s-%02d", phase, n)
+	}
+	return fmt.Sprintf("hooks-%s-%s-%02d", module, phase, n)
+}
+
+func writeHookTask(b *strings.Builder, phase string, commands []profile.HookCommand, profileRoot string, f *facts.Facts) {
+	counts := make(map[string]int)
+	for _, c := range commands {
+		counts[c.Module]++
 		if b.Len() > 0 {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(b, "[tasks.%q]\n", fmt.Sprintf("%s-%d", prefix, i))
+		fmt.Fprintf(b, "[tasks.%q]\n", hookTaskName(c.Module, phase, counts[c.Module]))
 		fmt.Fprintf(b, "run = [\"%s\"]\n", tomlEscape(c.Command))
 		fmt.Fprintf(b, "dir = \"%s\"\n", tomlEscape(profileRoot))
 		fmt.Fprintf(b, "env = { DOTDRIFT_PROFILE = \"%s\", DOTDRIFT_HOSTNAME = \"%s\", DOTDRIFT_USERNAME = \"%s\", DOTDRIFT_OS = \"%s\", DOTDRIFT_BACKEND = \"%s\" }\n",

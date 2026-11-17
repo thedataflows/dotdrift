@@ -1,6 +1,10 @@
 # Directory Update Log
 
 
+## 2026-11-17
+
+* **Feat (hooks, task names state the module — issue [0150](issues/0150-hook-tasks-include-module-name.md))**: hook tasks are now named `hooks-<module>-<pre|post>-<NN>` (for example `hooks-shell-pre-01`), not `hooks-pre-0`. NN counts from 01 per module and phase. Resolve sets the module directory name on each hook command (`profile.HookCommand.Module`, not read from `module.toml`); `GenerateHookTasks` and `HooksStep.Run` use one name rule, so the task that apply runs is the task that generation writes. A hook command with no module name keeps the short form `hooks-pre-01`. The step names `hooks-pre` and `hooks-post` and the plan output do not change. TDD red-first: the resolve and generation tests failed on the missing field and names before the change. Docs: contract 12, README hooks, issue 0150 + index, this entry.
+
 ## 2026-10-19
 
 * **Fixed (ci, lint job staticcheck findings — issue [0149](issues/0149-ci-lint-staticcheck.md))**: the CI lint job failed in the golangci-lint step (9 staticcheck findings), so the gosec step never ran. Two QF1001 sites now use the De Morgan form (the 0136 terminal check in `internal/mise/mise.go`, one test loop), and seven SA4006 sites drop test-step assignments whose returned compositor is never read (the returned `cmd` stays where a test asserts on it). Verified locally with `act -j lint`: golangci-lint 0 issues, gosec 0 issues, job succeeded. Gates: `go test ./...` all packages ok, `go vet ./...` exit 0. Docs: issue 0149 + index, this entry.

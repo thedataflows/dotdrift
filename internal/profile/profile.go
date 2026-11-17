@@ -124,6 +124,9 @@ type Hooks struct {
 type HookCommand struct {
 	Command  string `toml:"command"`
 	Optional bool   `toml:"optional"`
+	// Module is the directory name of the module that declares the command.
+	// Resolve sets it. It is not in module.toml.
+	Module string `toml:"-"`
 }
 
 // unknownHookKeyError flags a key outside the {command, optional} hook

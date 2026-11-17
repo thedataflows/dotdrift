@@ -151,13 +151,14 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 // cmd/apply.go only constructs HooksSteps for non-empty command lists; Run
 // also no-ops on an empty list as a second line of defense.
 //
-// Each command maps to a mise task named <Task>-<index> (e.g. hooks-pre-0),
-// which GenerateHookTasks emits in lockstep with this loop.
+// Each command maps to a mise task named hooks-<module>-<phase>-<NN>
+// (e.g. hooks-shell-pre-01), which GenerateHookTasks emits in lockstep
+// with this loop. NN counts from 01 per module and phase.
 type HooksStep struct {
 	Exec       *ExecMise
 	Commands   []profile.HookCommand
 	ConfigPath string
-	Task       string // mise task-name prefix, e.g. "hooks-pre"; per-command tasks are <Task>-<i>
+	Task       string // e.g. "hooks-pre"; the part after "hooks-" is the phase in each task name
 	StepName   string // pipeline step name, e.g. "hooks-pre"
 	// Hook tasks are interactive everywhere — the generated tasks always
 	// carry mise's `interactive = true` (0088) and every task runs through
@@ -208,8 +209,11 @@ func (s *HooksStep) Run(ctx context.Context) error {
 	if s.Handover == nil {
 		return fmt.Errorf("interactive hook tasks require a handover callback")
 	}
+	phase := strings.TrimPrefix(s.Task, "hooks-")
+	counts := make(map[string]int)
 	for i, c := range s.Commands {
-		task := fmt.Sprintf("%s-%d", s.Task, i)
+		counts[c.Module]++
+		task := hookTaskName(c.Module, phase, counts[c.Module])
 		sub := apply.SubStep{Index: i, Total: len(s.Commands), Command: c.Command}
 		if s.obs != nil {
 			s.obs.HookStarted(s.StepName, sub)

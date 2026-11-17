@@ -399,8 +399,8 @@ optional = true
 	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "myhost", Username: "cri"})
 	require.NoError(t, err)
 	require.Equal(t, []profile.HookCommand{
-		{Command: "echo required"},
-		{Command: "echo flaky", Optional: true},
+		{Command: "echo required", Module: "shell"},
+		{Command: "echo flaky", Optional: true, Module: "shell"},
 	}, plan.Hooks.Pre)
 }
 
@@ -423,8 +423,8 @@ command = "echo user-req"
 	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "myhost", Username: "cri"})
 	require.NoError(t, err)
 	require.Equal(t, []profile.HookCommand{
-		{Command: "echo base-opt", Optional: true},
-		{Command: "echo user-req"},
+		{Command: "echo base-opt", Optional: true, Module: "shell"},
+		{Command: "echo user-req", Module: "shell"},
 	}, plan.Hooks.Pre)
 }
 

@@ -686,7 +686,7 @@ func TestSession_hookSubStepFailure(t *testing.T) {
 
 	opts := baseOpts(resolveFixture(t), statePath)
 	opts.Handover = func(cmd *exec.Cmd) error {
-		if cmd.Args[len(cmd.Args)-1] == "hooks-pre-0" {
+		if cmd.Args[len(cmd.Args)-1] == "hooks-shell-pre-01" {
 			return errors.New("hook boom")
 		}
 		return nil
@@ -759,11 +759,19 @@ func TestSession_hooksRunThroughHandoverEverywhere(t *testing.T) {
 	// plan order (pre then post), never through the piped runner.
 	pr := evs[0].(PlanResolved)
 	require.Len(t, handed, len(pr.Plan.Hooks.Pre)+len(pr.Plan.Hooks.Post))
+	// The resolve fixture hooks all come from the shell module.
+	counts := map[string]int{}
 	taskAt := func(i int) string {
+		var c profile.HookCommand
+		phase := "pre"
 		if i < len(pr.Plan.Hooks.Pre) {
-			return fmt.Sprintf("hooks-pre-%d", i)
+			c = pr.Plan.Hooks.Pre[i]
+		} else {
+			c = pr.Plan.Hooks.Post[i-len(pr.Plan.Hooks.Pre)]
+			phase = "post"
 		}
-		return fmt.Sprintf("hooks-post-%d", i-len(pr.Plan.Hooks.Pre))
+		counts[phase]++
+		return fmt.Sprintf("hooks-%s-%s-%02d", c.Module, phase, counts[phase])
 	}
 	for i, cmd := range handed {
 		require.Equal(t, "/fake/mise", cmd.Path)
@@ -771,7 +779,7 @@ func TestSession_hooksRunThroughHandoverEverywhere(t *testing.T) {
 		require.True(t, hasEnv(cmd.Env, "MISE_TRUSTED_CONFIG_PATHS"), "trust plumbing rides the handover child")
 	}
 	for _, e := range *events {
-		require.NotContains(t, e, "hooks-pre-0", "hook tasks must not run through the piped runner")
+		require.NotContains(t, e, "hooks-shell-pre-01", "hook tasks must not run through the piped runner")
 	}
 	// Sub-step boundaries still announced.
 	subs := 0

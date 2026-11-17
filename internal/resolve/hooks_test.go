@@ -19,15 +19,15 @@ func TestMergeHooks_layerAppendOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []profile.HookCommand{
-		{Command: "echo base-pre"},
-		{Command: "echo host-pre"},
-		{Command: "echo user-pre"},
-	}, plan.Hooks.Pre, "pre hooks must append base → host → user")
+		{Command: "echo base-pre", Module: "shell"},
+		{Command: "echo host-pre", Module: "shell"},
+		{Command: "echo user-pre", Module: "shell"},
+	}, plan.Hooks.Pre, "pre hooks must append base → host → user and carry the module name")
 	require.Equal(t, []profile.HookCommand{
-		{Command: "echo base-post"},
-		{Command: "echo host-post"},
-		{Command: "echo user-post"},
-	}, plan.Hooks.Post, "post hooks must append base → host → user")
+		{Command: "echo base-post", Module: "shell"},
+		{Command: "echo host-post", Module: "shell"},
+		{Command: "echo user-post", Module: "shell"},
+	}, plan.Hooks.Post, "post hooks must append base → host → user and carry the module name")
 }
 
 // Hooks from several selected modules aggregate in selection order (modules
@@ -41,11 +41,11 @@ func TestMergeHooks_multiModuleSelectionOrder(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, []profile.HookCommand{
-		{Command: "a-pre"},
-		{Command: "b-pre-1"},
-		{Command: "b-pre-2"},
-	}, plan.Hooks.Pre, "pre hooks must aggregate in module selection order")
-	require.Equal(t, []profile.HookCommand{{Command: "a-post"}}, plan.Hooks.Post,
+		{Command: "a-pre", Module: "a"},
+		{Command: "b-pre-1", Module: "b"},
+		{Command: "b-pre-2", Module: "b"},
+	}, plan.Hooks.Pre, "pre hooks must aggregate in module selection order and carry the module name")
+	require.Equal(t, []profile.HookCommand{{Command: "a-post", Module: "a"}}, plan.Hooks.Post,
 		"post hooks must only contain modules that declare them")
 }
 
@@ -69,6 +69,6 @@ func TestMergeHooks_preOnly(t *testing.T) {
 	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "u"})
 	require.NoError(t, err)
 
-	require.Equal(t, []profile.HookCommand{{Command: "only-pre"}}, plan.Hooks.Pre)
+	require.Equal(t, []profile.HookCommand{{Command: "only-pre", Module: "mod"}}, plan.Hooks.Pre)
 	require.Empty(t, plan.Hooks.Post)
 }

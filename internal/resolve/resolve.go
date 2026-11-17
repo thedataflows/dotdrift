@@ -92,6 +92,17 @@ type HooksStep struct {
 	Post []profile.HookCommand
 }
 
+// appendHooks appends hook commands and sets Module on each command.
+func appendHooks(dst []profile.HookCommand, module string, lists ...[]profile.HookCommand) []profile.HookCommand {
+	for _, list := range lists {
+		for _, c := range list {
+			c.Module = module
+			dst = append(dst, c)
+		}
+	}
+	return dst
+}
+
 type layerConfig struct {
 	name string
 	path string
@@ -205,12 +216,8 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		}
 		plan.Dotfiles.Entries = append(plan.Dotfiles.Entries, entries...)
 
-		plan.Hooks.Pre = append(plan.Hooks.Pre, base.cfg.Hooks.Pre...)
-		plan.Hooks.Pre = append(plan.Hooks.Pre, host.cfg.Hooks.Pre...)
-		plan.Hooks.Pre = append(plan.Hooks.Pre, user.cfg.Hooks.Pre...)
-		plan.Hooks.Post = append(plan.Hooks.Post, base.cfg.Hooks.Post...)
-		plan.Hooks.Post = append(plan.Hooks.Post, host.cfg.Hooks.Post...)
-		plan.Hooks.Post = append(plan.Hooks.Post, user.cfg.Hooks.Post...)
+		plan.Hooks.Pre = appendHooks(plan.Hooks.Pre, dir, base.cfg.Hooks.Pre, host.cfg.Hooks.Pre, user.cfg.Hooks.Pre)
+		plan.Hooks.Post = appendHooks(plan.Hooks.Post, dir, base.cfg.Hooks.Post, host.cfg.Hooks.Post, user.cfg.Hooks.Post)
 
 		// Mounts and smb artifacts land in root-owned paths (systemd unit
 		// dirs, /etc/samba), so they require system scope; a user-scope

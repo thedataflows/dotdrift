@@ -42,31 +42,34 @@ func decodeHookTasks(t *testing.T, cfg string) map[string]hookTask {
 
 // GenerateHookTasks emits one mise task per command so each can be run (and
 // tolerated on failure) individually while preserving order. Tasks are named
-// <phase>-<index>: hooks-pre-0, hooks-pre-1, hooks-post-0.
+// hooks-<module>-<phase>-<NN>: hooks-shell-pre-01, hooks-shell-pre-02,
+// hooks-nas-post-01. NN counts per module and phase, from 01.
 func TestGenerateHookTasks_perCommandTasks(t *testing.T) {
 	hooks := resolve.HooksStep{
-		Pre:  []profile.HookCommand{{Command: "echo base-pre"}, {Command: "echo host-pre"}},
-		Post: []profile.HookCommand{{Command: "echo base-post"}},
+		Pre:  []profile.HookCommand{{Command: "echo base-pre", Module: "shell"}, {Command: "echo host-pre", Module: "shell"}, {Command: "echo other-pre", Module: "other"}},
+		Post: []profile.HookCommand{{Command: "echo base-post", Module: "shell"}},
 	}
 	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
 
-	require.Contains(t, out, `[tasks."hooks-pre-0"]`)
-	require.Contains(t, out, `[tasks."hooks-pre-1"]`)
-	require.Contains(t, out, `[tasks."hooks-post-0"]`)
+	require.Contains(t, out, `[tasks."hooks-shell-pre-01"]`)
+	require.Contains(t, out, `[tasks."hooks-shell-pre-02"]`)
+	require.Contains(t, out, `[tasks."hooks-other-pre-01"]`)
+	require.Contains(t, out, `[tasks."hooks-shell-post-01"]`)
 
 	tasks := decodeHookTasks(t, out)
-	require.Equal(t, []string{"echo base-pre"}, tasks["hooks-pre-0"].Run)
-	require.Equal(t, []string{"echo host-pre"}, tasks["hooks-pre-1"].Run)
-	require.Equal(t, []string{"echo base-post"}, tasks["hooks-post-0"].Run)
-	require.Equal(t, "/profiles/main", tasks["hooks-pre-0"].Dir)
+	require.Equal(t, []string{"echo base-pre"}, tasks["hooks-shell-pre-01"].Run)
+	require.Equal(t, []string{"echo host-pre"}, tasks["hooks-shell-pre-02"].Run)
+	require.Equal(t, []string{"echo other-pre"}, tasks["hooks-other-pre-01"].Run)
+	require.Equal(t, []string{"echo base-post"}, tasks["hooks-shell-post-01"].Run)
+	require.Equal(t, "/profiles/main", tasks["hooks-shell-pre-01"].Dir)
 	require.Equal(t, map[string]string{
 		"DOTDRIFT_PROFILE":  "/profiles/main",
 		"DOTDRIFT_HOSTNAME": "myhost",
 		"DOTDRIFT_USERNAME": "cri",
 		"DOTDRIFT_OS":       "linux",
 		"DOTDRIFT_BACKEND":  "paru",
-	}, tasks["hooks-pre-0"].Env)
-	require.Equal(t, tasks["hooks-pre-0"].Env, tasks["hooks-pre-1"].Env)
+	}, tasks["hooks-shell-pre-01"].Env)
+	require.Equal(t, tasks["hooks-shell-pre-01"].Env, tasks["hooks-shell-pre-02"].Env)
 }
 
 // No hook commands → no [tasks] section at all.
@@ -78,8 +81,8 @@ func TestGenerateHookTasks_empty(t *testing.T) {
 func TestGenerateHookTasks_preOnly(t *testing.T) {
 	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo hi"}}}, "/profiles/main", testFacts)
 	tasks := decodeHookTasks(t, out)
-	require.Contains(t, tasks, "hooks-pre-0")
-	require.NotContains(t, tasks, "hooks-post-0")
+	require.Contains(t, tasks, "hooks-pre-01")
+	require.NotContains(t, tasks, "hooks-post-01")
 }
 
 // Shell metacharacters in commands must survive the TOML round-trip.
@@ -87,7 +90,7 @@ func TestGenerateHookTasks_escapesCommands(t *testing.T) {
 	raw := `echo "a b" && sed -i 's\x\y\g' f`
 	hooks := resolve.HooksStep{Pre: []profile.HookCommand{{Command: raw}}}
 	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
-	require.Equal(t, []string{raw}, decodeHookTasks(t, out)["hooks-pre-0"].Run)
+	require.Equal(t, []string{raw}, decodeHookTasks(t, out)["hooks-pre-01"].Run)
 }
 
 // Every emitted hook task carries interactive=true so mise connects it to the
@@ -101,8 +104,8 @@ func TestGenerateHookTasks_interactiveTrue(t *testing.T) {
 	out := mise.GenerateHookTasks(hooks, "/profiles/main", testFacts)
 	require.Contains(t, out, "interactive = true")
 	tasks := decodeHookTasks(t, out)
-	require.True(t, tasks["hooks-pre-0"].Interactive, "pre task must be interactive")
-	require.True(t, tasks["hooks-post-0"].Interactive, "post task must be interactive")
+	require.True(t, tasks["hooks-pre-01"].Interactive, "pre task must be interactive")
+	require.True(t, tasks["hooks-post-01"].Interactive, "post task must be interactive")
 }
 
 // Hook tasks are always interactive (issue 0088) — even when the writing
@@ -113,7 +116,7 @@ func TestGenerateHookTasks_interactiveTrue(t *testing.T) {
 func TestGenerateHookTasks_interactiveEvenWhenSessionIsNot(t *testing.T) {
 	out := mise.GenerateHookTasks(resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo pre"}}}, "/profiles/main", testFacts)
 	require.Contains(t, out, "interactive = true")
-	require.True(t, decodeHookTasks(t, out)["hooks-pre-0"].Interactive)
+	require.True(t, decodeHookTasks(t, out)["hooks-pre-01"].Interactive)
 }
 
 // The always-interactive rule flows through the full apply config, not just
@@ -140,12 +143,12 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 
 	require.Contains(t, out, "[tools]")
 	require.Contains(t, out, "[dotfiles]")
-	require.Contains(t, out, `[tasks."hooks-pre-0"]`)
-	require.Contains(t, out, `[tasks."hooks-post-0"]`)
+	require.Contains(t, out, `[tasks."hooks-pre-01"]`)
+	require.Contains(t, out, `[tasks."hooks-post-01"]`)
 
 	tasks := decodeHookTasks(t, out)
-	require.Equal(t, []string{"echo pre"}, tasks["hooks-pre-0"].Run)
-	require.Equal(t, []string{"echo post"}, tasks["hooks-post-0"].Run)
+	require.Equal(t, []string{"echo pre"}, tasks["hooks-pre-01"].Run)
+	require.Equal(t, []string{"echo post"}, tasks["hooks-post-01"].Run)
 }
 
 // A plan without hooks keeps the apply config task-free.
@@ -173,15 +176,15 @@ func recordingRunMise(calls *[][]string, runErr error) *mise.Mise {
 	}
 }
 
-// Each command runs as its own mise task, named by index against the Task
-// prefix, in order.
+// Each command runs as its own mise task, named for its module and phase,
+// in order.
 func TestHooksStep_runsEachCommandAsTask(t *testing.T) {
 	var calls [][]string
 	var handed [][]string
 	em := mise.NewExecMise(recordingRunMise(&calls, nil))
 	step := &mise.HooksStep{
 		Exec:       em,
-		Commands:   []profile.HookCommand{{Command: "echo a"}, {Command: "echo b"}},
+		Commands:   []profile.HookCommand{{Command: "echo a", Module: "shell"}, {Command: "echo b", Module: "shell"}},
 		ConfigPath: "/state/mise/mise.toml",
 		Task:       "hooks-pre",
 		StepName:   "hooks-pre",
@@ -197,7 +200,7 @@ func TestHooksStep_runsEachCommandAsTask(t *testing.T) {
 		require.Equal(t, []string{"--version"}, c,
 			"only mise's version probe may use the piped runner; tasks go through handover")
 	}
-	require.Equal(t, []string{"hooks-pre-0", "hooks-pre-1"}, taskNames(handed))
+	require.Equal(t, []string{"hooks-shell-pre-01", "hooks-shell-pre-02"}, taskNames(handed))
 }
 
 // The pipeline ctx reaches the mise runner.
@@ -303,14 +306,14 @@ func TestHooksStep_optionalFailureRunsRemaining(t *testing.T) {
 		StepName:   "hooks-pre",
 		Handover: func(cmd *exec.Cmd) error {
 			handed = append(handed, cmd.Args)
-			if taskNames(handed)[len(taskNames(handed))-1] == "hooks-pre-1" {
+			if taskNames(handed)[len(taskNames(handed))-1] == "hooks-pre-02" {
 				return errors.New("flaky failed")
 			}
 			return nil
 		},
 	}
 	require.NoError(t, step.Run(context.Background()))
-	require.Equal(t, []string{"hooks-pre-0", "hooks-pre-1", "hooks-pre-2"}, taskNames(handed),
+	require.Equal(t, []string{"hooks-pre-01", "hooks-pre-02", "hooks-pre-03"}, taskNames(handed),
 		"all hooks must run in order despite the optional failure")
 }
 
@@ -371,7 +374,7 @@ func TestHooksStep_subStepEventsFirePerCommand(t *testing.T) {
 		StepName:   "hooks-pre",
 		Handover: func(cmd *exec.Cmd) error {
 			handed = append(handed, cmd.Args)
-			if taskNames(handed)[len(taskNames(handed))-1] == "hooks-pre-1" {
+			if taskNames(handed)[len(taskNames(handed))-1] == "hooks-pre-02" {
 				return errors.New("task failed")
 			}
 			return nil
@@ -415,8 +418,8 @@ func TestHooksStep_alwaysRoutesThroughHandover(t *testing.T) {
 			"only mise's version probe may use the piped runner; tasks go through handover")
 	}
 	require.Equal(t, [][]string{
-		{"/fake/mise", "run", "--cd", "/state/mise", "hooks-pre-0"},
-		{"/fake/mise", "run", "--cd", "/state/mise", "hooks-pre-1"},
+		{"/fake/mise", "run", "--cd", "/state/mise", "hooks-pre-01"},
+		{"/fake/mise", "run", "--cd", "/state/mise", "hooks-pre-02"},
 	}, handed)
 }
 

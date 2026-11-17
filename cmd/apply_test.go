@@ -458,13 +458,13 @@ func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 		onlySections: []string{"dotfiles"}}
 	require.NoError(t, cmd.Run())
 
-	// The fixture's system-scope unit files still converge via bootstrap
-	// --only files; mount services must not.
-	requireOrder(t, *fk.events, "--only files")
+	// The fixture's system-scope unit files still converge via the system
+	// dotfiles apply; mount services must not.
+	requireOrder(t, *fk.events, "dotfiles apply --cd "+filepath.Join(dir, "mise", "system-edits"))
 	for _, e := range *fk.events {
 		require.NotContains(t, e, "services", "mounts services must not run")
 	}
-	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
+	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "system-edits", "mise.toml"))
 	require.NoError(t, err)
 	require.NotContains(t, string(cfg), "/mnt/data", "mount destinations are section-gated out of the system files config")
 	require.NotContains(t, string(cfg), "/mnt/backup", "mount destinations are section-gated out of the system files config")

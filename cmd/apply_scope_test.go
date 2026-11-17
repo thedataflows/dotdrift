@@ -30,9 +30,8 @@ func scopeFixture(t *testing.T) string {
 }
 
 // A profile with system-scope modules gains a dotfiles-system step that runs
-// after dotfiles, converges whole-file system entries via mise bootstrap
-// --only files from its own config dir (issue 0042), and is recorded in
-// resume state.
+// after dotfiles, converges system entries via mise dotfiles apply from its
+// own config dir (issue 0156), and is recorded in resume state.
 func TestApply_dotfilesSystemStep(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -42,10 +41,11 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	cmd := &ApplyCmd{deps: &fk.deps, Profile: scopeFixture(t), State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// User dotfiles use mise dotfiles apply; system whole-file entries use
-	// mise bootstrap --only files; the system step runs after the user step.
+	// User dotfiles use mise dotfiles apply from dotfiles/; system entries
+	// use mise dotfiles apply from system-edits/; the system step runs
+	// after the user step.
 	userApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "dotfiles")
-	systemApply := "bootstrap --cd " + filepath.Join(dir, "mise", "system")
+	systemApply := "dotfiles apply --cd " + filepath.Join(dir, "mise", "system-edits")
 	userIdx := -1
 	for i, e := range *fk.events {
 		if strings.Contains(e, userApply) {
@@ -67,12 +67,13 @@ func TestApply_dotfilesSystemStep(t *testing.T) {
 	require.Contains(t, string(userCfg), "~/.bashrc")
 	require.NotContains(t, string(userCfg), "/etc/demo.conf")
 
-	// Whole-file system entries are [bootstrap.files], not [dotfiles].
-	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
+	// System entries are [dotfiles] in the system-edits config, modes
+	// preserved (issue 0156).
+	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system-edits", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(sysCfg), "[bootstrap.files]")
+	require.Contains(t, string(sysCfg), "[dotfiles]")
 	require.Contains(t, string(sysCfg), "/etc/demo.conf")
-	require.NotContains(t, string(sysCfg), "[dotfiles]")
+	require.NotContains(t, string(sysCfg), "[bootstrap.files]")
 
 	// The pre-pipeline full config (D8a crash snapshot) still contains everything.
 	full, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
@@ -178,34 +179,24 @@ scope = "system"
 	cmd := &ApplyCmd{deps: &fk.deps, Profile: profileDir, State: statePath, Yes: true}
 	require.NoError(t, cmd.Run())
 
-	// Whole-file entries reach bootstrap --only files from system/.
-	var foundBootstrap bool
-	for _, e := range *fk.events {
-		if strings.Contains(e, "bootstrap") && strings.Contains(e, filepath.Join("mise", "system")) && strings.Contains(e, "--only files") {
-			foundBootstrap = true
-		}
-	}
-	require.True(t, foundBootstrap, "whole-file system entries must reach bootstrap --only files, events: %v", *fk.events)
-
-	// Edits reach dotfiles apply from system-edits/.
+	// Whole-file entries and edits reach dotfiles apply together from
+	// system-edits/ (issue 0156); no bootstrap --only files pass runs for
+	// them (the targets' parent /etc exists, so no directories pass either).
 	var foundApply bool
 	for _, e := range *fk.events {
 		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system-edits")) {
 			foundApply = true
 		}
+		require.NotContains(t, e, "[bootstrap.files]", "whole-file entries no longer ride bootstrap.files")
 	}
-	require.True(t, foundApply, "system edit entries must reach dotfiles apply, events: %v", *fk.events)
+	require.True(t, foundApply, "system entries must reach dotfiles apply, events: %v", *fk.events)
+	require.NoFileExists(t, filepath.Join(dir, "mise", "system", "mise.toml"))
 
-	// The configs are partitioned: bootstrap.files holds the whole-file entry,
-	// dotfiles holds the edit.
-	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
-	require.NoError(t, err)
-	require.Contains(t, string(sysCfg), "[bootstrap.files]")
-	require.Contains(t, string(sysCfg), "/etc/demo.conf")
-	require.NotContains(t, string(sysCfg), "127.0.0.1 dev.local")
-
+	// One config holds both entries, modes preserved.
 	editCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system-edits", "mise.toml"))
 	require.NoError(t, err)
+	require.Contains(t, string(editCfg), "[dotfiles]")
+	require.Contains(t, string(editCfg), "/etc/demo.conf")
+	require.Contains(t, string(editCfg), "mode = \"copy\"")
 	require.Contains(t, string(editCfg), `line = "127.0.0.1 dev.local"`)
-	require.NotContains(t, string(editCfg), "/etc/demo.conf")
 }

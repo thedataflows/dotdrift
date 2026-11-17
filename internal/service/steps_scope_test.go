@@ -20,16 +20,17 @@ import (
 // package — 0064-D6 absorbed the steps into the session, 0070 deleted the
 // cmd copy these tests targeted).
 
-// Whole-file system entries converge via mise bootstrap --only files and
-// dotdrift never elevates them itself (issue 0042): mise tries as the current
-// user and retries the remaining changes in one privileged batch — the old
-// dotdrift-side writability pre-flight + sudo pass is gone for whole files.
-func TestSystemFilesStep_wholeFilesViaBootstrapNeverSudo(t *testing.T) {
+// Whole-file system entries converge via [dotfiles] with the declared
+// mode preserved (issue 0156): a non-writable target elevates the batch
+// through the handover seam, exactly like system edits — dotdrift runs
+// the sudo pass, mise does not self-elevate a [bootstrap.files] batch.
+func TestSystemFilesStep_wholeFilesElevatedViaDotfilesApply(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("elevation test requires a non-root user")
 	}
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
+	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
 
 	var names []string
 	m := &mise.Mise{
@@ -44,31 +45,38 @@ func TestSystemFilesStep_wholeFilesViaBootstrapNeverSudo(t *testing.T) {
 	}
 	em := mise.NewExecMise(m)
 
+	var handed []*exec.Cmd
 	step := &systemFilesStep{
 		exec: em,
 		entries: []resolve.DotfileEntry{
 			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
 		},
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
-		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		editsPath:  editsPath,
 		yes:        true,
+		handover: func(cmd *exec.Cmd) error {
+			handed = append(handed, cmd)
+			return nil
+		},
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	require.Equal(t, []string{"/fake/mise"}, names,
-		"whole-file entries converge through mise bootstrap; dotdrift never invokes sudo for them")
+	require.Empty(t, names, "the parent (/etc) exists, so no directories pass runs on the piped runner")
+	require.Len(t, handed, 1, "a non-writable whole-file target elevates in one sudo pass")
+	require.True(t, strings.HasSuffix(handed[0].Path, "/sudo"))
+	require.Contains(t, handed[0].Args, "dotfiles")
+	require.Contains(t, handed[0].Args, "apply")
 
-	cfg, err := os.ReadFile(configPath)
+	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)
-	require.Contains(t, string(cfg), "[bootstrap.files]")
-	require.Contains(t, string(cfg), `"/etc/test.conf" = { source = "/fake/profile/test.conf" }`)
+	require.Contains(t, string(cfg), "[dotfiles]")
+	require.Contains(t, string(cfg), `"/etc/test.conf" = { source = "test.conf", mode = "copy" }`)
 }
 
-// A bootstrap failure propagates verbatim — no dotdrift-side retry or
-// elevation second-guessing (mise already self-elevated or failed loud).
-func TestSystemFilesStep_bootstrapFailurePropagates(t *testing.T) {
+// A dotfiles apply failure propagates verbatim — no dotdrift-side retry
+// or elevation second-guessing.
+func TestSystemFilesStep_dotfilesFailurePropagates(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
 
@@ -90,7 +98,6 @@ func TestSystemFilesStep_bootstrapFailurePropagates(t *testing.T) {
 		entries: []resolve.DotfileEntry{
 			{Target: filepath.Join(dir, "mine.conf"), Source: "mine.conf", Mode: "copy"},
 		},
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
 		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
@@ -133,7 +140,6 @@ func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 		entries: []resolve.DotfileEntry{
 			{Target: "/etc/hosts/dev", Line: "127.0.0.1 dev.local"},
 		},
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: filepath.Join(dir, "system", "mise.toml"),
 		editsPath:  editsPath,
@@ -197,7 +203,6 @@ func TestSystemFilesStep_createsParentDirectories(t *testing.T) {
 			{Target: filepath.Join(dir, "sys", "eachdir"), Source: "files/each", Mode: "symlink-each"},
 			{Target: filepath.Join(dir, "sys", "edit", "e.conf", "myline"), Line: "x"},
 		},
-		sourceRoot: root,
 		homeDir:    dir,
 		configPath: configPath,
 		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
@@ -253,7 +258,6 @@ func TestSystemFilesStep_existingParentNotDeclared(t *testing.T) {
 			{Target: filepath.Join(existing, "a.conf"), Source: "a.conf", Mode: "copy"},
 			{Target: filepath.Join(missing, "b.conf"), Source: "b.conf", Mode: "copy"},
 		},
-		sourceRoot: dir,
 		homeDir:    dir,
 		configPath: configPath,
 		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
@@ -263,20 +267,22 @@ func TestSystemFilesStep_existingParentNotDeclared(t *testing.T) {
 	require.NoError(t, step.Run(context.Background()))
 	cfg, err := os.ReadFile(configPath)
 	require.NoError(t, err)
-	require.Contains(t, string(cfg), "[bootstrap.files]")
+	require.Contains(t, string(cfg), "[bootstrap.directories]")
 	require.NotContains(t, string(cfg), fmt.Sprintf("%q = { state = \"present\" }", existing),
 		"an existing parent must not be declared: it suppresses mise's privilege escalation for the files under it")
 	require.Contains(t, string(cfg), fmt.Sprintf("%q = { state = \"present\" }", missing),
 		"a missing parent must still be declared so mise creates it")
 }
 
-// Chained system entries converge level by level (issue 0155): an entry
-// whose source is another entry's target goes in a later bootstrap run,
-// because mise reads every source while planning a run. Here .bashrc
-// reads the .profile that the first entry creates.
+// Chained system entries converge level by level (issues 0155, 0156):
+// an entry whose source is another entry's target goes in a later
+// dotfiles apply pass, because a copy or template reads its source.
+// Here .bashrc links to the .profile that the first entry creates; the
+// symlink mode survives into the applied config.
 func TestSystemFilesStep_chainedEntriesRunPerLevel(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
+	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
 	profileTarget := filepath.Join(dir, "root", ".profile")
 	bashrcTarget := filepath.Join(dir, "root", ".bashrc")
 
@@ -287,11 +293,13 @@ func TestSystemFilesStep_chainedEntriesRunPerLevel(t *testing.T) {
 			if len(args) > 0 && args[0] == "--version" {
 				return mise.MinMiseVersion + string(rune(10)), nil
 			}
-			cfg, err := os.ReadFile(configPath)
-			if err != nil {
-				return "", err
+			if len(args) > 0 && args[0] == "dotfiles" {
+				cfg, err := os.ReadFile(editsPath)
+				if err != nil {
+					return "", err
+				}
+				configs = append(configs, string(cfg))
 			}
-			configs = append(configs, string(cfg))
 			return "", nil
 		},
 	}
@@ -303,19 +311,19 @@ func TestSystemFilesStep_chainedEntriesRunPerLevel(t *testing.T) {
 			{Target: bashrcTarget, Source: profileTarget, Mode: "symlink"},
 			{Target: profileTarget, Source: "home/.profile", Mode: "copy"},
 		},
-		sourceRoot: dir,
 		homeDir:    dir,
 		configPath: configPath,
-		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		editsPath:  editsPath,
 		yes:        true,
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	require.Len(t, configs, 2, "one bootstrap run per dependency level")
+	require.Len(t, configs, 2, "one dotfiles apply pass per dependency level")
 	require.Contains(t, configs[0], fmt.Sprintf("%q = { source", profileTarget))
 	require.NotContains(t, configs[0], fmt.Sprintf("%q = { source", bashrcTarget))
 	require.Contains(t, configs[1], fmt.Sprintf("%q = { source", bashrcTarget))
 	require.NotContains(t, configs[1], fmt.Sprintf("%q = { source", profileTarget))
+	require.Contains(t, configs[1], "mode = \"symlink\"", "the chained symlink keeps its mode")
 }
 
 // A source-dependency cycle between system entries is an error naming
@@ -339,7 +347,6 @@ func TestSystemFilesStep_chainedCycleErrors(t *testing.T) {
 			{Target: a, Source: b, Mode: "copy"},
 			{Target: b, Source: a, Mode: "copy"},
 		},
-		sourceRoot: dir,
 		homeDir:    dir,
 		configPath: filepath.Join(dir, "system", "mise.toml"),
 		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
@@ -372,7 +379,6 @@ func TestSystemFilesStep_mountDirsViaBootstrapDirectories(t *testing.T) {
 
 	step := &systemFilesStep{
 		exec:       em,
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		dirs:       []string{"/mnt/data", "/mnt/backup"},
 		configPath: configPath,
@@ -390,13 +396,13 @@ func TestSystemFilesStep_mountDirsViaBootstrapDirectories(t *testing.T) {
 	require.Contains(t, string(cfg), "/mnt/backup")
 }
 
-// System-scope entries declared as symlink carry no mode into
-// [bootstrap.files]: mise's system files manage content (an inherent
-// symlink→copy), so no symlink mode can leak into the emitted config.
-// symlink-each entries are expanded to individual file entries.
-func TestSystemFilesStep_symlinkTranslatedToCopy(t *testing.T) {
+// A system entry declared as symlink reaches the applied config as
+// mode = "symlink" with its declared source (issue 0156): nothing
+// translates it to a content copy.
+func TestSystemFilesStep_symlinkModePreserved(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
+	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
 
 	m := &mise.Mise{
 		LookPath: func(string) (string, error) { return "/fake/mise", nil },
@@ -412,31 +418,29 @@ func TestSystemFilesStep_symlinkTranslatedToCopy(t *testing.T) {
 	step := &systemFilesStep{
 		exec: em,
 		entries: []resolve.DotfileEntry{
-			{Target: "/etc/symlinked.conf", Source: "files/symlinked.conf", Mode: "symlink"},
+			{Target: filepath.Join(dir, "symlinked.conf"), Source: "/fake/profile/files/symlinked.conf", Mode: "symlink"},
 		},
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
-		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		editsPath:  editsPath,
 		yes:        true,
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	cfg, err := os.ReadFile(configPath)
+	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)
-	require.Contains(t, string(cfg), "[bootstrap.files]")
-	require.Contains(t, string(cfg), `"/etc/symlinked.conf" = { source = "/fake/profile/files/symlinked.conf" }`)
-	require.NotContains(t, string(cfg), "mode = ",
-		"bootstrap.files manages content — no mode vocabulary may leak")
+	require.Contains(t, string(cfg), "[dotfiles]")
+	require.Contains(t, string(cfg), "mode = \"symlink\"")
+	require.Contains(t, string(cfg), "source = \"/fake/profile/files/symlinked.conf\"")
 }
 
-// Declared secrets are emitted as [bootstrap.secrets] into the system files
-// config alongside [bootstrap.files] (issue 0044) — the only template path
-// where mise resolves secret() ([dotfiles] templates have no secret
-// function, verified against mise 2026.9.1).
+// Declared secrets are emitted as [bootstrap.secrets] into the system
+// dotfiles config (issues 0044, 0156): current mise reads them in
+// [dotfiles] templates too.
 func TestSystemFilesStep_includesSecrets(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
+	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
 
 	m := &mise.Mise{
 		LookPath: func(string) (string, error) { return "/fake/mise", nil },
@@ -452,12 +456,11 @@ func TestSystemFilesStep_includesSecrets(t *testing.T) {
 	step := &systemFilesStep{
 		exec: em,
 		entries: []resolve.DotfileEntry{
-			{Target: "/etc/svc.env", Source: "svc.env", Mode: "template"},
+			{Target: filepath.Join(dir, "svc.env"), Source: "svc.env", Mode: "template"},
 		},
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
-		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		editsPath:  editsPath,
 		yes:        true,
 		secrets: map[string]profile.Secret{
 			"cache_token": {Env: "MISE_CACHE_TOKEN"},
@@ -465,11 +468,11 @@ func TestSystemFilesStep_includesSecrets(t *testing.T) {
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	cfg, err := os.ReadFile(configPath)
+	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)
 	require.Contains(t, string(cfg), "[bootstrap.secrets]")
 	require.Contains(t, string(cfg), `cache_token = "MISE_CACHE_TOKEN"`)
-	require.Contains(t, string(cfg), "template = true")
+	require.Contains(t, string(cfg), "mode = \"template\"")
 }
 
 // No declared secrets → no [bootstrap.secrets] section.
@@ -488,20 +491,20 @@ func TestSystemFilesStep_noSecretsNoSection(t *testing.T) {
 	}
 	em := mise.NewExecMise(m)
 
+	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
 	step := &systemFilesStep{
 		exec: em,
 		entries: []resolve.DotfileEntry{
-			{Target: "/etc/test.conf", Source: "test.conf", Mode: "copy"},
+			{Target: filepath.Join(dir, "test.conf"), Source: "test.conf", Mode: "copy"},
 		},
-		sourceRoot: "/fake/profile",
 		homeDir:    "/home/test",
 		configPath: configPath,
-		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		editsPath:  editsPath,
 		yes:        true,
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	cfg, err := os.ReadFile(configPath)
+	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)
 	require.NotContains(t, string(cfg), "[bootstrap.secrets]")
 }

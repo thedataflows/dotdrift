@@ -96,28 +96,26 @@ func packageAttribution(plan *resolve.Plan) string {
 }
 
 // systemFilesStep applies system-scope dotfile entries and creates mount
-// destination directories. Whole-file entries (symlink-each pre-expanded) and
-// mount dirs converge through mise's native [bootstrap.files] +
-// [bootstrap.directories] via `mise bootstrap --only files` (issue 0042):
-// mise attempts changes as the current user and retries the remainder in one
-// privileged batch, writes atomically, and fails loud with the exact command
-// when elevation is impossible — dotdrift runs no sudo for whole files.
-// symlink→copy is inherent: bootstrap.files manages content, not links.
-// Edit entries have no bootstrap.files equivalent (contract #18): they keep
-// the [dotfiles] path, elevated via one sudo -E "mise dotfiles apply"
-// handover child when an edit target is not user-writable (0071).
+// destination directories. Every entry — whole-file and edit — converges
+// through [dotfiles] (`mise dotfiles apply`) with the declared mode
+// preserved: a symlink stays a symlink (issue 0156; [bootstrap.files]
+// cannot express one, so the issue-0042 content-copy translation is
+// gone). When any entry target is not user-writable, the batch runs
+// elevated through the handover seam (0071), in dependency-level passes
+// so a chained entry reads a source an earlier pass created (0155).
+// Mount destinations and missing target parents ride a directories-only
+// `mise bootstrap --only files` pass first (0151, 0154).
 type systemFilesStep struct {
 	exec       *mise.ExecMise
 	entries    []resolve.DotfileEntry
-	sourceRoot string
 	homeDir    string
 	dirs       []string // mount destinations → [bootstrap.directories]
-	configPath string   // [bootstrap.files] + [bootstrap.directories] + [bootstrap.secrets]
-	editsPath  string   // [dotfiles] for edit entries
+	configPath string   // directories-only bootstrap config
+	editsPath  string   // [dotfiles] config for all entries, rewritten per level
 	yes        bool
-	force      bool                      // apply --force → --force on the edits dotfiles apply (issue 0046)
+	force      bool                      // apply --force → --force on the dotfiles apply (issue 0046)
 	secrets    map[string]profile.Secret // declared secret inputs → [bootstrap.secrets]
-	handover   apply.HandoverFunc        // session-injected; the elevated edits child needs the terminal
+	handover   apply.HandoverFunc        // session-injected; an elevated child needs the terminal
 }
 
 var (
@@ -130,11 +128,11 @@ var geteuid = os.Geteuid
 
 func (s *systemFilesStep) Name() string { return "dotfiles-system" }
 
-// RequiresTTY classifies the step up front (0064-D4): elevated system edits
-// prompt through sudo on the consumer's terminal.
+// RequiresTTY classifies the step up front (0064-D4): an elevated system
+// batch prompts through sudo on the consumer's terminal.
 func (s *systemFilesStep) RequiresTTY() string {
 	if s.needsSudo() {
-		return "elevated system edits: edit targets are not user-writable (sudo)"
+		return "elevated system files: targets are not user-writable (sudo)"
 	}
 	return ""
 }
@@ -142,145 +140,164 @@ func (s *systemFilesStep) RequiresTTY() string {
 // SetHandover injects the consumer's handover callback (apply.HandoverStep).
 func (s *systemFilesStep) SetHandover(h apply.HandoverFunc) { s.handover = h }
 
-// editEntries returns the step's partial-edit entries.
-func (s *systemFilesStep) editEntries() []resolve.DotfileEntry {
-	var edit []resolve.DotfileEntry
-	for _, e := range s.entries {
-		if e.IsEdit() {
-			edit = append(edit, e)
-		}
-	}
-	return edit
-}
-
-// needsSudo reports whether the edit batch must converge elevated: not
-// already root and some edit target is not user-writable. RequiresTTY and
-// Run share this one predicate, so the up-front classification cannot
-// drift from what the step actually does (issue 0071).
+// needsSudo reports whether the batch must converge elevated: not
+// already root and some entry target is not user-writable. RequiresTTY
+// and Run share this one predicate, so the up-front classification
+// cannot drift from what the step actually does (issue 0071).
 func (s *systemFilesStep) needsSudo() bool {
-	return geteuid() != 0 && !systemTargetsUserWritable(s.editEntries(), s.homeDir)
+	return geteuid() != 0 && !systemTargetsUserWritable(s.entries, s.homeDir)
 }
 
 func (s *systemFilesStep) Run(ctx context.Context) error {
-	edit := s.editEntries()
-	var whole []resolve.DotfileEntry
-	for _, e := range s.entries {
-		if !e.IsEdit() {
-			whole = append(whole, e)
-		}
+	if s.exec == nil && (len(s.entries) > 0 || len(s.dirs) > 0) {
+		return fmt.Errorf("system files require an exec mise runner")
 	}
 
-	// Parent directories of every target (issue 0151): bootstrap.files
-	// creates no parents, so each whole-file target's parent (the target
-	// directory itself for expanded symlink-each children) and each edit
-	// file's parent becomes a [bootstrap.directories] entry next to the
-	// mount destinations, and mise creates it in the same run.
+	// Parent directories of every target (issue 0151): each whole-file
+	// target's parent (the target directory itself for symlink-each, whose
+	// children land inside it) and each edit file's parent joins the mount
+	// destinations as a [bootstrap.directories] entry, and mise creates
+	// them in one pass before anything lands.
 	//
 	// Only a parent that does not exist is declared (issue 0154):
-	// declaring an existing parent makes mise plan the files under it as
-	// user-level changes, so a copy into /root runs as the current user
-	// and fails with Permission denied instead of escalating in mise's
-	// privileged batch. Undeclared, mise classifies each file by its own
-	// target. A missing parent is declared: mise escalates its creation
-	// when that needs privilege, and the files ride along.
+	// declaring an existing directory is a no-op change that mise plans
+	// at user level, and it must stay out of the file entries' way.
 	dirs := append([]string{}, s.dirs...)
-	var parents []string
-	var files []mise.BootstrapFile
-	if len(whole) > 0 {
-		var err error
-		files, err = mise.ResolveBootstrapFiles(whole, s.sourceRoot, s.homeDir)
-		if err != nil {
-			return fmt.Errorf("resolve system files: %w", err)
-		}
-		for _, f := range files {
-			parents = append(parents, filepath.Dir(f.Target))
-		}
-	}
-	for _, e := range edit {
-		file, _ := resolve.SplitEditTarget(e.Target)
-		if strings.HasPrefix(file, "~/") {
-			file = filepath.Join(s.homeDir, file[2:])
-		}
-		parents = append(parents, filepath.Dir(file))
-	}
-	for _, parent := range parents {
+	for _, e := range s.entries {
+		parent := systemEntryParent(e, s.homeDir)
 		if _, err := os.Stat(parent); err != nil {
 			dirs = append(dirs, parent)
 		}
 	}
-
-	// Whole-file entries + all directories → bootstrap files, one run
-	// per dependency level (issue 0155): mise reads every source while
-	// planning a run, so an entry whose source is another entry's target
-	// converges in a later run, when that target exists. Directories
-	// ride the first run; secrets ride every run (a template at any
-	// level can resolve secret()).
-	if len(files) > 0 || len(dirs) > 0 {
-		if s.exec == nil {
-			return fmt.Errorf("system files require an exec mise runner")
+	if len(dirs) > 0 {
+		if err := writeBootstrapConfig(s.configPath, mise.GenerateBootstrapDirectories(dirs)); err != nil {
+			return fmt.Errorf("write system directories config: %w", err)
 		}
-		levels, err := mise.OrderBootstrapFiles(files)
-		if err != nil {
-			return fmt.Errorf("system files: %w", err)
-		}
-		if len(levels) == 0 {
-			levels = [][]mise.BootstrapFile{nil}
-		}
-		for i, level := range levels {
-			var content string
-			if len(level) > 0 {
-				content = mise.GenerateBootstrapFiles(level)
-			}
-			if i == 0 {
-				content += mise.GenerateBootstrapDirectories(dirs)
-			}
-			// Declared secret inputs ride the config: the system files
-			// template path is the only one where mise resolves secret()
-			// ([dotfiles] templates have no secret function — verified
-			// against mise 2026.9.1, issue 0044).
-			content += mise.GenerateBootstrapSecrets(s.secrets)
-			if err := writeBootstrapConfig(s.configPath, content); err != nil {
-				return fmt.Errorf("write system files config: %w", err)
-			}
-			if err := s.exec.Bootstrap(ctx, s.configPath, s.yes, "files"); err != nil {
-				return fmt.Errorf("system files: %w", err)
-			}
+		if err := s.exec.Bootstrap(ctx, s.configPath, s.yes, "files"); err != nil {
+			return fmt.Errorf("system directories: %w", err)
 		}
 	}
 
-	// Edit entries → elevated [dotfiles] path (contract #18).
-	if len(edit) > 0 {
-		if s.exec == nil {
-			return fmt.Errorf("system edits require an exec mise runner")
+	if len(s.entries) == 0 {
+		return nil
+	}
+	levels, err := orderSystemEntries(s.entries, s.homeDir)
+	if err != nil {
+		return err
+	}
+	// Elevation is decided up front from the targets' writability (the
+	// same predicate RequiresTTY reported): the elevated child needs the
+	// real terminal for the sudo prompt, so it goes through the session's
+	// handover seam (issue 0071) — the consumer wires fds, keeping mise's
+	// color and the prompt. No handover (impossible under a session,
+	// which always injects one) fails loud instead of silently degrading
+	// to a piped sudo.
+	elevated := s.needsSudo()
+	if elevated && s.handover == nil {
+		return fmt.Errorf("elevated system files require a handover callback")
+	}
+	for _, level := range levels {
+		// Declared secret inputs ride the config: mise resolves secret()
+		// in [dotfiles] templates from [bootstrap.secrets] (verified
+		// against mise 2026.11.8; issue 0044's contrary finding was
+		// against 2026.9.1).
+		content := mise.GenerateDotfiles(level) + mise.GenerateBootstrapSecrets(s.secrets)
+		if err := writeBootstrapConfig(s.editsPath, content); err != nil {
+			return fmt.Errorf("write system dotfiles config: %w", err)
 		}
-		if err := writeBootstrapConfig(s.editsPath, mise.GenerateDotfiles(edit)); err != nil {
-			return fmt.Errorf("write system edits config: %w", err)
-		}
-		// Elevation is decided up front from the edit targets' writability
-		// (the same predicate RequiresTTY reported): the elevated child needs
-		// the real terminal for the sudo prompt, so it goes through the
-		// session's handover seam (issue 0071) — the consumer wires fds,
-		// keeping mise's color and the prompt. No handover (impossible under
-		// a session, which always injects one) fails loud instead of silently
-		// degrading to a piped sudo.
-		if s.needsSudo() {
-			if s.handover == nil {
-				return fmt.Errorf("elevated system edits require a handover callback")
-			}
+		if elevated {
 			cmd, err := s.exec.DotfilesApplySudoCmd(ctx, s.editsPath, s.yes, s.force)
 			if err == nil {
 				err = s.handover(cmd)
 			}
 			if err != nil {
-				return fmt.Errorf("system edits (elevated): %w", err)
+				return fmt.Errorf("system files (elevated): %w", err)
 			}
-		} else {
-			if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, s.force); err != nil {
-				return fmt.Errorf("system edits: %w", err)
-			}
+		} else if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, s.force); err != nil {
+			return fmt.Errorf("system files: %w", err)
 		}
 	}
 	return nil
+}
+
+// expandHomePath expands a leading ~/ against homeDir.
+func expandHomePath(p, homeDir string) string {
+	if strings.HasPrefix(p, "~/") {
+		return filepath.Join(homeDir, p[2:])
+	}
+	return p
+}
+
+// systemEntryParent is the directory an entry's apply needs to exist:
+// the target's parent, the target directory itself for symlink-each, and
+// the edited file's parent for edit entries.
+func systemEntryParent(e resolve.DotfileEntry, homeDir string) string {
+	if e.IsEdit() {
+		file, _ := resolve.SplitEditTarget(e.Target)
+		return filepath.Dir(expandHomePath(file, homeDir))
+	}
+	if e.Mode == "symlink-each" {
+		return expandHomePath(e.Target, homeDir)
+	}
+	return filepath.Dir(expandHomePath(e.Target, homeDir))
+}
+
+// orderSystemEntries groups entries into dependency levels for chained
+// entries (issues 0155, 0156): an entry whose source is another entry's
+// target — or lies under it — applies in a later pass, because a copy or
+// template reads its source. Levels are in apply order; entries within a
+// level keep target order. A dependency cycle (including an entry that
+// is its own source) is an error naming the targets involved.
+func orderSystemEntries(entries []resolve.DotfileEntry, homeDir string) ([][]resolve.DotfileEntry, error) {
+	sorted := append([]resolve.DotfileEntry(nil), entries...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Target < sorted[j].Target })
+	targetOf := func(e resolve.DotfileEntry) string {
+		if e.IsEdit() {
+			file, _ := resolve.SplitEditTarget(e.Target)
+			return expandHomePath(file, homeDir)
+		}
+		return expandHomePath(e.Target, homeDir)
+	}
+	placed := make(map[string]bool, len(sorted))
+	remaining := sorted
+	var levels [][]resolve.DotfileEntry
+	for len(remaining) > 0 {
+		var level, rest []resolve.DotfileEntry
+		for _, e := range remaining {
+			ready := true
+			for _, g := range sorted {
+				if g.Target == e.Target {
+					continue // itself (targets are unique per plan)
+				}
+				gt := targetOf(g)
+				if placed[gt] {
+					continue
+				}
+				if e.Source == gt || strings.HasPrefix(e.Source, gt+"/") {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				level = append(level, e)
+			} else {
+				rest = append(rest, e)
+			}
+		}
+		if len(level) == 0 {
+			targets := make([]string, 0, len(rest))
+			for _, e := range rest {
+				targets = append(targets, e.Target)
+			}
+			return nil, fmt.Errorf("system files: source dependency cycle among targets: %s", strings.Join(targets, ", "))
+		}
+		for _, e := range level {
+			placed[targetOf(e)] = true
+		}
+		levels = append(levels, level)
+		remaining = rest
+	}
+	return levels, nil
 }
 
 // systemTargetsUserWritable reports whether the current user can write every
@@ -586,7 +603,7 @@ func buildSteps(sections SectionSet, plan *resolve.Plan, runner *mise.ExecMise,
 	if len(systemEntries) > 0 || len(mountDests) > 0 {
 		homeDir, _ := os.UserHomeDir()
 		steps = append(steps, &systemFilesStep{
-			exec: runner, entries: systemEntries, sourceRoot: profileRoot,
+			exec: runner, entries: systemEntries,
 			homeDir: homeDir, dirs: mountDests, configPath: paths.system,
 			editsPath: paths.systemEdits, yes: opts.Yes, force: opts.Force, secrets: plan.Secrets,
 		})

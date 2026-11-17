@@ -64,6 +64,10 @@ mise escalates interactively (sudo prompt on a terminal; exact-command error
 when non-interactive without passwordless sudo) — that matches dotdrift's
 fail-loud posture better than the current whole-run sudo retry.
 
+## Superseded in part (issue 0156, 2026-11-17)
+
+Whole-file system entries no longer converge through [bootstrap.files]: it cannot express a symlink, so declared symlink entries silently became content copies. They now converge through [dotfiles] with the mode preserved, elevated like edit entries. The directories-only bootstrap pass (mount destinations, missing parents) remains from this issue's work.
+
 ## Resolution notes
 
 - The August revert (dfb5745: "hidden sudo helpers needing a TTY mise could

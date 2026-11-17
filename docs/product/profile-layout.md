@@ -237,10 +237,11 @@ public = false
   declared input with mise's `{{ secret(name="...") }}`; apply emits the
   resolved declarations as `[bootstrap.secrets]` and mise resolves, fails
   loud on a missing variable (naming the secret and how to supply it), and
-  redacts values from all output. **Boundary**: `secret()` exists only in
-  system-scope whole-file templates (the `[bootstrap.files]` path) — mise's
-  `[dotfiles]` template engine has no `secret` function, so user-scope
-  templates cannot consume secrets.
+  redacts values from all output. **Boundary**: apply emits the declared
+  secrets only into the system-scope dotfiles config, so `secret()` is
+  available to system-scope templates (whole-file and edit; verified
+  against mise 2026.11.8 — 2026.9.1 had no `secret` in [dotfiles]
+  templates). User-scope templates cannot consume secrets.
 - `systemd.units` declares systemd **user** units (issue 0048) emitted as
   `[bootstrap.linux.systemd.units]` and converged by a dedicated `systemd`
   apply step (`mise bootstrap --only linux-systemd-units`): mise writes

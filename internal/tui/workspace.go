@@ -601,6 +601,9 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 				family: profile.FamilyServices, key: pathKey(name, field), value: value,
 				valueAt: len(text) - len(value)})
 		}
+		if svc.Scope != "" {
+			svcField("scope", svc.Scope)
+		}
 		if svc.Command != "" {
 			svcField("command", svc.Command)
 		}

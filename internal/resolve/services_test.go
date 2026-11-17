@@ -77,3 +77,33 @@ func TestResolve_servicesSystemdNameConflict(t *testing.T) {
 	require.Contains(t, err.Error(), "my-sync")
 	require.Contains(t, err.Error(), "systemd")
 }
+
+// Issue 0160: an entry scope overrides the module scope; @ is a valid
+// name character for template instances.
+func TestResolve_servicesEntryScopeOverride(t *testing.T) {
+	root := t.TempDir()
+	writeModule(t, root, "svc", "[services.sshd]\nscope = \"system\"\n\n[services.\"netbird@main\"]\nscope = \"system\"\n")
+	plan, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "cri"})
+	require.NoError(t, err)
+	require.Len(t, plan.Services.Entries, 2)
+	for _, e := range plan.Services.Entries {
+		require.Equal(t, "system", e.Scope, e.Name)
+	}
+}
+
+func TestResolve_servicesEntryScopeValidation(t *testing.T) {
+	cases := []struct{ name, toml, want string }{
+		{"unknown scope", "[services.a]\nscope = \"galaxy\"\n", "scope"},
+		{"command on system entry", "[services.a]\nscope = \"system\"\ncommand = \"/bin/a\"\n", "command"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			writeModule(t, root, "svc", tc.toml)
+			_, err := loadAndResolve(t, root, &facts.Facts{Hostname: "h", Username: "cri"})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "svc")
+			require.Contains(t, err.Error(), tc.want)
+		})
+	}
+}

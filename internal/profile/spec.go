@@ -22,6 +22,7 @@ type SystemdUnit map[string]any
 // service scope. Enabled is a *bool so an unset key (nil, default
 // true) differs from an explicit false.
 type ServiceSpec struct {
+	Scope            string            `toml:"scope"`
 	Command          string            `toml:"command"`
 	State            string            `toml:"state"`
 	Enabled          *bool             `toml:"enabled"`

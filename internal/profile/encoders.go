@@ -433,7 +433,7 @@ func EncodeServicesSection(services map[string]ServiceSpec) string {
 			key string
 			val string
 		}{
-			{"command", s.Command}, {"state", s.State}, {"restart", s.Restart}, {"working_directory", s.WorkingDirectory},
+			{"scope", s.Scope}, {"command", s.Command}, {"state", s.State}, {"restart", s.Restart}, {"working_directory", s.WorkingDirectory},
 		} {
 			if f.val != "" {
 				b.WriteString(f.key + " = " + tomlBasicString(f.val) + "\n")

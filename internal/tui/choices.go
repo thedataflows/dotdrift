@@ -34,6 +34,8 @@ func choiceSet(row wsRow) []string {
 		}
 	case profile.FamilyServices:
 		switch lastPathSegment(row.key) {
+		case "scope":
+			return []string{profile.ScopeUser, profile.ScopeSystem}
 		case "state":
 			return []string{"running", "stopped", "absent"}
 		case "restart":

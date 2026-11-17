@@ -274,7 +274,9 @@ public = false
 - `services` declares services (issue 0159) emitted as
   `[bootstrap.services]` and converged by a dedicated `services` apply
   step (`mise bootstrap --only services`) after the systemd step. The
-  module scope is the service scope. Without `command`, the entry
+  module scope is the service scope; an entry may set `scope` to
+  override it (issue 0160), and names may contain `@` for template
+  instances. Without `command`, the entry
   enables and starts a unit that already exists (installed by a
   package or placed by a dotfile) and mise writes nothing; this
   replaces the `systemctl enable --now <unit> || true` hook, and a

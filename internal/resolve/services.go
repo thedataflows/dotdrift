@@ -66,21 +66,36 @@ func mergeServices(base, host, user layerConfig, moduleID, scope string) ([]Serv
 			enabled := true
 			spec.Enabled = &enabled
 		}
+		effective := spec.Scope
+		if effective == "" {
+			effective = scope
+		}
 		entries = append(entries, ServiceEntry{
-			Name: name, Spec: spec, Module: moduleID, Layer: w.layer, Scope: scope,
+			Name: name, Spec: spec, Module: moduleID, Layer: w.layer, Scope: effective,
 		})
 	}
 	return entries, nil
 }
 
+// validateService checks one entry. scope is the module scope; the
+// entry scope overrides it when set (issue 0160).
 func validateService(moduleID, name string, s profile.ServiceSpec, scope string) error {
+	effective := s.Scope
+	if effective == "" {
+		effective = scope
+	}
+	switch effective {
+	case profile.ScopeUser, profile.ScopeSystem:
+	default:
+		return fmt.Errorf("module %s: service %q: unknown scope %q (valid: user, system)", moduleID, name, s.Scope)
+	}
 	if name == "" {
 		return fmt.Errorf("module %s: service name must not be empty", moduleID)
 	}
 	for _, r := range name {
 		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') &&
-			r != '.' && r != '_' && r != '-' {
-			return fmt.Errorf("module %s: service name %q must contain only letters, numbers, '.', '_', or '-'", moduleID, name)
+			r != '.' && r != '_' && r != '-' && r != '@' {
+			return fmt.Errorf("module %s: service name %q must contain only letters, numbers, '.', '_', '-', or '@'", moduleID, name)
 		}
 	}
 	switch s.State {
@@ -99,8 +114,8 @@ func validateService(moduleID, name string, s profile.ServiceSpec, scope string)
 		}
 		return nil
 	}
-	if scope != profile.ScopeUser {
-		return fmt.Errorf("module %s: service %q: command requires scope = \"user\" (got %q): mise system services cannot define a program", moduleID, name, scope)
+	if effective != profile.ScopeUser {
+		return fmt.Errorf("module %s: service %q: command requires scope = \"user\" (got %q): mise system services cannot define a program", moduleID, name, effective)
 	}
 	return nil
 }

@@ -90,6 +90,22 @@ func TestServices_fieldEdits(t *testing.T) {
 	require.Contains(t, c.ws.draft.raw, "environment")
 }
 
+func TestServices_scopeRowAndPickerEdit(t *testing.T) {
+	_, c := wsShell(t, map[string]string{"modules/demo/module.toml": "id = \"demo\"\n\n[services.sshd]\nscope = \"user\"\nstate = \"running\"\n"})
+	c = cpress(c, "right")
+	wsToKey(t, c, pathKey("sshd", "scope"), "services")
+	require.Equal(t, "user", c.ws.rows[c.ws.cursor].value, "the scope row renders its value")
+	require.Contains(t, c.ws.placeholderOrBody(), "scope user")
+
+	c = cpress(c, "enter")
+	ch := c.modals[0].(*choiceModel)
+	require.Equal(t, []string{"user", "system"}, ch.choices)
+	c = cpress(c, "down")
+	c = cpress(c, "enter")
+	require.Equal(t, "system", c.ws.draft.cfg.Services["sshd"].Scope)
+	require.Contains(t, c.ws.draft.raw, "scope = \"system\"", "the edit lands in the draft raw TOML")
+}
+
 func TestServices_addAndRemove(t *testing.T) {
 	_, c := servicesShell(t)
 	wsToHeader(t, c, "services")

@@ -312,6 +312,10 @@ func validateField(family, key, input string) string {
 		}
 	case profile.FamilyServices:
 		switch lastPathSegment(key) {
+		case "scope":
+			if input != "" && input != "user" && input != "system" {
+				return `scope must be "", "user", or "system"`
+			}
 		case "state":
 			if input != "" && input != "running" && input != "stopped" && input != "absent" {
 				return `state must be "", "running", "stopped", or "absent"`
@@ -399,7 +403,7 @@ func validateAdd(family, addPath, input string) string {
 		if addPath == "" {
 			return validEntryName(input, "service")
 		}
-		if !okFieldValue(input, "command", "state", "enabled", "restart", "environment", "working_directory") {
+		if !okFieldValue(input, "command", "scope", "state", "enabled", "restart", "environment", "working_directory") {
 			return `add as "field = value"`
 		}
 	case profile.FamilySmb:
@@ -1000,6 +1004,8 @@ func (w *workspaceModel) removeRow() {
 		}
 		svc := candidate.Services[parts[0]]
 		switch parts[1] {
+		case "scope":
+			svc.Scope = ""
 		case "command":
 			svc.Command = ""
 		case "state":

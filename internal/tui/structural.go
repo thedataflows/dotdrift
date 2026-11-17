@@ -238,6 +238,13 @@ func mutateServices(cfg *profile.ModuleConfig, key, input string, add bool) erro
 	}
 	svc := cfg.Services[parts[0]]
 	switch parts[1] {
+	case "scope":
+		switch input {
+		case "", "user", "system":
+			svc.Scope = input
+		default:
+			return errors.New(`scope must be "", "user", or "system"`)
+		}
 	case "command":
 		svc.Command = input
 	case "state":

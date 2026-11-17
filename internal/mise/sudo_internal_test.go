@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -113,6 +114,57 @@ func TestExecMise_dotfilesApplySudoSpec_trustsGeneratedConfigDir(t *testing.T) {
 		}
 	}
 	require.True(t, found, "child env must trust the generated config's directory")
+}
+
+// The elevated child must not anchor mise's state in the invoking user's
+// home (issue 0157): sudo -E preserves HOME/XDG, so the sudo branch
+// overrides the home-anchored dirs with root's. The already-root branch
+// keeps the inherited environment.
+func TestExecMise_dotfilesApplySudoSpec_elevatedEnvAnchorsRoot(t *testing.T) {
+	orig := rootHomeDir
+	rootHomeDir = func() string { return "/root" }
+	t.Cleanup(func() { rootHomeDir = orig })
+	t.Setenv("HOME", "/home/cri")
+	t.Setenv("XDG_STATE_HOME", "/home/cri/.local/state")
+
+	newExec := func() *ExecMise {
+		return NewExecMise(&Mise{
+			LookPath: func(string) (string, error) { return "/fake/mise", nil },
+			RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+				if len(args) > 0 && args[0] == "--version" {
+					return MinMiseVersion + "\n", nil
+				}
+				return "", nil
+			},
+		})
+	}
+	lastWins := func(cmd *exec.Cmd) map[string]string {
+		env := map[string]string{}
+		for _, e := range cmd.Env {
+			k, v, _ := strings.Cut(e, "=")
+			env[k] = v
+		}
+		return env
+	}
+
+	swapEUID(t, 1000)
+	cmd, err := newExec().DotfilesApplySudoCmd(context.Background(), "/cfg/mise.toml", true, false)
+	require.NoError(t, err)
+	env := lastWins(cmd)
+	require.Equal(t, "/root", env["HOME"])
+	require.Equal(t, "/root/.local/state", env["XDG_STATE_HOME"])
+	require.Equal(t, "/root/.local/state/mise", env["MISE_STATE_DIR"])
+	require.Equal(t, "/root/.local/share/mise", env["MISE_DATA_DIR"])
+	require.Equal(t, "/root/.cache/mise", env["MISE_CACHE_DIR"])
+	require.Equal(t, "/root/.config/mise", env["MISE_CONFIG_DIR"])
+	require.Contains(t, env["MISE_TRUSTED_CONFIG_PATHS"], "/cfg", "trust plumbing survives")
+
+	swapEUID(t, 0)
+	cmd, err = newExec().DotfilesApplySudoCmd(context.Background(), "/cfg/mise.toml", true, false)
+	require.NoError(t, err)
+	env = lastWins(cmd)
+	require.Equal(t, "/home/cri", env["HOME"], "already-root child keeps the inherited environment")
+	require.NotContains(t, env, "MISE_STATE_DIR")
 }
 
 // runOp streams the child's stdout/stderr straight to the destination — never

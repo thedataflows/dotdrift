@@ -144,3 +144,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0154](0154-system-files-existing-parent-suppresses-sudo.md) | System files under an existing parent lose their sudo prompt | done | high |
 | [0155](0155-chained-system-files-level-order.md) | Chained system files converge level by level | done | high |
 | [0156](0156-system-dotfiles-keep-mode-dotfiles-apply.md) | System dotfiles keep their mode via dotfiles apply | done | high |
+| [0157](0157-elevated-mise-root-state.md) | Elevated mise must not write the invoking user's state | done | high |

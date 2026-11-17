@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -646,7 +647,43 @@ func (e *ExecMise) DotfilesApplySudoCmd(ctx context.Context, configPath string, 
 		return nil, err
 	}
 	argv := dotfilesApplyArgv(geteuid(), path, configPath, yes, force)
-	return e.mise.newOpCmd(ctx, trustEnv(configPath), argv[0], argv[1:]...), nil
+	env := trustEnv(configPath)
+	if geteuid() != 0 {
+		env = append(env, elevatedEnv()...)
+	}
+	return e.mise.newOpCmd(ctx, env, argv[0], argv[1:]...), nil
+}
+
+// rootHomeDir resolves the root account's home directory, falling back
+// to /root. A var so tests can pin it.
+var rootHomeDir = func() string {
+	if u, err := user.Lookup("root"); err == nil && u.HomeDir != "" {
+		return u.HomeDir
+	}
+	return "/root"
+}
+
+// elevatedEnv re-anchors the home-based directories at root's home for
+// the elevated (sudo) child (issue 0157). sudo -E preserves the invoking
+// user's HOME and XDG dirs, so without this the root mise process writes
+// its history and state into the user's ~/.local/state — where it fails
+// on permissions and where root-owned leftovers would break the user's
+// own mise afterwards. The elevated child acts on system files only;
+// mise's bookkeeping belongs to root. Later env entries win over the
+// inherited duplicates (newOpCmd appends).
+func elevatedEnv() []string {
+	home := rootHomeDir()
+	return []string{
+		"HOME=" + home,
+		"XDG_STATE_HOME=" + filepath.Join(home, ".local", "state"),
+		"XDG_DATA_HOME=" + filepath.Join(home, ".local", "share"),
+		"XDG_CACHE_HOME=" + filepath.Join(home, ".cache"),
+		"XDG_CONFIG_HOME=" + filepath.Join(home, ".config"),
+		"MISE_STATE_DIR=" + filepath.Join(home, ".local", "state", "mise"),
+		"MISE_DATA_DIR=" + filepath.Join(home, ".local", "share", "mise"),
+		"MISE_CACHE_DIR=" + filepath.Join(home, ".cache", "mise"),
+		"MISE_CONFIG_DIR=" + filepath.Join(home, ".config", "mise"),
+	}
 }
 
 // RunTaskCmd builds (never starts) the child for one mise task run — the

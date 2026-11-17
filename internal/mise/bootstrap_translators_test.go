@@ -90,6 +90,67 @@ func TestResolveBootstrapFiles_recordsMode(t *testing.T) {
 	require.Equal(t, "symlink", se[0].Mode)
 }
 
+// --- OrderBootstrapFiles (issue 0155) ---
+
+// mise reads every source while it plans a bootstrap run, before it
+// applies anything, so a file whose source is another file's target must
+// converge in a later run: levels are dependency levels.
+func TestOrderBootstrapFiles_chainLevels(t *testing.T) {
+	files := []mise.BootstrapFile{
+		{Target: "/root/.bashrc", Source: "/root/.profile"},
+		{Target: "/root/.profile", Source: "/src/.profile"},
+		{Target: "/etc/motd", Source: "/src/motd"},
+	}
+	levels, err := mise.OrderBootstrapFiles(files)
+	require.NoError(t, err)
+	require.Len(t, levels, 2)
+	var lvl0, lvl1 []string
+	for _, f := range levels[0] {
+		lvl0 = append(lvl0, f.Target)
+	}
+	for _, f := range levels[1] {
+		lvl1 = append(lvl1, f.Target)
+	}
+	require.ElementsMatch(t, []string{"/root/.profile", "/etc/motd"}, lvl0)
+	require.Equal(t, []string{"/root/.bashrc"}, lvl1)
+}
+
+// A source under a directory target depends on that target too.
+func TestOrderBootstrapFiles_sourceUnderTargetDir(t *testing.T) {
+	files := []mise.BootstrapFile{
+		{Target: "/etc/other", Source: "/etc/app/conf"},
+		{Target: "/etc/app", Source: "/src/app"},
+	}
+	levels, err := mise.OrderBootstrapFiles(files)
+	require.NoError(t, err)
+	require.Len(t, levels, 2)
+	require.Equal(t, "/etc/app", levels[0][0].Target)
+	require.Equal(t, "/etc/other", levels[1][0].Target)
+}
+
+func TestOrderBootstrapFiles_cycleErrors(t *testing.T) {
+	files := []mise.BootstrapFile{
+		{Target: "/a", Source: "/b"},
+		{Target: "/b", Source: "/a"},
+	}
+	_, err := mise.OrderBootstrapFiles(files)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cycle")
+	require.Contains(t, err.Error(), "/a")
+	require.Contains(t, err.Error(), "/b")
+}
+
+func TestOrderBootstrapFiles_noDepsOneLevel(t *testing.T) {
+	files := []mise.BootstrapFile{
+		{Target: "/a", Source: "/src/a"},
+		{Target: "/b", Source: "/src/b"},
+	}
+	levels, err := mise.OrderBootstrapFiles(files)
+	require.NoError(t, err)
+	require.Len(t, levels, 1)
+	require.Len(t, levels[0], 2)
+}
+
 // --- GenerateBootstrapFiles ---
 
 func TestGenerateBootstrapFiles_emitsSection(t *testing.T) {

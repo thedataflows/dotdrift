@@ -209,26 +209,42 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		}
 	}
 
-	// Whole-file entries + all directories → bootstrap files.
-	if len(whole) > 0 || len(dirs) > 0 {
+	// Whole-file entries + all directories → bootstrap files, one run
+	// per dependency level (issue 0155): mise reads every source while
+	// planning a run, so an entry whose source is another entry's target
+	// converges in a later run, when that target exists. Directories
+	// ride the first run; secrets ride every run (a template at any
+	// level can resolve secret()).
+	if len(files) > 0 || len(dirs) > 0 {
 		if s.exec == nil {
 			return fmt.Errorf("system files require an exec mise runner")
 		}
-		var content string
-		if len(files) > 0 {
-			content = mise.GenerateBootstrapFiles(files)
-		}
-		content += mise.GenerateBootstrapDirectories(dirs)
-		// Declared secret inputs ride the same config: the system files
-		// template path is the only one where mise resolves secret()
-		// ([dotfiles] templates have no secret function — verified against
-		// mise 2026.9.1, issue 0044).
-		content += mise.GenerateBootstrapSecrets(s.secrets)
-		if err := writeBootstrapConfig(s.configPath, content); err != nil {
-			return fmt.Errorf("write system files config: %w", err)
-		}
-		if err := s.exec.Bootstrap(ctx, s.configPath, s.yes, "files"); err != nil {
+		levels, err := mise.OrderBootstrapFiles(files)
+		if err != nil {
 			return fmt.Errorf("system files: %w", err)
+		}
+		if len(levels) == 0 {
+			levels = [][]mise.BootstrapFile{nil}
+		}
+		for i, level := range levels {
+			var content string
+			if len(level) > 0 {
+				content = mise.GenerateBootstrapFiles(level)
+			}
+			if i == 0 {
+				content += mise.GenerateBootstrapDirectories(dirs)
+			}
+			// Declared secret inputs ride the config: the system files
+			// template path is the only one where mise resolves secret()
+			// ([dotfiles] templates have no secret function — verified
+			// against mise 2026.9.1, issue 0044).
+			content += mise.GenerateBootstrapSecrets(s.secrets)
+			if err := writeBootstrapConfig(s.configPath, content); err != nil {
+				return fmt.Errorf("write system files config: %w", err)
+			}
+			if err := s.exec.Bootstrap(ctx, s.configPath, s.yes, "files"); err != nil {
+				return fmt.Errorf("system files: %w", err)
+			}
 		}
 	}
 

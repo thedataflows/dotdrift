@@ -151,6 +151,58 @@ func ResolveBootstrapFiles(entries []resolve.DotfileEntry, sourceRoot, homeDir s
 	return out, nil
 }
 
+// OrderBootstrapFiles groups files into dependency levels for chained
+// entries (issue 0155): a file whose source is another file's target — or
+// lies under it — must converge in a later bootstrap run than that target,
+// because mise reads every source while planning a run, before it applies
+// anything. Entry order inside one config cannot express this. Levels are
+// in convergence order; files within a level keep target order. A
+// dependency cycle (including a file that is its own source) is an error
+// naming the targets involved.
+func OrderBootstrapFiles(files []BootstrapFile) ([][]BootstrapFile, error) {
+	sorted := append([]BootstrapFile(nil), files...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Target < sorted[j].Target })
+	placed := make(map[string]bool, len(sorted))
+	remaining := sorted
+	var levels [][]BootstrapFile
+	for len(remaining) > 0 {
+		var level, rest []BootstrapFile
+		for _, f := range remaining {
+			ready := true
+			for _, g := range sorted {
+				if g.Target == f.Target && g.Source == f.Source {
+					continue // itself
+				}
+				if placed[g.Target] {
+					continue
+				}
+				if f.Source == g.Target || strings.HasPrefix(f.Source, g.Target+"/") {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				level = append(level, f)
+			} else {
+				rest = append(rest, f)
+			}
+		}
+		if len(level) == 0 {
+			targets := make([]string, 0, len(rest))
+			for _, f := range rest {
+				targets = append(targets, f.Target)
+			}
+			return nil, fmt.Errorf("bootstrap files: source dependency cycle among targets: %s", strings.Join(targets, ", "))
+		}
+		for _, f := range level {
+			placed[f.Target] = true
+		}
+		levels = append(levels, level)
+		remaining = rest
+	}
+	return levels, nil
+}
+
 // GenerateBootstrapFiles emits a [bootstrap.files] section. copy/symlink modes
 // become content copies (symlink→copy is a deliberate improvement for system
 // files); template mode adds template = true.

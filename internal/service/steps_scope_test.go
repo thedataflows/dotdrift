@@ -270,6 +270,89 @@ func TestSystemFilesStep_existingParentNotDeclared(t *testing.T) {
 		"a missing parent must still be declared so mise creates it")
 }
 
+// Chained system entries converge level by level (issue 0155): an entry
+// whose source is another entry's target goes in a later bootstrap run,
+// because mise reads every source while planning a run. Here .bashrc
+// reads the .profile that the first entry creates.
+func TestSystemFilesStep_chainedEntriesRunPerLevel(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "system", "mise.toml")
+	profileTarget := filepath.Join(dir, "root", ".profile")
+	bashrcTarget := filepath.Join(dir, "root", ".bashrc")
+
+	var configs []string
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + string(rune(10)), nil
+			}
+			cfg, err := os.ReadFile(configPath)
+			if err != nil {
+				return "", err
+			}
+			configs = append(configs, string(cfg))
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: bashrcTarget, Source: profileTarget, Mode: "symlink"},
+			{Target: profileTarget, Source: "home/.profile", Mode: "copy"},
+		},
+		sourceRoot: dir,
+		homeDir:    dir,
+		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	require.Len(t, configs, 2, "one bootstrap run per dependency level")
+	require.Contains(t, configs[0], fmt.Sprintf("%q = { source", profileTarget))
+	require.NotContains(t, configs[0], fmt.Sprintf("%q = { source", bashrcTarget))
+	require.Contains(t, configs[1], fmt.Sprintf("%q = { source", bashrcTarget))
+	require.NotContains(t, configs[1], fmt.Sprintf("%q = { source", profileTarget))
+}
+
+// A source-dependency cycle between system entries is an error naming
+// the targets, not a mise failure.
+func TestSystemFilesStep_chainedCycleErrors(t *testing.T) {
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a")
+	b := filepath.Join(dir, "b")
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + string(rune(10)), nil
+			}
+			return "", nil
+		},
+	}
+	step := &systemFilesStep{
+		exec: mise.NewExecMise(m),
+		entries: []resolve.DotfileEntry{
+			{Target: a, Source: b, Mode: "copy"},
+			{Target: b, Source: a, Mode: "copy"},
+		},
+		sourceRoot: dir,
+		homeDir:    dir,
+		configPath: filepath.Join(dir, "system", "mise.toml"),
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+	}
+
+	err := step.Run(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "cycle")
+	require.Contains(t, err.Error(), a)
+	require.Contains(t, err.Error(), b)
+}
+
 func TestSystemFilesStep_mountDirsViaBootstrapDirectories(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")

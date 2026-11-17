@@ -263,7 +263,9 @@ public = false
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a
     target path (absolute or `~/...`); the value is a table with:
-    - `source`: relative path inside the module directory.
+    - `source`: relative path inside the module directory, or an absolute
+      path (starts with `/`) that is used as-is and does not take part in
+      the layer search. The file or directory must exist.
     - `mode`: `symlink`, `symlink-each`, `copy`, or `template` — exactly mise's
       mode vocabulary, passed through to the generated `mise.toml` unchanged.
       Any other value (including an omitted mode) is a resolve-time error naming
@@ -281,7 +283,8 @@ public = false
     - `source = "..."` + `mode = "edit"`: read the source file's raw contents
       and use them as a block (dotdrift convenience — mise has no raw-source
       block form; `source` alone is a whole-file entry). The source is
-      resolved across layers at plan time and the contents become the block.
+      resolved across layers at plan time (an absolute source is used
+      as-is) and the contents become the block.
       `comment` is supported, same as inline `block`. Avoids multi-line inline
       content in `module.toml`.
     - `source = "..."` + `template = "tera"`: render the source via the engine

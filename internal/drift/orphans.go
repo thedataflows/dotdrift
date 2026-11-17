@@ -191,7 +191,7 @@ func ReferencedPaths(layers []ModuleLayer) map[string]bool {
 				// which view's whole-entry override wins deployment (issue
 				// 0031): bare-base accounts are invisible to the view
 				// enumeration, and they still resolve this declaration.
-				declared := filepath.Join(ml.Path, filepath.FromSlash(df.Source))
+				declared := sourcePath(ml.Path, df.Source)
 				if isDir(declared) {
 					markTree(declared, referenced)
 				}
@@ -208,7 +208,7 @@ func ReferencedPaths(layers []ModuleLayer) map[string]bool {
 				}
 			}
 			for _, d := range effective {
-				declared := filepath.Join(d.layer.Path, filepath.FromSlash(d.rel))
+				declared := sourcePath(d.layer.Path, d.rel)
 				if isDir(declared) {
 					continue // dir trees were marked at declaration time; never resolved per view
 				}
@@ -233,11 +233,22 @@ type layerView struct {
 	order []ModuleLayer // user, host, base
 }
 
+// sourcePath resolves a declared source against a layer directory. An
+// absolute source is used as-is (issue 0153); a relative source joins the
+// layer directory.
+func sourcePath(layerPath, rel string) string {
+	if filepath.IsAbs(rel) {
+		return filepath.Clean(rel)
+	}
+	return filepath.Join(layerPath, filepath.FromSlash(rel))
+}
+
 // resolve returns the first existing path at rel along the view's layer
-// order, or "".
+// order, or "". For an absolute rel every layer gives the same path, so the
+// first existing check decides.
 func (v layerView) resolve(rel string) string {
 	for _, ml := range v.order {
-		p := filepath.Join(ml.Path, filepath.FromSlash(rel))
+		p := sourcePath(ml.Path, rel)
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}

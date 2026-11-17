@@ -39,6 +39,29 @@ func orphanLayers(root string) []drift.ModuleLayer {
 // User-layer orphans are attributed "[user:<username>]" — same as host
 // layers name their host — so a multi-user profile's leftovers are
 // distinguishable at a glance.
+// An absolute source names a file outside the module. The orphan scan must
+// not join it to the module directory: a file that sits at that joined path
+// inside the module is not referenced by the entry (issue 0153).
+func TestCheckOrphans_absoluteSourceStaysOutsideModule(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	absFile := filepath.Join(outside, "shared.conf")
+	require.NoError(t, os.WriteFile(absFile, []byte("shared"), 0o644))
+
+	writeTree(t, root, map[string]string{
+		"modules/shell/module.toml": "[dotfiles]\n\"~/.config/app/shared.conf\" = { source = \"" + absFile + "\", mode = \"copy\" }\n",
+	})
+	coincident := filepath.Join(root, "modules", "shell", absFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(coincident), 0o755))
+	require.NoError(t, os.WriteFile(coincident, []byte("not the source"), 0o644))
+
+	fs := drift.CheckOrphans(orphanLayers(root))
+	groups := orphanGroups(fs)
+	want := strings.TrimPrefix(absFile, string(filepath.Separator))
+	require.Contains(t, groups["base"]["shell"], want,
+		"the file at the joined path inside the module is not the absolute source, so it is an orphan")
+}
+
 func TestCheckOrphans_userLayerAttribution(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{

@@ -244,6 +244,53 @@ func TestResolveSource_missingFileErrors(t *testing.T) {
 	require.Contains(t, err.Error(), "no-such-file", "error should name the missing source")
 }
 
+func TestResolveSource_absolutePathUsedAsIs(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	absFile := filepath.Join(outside, "shared.conf")
+	require.NoError(t, os.WriteFile(absFile, []byte("shared"), 0o644))
+	absDir := filepath.Join(outside, "units")
+	require.NoError(t, os.MkdirAll(absDir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(absDir, "a.service"), []byte("a"), 0o644))
+	absEdit := filepath.Join(outside, "aliases.sh")
+	require.NoError(t, os.WriteFile(absEdit, []byte("alias x='y'\n"), 0o644))
+
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.config/app/shared.conf" = { source = "`+absFile+`", mode = "copy" }
+"~/.config/units" = { source = "`+absDir+`", mode = "symlink-each" }
+"~/.zshrc/aliases" = { source = "`+absEdit+`", mode = "edit" }
+`)
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err, "an absolute source must be used as-is, not joined to the module directory")
+	byTarget := map[string]resolve.DotfileEntry{}
+	for _, e := range plan.Dotfiles.Entries {
+		byTarget[e.Target] = e
+	}
+	require.Equal(t, absFile, byTarget["~/.config/app/shared.conf"].Source)
+	require.Equal(t, absDir, byTarget["~/.config/units"].Source)
+	edit := byTarget["~/.zshrc/aliases"]
+	require.Equal(t, absEdit, edit.EditSource, "mode = edit keeps the absolute source path for attribution")
+	require.Equal(t, "alias x='y'"+string(rune(10)), edit.Block)
+}
+
+func TestResolveSource_absolutePathMissingErrors(t *testing.T) {
+	root := t.TempDir()
+	missing := filepath.Join(t.TempDir(), "gone.conf")
+	writeModule(t, root, "mod", `
+[dotfiles]
+"~/.x" = { source = "`+missing+`", mode = "copy" }
+`)
+	f := &facts.Facts{Hostname: "h", Username: "u"}
+
+	_, err := loadAndResolve(t, root, f)
+	require.Error(t, err, "a missing absolute source must be an error")
+	require.Contains(t, err.Error(), "mod", "error should name the module")
+	require.Contains(t, err.Error(), missing, "error should name the absolute path")
+}
+
 func TestResolveDotfileMode_unknownModeErrors(t *testing.T) {
 	root := t.TempDir()
 	dir := writeModule(t, root, "mod", `

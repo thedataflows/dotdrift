@@ -729,6 +729,41 @@ var (
 )
 
 func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
+	out, err := e.probeTool(ctx, "current", tool)
+	if err != nil && strings.Contains(err.Error(), "not installed") {
+		return "", fmt.Errorf("%w: %v", ErrNotInstalled, err)
+	}
+	return out, err
+}
+
+// IsLatest reports whether the active version matches mise's local latest link.
+func (e *ExecMise) IsLatest(ctx context.Context, tool, version string) (bool, error) {
+	dir, err := e.probeTool(ctx, "where", tool+"@"+version)
+	if err != nil {
+		return false, fmt.Errorf("mise where: %w", err)
+	}
+	if !filepath.IsAbs(dir) {
+		return false, fmt.Errorf("mise where returned no absolute install path for %s", tool)
+	}
+	alias := filepath.Join(filepath.Dir(dir), "latest")
+	if _, err := os.Readlink(alias); err != nil {
+		return false, err
+	}
+	latest, err := os.Stat(alias)
+	if err != nil {
+		return false, err
+	}
+	if !latest.IsDir() {
+		return false, fmt.Errorf("%s does not point to an install directory", alias)
+	}
+	active, err := os.Stat(dir)
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(active, latest), nil
+}
+
+func (e *ExecMise) probeTool(ctx context.Context, command, tool string) (string, error) {
 	lookPath := e.mise.LookPath
 	if lookPath == nil {
 		lookPath = exec.LookPath
@@ -737,10 +772,7 @@ func (e *ExecMise) Current(ctx context.Context, tool string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
-	out, err := e.mise.runProbe(ctx, path, "current", tool)
-	if err != nil && strings.Contains(err.Error(), "not installed") {
-		return "", fmt.Errorf("%w: %v", ErrNotInstalled, err)
-	}
+	out, err := e.mise.runProbe(ctx, path, command, tool)
 	return strings.TrimSpace(out), err
 }
 

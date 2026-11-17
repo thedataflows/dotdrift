@@ -1,5 +1,9 @@
 # Directory Update Log
 
+## 2026-11-18
+
+* **Fixed (tool status, issue [0163](issues/0163-status-checks-local-mise-latest.md))**: For a tool declared as `latest`, status checks whether the active install matches mise's local `latest` link. A different install reports drift. A missing or broken link reports unknown. Status does not check for newer remote releases.
+
 
 ## 2026-11-17
 

@@ -77,15 +77,16 @@ type Finding struct {
 // generic OS default (they need a package backend / mise) and must be set by
 // the caller before Check.
 type Probes struct {
-	IsInstalled func(ctx context.Context, pkg string) (bool, error)
-	ToolCurrent func(ctx context.Context, tool string) (string, error) // err or "" → Unknown
-	Run         func(ctx context.Context, name string, args ...string) (string, error)
-	HomeDir     string
-	Readlink    func(path string) (string, error)
-	ReadFile    func(path string) ([]byte, error)
-	StatDir     func(path string) (bool, error)     // exists and is a directory
-	Stat        func(path string) (bool, error)     // exists (file or dir) — source validity
-	ListDir     func(path string) ([]string, error) // direct child names — stale symlink-each scan
+	IsInstalled  func(ctx context.Context, pkg string) (bool, error)
+	ToolCurrent  func(ctx context.Context, tool string) (string, error) // err or "" → Unknown
+	ToolIsLatest func(ctx context.Context, tool, version string) (bool, error)
+	Run          func(ctx context.Context, name string, args ...string) (string, error)
+	HomeDir      string
+	Readlink     func(path string) (string, error)
+	ReadFile     func(path string) ([]byte, error)
+	StatDir      func(path string) (bool, error)     // exists and is a directory
+	Stat         func(path string) (bool, error)     // exists (file or dir) — source validity
+	ListDir      func(path string) ([]string, error) // direct child names — stale symlink-each scan
 }
 
 // DefaultProbes returns OS-backed probes for Run, Readlink, ReadFile, StatDir,
@@ -284,7 +285,18 @@ func checkTools(plan *resolve.Plan, pr Probes) []probeTask {
 					reason, _, _ := strings.Cut(err.Error(), "\n")
 					return Finding{"tools", name, Unknown, "mise current failed: " + reason, "", ""}
 				}
-				if got == want || strings.HasPrefix(got, want+".") {
+				matches := got == want || strings.HasPrefix(got, want+".")
+				if want == "latest" {
+					if pr.ToolIsLatest == nil {
+						return Finding{"tools", name, Unknown, "mise latest probe not available", "", ""}
+					}
+					matches, err = pr.ToolIsLatest(ctx, name, got)
+					if err != nil {
+						reason, _, _ := strings.Cut(err.Error(), "\n")
+						return Finding{"tools", name, Unknown, "mise latest check failed: " + reason, "", ""}
+					}
+				}
+				if matches {
 					return Finding{"tools", name, OK, "", "", ""}
 				}
 				return Finding{"tools", name, Drift, fmt.Sprintf("installed %s, want %s", got, want), "", ""}

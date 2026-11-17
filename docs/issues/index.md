@@ -150,3 +150,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0160](0160-services-entry-scope.md) | Per-entry scope for declared services | done | medium |
 | [0161](0161-refresh-mise-alignment-map.md) | Refresh the mise alignment map to mise 2026.11.9 | done | low |
 | [0162](0162-services-step-failure-names-services.md) | Services step failure names the declared services | done | medium |
+| [0163](0163-status-checks-local-mise-latest.md) | Status checks the local mise latest link | in-progress | medium |

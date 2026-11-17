@@ -27,7 +27,9 @@ var sudoRead = func(name string, args ...string) ([]byte, error) {
 func defaultProbes(f *facts.Facts, elevated bool, packagesFor func(string) packages.Backend, newMise func() *mise.Mise, nonInteractive ...bool) drift.Probes {
 	pr := drift.DefaultProbes()
 	pr.IsInstalled = packagesFor(f.Backend).IsInstalled
-	pr.ToolCurrent = mise.NewExecMise(newMise()).Current
+	tools := mise.NewExecMise(newMise())
+	pr.ToolCurrent = tools.Current
+	pr.ToolIsLatest = tools.IsLatest
 	if elevated {
 		return elevateProbes(pr, nonInteractive...) // retry elevated on permission denied (system files)
 	}

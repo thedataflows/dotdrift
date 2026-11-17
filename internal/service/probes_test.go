@@ -11,6 +11,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/facts"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/packages"
+	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
 // Probe-assembly tests (issue 0108, slice 2b): the service owns the sudo
@@ -89,6 +90,53 @@ func TestService_status_usesDefaultProbes(t *testing.T) {
 	require.Equal(t, "packages", r.Findings[0].Section)
 	require.Equal(t, drift.Drift, r.Findings[0].Status)
 	require.Equal(t, "missing", r.Findings[0].Detail)
+}
+
+func TestStatus_latestToolUsesLocalAlias(t *testing.T) {
+	const tool = "github:storytold/pdfcraft"
+	const version = "0.21.1"
+	for _, tc := range []struct {
+		name, target string
+		want         drift.Status
+	}{
+		{"active version is latest", "./0.21.1", drift.OK},
+		{"another version is latest", "./0.22.0", drift.Drift},
+		{"missing latest link", "", drift.Unknown},
+		{"dangling latest link", "./0.23.0", drift.Unknown},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			active := filepath.Join(dir, version)
+			require.NoError(t, os.Mkdir(active, 0o755))
+			require.NoError(t, os.Mkdir(filepath.Join(dir, "0.22.0"), 0o755))
+			if tc.target != "" {
+				require.NoError(t, os.Symlink(tc.target, filepath.Join(dir, "latest")))
+			}
+			packagesFor, _ := probeDeps(&[]string{})
+			pr := defaultProbes(&facts.Facts{Backend: "paru"}, false, packagesFor, func() *mise.Mise {
+				return &mise.Mise{
+					LookPath: func(string) (string, error) { return "/usr/bin/mise", nil },
+					Run: func(_ string, args ...string) (string, error) {
+						switch {
+						case len(args) == 2 && args[0] == "current" && args[1] == tool:
+							return version + "\n", nil
+						case len(args) == 2 && args[0] == "where" && args[1] == tool+"@"+version:
+							return active + "\n", nil
+						default:
+							return "", errors.New("unexpected mise command")
+						}
+					},
+				}
+			})
+			plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{tool: "latest"}}}
+			findings := drift.Check(t.Context(), plan, "", pr, drift.CheckOptions{})
+			require.Len(t, findings, 1)
+			require.Equal(t, tc.want, findings[0].Status, findings[0].Detail)
+			if tc.want == drift.Drift {
+				require.Equal(t, "installed 0.21.1, want latest", findings[0].Detail)
+			}
+		})
+	}
 }
 
 // elevateProbes wraps Readlink/ReadFile/StatDir/ListDir to retry elevated on

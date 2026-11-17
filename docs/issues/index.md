@@ -139,3 +139,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0149](0149-ci-lint-staticcheck.md) | CI lint job fails on 9 staticcheck findings | done | medium |
 | [0150](0150-hook-tasks-include-module-name.md) | Hook tasks include the module name | done | medium |
 | [0151](0151-dotfile-operations-create-parent-directories.md) | Dotfile operations create parent directories | done | medium |
+| [0152](0152-invalid-package-name-names-module-and-config.md) | Invalid package name names its module and config | done | medium |

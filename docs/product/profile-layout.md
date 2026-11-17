@@ -214,7 +214,9 @@ public = false
   sudo itself, issues 0003/0054; `apt` on Debian; `dnf` on Fedora). An
   `aur/<pkg>` marker targets the AUR through the same paru plugin, with the
   marker stripped (until mise ships its built-in `aur` manager — issue 0045).
-  An explicit `manager:<pkg>` passes through unchanged.
+  An explicit `manager:<pkg>` passes through unchanged. A package name is
+  one word: an entry with spaces in it (a description pasted where a name
+  belongs) is a resolve-time error naming the module, layer, and file.
 - `tools` installs the listed tools via mise AND activates them globally:
   apply writes each module's resolved `[tools]` into its own snippet
   `~/.config/mise/conf.d/<module>.toml` (mise loads `conf.d/*.toml` as

@@ -74,7 +74,25 @@ func (s *packagesStep) Run(ctx context.Context) error {
 	// dotdrift copies the paru plugin into mise's registry itself (EnsureInstalled
 	// above), so there is no [bootstrap.plugins] declaration and the plugins
 	// phase is not run — mise discovers it as a normal installed plugin.
-	return s.runner.Bootstrap(ctx, s.configPath, true, "packages")
+	if err := s.runner.Bootstrap(ctx, s.configPath, true, "packages"); err != nil {
+		return fmt.Errorf("mise bootstrap packages: %w; packages in this run: %s", err, packageAttribution(s.plan))
+	}
+	return nil
+}
+
+// packageAttribution lists each install package with the module or modules
+// that declared it, so a failure inside mise (which names only the
+// package) can be traced to the config to fix (issue 0152).
+func packageAttribution(plan *resolve.Plan) string {
+	parts := make([]string, 0, len(plan.Packages.Install))
+	for _, pkg := range plan.Packages.Install {
+		if mods := plan.Packages.PresentModules[pkg]; len(mods) > 0 {
+			parts = append(parts, fmt.Sprintf("%s (module %s)", pkg, strings.Join(mods, ", ")))
+		} else {
+			parts = append(parts, pkg)
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // systemFilesStep applies system-scope dotfile entries and creates mount

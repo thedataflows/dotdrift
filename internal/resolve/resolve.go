@@ -184,6 +184,11 @@ func Resolve(p *profile.Profile, f *facts.Facts) (*Plan, error) {
 		}
 		user := layerConfig{name: "user", path: userPath, cfg: userCfg}
 
+		for _, layer := range []layerConfig{base, host, user} {
+			if err := validatePackages(m.ID, layer); err != nil {
+				return nil, err
+			}
+		}
 		install, remove := mergePackages(base.cfg.Packages, host.cfg.Packages, user.cfg.Packages)
 		for _, pkg := range install {
 			pkgSet[pkg] = struct{}{}
@@ -379,6 +384,21 @@ func loadModuleConfig(modulePath string) (profile.ModuleConfig, error) {
 		return cfg, err
 	}
 	return cfg, nil
+}
+
+// validatePackages rejects a package entry that is not one word. A
+// multi-word entry (a description pasted where a name belongs) otherwise
+// reaches mise verbatim and fails there as an opaque package-hook error
+// with no pointer to the config that declared it (issue 0152).
+func validatePackages(moduleID string, layer layerConfig) error {
+	for _, list := range [][]string{layer.cfg.Packages.Present, layer.cfg.Packages.Absent} {
+		for _, pkg := range list {
+			if len(strings.Fields(pkg)) != 1 {
+				return fmt.Errorf("module %s: %s layer %s: invalid package name %q: a package name is one word, with no spaces", moduleID, layer.name, filepath.Join(layer.path, "module.toml"), pkg)
+			}
+		}
+	}
+	return nil
 }
 
 func mergePackages(base, host, user profile.Packages) (present []string, absent []string) {

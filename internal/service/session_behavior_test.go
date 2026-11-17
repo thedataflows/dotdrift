@@ -686,7 +686,7 @@ func TestSession_hookSubStepFailure(t *testing.T) {
 
 	opts := baseOpts(resolveFixture(t), statePath)
 	opts.Handover = func(cmd *exec.Cmd) error {
-		if cmd.Args[len(cmd.Args)-1] == "hooks-shell-pre-01" {
+		if cmd.Args[len(cmd.Args)-1] == "shell:hook-pre-01" {
 			return errors.New("hook boom")
 		}
 		return nil
@@ -771,7 +771,7 @@ func TestSession_hooksRunThroughHandoverEverywhere(t *testing.T) {
 			phase = "post"
 		}
 		counts[phase]++
-		return fmt.Sprintf("hooks-%s-%s-%02d", c.Module, phase, counts[phase])
+		return fmt.Sprintf("%s:hook-%s-%02d", c.Module, phase, counts[phase])
 	}
 	for i, cmd := range handed {
 		require.Equal(t, "/fake/mise", cmd.Path)
@@ -779,7 +779,7 @@ func TestSession_hooksRunThroughHandoverEverywhere(t *testing.T) {
 		require.True(t, hasEnv(cmd.Env, "MISE_TRUSTED_CONFIG_PATHS"), "trust plumbing rides the handover child")
 	}
 	for _, e := range *events {
-		require.NotContains(t, e, "hooks-shell-pre-01", "hook tasks must not run through the piped runner")
+		require.NotContains(t, e, "shell:hook-pre-01", "hook tasks must not run through the piped runner")
 	}
 	// Sub-step boundaries still announced.
 	subs := 0

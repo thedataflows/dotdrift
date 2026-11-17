@@ -151,8 +151,8 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 // cmd/apply.go only constructs HooksSteps for non-empty command lists; Run
 // also no-ops on an empty list as a second line of defense.
 //
-// Each command maps to a mise task named hooks-<module>-<phase>-<NN>
-// (e.g. hooks-shell-pre-01), which GenerateHookTasks emits in lockstep
+// Each command maps to a mise task named <module>:hook-<phase>-<NN>
+// (e.g. shell:hook-pre-01), which GenerateHookTasks emits in lockstep
 // with this loop. NN counts from 01 per module and phase.
 type HooksStep struct {
 	Exec       *ExecMise

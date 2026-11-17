@@ -185,12 +185,12 @@ func TestApply_happyPath(t *testing.T) {
 		"load",
 		"resolve",
 		"mise:ensure",
-		"handover:/fake/mise /fake/mise run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-shell-pre-01",
+		"handover:/fake/mise /fake/mise run --cd "+filepath.Join(dir, "mise", "shared")+" shell:hook-pre-01",
 		"packages:absent",
 		"mise:run bootstrap",
 		"mise:run install",
 		"mise:run dotfiles apply",
-		"handover:/fake/mise /fake/mise run --cd "+filepath.Join(dir, "mise", "shared")+" hooks-shell-post-01",
+		"handover:/fake/mise /fake/mise run --cd "+filepath.Join(dir, "mise", "shared")+" shell:hook-post-01",
 	)
 	requireOrder(t, *fk.events, "mise:run bootstrap")
 	require.Contains(t, *fk.events, "packages:absent emacs,nano")
@@ -270,7 +270,7 @@ func TestApply_hookTasksAlwaysInteractive(t *testing.T) {
 
 	// The tasks ran through the handover seam, never the piped runner.
 	require.Contains(t, *fk.events, "handover:/fake/mise /fake/mise run --cd "+
-		filepath.Join(dir, "mise", "shared")+" hooks-shell-pre-01")
+		filepath.Join(dir, "mise", "shared")+" shell:hook-pre-01")
 	for _, e := range *fk.events {
 		require.NotContains(t, e, "mise:run run", "hook tasks must not run through the piped runner")
 	}
@@ -291,7 +291,7 @@ func TestApply_stepsDoNotClobberSharedMiseConfig(t *testing.T) {
 
 	shared, err := os.ReadFile(filepath.Join(dir, "mise", "shared", "mise.toml"))
 	require.NoError(t, err)
-	require.Contains(t, string(shared), `[tasks."hooks-shell-post-01"]`, "shared config must keep hook tasks after the pipeline")
+	require.Contains(t, string(shared), `[tasks."shell:hook-post-01"]`, "shared config must keep hook tasks after the pipeline")
 	require.Contains(t, string(shared), "[dotfiles]")
 
 	dotfiles, err := os.ReadFile(filepath.Join(dir, "mise", "dotfiles", "mise.toml"))
@@ -372,8 +372,8 @@ func TestApply_crashSnapshotKeepsFullMiseConfig(t *testing.T) {
 	require.Contains(t, cfg, `node = "22"`)
 	require.Contains(t, cfg, "[dotfiles]")
 	require.Contains(t, cfg, "~/.bashrc")
-	require.Contains(t, cfg, `[tasks."hooks-shell-pre-01"]`)
-	require.Contains(t, cfg, `[tasks."hooks-shell-post-01"]`)
+	require.Contains(t, cfg, `[tasks."shell:hook-pre-01"]`)
+	require.Contains(t, cfg, `[tasks."shell:hook-post-01"]`)
 
 	for _, e := range *fk.events {
 		require.NotContains(t, e, "mise:run install", "tools step must not run after the packages failure")

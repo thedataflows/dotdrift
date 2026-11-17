@@ -873,9 +873,9 @@ func GenerateConfig(plan *resolve.Plan) string {
 }
 
 // GenerateHookTasks emits one mise task per hook command, named
-// hooks-<module>-<phase>-<NN> ("hooks-shell-pre-01", "hooks-shell-pre-02",
-// "hooks-nas-post-01", ...). NN counts from 01 per module and phase. A
-// command with no module name gives hooks-<phase>-<NN>. One
+// <module>:hook-<phase>-<NN> ("shell:hook-pre-01", "shell:hook-pre-02",
+// "nas:hook-post-01", ...). NN counts from 01 per module and phase. A
+// command with no module name gives hook-<phase>-<NN>. One
 // task per command lets HooksStep run and tolerate them individually while
 // preserving order (an optional hook that fails does not skip later ones).
 // Each task runs from dir (the absolute profile root) with the DOTDRIFT_*
@@ -893,12 +893,13 @@ func GenerateHookTasks(hooks resolve.HooksStep, profileRoot string, f *facts.Fac
 	return b.String()
 }
 
-// hookTaskName names one hook task. HooksStep.Run uses the same name.
+// hookTaskName names one hook task. The module is the mise namespace,
+// so the task list groups by module. HooksStep.Run uses the same name.
 func hookTaskName(module, phase string, n int) string {
 	if module == "" {
-		return fmt.Sprintf("hooks-%s-%02d", phase, n)
+		return fmt.Sprintf("hook-%s-%02d", phase, n)
 	}
-	return fmt.Sprintf("hooks-%s-%s-%02d", module, phase, n)
+	return fmt.Sprintf("%s:hook-%s-%02d", module, phase, n)
 }
 
 func writeHookTask(b *strings.Builder, phase string, commands []profile.HookCommand, profileRoot string, f *facts.Facts) {

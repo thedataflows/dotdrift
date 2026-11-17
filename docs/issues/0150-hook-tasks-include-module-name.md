@@ -29,18 +29,19 @@ Tasks were named `hooks-<phase>-<index>`, for example `hooks-pre-0`.
 Resolve aggregates hooks from all selected modules into one list and kept
 no module name, so the generated name could not state the module.
 
-The new name is `hooks-<module>-<pre|post>-<NN>`, for example
-`hooks-shell-pre-01` and `hooks-shell-pre-02`. NN starts at 01 and
+The new name is `<module>:hook-<pre|post>-<NN>`, for example
+`shell:hook-pre-01` and `shell:hook-pre-02`. The colon is the mise
+namespace separator, so the task list groups hook tasks by module. NN starts at 01 and
 counts per module and phase. The pipeline step names `hooks-pre` and
 `hooks-post` do not change. Resolve sets the module directory name on
 each hook command. Task generation and task execution use the same name
 rule. A hook command built without a module name keeps the short form,
-for example `hooks-pre-01`.
+for example `hook-pre-01`.
 
 ## Acceptance Criteria
 
 - [x] Resolve sets the declaring module directory name on each pre and post hook command.
-- [x] Generated tasks use `hooks-<module>-<pre|post>-<NN>`, with NN counted per module and phase from 01.
+- [x] Generated tasks use `<module>:hook-<pre|post>-<NN>`, with NN counted per module and phase from 01.
 - [x] The apply pipeline runs the same task names that generation writes.
 - [x] `go test ./...` and `go vet ./...` pass.
 

@@ -3,7 +3,7 @@
 
 ## 2026-11-17
 
-* **Feat (hooks, task names state the module — issue [0150](issues/0150-hook-tasks-include-module-name.md))**: hook tasks are now named `hooks-<module>-<pre|post>-<NN>` (for example `hooks-shell-pre-01`), not `hooks-pre-0`. NN counts from 01 per module and phase. Resolve sets the module directory name on each hook command (`profile.HookCommand.Module`, not read from `module.toml`); `GenerateHookTasks` and `HooksStep.Run` use one name rule, so the task that apply runs is the task that generation writes. A hook command with no module name keeps the short form `hooks-pre-01`. The step names `hooks-pre` and `hooks-post` and the plan output do not change. TDD red-first: the resolve and generation tests failed on the missing field and names before the change. Docs: contract 12, README hooks, issue 0150 + index, this entry.
+* **Feat (hooks, task names state the module — issue [0150](issues/0150-hook-tasks-include-module-name.md))**: hook tasks are now named `<module>:hook-<pre|post>-<NN>` (for example `shell:hook-pre-01`), not `hooks-pre-0`. The colon is the mise namespace separator, so the task list groups by module. NN counts from 01 per module and phase. Resolve sets the module directory name on each hook command (`profile.HookCommand.Module`, not read from `module.toml`); `GenerateHookTasks` and `HooksStep.Run` use one name rule, so the task that apply runs is the task that generation writes. A hook command with no module name keeps the short form `hook-pre-01`. The step names `hooks-pre` and `hooks-post` and the plan output do not change. TDD red-first: the resolve and generation tests failed on the missing field and names before the change. Docs: contract 12, README hooks, issue 0150 + index, this entry.
 
 ## 2026-10-19
 

@@ -151,16 +151,75 @@ func TestSystemFilesStep_editEntriesElevatedWhenNotWritable(t *testing.T) {
 	require.Contains(t, handed[0].Args, "apply")
 	require.Contains(t, handed[0].Args, editsPath[0:len(editsPath)-len("/mise.toml")],
 		"the elevated child applies the system-edits config dir")
-	require.Empty(t, names, "the elevated apply must not run through the piped runner")
+	require.Equal(t, []string{"/fake/mise"}, names, "only the parent-directory bootstrap run uses the piped runner; the elevated apply does not")
 
 	cfg, err := os.ReadFile(editsPath)
 	require.NoError(t, err)
 	require.Contains(t, string(cfg), "[dotfiles]")
 	require.Contains(t, string(cfg), `line = "127.0.0.1 dev.local"`)
 
-	// No whole-file entries and no dirs → no bootstrap config is written.
-	_, statErr := os.Stat(filepath.Join(dir, "system", "mise.toml"))
-	require.True(t, os.IsNotExist(statErr), "edits-only step writes no bootstrap config")
+	// The edit file's parent (/etc) is created through a
+	// [bootstrap.directories] entry in the system config (issue 0151),
+	// written and applied before the elevated edit apply.
+	sysCfg, err := os.ReadFile(filepath.Join(dir, "system", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(sysCfg), "[bootstrap.directories]")
+	require.Contains(t, string(sysCfg), "\"/etc\" = { state = \"present\" }")
+}
+
+// Every system dotfile operation creates its target's parent directory
+// (issue 0151): the parent of every whole-file target (the target
+// directory itself for symlink-each) and of every edit file is emitted
+// as a [bootstrap.directories] entry in the same config, so mise creates
+// it in the same bootstrap run, before the files and edits land.
+func TestSystemFilesStep_createsParentDirectories(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "profile")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "files", "each"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(root, "files", "each", "a.txt"), []byte("a"), 0o644))
+	configPath := filepath.Join(dir, "system", "mise.toml")
+
+	m := &mise.Mise{
+		LookPath: func(string) (string, error) { return "/fake/mise", nil },
+		RunContext: func(_ context.Context, name string, args ...string) (string, error) {
+			if len(args) > 0 && args[0] == "--version" {
+				return mise.MinMiseVersion + string(rune(10)), nil
+			}
+			return "", nil
+		},
+	}
+	em := mise.NewExecMise(m)
+
+	step := &systemFilesStep{
+		exec: em,
+		entries: []resolve.DotfileEntry{
+			{Target: filepath.Join(dir, "sys", "deep", "copy.conf"), Source: "files/copy.conf", Mode: "copy"},
+			{Target: filepath.Join(dir, "sys", "link.conf"), Source: "files/link.conf", Mode: "symlink"},
+			{Target: filepath.Join(dir, "sys", "tmpl", "t.conf"), Source: "files/t.conf", Mode: "template"},
+			{Target: filepath.Join(dir, "sys", "eachdir"), Source: "files/each", Mode: "symlink-each"},
+			{Target: filepath.Join(dir, "sys", "edit", "e.conf", "myline"), Line: "x"},
+		},
+		sourceRoot: root,
+		homeDir:    dir,
+		configPath: configPath,
+		editsPath:  filepath.Join(dir, "system-edits", "mise.toml"),
+		yes:        true,
+	}
+
+	require.NoError(t, step.Run(context.Background()))
+	cfg, err := os.ReadFile(configPath)
+	require.NoError(t, err)
+	require.Contains(t, string(cfg), "[bootstrap.directories]")
+	for _, parent := range []string{
+		filepath.Join(dir, "sys", "deep"),
+		filepath.Join(dir, "sys"),
+		filepath.Join(dir, "sys", "tmpl"),
+		filepath.Join(dir, "sys", "eachdir"),
+		filepath.Join(dir, "sys", "edit"),
+	} {
+		require.Contains(t, string(cfg), fmt.Sprintf(`%q = { state = "present" }`, parent),
+			"parent %s must be a bootstrap directory", parent)
+	}
 }
 
 // Mount destination directories are emitted as [bootstrap.directories] in the

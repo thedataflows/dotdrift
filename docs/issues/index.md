@@ -138,3 +138,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0148](0148-quickfilter-read-views.md) | Quickfilter on the Status, Plan, and Profile views | done | medium |
 | [0149](0149-ci-lint-staticcheck.md) | CI lint job fails on 9 staticcheck findings | done | medium |
 | [0150](0150-hook-tasks-include-module-name.md) | Hook tasks include the module name | done | medium |
+| [0151](0151-dotfile-operations-create-parent-directories.md) | Dotfile operations create parent directories | done | medium |

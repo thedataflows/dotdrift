@@ -52,12 +52,12 @@ func backupFixtureHome(t *testing.T) string {
 func applyBackupDeps(t *testing.T, backup bool, sections []string) (*strings.Builder, string) {
 	t.Helper()
 	home := backupFixtureHome(t)
-	t.Setenv("HOME", home)
 	root := backupFixtureProfile(t)
 	statePath := filepath.Join(t.TempDir(), "state.json")
 
 	f := &facts.Facts{Hostname: "myhost", Username: "cri", OS: "linux", Backend: "paru"}
 	fk := stubApplyDeps(t, f)
+	t.Setenv("HOME", home)
 
 	var out strings.Builder
 	cmd := &ApplyCmd{deps: &fk.deps, Profile: root, State: statePath, Yes: true, Backup: backup, Out: &out}

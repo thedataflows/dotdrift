@@ -153,6 +153,8 @@ scope = "system"
 
 A single `dotdrift apply` covers both scopes. User dotfiles apply as usual; system dotfiles converge in a `dotfiles-system` step that pre-checks whether every system target is user-writable, and elevates via `sudo` when any target is not writable.
 
+Every dotfile operation creates the parent directory of its target when it does not exist — at either scope, for every mode (`symlink`, `symlink-each`, `copy`, `template`), and for edit entries (the parent of the edited file).
+
 - At most one password prompt per apply (sudo timestamp cache) — none at all when already running as root or when the system files are already converged.
 - System-scope entries are marked `[system]` in `dotdrift plan`.
 - Packages self-elevate via the distro backend, and hooks carry their own inline privilege, so neither needs scope machinery.

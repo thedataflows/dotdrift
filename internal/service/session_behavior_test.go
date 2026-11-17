@@ -417,7 +417,6 @@ func TestSession_backupEmitsEvents(t *testing.T) {
 	write("hosts/myhost/modules/demo/home/host.conf", "host copy content")
 
 	home := t.TempDir()
-	t.Setenv("HOME", home)
 	live := filepath.Join(home, ".config", "demo")
 	require.NoError(t, os.MkdirAll(live, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(live, "app.conf"), []byte("local edits"), 0o644))
@@ -425,6 +424,7 @@ func TestSession_backupEmitsEvents(t *testing.T) {
 
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	deps, _ := stubSessionDeps(t, testFacts())
+	t.Setenv("HOME", home)
 	opts := baseOpts(root, statePath)
 	opts.Backup = true
 

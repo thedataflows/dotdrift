@@ -131,6 +131,9 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	if len(s.Plan.Dotfiles.Entries) == 0 {
 		return nil
 	}
+	if err := createDotfileParents(s.Plan.Dotfiles.Entries); err != nil {
+		return err
+	}
 	cfg := GenerateDotfiles(s.Plan.Dotfiles.Entries)
 	if err := writeConfig(s.ConfigPath, cfg); err != nil {
 		return fmt.Errorf("write dotfiles mise config: %w", err)
@@ -233,6 +236,32 @@ func (s *HooksStep) Run(ctx context.Context) error {
 				continue
 			}
 			return fmt.Errorf("hook %q: %w", c.Command, err)
+		}
+	}
+	return nil
+}
+
+// createDotfileParents creates the parent directory of every entry's
+// target when it does not exist (issue 0151), for every mode. The parent
+// of an edit entry is the directory that holds the edited file. A
+// symlink-each entry needs only its own parent here: mise creates the
+// target directory itself when it links the children.
+func createDotfileParents(entries []resolve.DotfileEntry) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("home dir: %w", err)
+	}
+	for _, e := range entries {
+		target := e.Target
+		if e.IsEdit() {
+			target, _ = resolve.SplitEditTarget(target)
+		}
+		dir := filepath.Dir(expandHome(target, home))
+		if dir == "" || dir == "." {
+			continue
+		}
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("create parent directory %s: %w", dir, err)
 		}
 	}
 	return nil

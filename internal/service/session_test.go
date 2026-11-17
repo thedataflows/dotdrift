@@ -84,6 +84,7 @@ var _ smb.Runner = (*recordingSmbRunner)(nil)
 // temp dirs.
 func stubSessionDeps(t *testing.T, f *facts.Facts) (ApplyDeps, *[]string) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	events := &[]string{}

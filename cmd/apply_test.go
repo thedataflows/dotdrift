@@ -101,6 +101,7 @@ func stubApplyDeps(t *testing.T, f *facts.Facts) *applyFakes {
 	// packages step otherwise writes under the real $XDG_DATA_HOME. Same for
 	// the tools step's global activation fragment under $XDG_CONFIG_HOME
 	// (issue 0037).
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	events := &[]string{}
@@ -443,8 +444,9 @@ func TestApply_onlyToolsAndDotfiles(t *testing.T) {
 }
 
 // Section flags drop the mounts machinery too: on the mounts fixture with
-// only dotfiles selected, no mount services bootstrap runs and the system
-// files config carries no [bootstrap.directories] (issue 0042).
+// only dotfiles selected, no mount services bootstrap runs and no mount
+// destination reaches the system files config. The [bootstrap.directories]
+// section that remains holds only dotfile target parents (issue 0151).
 func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
@@ -463,8 +465,9 @@ func TestApply_sectionFlagsSkipMounts(t *testing.T) {
 	}
 	cfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
 	require.NoError(t, err)
-	require.NotContains(t, string(cfg), "[bootstrap.directories]",
-		"mount destinations are section-gated out of the system files config")
+	require.NotContains(t, string(cfg), "/mnt/data", "mount destinations are section-gated out of the system files config")
+	require.NotContains(t, string(cfg), "/mnt/backup", "mount destinations are section-gated out of the system files config")
+	require.Contains(t, string(cfg), "\"/etc/systemd/system\" = { state = \"present\" }", "dotfile target parents stay (issue 0151)")
 }
 
 // DOTDRIFT_NO_HOOKS=1 suppresses hooks exactly like --no-hooks.
@@ -664,6 +667,7 @@ func (r *verboseSmbRunner) SetVerbose(v bool) { r.verbose = v }
 // where --verbose landed.
 func stubVerboseDeps(t *testing.T, f *facts.Facts) (miseCapture **mise.Mise, backend *verboseRecordingBackend, sr *verboseSmbRunner, deps *service.ApplyDeps) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_DATA_HOME", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir()) // tools activation fragment (issue 0037)
 	events := &[]string{}

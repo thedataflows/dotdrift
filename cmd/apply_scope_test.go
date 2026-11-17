@@ -130,16 +130,23 @@ scope = "system"
 	require.NoError(t, cmd.Run())
 
 	// The system edit runs as `sudo -E mise dotfiles apply` from the
-	// system-edits/ config dir (0071: through the handover seam); no
-	// bootstrap files phase runs for an edits-only plan.
-	var foundApply bool
+	// system-edits/ config dir (0071: through the handover seam). A
+	// bootstrap --only files run also happens, carrying only the edit
+	// file's parent directory (issue 0151).
+	var foundApply, foundBootstrap bool
 	for _, e := range *fk.events {
 		if strings.Contains(e, "dotfiles apply") && strings.Contains(e, filepath.Join("mise", "system-edits")) {
 			foundApply = true
 		}
-		require.NotContains(t, e, filepath.Join("mise", "system "), "no bootstrap system config for edits-only: %v", e)
+		if strings.Contains(e, "bootstrap") && strings.Contains(e, filepath.Join("mise", "system")) {
+			foundBootstrap = true
+		}
 	}
 	require.True(t, foundApply, "system edit entries must reach dotfiles apply, events: %v", *fk.events)
+	require.True(t, foundBootstrap, "the edit parent directory must converge via bootstrap, events: %v", *fk.events)
+	sysCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system", "mise.toml"))
+	require.NoError(t, err)
+	require.Contains(t, string(sysCfg), "\"/etc\" = { state = \"present\" }")
 
 	// The edits config carries a [dotfiles] section (not [bootstrap.files]).
 	editCfg, err := os.ReadFile(filepath.Join(dir, "mise", "system-edits", "mise.toml"))

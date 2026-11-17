@@ -152,20 +152,42 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 		}
 	}
 
-	// Whole-file entries + mount destination directories → bootstrap files.
-	if len(whole) > 0 || len(s.dirs) > 0 {
+	// Parent directories of every target (issue 0151): bootstrap.files
+	// creates no parents, so each whole-file target's parent (the target
+	// directory itself for expanded symlink-each children) and each edit
+	// file's parent joins the mount destinations as a
+	// [bootstrap.directories] entry. mise creates them in the same run,
+	// before the files and edits land, with its normal privilege handling.
+	dirs := append([]string{}, s.dirs...)
+	var files []mise.BootstrapFile
+	if len(whole) > 0 {
+		var err error
+		files, err = mise.ResolveBootstrapFiles(whole, s.sourceRoot, s.homeDir)
+		if err != nil {
+			return fmt.Errorf("resolve system files: %w", err)
+		}
+		for _, f := range files {
+			dirs = append(dirs, filepath.Dir(f.Target))
+		}
+	}
+	for _, e := range edit {
+		file, _ := resolve.SplitEditTarget(e.Target)
+		if strings.HasPrefix(file, "~/") {
+			file = filepath.Join(s.homeDir, file[2:])
+		}
+		dirs = append(dirs, filepath.Dir(file))
+	}
+
+	// Whole-file entries + all directories → bootstrap files.
+	if len(whole) > 0 || len(dirs) > 0 {
 		if s.exec == nil {
 			return fmt.Errorf("system files require an exec mise runner")
 		}
 		var content string
-		if len(whole) > 0 {
-			files, err := mise.ResolveBootstrapFiles(whole, s.sourceRoot, s.homeDir)
-			if err != nil {
-				return fmt.Errorf("resolve system files: %w", err)
-			}
+		if len(files) > 0 {
 			content = mise.GenerateBootstrapFiles(files)
 		}
-		content += mise.GenerateBootstrapDirectories(s.dirs)
+		content += mise.GenerateBootstrapDirectories(dirs)
 		// Declared secret inputs ride the same config: the system files
 		// template path is the only one where mise resolves secret()
 		// ([dotfiles] templates have no secret function — verified against

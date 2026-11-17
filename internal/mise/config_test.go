@@ -3,6 +3,8 @@ package mise_test
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/BurntSushi/toml"
@@ -116,6 +118,30 @@ func TestDotfilesStep_callsApply(t *testing.T) {
 	require.True(t, fr.DotfilesCalled)
 	require.True(t, fr.Yes)
 	require.False(t, fr.InstallCalled)
+}
+
+// Every dotfile operation creates its target's parent directory when it
+// does not exist (issue 0151), before mise runs — for every mode and for
+// edit entries (parent of the edited file).
+func TestDotfilesStep_createsParentDirectories(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	fr := &mise.FakeRunner{}
+	plan := &resolve.Plan{Dotfiles: resolve.DotfilesStep{Entries: []resolve.DotfileEntry{
+		{Target: "~/a/b/link.txt", Source: "s", Mode: "symlink"},
+		{Target: "~/a/b/copy.txt", Source: "s", Mode: "copy"},
+		{Target: "~/a/b/tmpl.txt", Source: "s", Mode: "template"},
+		{Target: "~/a/each", Source: "s", Mode: "symlink-each"},
+		{Target: "~/a/b/edited.conf/myline", Line: "x"},
+	}}}
+	step := &mise.DotfilesStep{Runner: fr, Plan: plan, ConfigPath: filepath.Join(t.TempDir(), "mise.toml"), Yes: true}
+	require.NoError(t, step.Run(context.Background()))
+	require.True(t, fr.DotfilesCalled)
+	for _, dir := range []string{"a/b", "a"} {
+		info, err := os.Stat(filepath.Join(home, dir))
+		require.NoError(t, err, "parent %s must exist after the step runs", dir)
+		require.True(t, info.IsDir())
+	}
 }
 
 func TestDotfilesStep_conflictStops(t *testing.T) {

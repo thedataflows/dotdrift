@@ -101,8 +101,10 @@ func packageAttribution(plan *resolve.Plan) string {
 // preserved: a symlink stays a symlink (issue 0156; [bootstrap.files]
 // cannot express one, so the issue-0042 content-copy translation is
 // gone). When any entry target is not user-writable, the batch runs
-// elevated through the handover seam (0071), in dependency-level passes
-// so a chained entry reads a source an earlier pass created (0155).
+// elevated through the handover seam (0071). A chained entry, whose
+// source is another entry's target, converges in the same pass: the
+// generated config declares depends on that target (issue 0158; the
+// per-level passes of 0155 are gone).
 // Mount destinations and missing target parents ride a directories-only
 // `mise bootstrap --only files` pass first (0151, 0154).
 type systemFilesStep struct {
@@ -111,7 +113,7 @@ type systemFilesStep struct {
 	homeDir    string
 	dirs       []string // mount destinations → [bootstrap.directories]
 	configPath string   // directories-only bootstrap config
-	editsPath  string   // [dotfiles] config for all entries, rewritten per level
+	editsPath  string   // [dotfiles] config for all entries
 	yes        bool
 	force      bool                      // apply --force → --force on the dotfiles apply (issue 0046)
 	secrets    map[string]profile.Secret // declared secret inputs → [bootstrap.secrets]
@@ -181,10 +183,6 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 	if len(s.entries) == 0 {
 		return nil
 	}
-	levels, err := orderSystemEntries(s.entries, s.homeDir)
-	if err != nil {
-		return err
-	}
 	// Elevation is decided up front from the targets' writability (the
 	// same predicate RequiresTTY reported): the elevated child needs the
 	// real terminal for the sudo prompt, so it goes through the session's
@@ -196,26 +194,28 @@ func (s *systemFilesStep) Run(ctx context.Context) error {
 	if elevated && s.handover == nil {
 		return fmt.Errorf("elevated system files require a handover callback")
 	}
-	for _, level := range levels {
-		// Declared secret inputs ride the config: mise resolves secret()
-		// in [dotfiles] templates from [bootstrap.secrets] (verified
-		// against mise 2026.11.8; issue 0044's contrary finding was
-		// against 2026.9.1).
-		content := mise.GenerateDotfiles(level) + mise.GenerateBootstrapSecrets(s.secrets)
-		if err := writeBootstrapConfig(s.editsPath, content); err != nil {
-			return fmt.Errorf("write system dotfiles config: %w", err)
+	// Declared secret inputs ride the config: mise resolves secret()
+	// in [dotfiles] templates from [bootstrap.secrets] (verified
+	// against mise 2026.11.8; issue 0044's contrary finding was
+	// against 2026.9.1).
+	generated, err := mise.GenerateDotfiles(s.entries)
+	if err != nil {
+		return err
+	}
+	content := generated + mise.GenerateBootstrapSecrets(s.secrets)
+	if err := writeBootstrapConfig(s.editsPath, content); err != nil {
+		return fmt.Errorf("write system dotfiles config: %w", err)
+	}
+	if elevated {
+		cmd, err := s.exec.DotfilesApplySudoCmd(ctx, s.editsPath, s.yes, s.force)
+		if err == nil {
+			err = s.handover(cmd)
 		}
-		if elevated {
-			cmd, err := s.exec.DotfilesApplySudoCmd(ctx, s.editsPath, s.yes, s.force)
-			if err == nil {
-				err = s.handover(cmd)
-			}
-			if err != nil {
-				return fmt.Errorf("system files (elevated): %w", err)
-			}
-		} else if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, s.force); err != nil {
-			return fmt.Errorf("system files: %w", err)
+		if err != nil {
+			return fmt.Errorf("system files (elevated): %w", err)
 		}
+	} else if err := s.exec.DotfilesApply(ctx, s.editsPath, s.yes, s.force); err != nil {
+		return fmt.Errorf("system files: %w", err)
 	}
 	return nil
 }
@@ -242,69 +242,10 @@ func systemEntryParent(e resolve.DotfileEntry, homeDir string) string {
 	return filepath.Dir(expandHomePath(e.Target, homeDir))
 }
 
-// orderSystemEntries groups entries into dependency levels for chained
-// entries (issues 0155, 0156): an entry whose source is another entry's
-// target — or lies under it — applies in a later pass, because a copy or
-// template reads its source. Levels are in apply order; entries within a
-// level keep target order. A dependency cycle (including an entry that
-// is its own source) is an error naming the targets involved.
-func orderSystemEntries(entries []resolve.DotfileEntry, homeDir string) ([][]resolve.DotfileEntry, error) {
-	sorted := append([]resolve.DotfileEntry(nil), entries...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Target < sorted[j].Target })
-	targetOf := func(e resolve.DotfileEntry) string {
-		if e.IsEdit() {
-			file, _ := resolve.SplitEditTarget(e.Target)
-			return expandHomePath(file, homeDir)
-		}
-		return expandHomePath(e.Target, homeDir)
-	}
-	placed := make(map[string]bool, len(sorted))
-	remaining := sorted
-	var levels [][]resolve.DotfileEntry
-	for len(remaining) > 0 {
-		var level, rest []resolve.DotfileEntry
-		for _, e := range remaining {
-			ready := true
-			for _, g := range sorted {
-				if g.Target == e.Target {
-					continue // itself (targets are unique per plan)
-				}
-				gt := targetOf(g)
-				if placed[gt] {
-					continue
-				}
-				if e.Source == gt || strings.HasPrefix(e.Source, gt+"/") {
-					ready = false
-					break
-				}
-			}
-			if ready {
-				level = append(level, e)
-			} else {
-				rest = append(rest, e)
-			}
-		}
-		if len(level) == 0 {
-			targets := make([]string, 0, len(rest))
-			for _, e := range rest {
-				targets = append(targets, e.Target)
-			}
-			return nil, fmt.Errorf("system files: source dependency cycle among targets: %s", strings.Join(targets, ", "))
-		}
-		for _, e := range level {
-			placed[targetOf(e)] = true
-		}
-		levels = append(levels, level)
-		remaining = rest
-	}
-	return levels, nil
-}
-
-// systemTargetsUserWritable reports whether the current user can write every
-// edit target. Any non-writable target ⇒ the edits batch must converge
-// elevated (sudo) in one pass. Used to decide sudo up front instead of
-// inspecting mise's stderr (which runOp no longer captures — it streams
-// straight to the terminal to keep mise's color).
+// systemTargetsUserWritable reports whether the current user can write
+// every entry target. Any non-writable target means the batch must
+// converge elevated (sudo) in one pass. Used to decide sudo up front
+// instead of inspecting mise stderr.
 func systemTargetsUserWritable(entries []resolve.DotfileEntry, homeDir string) bool {
 	for _, e := range entries {
 		p := e.Target
@@ -439,8 +380,11 @@ func (s *smbBootstrapStep) Run(ctx context.Context) error {
 	return smb.PostBootstrap(ctx, s.smbRunner, s.modules, s.out)
 }
 
-// writeBootstrapConfig writes content to configPath, creating parent dirs.
+// writeBootstrapConfig writes content to configPath, creating parent
+// dirs. Every generated mise config states the min_version floor
+// (issue 0158).
 func writeBootstrapConfig(configPath, content string) error {
+	content = mise.WithMinVersion(content)
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}

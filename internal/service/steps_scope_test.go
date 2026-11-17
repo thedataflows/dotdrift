@@ -274,12 +274,12 @@ func TestSystemFilesStep_existingParentNotDeclared(t *testing.T) {
 		"a missing parent must still be declared so mise creates it")
 }
 
-// Chained system entries converge level by level (issues 0155, 0156):
-// an entry whose source is another entry's target goes in a later
-// dotfiles apply pass, because a copy or template reads its source.
+// Chained system entries converge in one apply pass (issue 0158):
+// an entry whose source is another entry's target declares depends on
+// that target, and mise writes the target before it reads the source.
 // Here .bashrc links to the .profile that the first entry creates; the
 // symlink mode survives into the applied config.
-func TestSystemFilesStep_chainedEntriesRunPerLevel(t *testing.T) {
+func TestSystemFilesStep_chainedEntriesOnePassWithDepends(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "system", "mise.toml")
 	editsPath := filepath.Join(dir, "system-edits", "mise.toml")
@@ -318,12 +318,11 @@ func TestSystemFilesStep_chainedEntriesRunPerLevel(t *testing.T) {
 	}
 
 	require.NoError(t, step.Run(context.Background()))
-	require.Len(t, configs, 2, "one dotfiles apply pass per dependency level")
+	require.Len(t, configs, 1, "one dotfiles apply pass for the whole chain")
 	require.Contains(t, configs[0], fmt.Sprintf("%q = { source", profileTarget))
-	require.NotContains(t, configs[0], fmt.Sprintf("%q = { source", bashrcTarget))
-	require.Contains(t, configs[1], fmt.Sprintf("%q = { source", bashrcTarget))
-	require.NotContains(t, configs[1], fmt.Sprintf("%q = { source", profileTarget))
-	require.Contains(t, configs[1], "mode = \"symlink\"", "the chained symlink keeps its mode")
+	require.Contains(t, configs[0], fmt.Sprintf("%q = { source", bashrcTarget))
+	require.Contains(t, configs[0], "mode = \"symlink\"", "the chained symlink keeps its mode")
+	require.Contains(t, configs[0], "depends = [\""+profileTarget+"\"]", "the chained entry depends on its source target")
 }
 
 // A source-dependency cycle between system entries is an error naming

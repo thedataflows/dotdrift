@@ -16,7 +16,9 @@ var systemEntries = []resolve.DotfileEntry{
 // System-scope entries generate a valid standalone mise config (TOML
 // round-trip), separate from the user-scope config.
 func TestGenerateDotfiles_systemEntriesRoundTrip(t *testing.T) {
-	out := mise.GenerateDotfiles(systemEntries)
+	out, err := mise.GenerateDotfiles(systemEntries)
+	require.NoError(t, err)
+	require.NoError(t, err)
 	require.Contains(t, out, "[dotfiles]")
 	require.Contains(t, out, "/etc/demo.conf")
 
@@ -26,7 +28,7 @@ func TestGenerateDotfiles_systemEntriesRoundTrip(t *testing.T) {
 			Mode   string `toml:"mode"`
 		} `toml:"dotfiles"`
 	}
-	_, err := toml.Decode(out, &decoded)
+	_, err = toml.Decode(out, &decoded)
 	require.NoError(t, err, "generated system config must be valid TOML")
 	entry, ok := decoded.Dotfiles["/etc/demo.conf"]
 	require.True(t, ok, "system target must be present")

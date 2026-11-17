@@ -50,7 +50,7 @@ func fakeMiseScript(t *testing.T, captureFile string) string {
 	t.Helper()
 	script := filepath.Join(t.TempDir(), "mise")
 	content := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 2026.8.2; exit 0; fi\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.11.9; exit 0; fi\n" +
 		fmt.Sprintf("echo \"TRUSTED=$MISE_TRUSTED_CONFIG_PATHS\" >> %q\n", captureFile) +
 		fmt.Sprintf("echo \"SENTINEL=$DOTDRIFT_TEST_SENTINEL\" >> %q\n", captureFile)
 	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
@@ -154,7 +154,7 @@ func echoMiseScript(t *testing.T) string {
 	t.Helper()
 	script := filepath.Join(t.TempDir(), "mise")
 	content := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 2026.8.2; exit 0; fi\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.11.9; exit 0; fi\n" +
 		"echo out-$1\n" +
 		"echo err-$1 >&2\n" +
 		"if [ \"$DOTDRIFT_TEST_FAIL\" = \"1\" ]; then exit 1; fi\n"
@@ -324,7 +324,7 @@ func miseVerboseEnvScript(t *testing.T) string {
 	t.Helper()
 	script := filepath.Join(t.TempDir(), "mise")
 	content := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 2026.8.2; exit 0; fi\n" +
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.11.9; exit 0; fi\n" +
 		"echo MISE_VERBOSE=$MISE_VERBOSE\n"
 	require.NoError(t, os.WriteFile(script, []byte(content), 0o755))
 	return script

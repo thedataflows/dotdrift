@@ -145,3 +145,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0155](0155-chained-system-files-level-order.md) | Chained system files converge level by level | done | high |
 | [0156](0156-system-dotfiles-keep-mode-dotfiles-apply.md) | System dotfiles keep their mode via dotfiles apply | done | high |
 | [0157](0157-elevated-mise-root-state.md) | Elevated mise must not write the invoking user's state | done | high |
+| [0158](0158-adopt-mise-dotfiles-depends.md) | Adopt mise dotfiles depends and raise the mise floor | done | high |

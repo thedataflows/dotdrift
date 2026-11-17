@@ -432,7 +432,12 @@ func (r *sessionRunner) run(ctx context.Context, spec *runSpec) {
 	// the tools/dotfiles steps rewrite it per-section later, so a crash
 	// leaves an on-disk config mirroring the whole resolved plan for crash
 	// recovery and manual mise runs.
-	if err := writeBootstrapConfig(spec.paths.shared, mise.GenerateApplyConfig(spec.plan, spec.profileRoot, spec.facts)); err != nil {
+	applyCfg, err := mise.GenerateApplyConfig(spec.plan, spec.profileRoot, spec.facts)
+	if err != nil {
+		r.finishPreStepFailure(res, &StepError{Step: "config", Err: fmt.Errorf("generate mise config: %w", err)})
+		return
+	}
+	if err := writeBootstrapConfig(spec.paths.shared, applyCfg); err != nil {
 		r.finishPreStepFailure(res, &StepError{Step: "config", Err: fmt.Errorf("write mise config: %w", err)})
 		return
 	}

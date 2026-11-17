@@ -23,7 +23,7 @@ import (
 )
 
 // MinMiseVersion is the hardcoded minimum mise version required by dotdrift.
-const MinMiseVersion = "2026.8.2"
+const MinMiseVersion = "2026.11.9"
 
 // InstallerURL is the official mise installer.
 const InstallerURL = "https://mise.run"
@@ -870,9 +870,21 @@ func GenerateTools(versions map[string]string) string {
 // mise's dotfiles phase parses: { line }, { block[, comment] }, or
 // { source, template }. The map key is the entry Target verbatim — for an
 // edit entry that is the full "<file-path>/<edit-id>" string.
-func GenerateDotfiles(entries []resolve.DotfileEntry) string {
+//
+// A whole-file entry whose source is another entry's target in the same
+// config, or lies under it, declares depends on that target (mise
+// 2026.11.0): mise writes the target before it reads the source, so a
+// chained pair converges in one apply. Edit entries never declare or
+// satisfy a depends; mise does not accept the key for them. A source
+// dependency cycle, including an entry that sources itself, is an error
+// naming the targets (issue 0158; the per-level passes of 0155 are gone).
+func GenerateDotfiles(entries []resolve.DotfileEntry) (string, error) {
 	if len(entries) == 0 {
-		return ""
+		return "", nil
+	}
+	deps, err := dotfileDepends(entries)
+	if err != nil {
+		return "", err
 	}
 	var b strings.Builder
 	b.WriteString("[dotfiles]\n")
@@ -890,23 +902,123 @@ func GenerateDotfiles(entries []resolve.DotfileEntry) string {
 			fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", template = \"%s\" }\n",
 				tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Template))
 		default: // whole-file, unchanged
-			fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", mode = \"%s\" }\n",
-				tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Mode))
+			fmt.Fprintf(&b, "\"%s\" = { source = \"%s\", mode = \"%s\"", tomlEscape(e.Target), tomlEscape(e.Source), tomlEscape(e.Mode))
+			if ds := deps[e.Target]; len(ds) > 0 {
+				quoted := make([]string, len(ds))
+				for i, d := range ds {
+					quoted[i] = "\"" + tomlEscape(d) + "\""
+				}
+				fmt.Fprintf(&b, ", depends = [%s]", strings.Join(quoted, ", "))
+			}
+			b.WriteString(" }\n")
 		}
 	}
-	return b.String()
+	return b.String(), nil
 }
 
-// GenerateConfig emits a complete mise.toml with tools and dotfiles sections.
-func GenerateConfig(plan *resolve.Plan) string {
+// dotfileDepends maps each whole-file entry target to the targets it must
+// be applied after: the entries whose expanded target equals its source
+// or is a parent directory of it. Targets expand a leading ~/ against
+// the real home directory, because sources are resolved absolute paths.
+func dotfileDepends(entries []resolve.DotfileEntry) (map[string][]string, error) {
+	home, _ := os.UserHomeDir()
+	expand := func(t string) string {
+		if strings.HasPrefix(t, "~/") && home != "" {
+			return filepath.Join(home, t[2:])
+		}
+		return t
+	}
+	type target struct{ raw, exp string }
+	var targets []target
+	for _, e := range entries {
+		if !e.IsEdit() {
+			targets = append(targets, target{e.Target, expand(e.Target)})
+		}
+	}
+	deps := make(map[string][]string)
+	for _, e := range entries {
+		if e.IsEdit() || e.Source == "" {
+			continue
+		}
+		seen := make(map[string]bool)
+		for _, tg := range targets {
+			if e.Source == tg.exp || strings.HasPrefix(e.Source, tg.exp+"/") {
+				if !seen[tg.raw] {
+					seen[tg.raw] = true
+					deps[e.Target] = append(deps[e.Target], tg.raw)
+				}
+			}
+		}
+		sort.Strings(deps[e.Target])
+	}
+	// A cycle never resolves: drop every entry whose dependencies are all
+	// placed; what remains is in the cycle (a self-source never places).
+	placed := make(map[string]bool)
+	for {
+		progress := false
+		for _, e := range entries {
+			if e.IsEdit() || placed[e.Target] {
+				continue
+			}
+			ready := true
+			for _, d := range deps[e.Target] {
+				if !placed[d] {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				placed[e.Target] = true
+				progress = true
+			}
+		}
+		if !progress {
+			break
+		}
+	}
+	var stuck []string
+	for _, e := range entries {
+		if !e.IsEdit() && !placed[e.Target] && len(deps[e.Target]) > 0 {
+			stuck = append(stuck, e.Target)
+		}
+	}
+	if len(stuck) > 0 {
+		sort.Strings(stuck)
+		return nil, fmt.Errorf("dotfiles: source dependency cycle among targets: %s", strings.Join(stuck, ", "))
+	}
+	return deps, nil
+}
+
+// WithMinVersion prepends the min_version floor to a complete mise
+// config, unless it already carries one. Empty content stays empty. A
+// generated-marker comment keeps the first line, so marker checks on
+// tools snippets still see it (issue 0158).
+func WithMinVersion(content string) string {
+	if content == "" || strings.HasPrefix(content, "min_version =") {
+		return content
+	}
+	line := "min_version = \"" + MinMiseVersion + "\"\n"
+	if rest, ok := strings.CutPrefix(content, generatedMarker); ok {
+		return generatedMarker + line + rest
+	}
+	return line + content
+}
+
+// GenerateConfig emits a complete mise.toml with tools and dotfiles
+// sections, headed by the min_version floor.
+func GenerateConfig(plan *resolve.Plan) (string, error) {
 	var out string
 	if tools := GenerateTools(plan.Tools.Versions); tools != "" {
 		out += tools + "\n"
 	}
-	if dotfiles := GenerateDotfiles(plan.Dotfiles.Entries); dotfiles != "" {
+	dotfiles, err := GenerateDotfiles(plan.Dotfiles.Entries)
+	if err != nil {
+		return "", err
+	}
+	if dotfiles != "" {
 		out += dotfiles + "\n"
 	}
-	return out
+	return WithMinVersion(out), nil
 }
 
 // GenerateHookTasks emits one mise task per hook command, named
@@ -958,10 +1070,13 @@ func writeHookTask(b *strings.Builder, phase string, commands []profile.HookComm
 // GenerateApplyConfig emits the full apply-time mise.toml: tools, dotfiles,
 // and hook tasks. The hook tasks need facts and the absolute profile root, so
 // only apply uses this; onboard keeps using GenerateConfig.
-func GenerateApplyConfig(plan *resolve.Plan, profileRoot string, f *facts.Facts) string {
-	out := GenerateConfig(plan)
+func GenerateApplyConfig(plan *resolve.Plan, profileRoot string, f *facts.Facts) (string, error) {
+	out, err := GenerateConfig(plan)
+	if err != nil {
+		return "", err
+	}
 	if tasks := GenerateHookTasks(plan.Hooks, profileRoot, f); tasks != "" {
 		out += tasks + "\n"
 	}
-	return out
+	return out, nil
 }

@@ -123,7 +123,9 @@ func TestGenerateHookTasks_interactiveEvenWhenSessionIsNot(t *testing.T) {
 // the standalone task generator.
 func TestGenerateApplyConfig_interactiveFlowsThrough(t *testing.T) {
 	plan := &resolve.Plan{Hooks: resolve.HooksStep{Pre: []profile.HookCommand{{Command: "echo pre"}}}}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	out, err := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	require.NoError(t, err)
+	require.NoError(t, err)
 	require.Contains(t, out, "interactive = true")
 }
 
@@ -139,7 +141,9 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 			Post: []profile.HookCommand{{Command: "echo post"}},
 		},
 	}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	out, err := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	require.NoError(t, err)
+	require.NoError(t, err)
 
 	require.Contains(t, out, "[tools]")
 	require.Contains(t, out, "[dotfiles]")
@@ -154,7 +158,9 @@ func TestGenerateApplyConfig_includesToolsDotfilesAndTasks(t *testing.T) {
 // A plan without hooks keeps the apply config task-free.
 func TestGenerateApplyConfig_noHooks(t *testing.T) {
 	plan := &resolve.Plan{Tools: resolve.ToolsStep{Versions: map[string]string{"node": "22"}}}
-	out := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	out, err := mise.GenerateApplyConfig(plan, "/profiles/main", testFacts)
+	require.NoError(t, err)
+	require.NoError(t, err)
 	require.Contains(t, out, "[tools]")
 	require.NotContains(t, out, "[tasks]")
 }

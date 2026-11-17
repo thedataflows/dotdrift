@@ -134,7 +134,10 @@ func (s *DotfilesStep) Run(ctx context.Context) error {
 	if err := createDotfileParents(s.Plan.Dotfiles.Entries); err != nil {
 		return err
 	}
-	cfg := GenerateDotfiles(s.Plan.Dotfiles.Entries)
+	cfg, err := GenerateDotfiles(s.Plan.Dotfiles.Entries)
+	if err != nil {
+		return fmt.Errorf("generate dotfiles config: %w", err)
+	}
 	if err := writeConfig(s.ConfigPath, cfg); err != nil {
 		return fmt.Errorf("write dotfiles mise config: %w", err)
 	}
@@ -267,10 +270,13 @@ func createDotfileParents(entries []resolve.DotfileEntry) error {
 	return nil
 }
 
+// writeConfig writes a complete mise config file. Every file dotdrift
+// hands to mise states the min_version floor (issue 0158).
 func writeConfig(path, content string) error {
 	if path == "" {
 		return fmt.Errorf("config path is empty")
 	}
+	content = WithMinVersion(content)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

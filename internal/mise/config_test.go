@@ -44,10 +44,11 @@ func TestGenerateTools_quotesNonBareKeys(t *testing.T) {
 // dotdrift's mode vocabulary is exactly mise's (symlink, symlink-each, copy,
 // template), so GenerateDotfiles emits modes unchanged.
 func TestGenerateDotfiles(t *testing.T) {
-	out := mise.GenerateDotfiles([]resolve.DotfileEntry{
+	out, err := mise.GenerateDotfiles([]resolve.DotfileEntry{
 		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 		{Target: "~/.config/nvim", Source: "nvim", Mode: "symlink-each"},
 	})
+	require.NoError(t, err)
 	require.Contains(t, out, "[dotfiles]")
 	require.Contains(t, out, `"~/.bashrc" = { source = ".bashrc", mode = "symlink" }`)
 	require.Contains(t, out, `"~/.config/nvim" = { source = "nvim", mode = "symlink-each" }`)
@@ -58,16 +59,17 @@ func TestGenerateDotfiles(t *testing.T) {
 func TestGenerateDotfiles_passthroughModes(t *testing.T) {
 	for _, mode := range []string{"symlink", "copy", "template", "symlink-each"} {
 		t.Run(mode, func(t *testing.T) {
-			out := mise.GenerateDotfiles([]resolve.DotfileEntry{
+			out, err := mise.GenerateDotfiles([]resolve.DotfileEntry{
 				{Target: "~/target", Source: "src", Mode: mode},
 			})
+			require.NoError(t, err)
 
 			var decoded struct {
 				Dotfiles map[string]struct {
 					Mode string `toml:"mode"`
 				} `toml:"dotfiles"`
 			}
-			_, err := toml.Decode(out, &decoded)
+			_, err = toml.Decode(out, &decoded)
 			require.NoError(t, err, "generated TOML must be parseable: %q", out)
 			require.Equal(t, mode, decoded.Dotfiles["~/target"].Mode)
 		})
@@ -81,7 +83,9 @@ func TestGenerateConfig(t *testing.T) {
 			{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 		}},
 	}
-	out := mise.GenerateConfig(plan)
+	out, err := mise.GenerateConfig(plan)
+	require.NoError(t, err)
+	require.NoError(t, err)
 	require.Contains(t, out, "[tools]")
 	require.Contains(t, out, "[dotfiles]")
 	require.Contains(t, out, `node = "20"`)
@@ -175,7 +179,8 @@ func TestGenerateDotfiles_escapesQuotesAndBackslashes(t *testing.T) {
 		{Target: `~/weird"dir\file`, Source: `mod\src"x`, Mode: "symlink"},
 		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 	}
-	out := mise.GenerateDotfiles(entries)
+	out, err := mise.GenerateDotfiles(entries)
+	require.NoError(t, err)
 
 	var decoded struct {
 		Dotfiles map[string]struct {
@@ -183,7 +188,7 @@ func TestGenerateDotfiles_escapesQuotesAndBackslashes(t *testing.T) {
 			Mode   string `toml:"mode"`
 		} `toml:"dotfiles"`
 	}
-	_, err := toml.Decode(out, &decoded)
+	_, err = toml.Decode(out, &decoded)
 	require.NoError(t, err, "generated TOML must be parseable: %q", out)
 	require.Len(t, decoded.Dotfiles, 2)
 	require.Equal(t, `mod\src"x`, decoded.Dotfiles[`~/weird"dir\file`].Source)
@@ -201,7 +206,8 @@ func TestGenerateDotfiles_editEntries(t *testing.T) {
 		{Target: "~/.gitconfig/id", Source: "snippets/git.tmpl", Template: "tera"},
 		{Target: "~/.bashrc", Source: ".bashrc", Mode: "symlink"},
 	}
-	out := mise.GenerateDotfiles(entries)
+	out, err := mise.GenerateDotfiles(entries)
+	require.NoError(t, err)
 
 	require.Contains(t, out, `"~/.zshrc/dev" = { line = "127.0.0.1 dev.local" }`)
 	require.Contains(t, out, `"~/.zshrc/aliases" = { block = "alias ll='ls -l'", comment = "#" }`)
@@ -220,7 +226,7 @@ func TestGenerateDotfiles_editEntries(t *testing.T) {
 			Template string `toml:"template"`
 		} `toml:"dotfiles"`
 	}
-	_, err := toml.Decode(out, &decoded)
+	_, err = toml.Decode(out, &decoded)
 	require.NoError(t, err, "generated TOML must be parseable: %q", out)
 	require.Equal(t, "127.0.0.1 dev.local", decoded.Dotfiles["~/.zshrc/dev"].Line)
 	require.Equal(t, "alias ll='ls -l'", decoded.Dotfiles["~/.zshrc/aliases"].Block)
@@ -234,7 +240,8 @@ func TestGenerateDotfiles_editBlockMultilineRoundTrip(t *testing.T) {
 	entries := []resolve.DotfileEntry{
 		{Target: "~/.zshrc/aliases", Block: block, Comment: "#"},
 	}
-	out := mise.GenerateDotfiles(entries)
+	out, err := mise.GenerateDotfiles(entries)
+	require.NoError(t, err)
 
 	var decoded struct {
 		Dotfiles map[string]struct {
@@ -242,7 +249,7 @@ func TestGenerateDotfiles_editBlockMultilineRoundTrip(t *testing.T) {
 			Comment string `toml:"comment"`
 		} `toml:"dotfiles"`
 	}
-	_, err := toml.Decode(out, &decoded)
+	_, err = toml.Decode(out, &decoded)
 	require.NoError(t, err, "generated TOML must be parseable: %q", out)
 	require.Equal(t, block, decoded.Dotfiles["~/.zshrc/aliases"].Block,
 		"multi-line block must round-trip byte-identical")

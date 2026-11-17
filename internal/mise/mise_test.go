@@ -25,7 +25,7 @@ func TestEnsureMise_detectsInPath(t *testing.T) {
 		Run: func(name string, args ...string) (string, error) {
 			require.Equal(t, "/usr/bin/mise", name)
 			require.Equal(t, []string{"--version"}, args)
-			return "2026.8.2 linux-x64", nil
+			return "2026.11.9 linux-x64", nil
 		},
 		Classify: func(string) mise.InstallKind { return mise.InstallKindSystemWide },
 	}
@@ -44,7 +44,7 @@ func TestEnsureMise_installsWhenMissing(t *testing.T) {
 		Run: func(name string, args ...string) (string, error) {
 			require.Equal(t, "/fake/mise", name)
 			require.Equal(t, []string{"--version"}, args)
-			return "2026.8.2", nil
+			return "2026.11.9", nil
 		},
 		Install: func() (string, error) {
 			calls++
@@ -70,7 +70,7 @@ func TestEnsureMise_upgradesWhenTooOld_userManaged(t *testing.T) {
 				if calls == 0 {
 					return "2024.1.1", nil
 				}
-				return "2026.8.2", nil
+				return "2026.11.9", nil
 			}
 			require.Equal(t, []string{"self-update"}, args)
 			calls++
@@ -99,7 +99,7 @@ func TestEnsureMise_upgradesWhenTooOld_userManagedSelfUpdateFails(t *testing.T) 
 				if calls == 0 {
 					return "2024.1.1", nil
 				}
-				return "2026.8.2", nil
+				return "2026.11.9", nil
 			}
 			calls++
 			return "", errors.New("self-update failed")
@@ -187,7 +187,7 @@ func TestVersionCompare_calendarVersion(t *testing.T) {
 		a, b string
 		want int
 	}{
-		{"2026.8.2", "2025.1.0", 1},
+		{"2026.11.9", "2025.1.0", 1},
 		{"2024.12.0", "2025.1.0", -1},
 		{"2025.1.0", "2025.1.0", 0},
 		{"2025.2.0", "2025.1.9", 1},
@@ -325,7 +325,7 @@ func TestEnsureMise_versionOutputWithLeadingToken(t *testing.T) {
 			return "/usr/bin/mise", nil
 		},
 		Run: func(name string, args ...string) (string, error) {
-			return "mise 2026.8.2 linux-x64 (2026-08-05)", nil
+			return "mise 2026.11.9 linux-x64 (2026-08-05)", nil
 		},
 		Classify: func(string) mise.InstallKind { return mise.InstallKindSystemWide },
 	}
@@ -361,7 +361,7 @@ func TestEnsureMise_ensureRunsOnceAcrossCalls(t *testing.T) {
 		Run: func(name string, args ...string) (string, error) {
 			if len(args) == 1 && args[0] == "--version" {
 				atomic.AddInt32(&versionCalls, 1)
-				return "2026.8.2 linux-x64 (2026-08-05)", nil
+				return "2026.11.9 linux-x64 (2026-08-05)", nil
 			}
 			return "", nil
 		},
@@ -388,7 +388,7 @@ func TestEnsureMise_ensureOnceConcurrent(t *testing.T) {
 			return "/fake/mise", nil
 		},
 		Run: func(name string, args ...string) (string, error) {
-			return "2026.8.2", nil
+			return "2026.11.9", nil
 		},
 		Classify: func(string) mise.InstallKind { return mise.InstallKindUserManaged },
 	}
@@ -423,7 +423,7 @@ func TestEnsureMise_logsInstallMessage(t *testing.T) {
 			return "", errors.New("not found")
 		},
 		Run: func(name string, args ...string) (string, error) {
-			return "2026.8.2", nil
+			return "2026.11.9", nil
 		},
 		Install: func() (string, error) {
 			return "/fake/mise", nil
@@ -593,7 +593,7 @@ func TestExecMise_operationsNeutralCwd(t *testing.T) {
 	script := filepath.Join(dir, "mise")
 	fake := "#!/bin/sh\n" +
 		"echo \"$1 $(pwd)\" >> " + marker + "\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 2026.9.1; fi\n"
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.11.9; fi\n"
 	require.NoError(t, os.WriteFile(script, []byte(fake), 0o755))
 	m := &mise.Mise{LookPath: func(string) (string, error) { return script, nil }}
 	e := mise.NewExecMise(m)
@@ -626,7 +626,7 @@ func TestExecMise_operationsWorkDirOverride(t *testing.T) {
 	script := filepath.Join(dir, "mise")
 	fake := "#!/bin/sh\n" +
 		"echo \"$(pwd)\" >> " + marker + "\n" +
-		"if [ \"$1\" = \"--version\" ]; then echo 2026.9.1; fi\n"
+		"if [ \"$1\" = \"--version\" ]; then echo 2026.11.9; fi\n"
 	require.NoError(t, os.WriteFile(script, []byte(fake), 0o755))
 	workDir := t.TempDir()
 	m := &mise.Mise{

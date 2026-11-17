@@ -843,7 +843,10 @@ func writeMiseConfig(profileRoot, moduleDir string, entries map[string]dotfileEn
 			Mode:   e.Mode,
 		})
 	}
-	cfg := mise.GenerateConfig(plan)
+	cfg, err := mise.GenerateConfig(plan)
+	if err != nil {
+		return "", err
+	}
 
 	configPath := filepath.Join(filepath.Dir(state.ProfileStatePath(profileRoot)), "onboard", "mise.toml")
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {

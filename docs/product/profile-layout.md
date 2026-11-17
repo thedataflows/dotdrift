@@ -265,7 +265,10 @@ public = false
     target path (absolute or `~/...`); the value is a table with:
     - `source`: relative path inside the module directory, or an absolute
       path (starts with `/`) that is used as-is and does not take part in
-      the layer search. The file or directory must exist.
+      the layer search. Existence is not checked at resolve time: a
+      missing absolute source fails in mise at apply time. (`mode = "edit"`
+      is the exception — its source is read at resolve time to inline the
+      block, so a missing file fails there.)
     - `mode`: `symlink`, `symlink-each`, `copy`, or `template` — exactly mise's
       mode vocabulary, passed through to the generated `mise.toml` unchanged.
       Any other value (including an omitted mode) is a resolve-time error naming

@@ -622,17 +622,16 @@ func mergeDotfiles(base, host, user layerConfig, scope string) ([]DotfileEntry, 
 	return entries, nil
 }
 
-// resolveSource locates a dotfile source. An absolute source is used as-is:
-// it names one file on the machine, outside every layer, so only its
-// existence is checked. A relative source is searched inside the layer
-// directories, highest-precedence existing file first; the joined path must
-// stay inside the layer root. A missing file is a resolve-time error.
+// resolveSource locates a dotfile source. An absolute source is used as-is,
+// with no existence check: it names one file on the machine, outside every
+// layer, and whether it exists is mise's concern at apply time (and the
+// drift report's at status time). A relative source is searched inside the
+// layer directories, highest-precedence existing file first; the joined
+// path must stay inside the layer root. A missing relative file is a
+// resolve-time error.
 func resolveSource(winner dotfileWinner, moduleID string, base, host, user layerConfig) (string, error) {
 	rel := winner.df.Source
 	if filepath.IsAbs(rel) {
-		if _, err := os.Stat(rel); err != nil {
-			return "", fmt.Errorf("module %s: dotfile source %q not found", moduleID, rel)
-		}
 		return rel, nil
 	}
 	for _, layer := range []layerConfig{user, host, base} {

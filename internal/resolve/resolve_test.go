@@ -276,7 +276,7 @@ func TestResolveSource_absolutePathUsedAsIs(t *testing.T) {
 	require.Equal(t, "alias x='y'"+string(rune(10)), edit.Block)
 }
 
-func TestResolveSource_absolutePathMissingErrors(t *testing.T) {
+func TestResolveSource_absolutePathMissingStillResolves(t *testing.T) {
 	root := t.TempDir()
 	missing := filepath.Join(t.TempDir(), "gone.conf")
 	writeModule(t, root, "mod", `
@@ -285,10 +285,10 @@ func TestResolveSource_absolutePathMissingErrors(t *testing.T) {
 `)
 	f := &facts.Facts{Hostname: "h", Username: "u"}
 
-	_, err := loadAndResolve(t, root, f)
-	require.Error(t, err, "a missing absolute source must be an error")
-	require.Contains(t, err.Error(), "mod", "error should name the module")
-	require.Contains(t, err.Error(), missing, "error should name the absolute path")
+	plan, err := loadAndResolve(t, root, f)
+	require.NoError(t, err, "an absolute source is not existence-checked at resolve time")
+	require.Len(t, plan.Dotfiles.Entries, 1)
+	require.Equal(t, missing, plan.Dotfiles.Entries[0].Source)
 }
 
 func TestResolveDotfileMode_unknownModeErrors(t *testing.T) {

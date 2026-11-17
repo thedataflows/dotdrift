@@ -89,6 +89,7 @@ type ApplyCmd struct {
 	Tools    bool `group:"Section flags" help:"Apply only the tools section" negatable:""`
 	Dotfiles bool `group:"Section flags" help:"Apply only the dotfiles section (user + system)" negatable:""`
 	Systemd  bool `group:"Section flags" help:"Apply only the systemd user units section" negatable:""`
+	Services bool `group:"Section flags" help:"Apply only the declared services section" negatable:""`
 	Mounts   bool `group:"Section flags" help:"Apply only the mounts section (units + services + destination dirs)" negatable:""`
 	Smb      bool `group:"Section flags" help:"Apply only the smb section" negatable:""`
 	Hooks    bool `group:"Section flags" help:"Run pre/post hook commands" negatable:""`

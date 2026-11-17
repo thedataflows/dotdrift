@@ -153,7 +153,7 @@ view stack wholesale). Its parts:
   The full merged plan of `dotdrift plan`. Left: one row per non-empty
   section in the report's order with the merged counts (`packages:
   2 install, 1 remove`, `tools: 2`, `dotfiles: 1`, `hooks: 1 pre,
-  1 post`, `systemd: 1`, `mounts: 1`, `smb: 1`). Right: the selected
+  1 post`, `systemd: 1`, `services: 1`, `mounts: 1`, `smb: 1`). Right: the selected
   section's entries exactly as `dotdrift plan` renders them — the full
   report renders once when the read lands and the detail cuts the
   section's block from it, minus the block's own header line: the
@@ -220,7 +220,7 @@ view stack wholesale). Its parts:
 - **The workspace** (T-tui-workspace). `module.toml` rendered as a
   sectioned read surface over the 0065 config seam (strict decode + raw
   text; the workspace never parses TOML): fixed-order sections — meta,
-  packages, links, writes, when, hooks, systemd.units, tools, secrets,
+  packages, links, writes, when, hooks, systemd.units, services, tools, secrets,
   mounts, smb — where a section shows what is set; an empty section is
   its header alone. The title line carries the layer tabs
   (`base · user cri · host myhost`, active bracketed) in sync with the
@@ -356,8 +356,11 @@ view stack wholesale). Its parts:
   unit is a container row (d removes with confirm) whose SET directives
   render beneath it as indented rows; directive values are typed TOML —
   `ExecStart = /usr/bin/demo` needs no quoting, while `"x"`, `30`,
-  `[a, b]`, and inline tables land with their TOML types. Secrets,
-  mounts, and smb shares edit the same way — one container per entry,
+  `[a, b]`, and inline tables land with their TOML types. Declared
+  services (issue 0159) edit the same way: one container per service,
+  field rows for command, state, enabled, restart, environment, and
+  working_directory, with pickers for state, restart, and enabled.
+  Secrets, mounts, and smb shares edit the same way — one container per entry,
   its set fields beneath it. The add forms reach everything the
   disclosure hides: `a` on a section header adds the section's entry
   (an empty section's header is selectable; the structural families'

@@ -146,3 +146,4 @@ use, plus emergent features and chores. Planned work lives in
 | [0156](0156-system-dotfiles-keep-mode-dotfiles-apply.md) | System dotfiles keep their mode via dotfiles apply | done | high |
 | [0157](0157-elevated-mise-root-state.md) | Elevated mise must not write the invoking user's state | done | high |
 | [0158](0158-adopt-mise-dotfiles-depends.md) | Adopt mise dotfiles depends and raise the mise floor | done | high |
+| [0159](0159-declare-services-instead-of-systemctl-hooks.md) | Declare services in module.toml instead of systemctl hooks | done | high |

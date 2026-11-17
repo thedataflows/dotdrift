@@ -34,6 +34,7 @@ const (
 	FamilyMounts   = "mounts"
 	FamilySmb      = "smb"
 	FamilySystemd  = "systemd"
+	FamilyServices = "services"
 )
 
 // PackageEntry is one declared distro package with its optional cosmetic
@@ -410,6 +411,43 @@ func EncodeSmbSection(s SmbSpec) string {
 		}
 		if sh.Public {
 			b.WriteString("public = true\n")
+		}
+	}
+	return b.String()
+}
+
+// EncodeServicesSection renders [services.<name>] blocks, names sorted,
+// zero fields omitted, environment as a sorted inline table (issue 0159).
+func EncodeServicesSection(services map[string]ServiceSpec) string {
+	if len(services) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, name := range slices.Sorted(maps.Keys(services)) {
+		s := services[name]
+		if b.Len() > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString("[services." + tomlKey(name) + "]\n")
+		for _, f := range []struct {
+			key string
+			val string
+		}{
+			{"command", s.Command}, {"state", s.State}, {"restart", s.Restart}, {"working_directory", s.WorkingDirectory},
+		} {
+			if f.val != "" {
+				b.WriteString(f.key + " = " + tomlBasicString(f.val) + "\n")
+			}
+		}
+		if s.Enabled != nil {
+			b.WriteString("enabled = " + strconv.FormatBool(*s.Enabled) + "\n")
+		}
+		if len(s.Environment) > 0 {
+			pairs := make([]string, 0, len(s.Environment))
+			for _, k := range slices.Sorted(maps.Keys(s.Environment)) {
+				pairs = append(pairs, tomlKey(k)+" = "+tomlBasicString(s.Environment[k]))
+			}
+			b.WriteString("environment = { " + strings.Join(pairs, ", ") + " }\n")
 		}
 	}
 	return b.String()

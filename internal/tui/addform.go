@@ -268,6 +268,13 @@ func addFormSpec(moduleID, section, addPath, dir string) (string, []dlgRow, func
 			}
 			return kindText
 		}, "path", "comment", "valid_users", "writable", "public")
+	case "services":
+		if addPath == "" {
+			name := newDlgField("name", "")
+			return "add service · " + moduleID, []dlgRow{fieldRow(name)},
+				func([]dlgRow) string { return strings.TrimSpace(name.String()) }, nil
+		}
+		return fieldValuePair("add field · "+addPath, nil, "command", "state", "enabled", "restart", "environment", "working_directory")
 	case "when":
 		kind := newDlgChoice("kind", "leaf", "and", "or", "not")
 		field := newDlgChoice("field", whenFields...)

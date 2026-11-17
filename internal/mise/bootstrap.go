@@ -180,29 +180,89 @@ func GenerateBootstrapDirectories(paths []string) string {
 
 // --- Mount/smb units → [bootstrap.services] ---
 
-// BootstrapService is one systemd unit to converge via [bootstrap.services].
+// BootstrapService is one service to converge via [bootstrap.services].
+// The zero value of the extended fields (Scope, Command, State, Restart,
+// Environment, WorkingDirectory) keeps the inline form the mounts and
+// smb steps emit; a set field switches the entry to the table form
+// (issue 0159).
 type BootstrapService struct {
 	Name    string // unit name, e.g. "mnt-data.mount"
 	Enabled bool
 	Running bool
+	// State, when set, overrides the state Running derives.
+	State string
+	// Scope is "user" or "system"; empty keeps mise's default.
+	Scope string
+	// Command defines a program for mise to run (user scope only).
+	Command string
+	// Restart is "on-failure", "always", or "never" (command only).
+	Restart string
+	// Environment sets variables for a command service.
+	Environment map[string]string
+	// WorkingDirectory is the directory a command service runs in.
+	WorkingDirectory string
 }
 
 // GenerateBootstrapServices emits a [bootstrap.services] section. mise's
 // schema types `enabled` as a boolean (true/false) and `state` as a
-// "running"/"stopped" string.
+// "running"/"stopped"/"absent" string. An entry with no extended field
+// keeps the inline form; an extended entry (issue 0159: a declared
+// service) emits the table form with its scope, command, and options.
 func GenerateBootstrapServices(services []BootstrapService) string {
 	if len(services) == 0 {
 		return ""
 	}
 	sort.Slice(services, func(i, j int) bool { return services[i].Name < services[j].Name })
+	stateOf := func(s BootstrapService) string {
+		if s.State != "" {
+			return s.State
+		}
+		if s.Running {
+			return "running"
+		}
+		return "stopped"
+	}
+	extended := func(s BootstrapService) bool {
+		return s.Scope != "" || s.Command != "" || s.Restart != "" || len(s.Environment) > 0 || s.WorkingDirectory != ""
+	}
 	var b strings.Builder
 	b.WriteString("[bootstrap.services]\n")
 	for _, s := range services {
-		state := "stopped"
-		if s.Running {
-			state = "running"
+		if !extended(s) {
+			fmt.Fprintf(&b, "%q = { state = %q, enabled = %t }\n", s.Name, stateOf(s), s.Enabled)
 		}
-		fmt.Fprintf(&b, "%q = { state = %q, enabled = %t }\n", s.Name, state, s.Enabled)
+	}
+	for _, s := range services {
+		if !extended(s) {
+			continue
+		}
+		fmt.Fprintf(&b, "\n[bootstrap.services.%s]\n", tomlKey(s.Name))
+		if s.Scope != "" {
+			fmt.Fprintf(&b, "scope = %q\n", s.Scope)
+		}
+		if s.Command != "" {
+			fmt.Fprintf(&b, "command = %q\n", tomlEscape(s.Command))
+		}
+		fmt.Fprintf(&b, "state = %q\n", stateOf(s))
+		fmt.Fprintf(&b, "enabled = %t\n", s.Enabled)
+		if s.Restart != "" {
+			fmt.Fprintf(&b, "restart = %q\n", s.Restart)
+		}
+		if len(s.Environment) > 0 {
+			keys := make([]string, 0, len(s.Environment))
+			for k := range s.Environment {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			pairs := make([]string, 0, len(keys))
+			for _, k := range keys {
+				pairs = append(pairs, fmt.Sprintf("%s = %q", tomlKey(k), tomlEscape(s.Environment[k])))
+			}
+			fmt.Fprintf(&b, "environment = { %s }\n", strings.Join(pairs, ", "))
+		}
+		if s.WorkingDirectory != "" {
+			fmt.Fprintf(&b, "working_directory = %q\n", tomlEscape(s.WorkingDirectory))
+		}
 	}
 	return b.String()
 }

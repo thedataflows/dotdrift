@@ -139,9 +139,21 @@ type planJSONDoc struct {
 		Pre  []planJSONHook `json:"pre"`
 		Post []planJSONHook `json:"post"`
 	} `json:"hooks"`
-	Systemd []planJSONSystemdUnit `json:"systemd"`
-	Mounts  []planJSONMount       `json:"mounts"`
-	Smb     []planJSONSmb         `json:"smb"`
+	Systemd  []planJSONSystemdUnit `json:"systemd"`
+	Services []planJSONService     `json:"services"`
+	Mounts   []planJSONMount       `json:"mounts"`
+	Smb      []planJSONSmb         `json:"smb"`
+}
+
+// planJSONService is one declared service in the JSON plan (issue 0159).
+type planJSONService struct {
+	Module  string `json:"module"`
+	Name    string `json:"name"`
+	Command string `json:"command,omitempty"`
+	State   string `json:"state"`
+	Enabled bool   `json:"enabled"`
+	Layer   string `json:"layer"`
+	Scope   string `json:"scope"`
 }
 
 // planJSONSystemdUnit is one declarative systemd user unit in the JSON plan.
@@ -188,6 +200,14 @@ func printPlanJSON(out io.Writer, plan *resolve.Plan, p *profile.Profile, f *fac
 	for _, u := range plan.Systemd.Units {
 		doc.Systemd = append(doc.Systemd, planJSONSystemdUnit{
 			Module: u.Module, Name: u.Name, Kind: u.Kind, Layer: u.Layer,
+		})
+	}
+	doc.Services = make([]planJSONService, 0, len(plan.Services.Entries))
+	for _, e := range plan.Services.Entries {
+		doc.Services = append(doc.Services, planJSONService{
+			Module: e.Module, Name: e.Name, Command: e.Spec.Command,
+			State: e.Spec.State, Enabled: e.Spec.Enabled != nil && *e.Spec.Enabled,
+			Layer: e.Layer, Scope: e.Scope,
 		})
 	}
 	doc.Mounts = make([]planJSONMount, 0, len(plan.Mounts.Entries))

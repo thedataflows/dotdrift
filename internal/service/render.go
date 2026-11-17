@@ -96,6 +96,16 @@ func RenderPlanReport(w io.Writer, r *PlanRead, depTree []packages.PackageDeps) 
 			fmt.Fprintf(w, "  %s: %s (%s) [%s]\n", u.Module, u.Name, u.Kind, u.Layer)
 		}
 	}
+	if len(plan.Services.Entries) > 0 {
+		fmt.Fprintln(w, "services:")
+		for _, e := range plan.Services.Entries {
+			fmt.Fprintf(w, "  %s: %s [%s][%s]", e.Module, e.Name, e.Layer, e.Scope)
+			if e.Spec.Command != "" {
+				fmt.Fprintf(w, " command %q", e.Spec.Command)
+			}
+			fmt.Fprintf(w, " state=%s enabled=%t\n", e.Spec.State, e.Spec.Enabled != nil && *e.Spec.Enabled)
+		}
+	}
 	if len(plan.Mounts.Entries) > 0 {
 		fmt.Fprintln(w, "mounts:")
 		for _, e := range plan.Mounts.Entries {

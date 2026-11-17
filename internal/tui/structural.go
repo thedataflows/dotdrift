@@ -26,7 +26,7 @@ func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input str
 	switch family {
 	case profile.FamilySystemd:
 		return mutateSystemd(cfg, addPath, key, input, add)
-	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb:
+	case profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyServices:
 		var err error
 		// a on a container: `field = value` lands inside the entry —
 		// the edit branch is the authority on the field and its value.
@@ -42,6 +42,8 @@ func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input str
 				err = mutateSecrets(cfg, key, strings.TrimSpace(value), false)
 			case profile.FamilyMounts:
 				err = mutateMounts(cfg, key, strings.TrimSpace(value), false)
+			case profile.FamilyServices:
+				err = mutateServices(cfg, key, strings.TrimSpace(value), false)
 			default:
 				err = mutateSmb(cfg, key, strings.TrimSpace(value), false)
 			}
@@ -55,6 +57,8 @@ func mutateStructural(cfg *profile.ModuleConfig, family, addPath, key, input str
 			err = mutateSecrets(cfg, key, input, add)
 		case profile.FamilyMounts:
 			err = mutateMounts(cfg, key, input, add)
+		case profile.FamilyServices:
+			err = mutateServices(cfg, key, input, add)
 		case profile.FamilySmb:
 			err = mutateSmb(cfg, key, input, add)
 		}
@@ -214,6 +218,69 @@ func mutateMounts(cfg *profile.ModuleConfig, key, input string, add bool) error 
 		return fmt.Errorf("unknown mount field %q", parts[1])
 	}
 	cfg.Mounts[parts[0]] = m
+	return nil
+}
+
+// mutateServices: entries add bare; command/state/restart/working_directory
+// are strings, enabled is a bool pointer, environment is a "K=V, K2=V2"
+// list (empty clears the map). State and restart are closed sets.
+func mutateServices(cfg *profile.ModuleConfig, key, input string, add bool) error {
+	if add {
+		if cfg.Services == nil {
+			cfg.Services = map[string]profile.ServiceSpec{}
+		}
+		cfg.Services[strings.TrimSpace(input)] = profile.ServiceSpec{}
+		return nil
+	}
+	parts := splitPath(key)
+	if len(parts) != 2 {
+		return fmt.Errorf("malformed service field row %q", key)
+	}
+	svc := cfg.Services[parts[0]]
+	switch parts[1] {
+	case "command":
+		svc.Command = input
+	case "state":
+		switch input {
+		case "", "running", "stopped", "absent":
+			svc.State = input
+		default:
+			return errors.New(`state must be "", "running", "stopped", or "absent"`)
+		}
+	case "enabled":
+		v, err := parseBoolInput(input)
+		if err != nil {
+			return err
+		}
+		svc.Enabled = &v
+	case "restart":
+		switch input {
+		case "", "on-failure", "always", "never":
+			svc.Restart = input
+		default:
+			return errors.New(`restart must be "", "on-failure", "always", or "never"`)
+		}
+	case "environment":
+		if strings.TrimSpace(input) == "" {
+			svc.Environment = nil
+			break
+		}
+		env := map[string]string{}
+		for _, pair := range splitComma(input) {
+			k, v, ok := strings.Cut(pair, "=")
+			k = strings.TrimSpace(k)
+			if !ok || k == "" {
+				return errors.New(`environment must be "K=V, K2=V2"`)
+			}
+			env[k] = strings.TrimSpace(v)
+		}
+		svc.Environment = env
+	case "working_directory":
+		svc.WorkingDirectory = input
+	default:
+		return fmt.Errorf("unknown service field %q", parts[1])
+	}
+	cfg.Services[parts[0]] = svc
 	return nil
 }
 

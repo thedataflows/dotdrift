@@ -69,7 +69,7 @@ type statusModel struct {
 
 // statusSectionOrder mirrors drift's report order (its unexported
 // sectionOrder); the TUI never re-derives it.
-var statusSectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb", "orphans"}
+var statusSectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb", "services", "orphans"}
 
 // statusRow is one rendered list line: section headers and the summary
 // are not selectable; finding rows and the all-OK row are.

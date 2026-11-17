@@ -38,6 +38,7 @@ const (
 	FamilyMounts   = profile.FamilyMounts
 	FamilySmb      = profile.FamilySmb
 	FamilySystemd  = profile.FamilySystemd
+	FamilyServices = profile.FamilyServices
 )
 
 // ConfigDeps carries the config area's seams: the facts the resolve-level

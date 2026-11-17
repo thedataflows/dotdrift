@@ -99,6 +99,7 @@ func planSections(r *service.PlanRead) []planSection {
 	}
 	add("hooks", strings.Join(hooks, ", "))
 	add("systemd", num(len(p.Systemd.Units)))
+	add("services", num(len(p.Services.Entries)))
 	add("mounts", num(len(p.Mounts.Entries)))
 	add("smb", num(len(p.Smb.Modules)))
 	return out
@@ -131,7 +132,8 @@ func planEntries(r *service.PlanRead) int {
 	return len(p.Packages.Install) + len(p.Packages.Remove) +
 		len(p.Tools.Versions) + len(p.Dotfiles.Entries) +
 		len(p.Hooks.Pre) + len(p.Hooks.Post) +
-		len(p.Systemd.Units) + len(p.Mounts.Entries) + len(p.Smb.Modules)
+		len(p.Systemd.Units) + len(p.Services.Entries) +
+		len(p.Mounts.Entries) + len(p.Smb.Modules)
 }
 
 // reloadPlan starts a plan read cycle (first entry, r): the probe-free

@@ -290,6 +290,43 @@ func (s *systemdUnitsStep) Run(ctx context.Context) error {
 	return s.runner.Bootstrap(ctx, s.configPath, s.yes, "linux-systemd-units")
 }
 
+// servicesStep converges the services modules declare in [services]
+// (issue 0159) via mise bootstrap --only services. It replaces the
+// systemctl hooks modules used to carry: an entry without a command
+// enables an existing unit, an entry with a command runs a program.
+// It runs after the systemd units step, so a unit file the plan places
+// or writes exists before mise enables anything.
+type servicesStep struct {
+	runner     mise.Runner
+	entries    []resolve.ServiceEntry
+	configPath string
+	yes        bool
+}
+
+var _ apply.Step = (*servicesStep)(nil)
+
+func (s *servicesStep) Name() string { return "services" }
+
+func (s *servicesStep) Run(ctx context.Context) error {
+	if len(s.entries) == 0 {
+		return nil
+	}
+	svcs := make([]mise.BootstrapService, 0, len(s.entries))
+	for _, e := range s.entries {
+		svcs = append(svcs, mise.BootstrapService{
+			Name: e.Name, Scope: e.Scope, Command: e.Spec.Command,
+			State: e.Spec.State, Enabled: e.Spec.Enabled != nil && *e.Spec.Enabled,
+			Restart: e.Spec.Restart, Environment: e.Spec.Environment,
+			WorkingDirectory: e.Spec.WorkingDirectory,
+		})
+	}
+	content := mise.GenerateBootstrapServices(svcs)
+	if err := writeBootstrapConfig(s.configPath, content); err != nil {
+		return fmt.Errorf("write services config: %w", err)
+	}
+	return s.runner.Bootstrap(ctx, s.configPath, s.yes, "services")
+}
+
 // mountsServicesStep replaces mounts.Step: it emits [bootstrap.services] for
 // each mount unit (+ timer if startat) and converges via
 // `mise bootstrap --only services`. Directory creation moved to systemFilesStep.
@@ -399,6 +436,7 @@ type configPaths struct {
 	tools, systemd, dotfiles, packages string
 	system, systemEdits                string
 	mounts, smb, shared                string
+	services                           string
 }
 
 func newConfigPaths(stateDir string) configPaths {
@@ -414,6 +452,7 @@ func newConfigPaths(stateDir string) configPaths {
 		mounts:      join("mounts"),
 		smb:         join("smb"),
 		shared:      join("shared"),
+		services:    join("services"),
 	}
 }
 
@@ -550,6 +589,12 @@ func buildSteps(sections SectionSet, plan *resolve.Plan, runner *mise.ExecMise,
 			exec: runner, entries: systemEntries,
 			homeDir: homeDir, dirs: mountDests, configPath: paths.system,
 			editsPath: paths.systemEdits, yes: opts.Yes, force: opts.Force, secrets: plan.Secrets,
+		})
+	}
+	// Declared services → mise bootstrap --only services (issue 0159).
+	if sections.Has("services") && len(plan.Services.Entries) > 0 {
+		steps = append(steps, &servicesStep{
+			runner: runner, entries: plan.Services.Entries, configPath: paths.services, yes: opts.Yes,
 		})
 	}
 	// Mount unit services → mise bootstrap --only services.

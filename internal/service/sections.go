@@ -9,7 +9,7 @@ import (
 // SectionNames are the module.toml plan sections in pipeline order. The
 // CLI's negatable flags map onto these (cmd keeps the flag layer; this
 // list is the single source of the vocabulary).
-var SectionNames = []string{"packages", "tools", "dotfiles", "systemd", "mounts", "smb", "hooks"}
+var SectionNames = []string{"packages", "tools", "dotfiles", "systemd", "services", "mounts", "smb", "hooks"}
 
 // SectionSet is the resolved selection of sections an apply run executes.
 type SectionSet map[string]bool

@@ -587,6 +587,48 @@ func wsRows(cfg *profile.ModuleConfig, needsRoot bool) []wsRow {
 	}
 	section("systemd.units", units)
 
+	var services []wsRow
+	for _, name := range slices.Sorted(maps.Keys(cfg.Services)) {
+		svc := cfg.Services[name]
+		before := len(services)
+		services = append(services, wsRow{
+			section: "services", text: name,
+			family: profile.FamilyServices, key: name, container: true,
+		})
+		svcField := func(field, value string) {
+			text := "  " + field + " " + value
+			services = append(services, wsRow{section: "services", text: text,
+				family: profile.FamilyServices, key: pathKey(name, field), value: value,
+				valueAt: len(text) - len(value)})
+		}
+		if svc.Command != "" {
+			svcField("command", svc.Command)
+		}
+		if svc.State != "" {
+			svcField("state", svc.State)
+		}
+		if svc.Enabled != nil {
+			svcField("enabled", strconv.FormatBool(*svc.Enabled))
+		}
+		if svc.Restart != "" {
+			svcField("restart", svc.Restart)
+		}
+		if len(svc.Environment) > 0 {
+			pairs := make([]string, 0, len(svc.Environment))
+			for _, k := range slices.Sorted(maps.Keys(svc.Environment)) {
+				pairs = append(pairs, k+"="+svc.Environment[k])
+			}
+			svcField("environment", strings.Join(pairs, ", "))
+		}
+		if svc.WorkingDirectory != "" {
+			svcField("working_directory", svc.WorkingDirectory)
+		}
+		if len(services) == before+1 {
+			services = append(services, hint("services"))
+		}
+	}
+	section("services", services)
+
 	var tools []wsRow
 	for _, name := range slices.Sorted(maps.Keys(cfg.Tools)) {
 		tools = append(tools, split(entry("tools", name+" = "+cfg.Tools[name], profile.FamilyTools, name, cfg.Tools[name]),

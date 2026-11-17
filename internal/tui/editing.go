@@ -161,7 +161,7 @@ func parseAvahiInput(input string) (*bool, error) {
 // mutateField's flat scalar/table grammar.
 func isStructuralFamily(family string) bool {
 	switch family {
-	case profile.FamilySystemd, profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen:
+	case profile.FamilySystemd, profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen, profile.FamilyServices:
 		return true
 	}
 	return false
@@ -249,6 +249,8 @@ func encodeFamily(family string, cfg *profile.ModuleConfig) string {
 		return profile.EncodeMountsSection(cfg.Mounts)
 	case profile.FamilySmb:
 		return profile.EncodeSmbSection(cfg.Smb)
+	case profile.FamilyServices:
+		return profile.EncodeServicesSection(cfg.Services)
 	default:
 		return ""
 	}
@@ -306,6 +308,21 @@ func validateField(family, key, input string) string {
 		case "state":
 			if input != "" && input != "enabled" && input != "disabled" {
 				return `state must be "", "enabled", or "disabled"`
+			}
+		}
+	case profile.FamilyServices:
+		switch lastPathSegment(key) {
+		case "state":
+			if input != "" && input != "running" && input != "stopped" && input != "absent" {
+				return `state must be "", "running", "stopped", or "absent"`
+			}
+		case "restart":
+			if input != "" && input != "on-failure" && input != "always" && input != "never" {
+				return `restart must be "", "on-failure", "always", or "never"`
+			}
+		case "enabled":
+			if _, err := parseBoolInput(input); err != nil {
+				return err.Error()
 			}
 		}
 	case profile.FamilySmb:
@@ -376,6 +393,13 @@ func validateAdd(family, addPath, input string) string {
 			return validEntryName(input, "mount")
 		}
 		if !okFieldValue(input, "source", "destination", "type", "options", "startat", "state") {
+			return `add as "field = value"`
+		}
+	case profile.FamilyServices:
+		if addPath == "" {
+			return validEntryName(input, "service")
+		}
+		if !okFieldValue(input, "command", "state", "enabled", "restart", "environment", "working_directory") {
 			return `add as "field = value"`
 		}
 	case profile.FamilySmb:
@@ -721,6 +745,8 @@ func addFamily(section string) string {
 		return profile.FamilySecrets
 	case "mounts":
 		return profile.FamilyMounts
+	case "services":
+		return profile.FamilyServices
 	case "smb":
 		return profile.FamilySmb
 	case "when":
@@ -963,6 +989,33 @@ func (w *workspaceModel) removeRow() {
 			return
 		}
 		candidate.Mounts[parts[0]] = mt
+	case profile.FamilyServices:
+		if row.container {
+			delete(candidate.Services, row.key)
+			break
+		}
+		parts := splitPath(row.key)
+		if len(parts) != 2 {
+			return
+		}
+		svc := candidate.Services[parts[0]]
+		switch parts[1] {
+		case "command":
+			svc.Command = ""
+		case "state":
+			svc.State = ""
+		case "enabled":
+			svc.Enabled = nil
+		case "restart":
+			svc.Restart = ""
+		case "environment":
+			svc.Environment = nil
+		case "working_directory":
+			svc.WorkingDirectory = ""
+		default:
+			return
+		}
+		candidate.Services[parts[0]] = svc
 	case profile.FamilySmb:
 		if row.container {
 			delete(candidate.Smb.Shares, row.key)
@@ -1490,7 +1543,7 @@ func (m *Compositor) confirmRemoveRow() {
 	row := m.ws.rows[m.ws.cursor]
 	switch row.family {
 	case profile.FamilyPackages, profile.FamilyTools, profile.FamilyHooks, profile.FamilyDotfiles, profile.FamilySystemd,
-		profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen:
+		profile.FamilySecrets, profile.FamilyMounts, profile.FamilySmb, profile.FamilyWhen, profile.FamilyServices:
 	default:
 		return
 	}

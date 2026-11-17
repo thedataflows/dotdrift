@@ -32,6 +32,15 @@ func choiceSet(row wsRow) []string {
 		if lastPathSegment(row.key) == "state" {
 			return []string{"enabled", "disabled"}
 		}
+	case profile.FamilyServices:
+		switch lastPathSegment(row.key) {
+		case "state":
+			return []string{"running", "stopped", "absent"}
+		case "restart":
+			return []string{"on-failure", "always", "never"}
+		case "enabled":
+			return []string{"false", "true"}
+		}
 	case profile.FamilySmb:
 		switch lastPathSegment(row.key) {
 		case "writable", "public":

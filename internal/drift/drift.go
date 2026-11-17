@@ -21,6 +21,7 @@ import (
 	"github.com/thedataflows/dotdrift/internal/generate"
 	"github.com/thedataflows/dotdrift/internal/mise"
 	"github.com/thedataflows/dotdrift/internal/palette"
+	"github.com/thedataflows/dotdrift/internal/profile"
 	"github.com/thedataflows/dotdrift/internal/resolve"
 )
 
@@ -60,7 +61,7 @@ func (s Status) String() string {
 
 // Finding is one checked item. Detail is empty for OK.
 type Finding struct {
-	Section string // "packages" | "tools" | "dotfiles" | "mounts" | "smb" | "orphans"
+	Section string // "packages" | "tools" | "dotfiles" | "mounts" | "smb" | "services" | "orphans"
 	Item    string // package name, tool name, target path, unit name, share name
 	Status  Status
 	Detail  string
@@ -82,8 +83,8 @@ type Probes struct {
 	HomeDir     string
 	Readlink    func(path string) (string, error)
 	ReadFile    func(path string) ([]byte, error)
-	StatDir     func(path string) (bool, error)  // exists and is a directory
-	Stat        func(path string) (bool, error)  // exists (file or dir) — source validity
+	StatDir     func(path string) (bool, error)     // exists and is a directory
+	Stat        func(path string) (bool, error)     // exists (file or dir) — source validity
 	ListDir     func(path string) ([]string, error) // direct child names — stale symlink-each scan
 }
 
@@ -124,7 +125,7 @@ func defaultStatDir(path string) (bool, error) {
 
 // sectionOrder is the fixed display order for report sections; orphans
 // (unreferenced module content) renders last.
-var sectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb", "orphans"}
+var sectionOrder = []string{"packages", "tools", "dotfiles", "mounts", "smb", "services", "orphans"}
 
 // CheckOptions controls how Check runs its probes.
 type CheckOptions struct {
@@ -160,6 +161,7 @@ func Check(ctx context.Context, plan *resolve.Plan, profileRoot string, pr Probe
 	tasks = append(tasks, checkDotfiles(plan, profileRoot, pr)...)
 	tasks = append(tasks, checkMounts(plan, pr)...)
 	tasks = append(tasks, checkSmb(plan, pr)...)
+	tasks = append(tasks, checkServices(plan, pr)...)
 
 	jobs := opts.Jobs
 	if jobs <= 0 {
@@ -789,6 +791,79 @@ func checkService(ctx context.Context, section, name string, pr Probes) Finding 
 		return Finding{section, name, Drift, "not active", "", ""}
 	}
 	return Finding{section, name, OK, "", "", ""}
+}
+
+// checkServices probes each declared service (issue 0159). A command
+// service addresses the unit mise writes, dev.mise.<name>.service; an
+// existing-unit entry addresses the unit itself, with .service as the
+// default suffix. User services probe the user manager.
+func checkServices(plan *resolve.Plan, pr Probes) []probeTask {
+	var tasks []probeTask
+	for _, e := range plan.Services.Entries {
+		entry := e
+		tasks = append(tasks, probeTask{
+			section: "services",
+			module:  entry.Module,
+			item:    entry.Name,
+			run: func(ctx context.Context) Finding {
+				return checkDeclaredService(ctx, entry, pr)
+			},
+		})
+	}
+	return tasks
+}
+
+func checkDeclaredService(ctx context.Context, e resolve.ServiceEntry, pr Probes) Finding {
+	const section = "services"
+	unit := e.Name
+	if e.Spec.Command != "" {
+		unit = "dev.mise." + unit + ".service"
+	} else if !hasUnitSuffix(unit) {
+		unit += ".service"
+	}
+	args := []string{"systemctl"}
+	if e.Scope == profile.ScopeUser {
+		args = append(args, "--user")
+	}
+	ctl := func(verb string) (string, error) {
+		return pr.Run(ctx, args[0], append(append([]string{}, args[1:]...), verb, unit)...)
+	}
+	if e.Spec.State == "absent" {
+		if _, err := ctl("is-enabled"); err != nil {
+			return Finding{section, e.Name, OK, "", "", ""}
+		}
+		return Finding{section, e.Name, Drift, "present but declared absent", "", ""}
+	}
+	enabledOut, err := ctl("is-enabled")
+	if err != nil {
+		return Finding{section, e.Name, Drift, "unit not found", "", ""}
+	}
+	enabled := strings.TrimSpace(enabledOut) == "enabled"
+	wantEnabled := e.Spec.Enabled != nil && *e.Spec.Enabled
+	if enabled != wantEnabled {
+		if wantEnabled {
+			return Finding{section, e.Name, Drift, "not enabled", "", ""}
+		}
+		return Finding{section, e.Name, Drift, "enabled but declared disabled", "", ""}
+	}
+	activeOut, _ := ctl("is-active")
+	active := strings.TrimSpace(activeOut) == "active"
+	if e.Spec.State == "running" && !active {
+		return Finding{section, e.Name, Drift, "not active", "", ""}
+	}
+	if e.Spec.State == "stopped" && active {
+		return Finding{section, e.Name, Drift, "active but declared stopped", "", ""}
+	}
+	return Finding{section, e.Name, OK, "", "", ""}
+}
+
+func hasUnitSuffix(unit string) bool {
+	for _, suf := range []string{".service", ".timer", ".socket", ".mount", ".target", ".path", ".slice", ".scope"} {
+		if strings.HasSuffix(unit, suf) {
+			return true
+		}
+	}
+	return false
 }
 
 // Render writes the drift report. Sections appear in fixed order and only when

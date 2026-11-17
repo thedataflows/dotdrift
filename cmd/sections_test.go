@@ -72,7 +72,7 @@ func TestApplyCmd_resolveSectionsFromKong(t *testing.T) {
 	require.NoError(t, err)
 	got, err = cli.Apply.resolveSections()
 	require.NoError(t, err)
-	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "mounts", "smb", "hooks"), got)
+	require.Equal(t, mustSections(t, "packages", "tools", "dotfiles", "systemd", "services", "mounts", "smb", "hooks"), got)
 }
 
 // DOTDRIFT_NO_HOOKS=1 subtracts hooks exactly like --no-hooks, on top of

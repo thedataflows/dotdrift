@@ -298,7 +298,7 @@ func TestApplyGate_optionsBeforePreview(t *testing.T) {
 
 	// force on (row 0); dotfiles only — every other section off.
 	c = cpress(c, "space")
-	for _, row := range []int{2, 3, 5, 6, 7, 8} { // packages, tools, systemd, mounts, smb, hooks
+	for _, row := range []int{2, 3, 5, 6, 7, 8, 9} { // packages, tools, systemd, services, mounts, smb, hooks
 		for c.modals[0].(*applyGateModel).cur < row {
 			c = cpress(c, "j")
 		}

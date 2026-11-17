@@ -14,6 +14,22 @@ type SystemdSpec struct {
 // their TOML types (string, bool, int64, []any, map[string]any).
 type SystemdUnit map[string]any
 
+// ServiceSpec describes one service declared in module.toml under
+// [services.<name>] (issue 0159). Without Command, the entry enables
+// and starts a unit that already exists (installed by a package or
+// placed by a dotfile); with Command, mise writes the platform service
+// definition and runs the program. The module scope decides the
+// service scope. Enabled is a *bool so an unset key (nil, default
+// true) differs from an explicit false.
+type ServiceSpec struct {
+	Command          string            `toml:"command"`
+	State            string            `toml:"state"`
+	Enabled          *bool             `toml:"enabled"`
+	Restart          string            `toml:"restart"`
+	Environment      map[string]string `toml:"environment"`
+	WorkingDirectory string            `toml:"working_directory"`
+}
+
 // MountSpec describes a single filesystem attachment declared in
 // module.toml under [mounts.<name>]. Resolve validates structure only
 // (non-empty source/destination/type, known state); Type is never checked

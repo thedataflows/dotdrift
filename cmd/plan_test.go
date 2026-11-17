@@ -43,6 +43,12 @@ type planJSON struct {
 		Name   string `json:"name"`
 		Kind   string `json:"kind"`
 	} `json:"systemd"`
+	Services []struct {
+		Module string `json:"module"`
+		Name   string `json:"name"`
+		State  string `json:"state"`
+		Scope  string `json:"scope"`
+	} `json:"services"`
 	Mounts []struct {
 		Module      string   `json:"module"`
 		Name        string   `json:"name"`

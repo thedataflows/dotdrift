@@ -166,6 +166,16 @@ on_calendar = "daily"
 persistent = true
 unit = "my-sync"
 
+[services.my-agent]
+# A service with a command: mise writes the platform definition and
+# runs the program (user-scope modules only). Without a command, the
+# entry enables an existing unit, e.g. [services.syncthing] alone.
+command = "~/.local/bin/my-agent --serve"
+state = "running"
+enabled = true
+restart = "on-failure"
+environment = { LOG_LEVEL = "info" }
+
 [mounts.data]
 source = "UUID=abcd-1234"
 destination = "/mnt/data"
@@ -261,6 +271,22 @@ public = false
   only**: a `scope = "system"` module declaring units is a resolve-time
   error (mise skips user units under sudo, so the declaration would
   silently no-op).
+- `services` declares services (issue 0159) emitted as
+  `[bootstrap.services]` and converged by a dedicated `services` apply
+  step (`mise bootstrap --only services`) after the systemd step. The
+  module scope is the service scope. Without `command`, the entry
+  enables and starts a unit that already exists (installed by a
+  package or placed by a dotfile) and mise writes nothing; this
+  replaces the `systemctl enable --now <unit> || true` hook, and a
+  missing unit fails the apply with the unit named instead of being
+  swallowed by `optional`. With `command` (user-scope modules only),
+  mise writes the platform service definition and runs the program;
+  `restart`, `environment`, and `working_directory` configure that
+  definition and require `command`. `state` is `running` (default),
+  `stopped`, or `absent`; `enabled` defaults to true. Entries merge
+  whole-entry by name across layers. A name declared in both
+  `services` and `systemd.units` is a resolve-time error: both would
+  write the same unit definition.
 - `dotfiles` entries come in two kinds, distinguished by their fields:
   - **Whole-file entries** take over a target path entirely. The key is a
     target path (absolute or `~/...`); the value is a table with:

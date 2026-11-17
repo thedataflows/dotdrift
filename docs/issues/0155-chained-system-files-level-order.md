@@ -49,3 +49,5 @@ Note on mode = "symlink": [bootstrap.files] has no symlink form — its mode fie
 ## Notes
 
 Verified live with mise 2026.11.8: a two-entry chain in one config fails at plan time ('failed to read source ... No such file or directory') in both entry orders, creating nothing; mode = "symlink" in a bootstrap.files entry is rejected ('mode must be an octal string').
+
+Online check (2026-11-17, latest mise 2026.11.9): the [bootstrap.files reference](https://mise.jdx.dev/bootstrap/files.html) lists every entry key — source, content, template, remove_empty, owner, group, mode (octal string), state, recursive, replace, phase, os, notify. There is no symlink or link key; the page mentions symlinks only to say mise does not follow them. Symlinks exist only in [dotfiles] (mode = "symlink"), the user-scope mechanism.

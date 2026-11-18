@@ -2,6 +2,8 @@
 
 ## 2026-11-18
 
+* **Fixed (CI, issue [0164](issues/0164-gosec-go-export-compatibility.md))**: CI uses gosec v2.30.0 to read Go 1.27.4 export data. The same lint job failed with gosec v2.28 and passed with v2.30.0 in act on Go 1.27.4. The workflow keeps the same rule exclusions.
+
 * **Fixed (tool status, issue [0163](issues/0163-status-checks-local-mise-latest.md))**: For a tool declared as `latest`, status checks whether the active install matches mise's local `latest` link. A different install reports drift. A missing or broken link reports unknown. Status does not check for newer remote releases.
 
 
